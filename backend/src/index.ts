@@ -14,6 +14,7 @@ import libraryRoutes from "./routes/library";
 import playsRoutes from "./routes/plays";
 import settingsRoutes from "./routes/settings";
 import systemSettingsRoutes from "./routes/systemSettings";
+import brandingRoutes from "./routes/branding";
 import listeningStateRoutes from "./routes/listeningState";
 import playbackStateRoutes from "./routes/playbackState";
 import offlineRoutes from "./routes/offline";
@@ -150,6 +151,8 @@ app.use("/api/library", libraryRoutes);
 app.use("/api/plays", apiLimiter, playsRoutes);
 app.use("/api/settings", apiLimiter, settingsRoutes);
 app.use("/api/system-settings", apiLimiter, systemSettingsRoutes);
+// Branding is readable even on the login screen; writes self-check admin rights.
+app.use("/api/branding", apiLimiter, brandingRoutes);
 app.use("/api/listening-state", apiLimiter, listeningStateRoutes);
 app.use("/api/playback-state", playbackStateRoutes); // No rate limit - syncs frequently
 app.use("/api/offline", apiLimiter, offlineRoutes);
