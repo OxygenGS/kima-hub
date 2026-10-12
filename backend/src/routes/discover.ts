@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { logger } from "../utils/logger";
-import { requireAuthOrToken, requireAdmin } from "../middleware/auth";
+import { requireAuthOrToken, requireAdmin, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { lastFmService } from "../services/lastfm";
 import { startOfWeek, endOfWeek } from "date-fns";
@@ -207,7 +207,7 @@ router.delete("/batch", async (req, res) => {
 });
 
 // POST /discover/generate - Generate new Discover Weekly playlist
-router.post("/generate", async (req, res) => {
+router.post("/generate", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const userId = req.user!.id;
 
@@ -837,7 +837,7 @@ router.delete("/unlike", async (req, res) => {
 });
 
 // POST /discover/retry-unavailable - Retry all unavailable albums from this week
-router.post("/retry-unavailable", async (req, res) => {
+router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const userId = req.user!.id;
 
