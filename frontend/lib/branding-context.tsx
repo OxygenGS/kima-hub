@@ -48,6 +48,19 @@ function mixHex(base: string, target: string, ratio: number): string {
     return "#" + blend.join("");
 }
 
+/**
+ * Choose the text color with at least WCAG AA contrast (4.5:1) on the accent.
+ * Black reaches that threshold at luminance >= 0.175; white works below it.
+ */
+export function brandContrastColor(hex: string): "#000000" | "#ffffff" {
+    const rgb = [1, 3, 5].map((pos) => {
+        const value = parseInt(hex.slice(pos, pos + 2), 16) / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    const luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    return luminance >= 0.175 ? "#000000" : "#ffffff";
+}
+
 function applyTheme(branding: InstanceBranding) {
     const root = document.documentElement;
     const accent = branding.accentColor;
@@ -57,6 +70,7 @@ function applyTheme(branding: InstanceBranding) {
     root.style.setProperty("--color-brand-hover", mixHex(accent, "#000000", 0.10));
     root.style.setProperty("--color-brand-light", mixHex(accent, "#ffffff", 0.20));
     root.style.setProperty("--color-brand-dark", mixHex(accent, "#000000", 0.18));
+    root.style.setProperty("--color-brand-contrast", brandContrastColor(accent));
 
     root.style.setProperty("--bg-primary", background);
     root.style.setProperty("--bg-secondary", mixHex(background, "#ffffff", 0.025));
