@@ -244,7 +244,7 @@ jobs:
 
                   echo "AIO fresh-install smoke test passed"
 
-db-upgrade:
+    db-upgrade:
         name: Existing Kima Database Upgrade & Restore
         runs-on: ubuntu-latest
         timeout-minutes: 30
