@@ -14,6 +14,7 @@ import {
     Github,
 } from "lucide-react";
 import { formatTime, formatDuration } from "@/utils/formatTime";
+import { useBranding } from "@/lib/branding-context";
 
 interface ShareTrack {
     id: string;
@@ -102,6 +103,7 @@ function getEntitySubtitle(shareData: ShareData): string {
 }
 
 export default function SharePageClient() {
+    const { branding } = useBranding();
     const params = useParams();
     const token = params.token as string;
 
@@ -516,7 +518,7 @@ export default function SharePageClient() {
             <div className="px-4 py-6">
                 <div className="max-w-lg mx-auto flex items-center justify-center gap-3">
                     <span className="text-xs text-white/10">
-                        Powered by Kima
+                        Shared via {branding.name}
                     </span>
                     <span className="text-white/[0.06]">|</span>
                     <a
