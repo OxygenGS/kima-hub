@@ -18,6 +18,8 @@
     --color-brand-hover: #e69200;
     --color-brand-light: #fcb84d;
     --color-brand-dark: #d48c00;
+    /* Contrasting text on configurable accent backgrounds. */
+    --color-brand-contrast: #000000;
 
     /* ── Motion ───────────────────────────────────────────────────────────
      *
