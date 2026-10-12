@@ -19,12 +19,14 @@ import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context"
 import { DiscoverSettingsTab } from "@/components/activity/DiscoverSettingsTab";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
 
 export default function DiscoverWeeklyPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { canRequestAlbums } = useMusicPermissions();
+    const { branding } = useBranding();
     const { setSettingsContent, settingsOwner } = useActivityPanelSettings();
     const queryClient = useQueryClient();
 
@@ -214,10 +216,10 @@ export default function DiscoverWeeklyPage() {
                                 {/* Section header */}
                                 <section>
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-4">
-                                        <span className="w-1 h-8 bg-gradient-to-b from-[#eab308] to-[#f59e0b] rounded-full" />
+                                        <span className="w-1 h-8 bg-gradient-to-b from-brand to-brand-light rounded-full" />
                                         <span className="tracking-tight">Playlist</span>
                                         <span className="flex-1 border-t border-white/10" />
-                                        <span className="text-xs tabular-nums text-[#a855f7]">
+                                        <span className="text-xs tabular-nums text-brand">
                                             {playlist?.totalCount || 0} tracks
                                         </span>
                                     </h2>
@@ -265,22 +267,22 @@ export default function DiscoverWeeklyPage() {
                                     </h3>
 
                                     <p className="text-sm text-[var(--text-muted)] mb-6 leading-relaxed">
-                                        Kima finds artists similar to ones you already love, picks a representative track
+                                        {branding.name} finds artists similar to ones you already love, picks a representative track
                                         from each, then builds your weekly playlist.
                                     </p>
 
                                     {/* What this does -- disk disclosure, visible before generating */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-purple-500 mb-1">Finds</div>
+                                            <div className="text-xs text-brand mb-1">Finds</div>
                                             <div className="text-xs text-[var(--text-secondary)] leading-snug">Similar artists via Last.fm, grouped by similarity tier</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-purple-500 mb-1">Downloads</div>
+                                            <div className="text-xs text-brand mb-1">Downloads</div>
                                             <div className="text-xs text-[var(--text-secondary)] leading-snug">Full albums to <span className="text-[var(--text-muted)]">/music/discovery</span> on your server</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-purple-500 mb-1">Cleans up</div>
+                                            <div className="text-xs text-brand mb-1">Cleans up</div>
                                             <div className="text-xs text-[var(--text-secondary)] leading-snug">Unliked albums are removed at week&apos;s end -- liked ones stay forever</div>
                                         </div>
                                     </div>
@@ -288,15 +290,15 @@ export default function DiscoverWeeklyPage() {
                                     {/* Placeholder stats */}
                                     <div className="grid grid-cols-3 gap-4 mb-8">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-purple-500 mb-1">--</div>
+                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
                                             <div className="text-xs text-[var(--text-muted)]">Tracks</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-purple-500 mb-1">--</div>
+                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
                                             <div className="text-xs text-[var(--text-muted)]">Duration</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-purple-500 mb-1">--</div>
+                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
                                             <div className="text-xs text-[var(--text-muted)]">Artists</div>
                                         </div>
                                     </div>
