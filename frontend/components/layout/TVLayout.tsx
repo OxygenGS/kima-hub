@@ -25,6 +25,7 @@ const tvNavigation = [
 
 export function TVLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const { branding } = useBranding();
     const router = useRouter();
     // Start with nav focused and first tab selected for immediate D-pad usability
     const [focusedTabIndex, setFocusedTabIndex] = useState(0);
@@ -214,8 +215,8 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             {/* Nav */}
             <header className="tv-nav">
                 <Link href="/" className="tv-logo">
-                    <Image src="/assets/images/kima.webp" alt="Kima" width={24} height={24} priority />
-                    <span>Kima</span>
+                    <Image src={branding.logoUrl} alt={branding.name} width={24} height={24} unoptimized priority />
+                    <span>{branding.name}</span>
                 </Link>
 
                 <nav ref={navRef} className="tv-nav-links">
