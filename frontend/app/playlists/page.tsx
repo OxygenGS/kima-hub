@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePlaylistsQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
-import { useAuth } from "@/lib/auth-context";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useAudioControls } from "@/lib/audio-context";
 import {
     Play,
@@ -567,10 +567,12 @@ function EmptyState({
     showHiddenTab,
     activeAction,
     setActiveAction,
+    canImportPlaylist,
 }: {
     showHiddenTab: boolean;
     activeAction: ActionPanel;
     setActiveAction: (a: ActionPanel) => void;
+    canImportPlaylist: boolean;
 }) {
     if (showHiddenTab) {
         return (
@@ -630,8 +632,8 @@ function EmptyState({
                     )}
                 </div>
 
-                {/* Import URL */}
-                <div className="space-y-3">
+                {/* Import URL (requires both album and track rights) */}
+                {canImportPlaylist && <div className="space-y-3">
                     <button
                         onClick={() => setActiveAction(activeAction === "importUrl" ? null : "importUrl")}
                         className="flex items-center gap-3 text-left group"
@@ -649,7 +651,7 @@ function EmptyState({
                             <ImportUrlPanel onClose={() => setActiveAction(null)} />
                         </div>
                     )}
-                </div>
+                </div>}
 
                 {/* Import M3U */}
                 <div className="space-y-3">
@@ -696,7 +698,8 @@ function EmptyState({
 
 export default function PlaylistsPage() {
     useRouter();
-    useAuth();
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
@@ -774,6 +777,7 @@ export default function PlaylistsPage() {
     };
 
     const toggleAction = (action: ActionPanel) => {
+        if (action === "importUrl" && !canImportPlaylist) return;
         setActiveAction((prev) => (prev === action ? null : action));
     };
 
@@ -848,12 +852,12 @@ export default function PlaylistsPage() {
                             onClick={() => toggleAction("create")}
                             primary
                         />
-                        <ActionButton
+                        {canImportPlaylist && <ActionButton
                             icon={Link2}
                             label="Import URL"
                             active={activeAction === "importUrl"}
                             onClick={() => toggleAction("importUrl")}
-                        />
+                        />}
                         <ActionButton
                             icon={FileMusic}
                             label="Import File"
@@ -875,7 +879,7 @@ export default function PlaylistsPage() {
                             {activeAction === "create" && (
                                 <CreatePanel onClose={() => setActiveAction(null)} />
                             )}
-                            {activeAction === "importUrl" && (
+                            {canImportPlaylist && activeAction === "importUrl" && (
                                 <ImportUrlPanel onClose={() => setActiveAction(null)} />
                             )}
                             {activeAction === "importFile" && (
@@ -936,6 +940,7 @@ export default function PlaylistsPage() {
                             showHiddenTab={showHiddenTab}
                             activeAction={activeAction}
                             setActiveAction={setActiveAction}
+                            canImportPlaylist={canImportPlaylist}
                         />
                     )}
                 </div>
