@@ -279,6 +279,8 @@ router.get("/users", requireAuth, requireAdmin, async (req, res) => {
                 id: true,
                 username: true,
                 role: true,
+                canRequestAlbums: true,
+                canDownloadTracks: true,
                 onboardingComplete: true,
                 createdAt: true,
             },
@@ -375,6 +377,9 @@ router.patch("/users/:id/permissions", requireAuth, requireAdmin, async (req, re
         return res.json(user);
     } catch (error) {
         logger.error("Update user permissions error:", error);
+        if ((error as { code?: string }).code === "P2025") {
+            return res.status(404).json({ error: "User not found" });
+        }
         return res.status(500).json({ error: "Failed to update permissions" });
     }
 });
