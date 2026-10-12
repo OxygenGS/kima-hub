@@ -76,10 +76,19 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-        void refreshBranding().catch(() => {});
+        let mounted = true;
+        // Resolve asynchronously inside the effect; avoid a synchronous state
+        // transition while React is committing the initial render.
+        void fetch("/api/branding", { cache: "no-store" })
+            .then((response) => response.ok ? response.json() as Promise<InstanceBranding> : Promise.reject())
+            .then((config) => { if (mounted) setBranding(config); })
+            .catch(() => {});
         const onFocus = () => void refreshBranding().catch(() => {});
         window.addEventListener("focus", onFocus);
-        return () => window.removeEventListener("focus", onFocus);
+        return () => {
+            mounted = false;
+            window.removeEventListener("focus", onFocus);
+        };
     }, [refreshBranding]);
 
     useEffect(() => {
