@@ -20,11 +20,16 @@ database migration outside the isolated CT 105 test environment.
 
 ## Release blockers / approvals required
 
-- [ ] **Choose delivery architecture.** CT 105 uses four services in
-      `docker-compose.chillverse-dev.yml`; the existing `Dockerfile` and
-      `docker-publish.yml` ship an all-in-one Kima image. The latter has not
-      been verified with this fork's changes. The DEV-only compose is *not*
-      ready to redistribute as a general production installer.
+- [x] **Delivery architecture selected: all-in-one (option A).** The
+      existing root `Dockerfile` combines frontend, backend, PostgreSQL,
+      Redis and audio analyzers; the four-container CT 105 stack remains the
+      known-good development baseline.
+- [ ] **Verify all-in-one runtime separately.** The normal PR checks build the
+      root image but do not boot it. An isolated `docker-compose.chillverse-aio-test.yml`
+      now provides a loopback-only port 3130 and separate named volumes for a
+      future fresh-install smoke test. Check CT 105 memory and free Docker disk
+      space *before* building; ML dependencies make this image substantial.
+      Do not take down or reconfigure the existing DEV stack.
 - [ ] **Confirm image ownership and release destination.** The existing publish
       workflow pushes `.../kima:latest` and versioned tags to Docker Hub and
       GHCR. `docker-compose.prod.yml` defaults to the original upstream
@@ -57,7 +62,8 @@ database migration outside the isolated CT 105 test environment.
 
 ## Release order
 
-1. Select supported installation architecture and owned image registry.
+1. Architecture chosen: all-in-one. Confirm release registry/name and
+   hardware requirements before building a local candidate.
 2. Finish testing missing scenarios on isolated environments.
 3. Verify backup and rollback instructions; review upgrade default permissions.
 4. Release a **candidate** under a distinct fork-owned name/tag.
