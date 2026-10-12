@@ -1,15 +1,17 @@
 interface SettingsToggleProps {
     id?: string;
+    label?: string;
     checked: boolean;
     onChange: (checked: boolean) => void;
     disabled?: boolean;
 }
 
-export function SettingsToggle({ id, checked, onChange, disabled }: SettingsToggleProps) {
+export function SettingsToggle({ id, label, checked, onChange, disabled }: SettingsToggleProps) {
     return (
         <label className="relative inline-flex items-center cursor-pointer">
             <input
                 id={id}
+                aria-label={label}
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
