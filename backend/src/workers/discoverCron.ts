@@ -33,6 +33,7 @@ export function startDiscoverWeeklyCron() {
             const configs = await prisma.userDiscoverConfig.findMany({
                 where: {
                     enabled: true,
+                    user: { OR: [{ role: "admin" }, { canRequestAlbums: true }] },
                 },
                 select: {
                     userId: true,
