@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { BrandingProvider } from "@/lib/branding-context";
+import { getServerBranding } from "@/lib/branding-server";
 import { FeaturesProvider } from "@/lib/features-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { DownloadProvider } from "@/lib/download-context";
@@ -32,31 +33,38 @@ export const viewport: Viewport = {
     themeColor: "#000000",
 };
 
-export const metadata: Metadata = {
-    title: "Kima - Your Music",
-    description: "Self-hosted music streaming platform. https://github.com/Chevron7Locked/kima-hub",
-    manifest: "/manifest.webmanifest",
-    icons: {
-        apple: [
-            { url: "/assets/images/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-        ],
-    },
-    appleWebApp: {
-        // Standalone PWA on iOS so "Add to Home Screen" opens fullscreen and
-        // safe-area-inset values activate, freeing the top nav and bottom
-        // player from Safari chrome overlap.
-        capable: true,
-        statusBarStyle: "black-translucent",
-        title: "Kima",
-    },
-    openGraph: {
-        title: "Kima",
-        description: "Self-hosted music streaming platform",
-        siteName: "Kima",
-        url: "https://github.com/Chevron7Locked/kima-hub",
-        type: "website",
-    },
-};
+export async function generateMetadata(): Promise<Metadata> {
+    const branding = await getServerBranding();
+    return {
+        title: branding.name + " - Your Music",
+        description: branding.tagline,
+        manifest: "/manifest.webmanifest",
+        icons: {
+            icon: [{
+                url: branding.faviconUrl,
+                type: branding.hasCustomFavicon ? "image/png" : "image/x-icon",
+            }],
+            apple: [{
+                url: branding.hasCustomFavicon
+                    ? branding.faviconUrl
+                    : "/assets/images/apple-touch-icon.png",
+                sizes: branding.hasCustomFavicon ? "192x192" : "180x180",
+                type: "image/png",
+            }],
+        },
+        appleWebApp: {
+            capable: true,
+            statusBarStyle: "black-translucent",
+            title: branding.name,
+        },
+        openGraph: {
+            title: branding.name,
+            description: branding.tagline,
+            siteName: branding.name,
+            type: "website",
+        },
+    };
+}
 
 export default function RootLayout({
     children,
