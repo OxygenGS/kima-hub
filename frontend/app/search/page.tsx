@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMusicPermissions } from "@/lib/auth-context";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
@@ -49,10 +49,8 @@ export default function SearchPage() {
         uniqueUserCount,
     } = useSoulseekSearch({ query, enabled: canDownloadTracks });
 
-    // A revoked track permission must not leave the P2P tab selected.
-    useEffect(() => {
-        if (!canDownloadTracks && filterTab === "soulseek") setFilterTab("all");
-    }, [canDownloadTracks, filterTab]);
+    // Render the library tab immediately when track rights are revoked.
+    // Avoid a state update inside an effect (and keep the full search usable).
 
     const urlQuery = searchParams.get("q") ?? "";
     const [prevUrlQuery, setPrevUrlQuery] = useState(urlQuery);
@@ -69,8 +67,9 @@ export default function SearchPage() {
         isDiscoverSearching ||
         isSoulseekSearching ||
         isSoulseekPolling;
-    const showLibrary = filterTab === "all" || filterTab === "library";
-    const showDiscover = filterTab === "all" || filterTab === "discover";
+    const activeFilterTab: FilterTab = !canDownloadTracks && filterTab === "soulseek" ? "all" : filterTab;
+    const showLibrary = activeFilterTab === "all" || activeFilterTab === "library";
+    const showDiscover = activeFilterTab === "all" || activeFilterTab === "discover";
 
     const hasTopResult = libraryResults?.artists?.[0] || topArtist;
     const hasTracks =
@@ -79,7 +78,7 @@ export default function SearchPage() {
         hasSearched &&
         hasTopResult &&
         hasTracks &&
-        filterTab !== "soulseek" &&
+        activeFilterTab !== "soulseek" &&
         (showLibrary || showDiscover);
 
     const handleTVSearch = (searchQuery: string) => {
@@ -131,7 +130,7 @@ export default function SearchPage() {
                         </div>
 
                         <SearchFilters
-                            filterTab={filterTab}
+                            activeFilterTab={activeFilterTab}
                             onFilterChange={setFilterTab}
                             soulseekEnabled={soulseekEnabled && canDownloadTracks}
                             hasSearched={hasSearched}
@@ -150,7 +149,7 @@ export default function SearchPage() {
 
                 {/* Loading state - only when no results yet */}
                 {hasSearched &&
-                    filterTab !== "soulseek" &&
+                    activeFilterTab !== "soulseek" &&
                     (isLibrarySearching ||
                         isDiscoverSearching ||
                         isSoulseekSearching) &&
@@ -168,7 +167,7 @@ export default function SearchPage() {
                     )}
 
                 {/* Soulseek Tab */}
-                {canDownloadTracks && filterTab === "soulseek" && hasSearched && (
+                {canDownloadTracks && activeFilterTab === "soulseek" && hasSearched && (
                     <div className="animate-fade-soft">
                         <SoulseekBrowser
                             results={soulseekResults}
@@ -184,7 +183,7 @@ export default function SearchPage() {
                 )}
 
                 {/* All / Library / Discover Tabs */}
-                {filterTab !== "soulseek" && (
+                {activeFilterTab !== "soulseek" && (
                     <div className="section-stack">
                         {show2ColumnLayout ?
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-8 animate-fade-soft">
@@ -208,7 +207,7 @@ export default function SearchPage() {
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
                                         Tracks
                                     </h2>
-                                    {filterTab === "all" ?
+                                    {activeFilterTab === "all" ?
                                         <UnifiedSongsList
                                             tracks={
                                                 libraryResults?.tracks ?? []
@@ -217,7 +216,7 @@ export default function SearchPage() {
                                             downloadingFiles={downloadingFiles}
                                             onDownload={handleDownload}
                                         />
-                                    : filterTab === "library" ?
+                                    : activeFilterTab === "library" ?
                                         <LibraryTracksList
                                             tracks={
                                                 libraryResults?.tracks ?? []
@@ -250,7 +249,7 @@ export default function SearchPage() {
                                             <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
                                             Tracks
                                         </h2>
-                                        {filterTab === "all" ?
+                                        {activeFilterTab === "all" ?
                                             <UnifiedSongsList
                                                 tracks={
                                                     libraryResults?.tracks ?? []
@@ -263,7 +262,7 @@ export default function SearchPage() {
                                                 }
                                                 onDownload={handleDownload}
                                             />
-                                        : filterTab === "library" ?
+                                        : activeFilterTab === "library" ?
                                             <LibraryTracksList
                                                 tracks={
                                                     libraryResults?.tracks ?? []
