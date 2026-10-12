@@ -5,6 +5,7 @@ import Image from "next/image";
 import { api } from "@/lib/api";
 import {
     DEFAULT_BRANDING,
+    brandingBackgroundTextContrast,
     useBranding,
     type InstanceBranding,
 } from "@/lib/branding-context";
@@ -123,6 +124,8 @@ function BrandingEditor({
     const faviconUrl = faviconChange === undefined
         ? initial.faviconUrl
         : faviconChange ?? DEFAULT_BRANDING.faviconUrl;
+    const backgroundContrast = brandingBackgroundTextContrast(values.backgroundColor);
+    const backgroundHasLowContrast = backgroundContrast < 4.5;
 
     return (
         <SettingsSection
@@ -187,6 +190,12 @@ function BrandingEditor({
                     This interface uses light text: choose a dark background for readable contrast.
                     The accent color changes primary buttons and themed highlights.
                 </p>
+                {backgroundHasLowContrast && (
+                    <p role="status" className="text-xs text-amber-300">
+                        Low contrast: primary text is only {backgroundContrast.toFixed(1)}:1 against this background.
+                        Choose a darker background for at least 4.5:1 readability.
+                    </p>
+                )}
 
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-lg border border-white/10 p-3 space-y-3">
@@ -194,7 +203,7 @@ function BrandingEditor({
                         <Image src={logoUrl} alt="Selected logo" width={64} height={64} unoptimized className="h-16 w-16 object-contain" />
                         <p className="text-xs text-[var(--text-muted)]">PNG, JPEG or WebP; max. 400 KB. Square images work best.</p>
                         <div className="flex flex-wrap items-center gap-3">
-                            <label className="cursor-pointer text-xs text-brand hover:underline">
+                            <label className="cursor-pointer text-xs text-brand hover:underline focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand">
                                 Choose logo
                                 <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void selectImage(event, "logo")} />
                             </label>
@@ -209,7 +218,7 @@ function BrandingEditor({
                         <Image src={faviconUrl} alt="Selected favicon" width={64} height={64} unoptimized className="h-16 w-16 object-contain" />
                         <p className="text-xs text-[var(--text-muted)]">PNG, JPEG or WebP; max. 128 KB. Square images work best.</p>
                         <div className="flex flex-wrap items-center gap-3">
-                            <label className="cursor-pointer text-xs text-brand hover:underline">
+                            <label className="cursor-pointer text-xs text-brand hover:underline focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand">
                                 Choose favicon
                                 <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void selectImage(event, "favicon")} />
                             </label>
@@ -225,7 +234,7 @@ function BrandingEditor({
                         type="button"
                         disabled={busy}
                         onClick={() => void save()}
-                        className="rounded-lg bg-brand px-5 py-2.5 font-semibold text-black disabled:opacity-50"
+                        className="rounded-lg bg-brand px-5 py-2.5 font-semibold text-brand-contrast disabled:opacity-50"
                     >
                         {busy ? "Saving..." : "Save branding"}
                     </button>
