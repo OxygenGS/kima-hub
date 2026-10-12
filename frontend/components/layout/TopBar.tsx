@@ -272,7 +272,7 @@ export function TopBar() {
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                             />
                         </div>
                     </form>
@@ -355,7 +355,7 @@ export function TopBar() {
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
-                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                                 />
                             </div>
                         </form>
