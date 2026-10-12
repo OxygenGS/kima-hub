@@ -5,6 +5,7 @@ import { Calendar, Clock, Download, Music2, Disc, ArrowRight, CheckCircle2, Load
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -203,6 +204,7 @@ function ReleaseCard({
     onDownload: (albumMbid: string, releaseId: string | number) => void;
     isDownloading: boolean;
 }) {
+    const { canRequestAlbums } = useMusicPermissions();
     const isUpcoming = release.status === 'upcoming';
     const hasIt = release.inLibrary;
 
@@ -236,7 +238,7 @@ function ReleaseCard({
                 </div>
 
                 {/* Download Button Overlay */}
-                {release.canDownload && !hasIt && (
+                {canRequestAlbums && release.canDownload && !hasIt && (
                     <button
                         onClick={() => onDownload(release.albumMbid, release.id)}
                         disabled={isDownloading}
