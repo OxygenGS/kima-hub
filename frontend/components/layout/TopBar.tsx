@@ -23,11 +23,13 @@ import { useAuth } from "@/lib/auth-context";
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
+import { useBranding } from "@/lib/branding-context";
 
 export function TopBar() {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuth();
+    const { branding } = useBranding();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -301,14 +303,16 @@ export function TopBar() {
                             className="flex items-center gap-2 group"
                         >
                             <Image
-                                src="/assets/images/kima.webp"
-                                alt="Kima"
+                                src={branding.logoUrl}
+                                alt={branding.name}
+                                unoptimized
                                 width={32}
                                 height={32}
                                 priority
                                 className="group-hover:scale-105 transition-transform"
                             />
                         </Link>
+                        <span className="ml-2 text-sm font-semibold text-white max-w-40 truncate">{branding.name}</span>
                         <span className="ml-2 px-1.5 py-0.5 text-micro font-medium text-[var(--text-muted)] bg-white/5 rounded border border-white/10">
                             v{APP_VERSION}
                         </span>
