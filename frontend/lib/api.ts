@@ -510,6 +510,8 @@ class ApiClient {
             id: string;
             username: string;
             role: string;
+            canRequestAlbums: boolean;
+            canDownloadTracks: boolean;
             onboardingComplete?: boolean;
             enrichmentSettings?: { enabled: boolean; lastRun?: string };
             createdAt: string;
