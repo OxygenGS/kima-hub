@@ -23,7 +23,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    # BullMQ requires noeviction: silently evicting jobs/locks corrupts queue state.
+    # Keep the 96 MiB test limit. When full, Redis will reject writes rather than
+    # discarding queue keys. Raise the budget only if monitoring shows pressure.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
