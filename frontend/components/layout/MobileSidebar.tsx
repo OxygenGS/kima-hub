@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import Image from "next/image";
+import { useBranding } from "@/lib/branding-context";
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const pathname = usePathname();
     const queryClient = useQueryClient();
     const { logout } = useAuth();
+    const { branding } = useBranding();
     const { toast } = useToast();
     const [isSyncing, setIsSyncing] = useState(false);
     const isFirstRender = useRef(true);
@@ -95,15 +97,16 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         onClick={onClose}
                     >
                         <Image
-                            src="/assets/images/kima.webp"
-                            alt="Kima"
+                            src={branding.logoUrl}
+                            alt={branding.name}
+                            unoptimized
                             width={32}
                             height={32}
                             priority
                             className="flex-shrink-0"
                         />
                         <span className="text-lg font-bold text-white tracking-tight">
-                            Kima
+                            {branding.name}
                         </span>
                     </Link>
                     <button
