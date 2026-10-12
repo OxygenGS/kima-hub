@@ -243,3 +243,143 @@ jobs:
                   fi
 
                   echo "AIO fresh-install smoke test passed"
+
+db-upgrade:
+        name: Existing Kima Database Upgrade & Restore
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            contents: read
+        services:
+            postgres:
+                image: pgvector/pgvector:pg16
+                env:
+                    POSTGRES_USER: test
+                    POSTGRES_PASSWORD: test
+                    POSTGRES_DB: upgrade_source
+                ports:
+                    - 5434:5432
+                options: >-
+                    --health-cmd "pg_isready -U test -d upgrade_source"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            # Synthetic test-only credentials on a throwaway GitHub runner.
+            PGPASSWORD: test
+            PGHOST: localhost
+            PGPORT: "5434"
+            PGUSER: test
+        steps:
+            - name: Checkout Chillverse candidate
+              uses: actions/checkout@v4
+
+            - name: Checkout pristine upstream baseline (pinned main)
+              uses: actions/checkout@v4
+              with:
+                  # Pre-fork Kima v1.10.0 schema, without music permissions
+                  # or BrandingSettings. Pinned for reproducible upgrades.
+                  ref: 1b390bc60cf915b6314da382cbd7a1ee3ce2f6ee
+                  path: baseline
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  cache: npm
+                  cache-dependency-path: backend/package-lock.json
+
+            - name: Install Prisma CLI and PostgreSQL client
+              run: |
+                  cd backend
+                  npm ci
+                  if ! command -v psql >/dev/null || ! command -v pg_dump >/dev/null; then
+                      sudo apt-get update -qq
+                      sudo apt-get install -y postgresql-client
+                  fi
+                  psql --version
+                  pg_dump --version
+
+            - name: Build a pre-fork database using baseline migration history
+              working-directory: backend
+              env:
+                  DATABASE_URL: postgresql://test:test@localhost:5434/upgrade_source
+              run: npx prisma migrate deploy --schema ../baseline/backend/prisma/schema.prisma
+
+            - name: Confirm old schema, then insert synthetic accounts and library
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  count="$(psql -d upgrade_source -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='User' AND column_name IN ('canRequestAlbums','canDownloadTracks')")"
+                  test "$count" = "0"
+                  absent="$(psql -d upgrade_source -Atc "SELECT to_regclass('public.\"BrandingSettings\"') IS NULL")"
+                  test "$absent" = "t"
+                  psql -v ON_ERROR_STOP=1 -d upgrade_source -f .github/ci/upgrade-fixture.sql
+
+            - name: Back up the old database, create a separate restored copy
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  pg_dump --format=custom --no-owner --no-acl \
+                      --file="$RUNNER_TEMP/legacy-kima.dump" -d upgrade_source
+                  test -s "$RUNNER_TEMP/legacy-kima.dump"
+                  psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE upgrade_restored;"
+                  pg_restore --exit-on-error --no-owner --no-acl \
+                      -d upgrade_restored "$RUNNER_TEMP/legacy-kima.dump"
+                  echo "A complete synthetic pre-upgrade backup was restored."
+
+            - name: Upgrade only the restored copy using fork migrations
+              working-directory: backend
+              env:
+                  DATABASE_URL: postgresql://test:test@localhost:5434/upgrade_restored
+              run: npx prisma migrate deploy
+
+            - name: Verify preserved data, relationships, settings and permission defaults
+              run: |
+                  psql -v ON_ERROR_STOP=1 -d upgrade_restored \
+                      -f .github/ci/assert-upgrade.sql
+
+            - name: Simulate post-upgrade admin changes
+              run: |
+                  psql -v ON_ERROR_STOP=1 -d upgrade_restored <<'SQL'
+                  UPDATE "User"
+                  SET "canRequestAlbums"=true, "canDownloadTracks"=true
+                  WHERE "id"='upgrade-listener';
+
+                  INSERT INTO "BrandingSettings"
+                      ("id","name","tagline","accentColor","backgroundColor","updatedAt")
+                  VALUES
+                      ('default','Chillverse Upgrade Fixture','Kept across migrations',
+                       '#3dacdb','#0a0a0a',NOW());
+                  SQL
+
+            - name: Run migrations a second time (idempotence)
+              working-directory: backend
+              env:
+                  DATABASE_URL: postgresql://test:test@localhost:5434/upgrade_restored
+              run: npx prisma migrate deploy
+
+            - name: Check custom brand and granted rights survive re-deploy
+              run: |
+                  psql -v ON_ERROR_STOP=1 -d upgrade_restored \
+                      -f .github/ci/assert-upgrade-second-pass.sql
+
+            - name: Verify backup can independently restore the original version
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE upgrade_rollback;"
+                  pg_restore --exit-on-error --no-owner --no-acl \
+                      -d upgrade_rollback "$RUNNER_TEMP/legacy-kima.dump"
+
+                  old_user="$(psql -d upgrade_rollback -Atc "SELECT count(*) FROM \"User\" WHERE id IN ('upgrade-admin','upgrade-listener')")"
+                  test "$old_user" = "2"
+                  old_track="$(psql -d upgrade_rollback -Atc "SELECT count(*) FROM \"Track\" WHERE id='upgrade-track'")"
+                  test "$old_track" = "1"
+                  old_permissions="$(psql -d upgrade_rollback -Atc "SELECT count(*) FROM information_schema.columns WHERE table_name='User' AND column_name IN ('canRequestAlbums','canDownloadTracks')")"
+                  test "$old_permissions" = "0"
+                  echo "Legacy data restored again from backup, with original schema."
+
+                  source_permissions="$(psql -d upgrade_source -Atc "SELECT count(*) FROM information_schema.columns WHERE table_name='User' AND column_name IN ('canRequestAlbums','canDownloadTracks')")"
+                  test "$source_permissions" = "0"
+                  echo "Original source database remained untouched."
+
