@@ -1,5 +1,10 @@
 name: PR Checks
 
+# New commits supersede older drafts; avoid building every intermediate state.
+concurrency:
+    group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
 on:
     pull_request:
         branches: [main]
