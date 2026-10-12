@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { logger } from "../utils/logger";
-import { requireAuthOrToken, requireAdmin } from "../middleware/auth";
+import { requireAuthOrToken, requireAdmin, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { config } from "../config";
 import { getSystemSettings } from "../utils/systemSettings";
@@ -88,7 +88,7 @@ async function verifyArtistName(
 }
 
 // POST /downloads - Create download job
-router.post("/", async (req, res) => {
+router.post("/", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const {
             type,
