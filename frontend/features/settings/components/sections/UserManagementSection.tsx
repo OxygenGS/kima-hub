@@ -205,22 +205,24 @@ export function UserManagementSection() {
                                         <span className="text-xs text-[var(--text-muted)]">Full access (admin)</span>
                                     ) : (
                                         <>
-                                            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                                                 Album requests
                                                 <SettingsToggle
+                                                    label={`Allow album requests for ${user.username}`}
                                                     checked={user.canRequestAlbums}
                                                     disabled={savingPermission === user.id}
                                                     onChange={(value) => handlePermissionChange(user, "canRequestAlbums", value)}
                                                 />
-                                            </label>
-                                            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                                                 Track downloads
                                                 <SettingsToggle
+                                                    label={`Allow track downloads for ${user.username}`}
                                                     checked={user.canDownloadTracks}
                                                     disabled={savingPermission === user.id}
                                                     onChange={(value) => handlePermissionChange(user, "canDownloadTracks", value)}
                                                 />
-                                            </label>
+                                            </div>
                                         </>
                                     )}
                                     {currentUser?.id !== user.id && (
