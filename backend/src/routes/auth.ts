@@ -197,6 +197,8 @@ router.get("/me", requireAuth, async (req, res) => {
                 id: true,
                 username: true,
                 role: true,
+                canRequestAlbums: true,
+                canDownloadTracks: true,
                 onboardingComplete: true,
                 enrichmentSettings: true,
                 createdAt: true,
@@ -346,11 +348,34 @@ router.post("/create-user", requireAuth, requireAdmin, async (req, res) => {
             id: user.id,
             username: user.username,
             role: user.role,
+            canRequestAlbums: user.canRequestAlbums,
+            canDownloadTracks: user.canDownloadTracks,
             createdAt: user.createdAt,
         });
     } catch (error) {
         logger.error("Create user error:", error);
         res.status(500).json({ error: "Failed to create user" });
+    }
+});
+
+// PATCH /auth/users/:id/permissions (Admin only)
+router.patch("/users/:id/permissions", requireAuth, requireAdmin, async (req, res) => {
+    const schema = z.object({
+        canRequestAlbums: z.boolean().optional(),
+        canDownloadTracks: z.boolean().optional(),
+    }).strict().refine(data => Object.keys(data).length > 0);
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid permissions" });
+    try {
+        const user = await prisma.user.update({
+            where: { id: req.params.id },
+            data: parsed.data,
+            select: { id: true, username: true, role: true, canRequestAlbums: true, canDownloadTracks: true },
+        });
+        return res.json(user);
+    } catch (error) {
+        logger.error("Update user permissions error:", error);
+        return res.status(500).json({ error: "Failed to update permissions" });
     }
 });
 
