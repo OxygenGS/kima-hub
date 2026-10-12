@@ -82,7 +82,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     // Show loading state only on protected pages
     if (!isPublicPage && isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-black">
+            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
                 <div className="flex flex-col items-center gap-4">
                     <GradientSpinner size="lg" />
                     <p className="text-[var(--text-secondary)] text-sm">Loading...</p>
@@ -124,7 +124,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     >
                         Skip to main content
                     </a>
-                    <div className="h-screen bg-black overflow-hidden flex flex-col">
+                    <div className="h-screen bg-[var(--bg-primary)] overflow-hidden flex flex-col">
                         <MediaControlsHandler />
                         <TopBar />
 
@@ -143,7 +143,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         <main
                             id="main-content"
                             tabIndex={-1}
-                            className="flex-1 bg-gradient-to-b from-[#1a1a1a] via-black to-black mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
+                            className="flex-1 bg-gradient-to-b from-[var(--bg-hover)] via-[var(--bg-primary)] to-[var(--bg-primary)] mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
                             style={{
                                 marginTop: "calc(58px + var(--standalone-safe-area-top, 0px))",
                                 marginBottom: "calc(56px + var(--standalone-safe-area-bottom, 0px))",
@@ -173,7 +173,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     Skip to main content
                 </a>
                 <div
-                    className="h-screen bg-black overflow-hidden flex flex-col"
+                    className="h-screen bg-[var(--bg-primary)] overflow-hidden flex flex-col"
                     style={{ paddingTop: "calc(64px + var(--titlebar-height, 0px))" }}
                 >
                     <MediaControlsHandler />
@@ -183,7 +183,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         <main
                             id="main-content"
                             tabIndex={-1}
-                            className="flex-1 bg-gradient-to-b from-[#1a1a1a] via-black to-black rounded-lg overflow-y-auto relative focus:outline-none"
+                            className="flex-1 bg-gradient-to-b from-[var(--bg-hover)] via-[var(--bg-primary)] to-[var(--bg-primary)] rounded-lg overflow-y-auto relative focus:outline-none"
                         >
                             {pathname !== "/vibe" && <GalaxyBackground />}
                             {children}
@@ -201,7 +201,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
     // If not authenticated on a protected page, auth context will redirect
     return (
-        <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
                 <p className="text-[var(--text-secondary)] text-sm">Redirecting...</p>
