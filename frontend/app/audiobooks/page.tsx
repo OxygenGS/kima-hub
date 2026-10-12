@@ -8,6 +8,7 @@ import { AudiobookCard } from "@/components/ui/AudiobookCard";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
 import { useAuth } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
 import { useToast } from "@/lib/toast-context";
 import { useAudiobooksQuery, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -61,6 +62,7 @@ function SectionHeader({ title, count, children }: { title: string; count?: numb
 }
 
 export default function AudiobooksPage() {
+    const { branding } = useBranding();
     const router = useRouter();
     useAuth();
     const { toast } = useToast();
@@ -303,7 +305,7 @@ export default function AudiobooksPage() {
                         {[
                             { num: "01", title: "Install Audiobookshelf", desc: "Set up your own Audiobookshelf instance via Docker or use an existing installation" },
                             { num: "02", title: "Get API Key", desc: "Settings > Users > Click your user > API Tokens > Generate" },
-                            { num: "03", title: "Configure", desc: "Enter your Audiobookshelf URL and API key in Kima settings" },
+                            { num: "03", title: "Configure", desc: `Enter your Audiobookshelf URL and API key in ${branding.name} settings` },
                         ].map((step) => (
                             <div
                                 key={step.num}
