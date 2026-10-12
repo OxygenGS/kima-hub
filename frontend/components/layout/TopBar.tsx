@@ -214,7 +214,7 @@ export function TopBar() {
 
     return (
         <header
-            className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
+            className="fixed top-0 left-0 right-0 bg-[var(--bg-primary)] flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
             style={{
                 height: isMobileOrTablet
                     ? "calc(58px + var(--standalone-safe-area-top, 0px))"
