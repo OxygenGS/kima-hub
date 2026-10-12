@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useBranding } from "@/lib/branding-context";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsSelect } from "../ui";
 import { SystemSettings } from "../../types";
 import { ExternalLink } from "lucide-react";
@@ -14,6 +15,7 @@ interface SoulseekSectionProps {
 }
 
 export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: SoulseekSectionProps) {
+    const { branding } = useBranding();
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
@@ -32,7 +34,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
 
     const mode = settings.soulseekMode || "p2p";
     const isSlskd = mode === "slskd";
-    // P2P needs Kima-side credentials; slskd only needs a reachable URL
+    // Direct P2P needs server-side credentials; slskd only needs a reachable URL
     // (slskd holds its own Soulseek account).
     const canTest = isSlskd
         ? !!settings.slskdUrl
@@ -49,7 +51,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                 description={
                     isSlskd
                         ? "Route through a slskd REST API instance. slskd holds its own Soulseek account, so no credentials are needed here."
-                        : "Connect directly using Kima's built-in Soulseek client and your account credentials."
+                        : `Connect directly using ${branding.name}'s built-in Soulseek client and your account credentials.`
                 }
             >
                 <SettingsSelect
