@@ -141,7 +141,7 @@ jobs:
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
 
-aio-smoke:
+    aio-smoke:
         name: All-in-One Fresh-Install Smoke Test
         runs-on: ubuntu-latest
         timeout-minutes: 90
