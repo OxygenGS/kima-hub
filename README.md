@@ -1,3 +1,5 @@
+This is a branch of kima-hub. More info soon about what will be diffrent in this branch.
+
 # kima-hub
 
 [![Docker Image](https://img.shields.io/docker/v/chevron7locked/kima?label=Docker&sort=semver)](https://hub.docker.com/r/chevron7locked/kima)
