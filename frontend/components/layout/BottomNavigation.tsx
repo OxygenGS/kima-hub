@@ -50,7 +50,7 @@ export function BottomNavigation() {
 
     return (
         <nav
-            className="fixed bottom-0 left-0 right-0 z-(--z-nav) bg-black border-t border-white/10"
+            className="fixed bottom-0 left-0 right-0 z-(--z-nav) bg-[var(--bg-primary)] border-t border-white/10"
             role="navigation"
             aria-label="Main navigation"
             style={{
@@ -69,8 +69,8 @@ export function BottomNavigation() {
                             className={cn(
                                 "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors duration-200",
                                 isActive
-                                    ? "text-white"
-                                    : "text-[var(--text-muted)] active:text-gray-300"
+                                    ? "text-brand"
+                                    : "text-[var(--text-muted)] active:text-[var(--text-primary)]"
                             )}
                             aria-label={item.name}
                             aria-current={isActive ? "page" : undefined}
@@ -78,7 +78,7 @@ export function BottomNavigation() {
                             <Icon
                                 className={cn(
                                     "w-5 h-5 mb-1 transition-all duration-200",
-                                    isActive && "text-white"
+                                    isActive && "text-brand"
                                 )}
                                 strokeWidth={isActive ? 2.5 : 2}
                             />
