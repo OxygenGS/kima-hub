@@ -24,12 +24,18 @@ database migration outside the isolated CT 105 test environment.
       existing root `Dockerfile` combines frontend, backend, PostgreSQL,
       Redis and audio analyzers; the four-container CT 105 stack remains the
       known-good development baseline.
-- [ ] **Verify all-in-one runtime separately.** The normal PR checks build the
-      root image but do not boot it. An isolated `docker-compose.chillverse-aio-test.yml`
-      now provides a loopback-only port 3130 and separate named volumes for a
-      future fresh-install smoke test. Check CT 105 memory and free Docker disk
-      space *before* building; ML dependencies make this image substantial.
-      Do not take down or reconfigure the existing DEV stack.
+- [x] **Verify all-in-one runtime in disposable CI environment.** GitHub
+      Actions run 38311997469 (commit `7daad0db`) passed all five jobs,
+      including building/loading the root Dockerfile and booting the resulting
+      image on a hosted runner with isolated volumes. The smoke test checks
+      container health, frontend onboarding, public default branding, the
+      user-permission fields, branding table and unauthenticated branding write
+      denial. This is NOT a substitute for end-to-end UI, playback or upgrade
+      testing.
+- [ ] **Manual all-in-one smoke on dedicated hardware, if available later.**
+      `docker-compose.chillverse-aio-test.yml` uses loopback-only port 3130
+      and separate volumes. Do not start it on CT 105 or load atlas with a
+      large image without a separate resource assessment.
 - [ ] **Confirm image ownership and release destination.** The existing publish
       workflow pushes `.../kima:latest` and versioned tags to Docker Hub and
       GHCR. `docker-compose.prod.yml` defaults to the original upstream
@@ -41,8 +47,12 @@ database migration outside the isolated CT 105 test environment.
       `false` for existing non-admin users. This intentionally fails closed
       but changes former download abilities. Communicate it and provide
       admin review before any production migration.
-- [ ] **Test a fresh installation** on an isolated new environment, with no
-      inherited data or secret configuration, including onboarding and branding.
+- [x] **Automated fresh-install smoke** passed in disposable GitHub Actions
+      runner 38311997469, including new database schema, branding defaults
+      and frontend onboarding endpoint.
+- [ ] **Complete fresh-install interactive E2E** (admin onboarding/login,
+      saving a custom brand, switching accounts and restarting the AIO image)
+      remains to be tested on a disposable instance.
 - [ ] **Test upgrading a disposable copy of an existing database**, including
       backup, migrations, user rights, metadata, branding and rollback plan.
 - [ ] **Test representative audio playback and its controls.** CT 105 currently
