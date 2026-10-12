@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import Image from "next/image";
+import { useBranding } from "@/lib/branding-context";
 
 function deriveProgress(p: number): number {
     return Math.min(p, 90);
@@ -28,6 +29,7 @@ function deriveMessage(p: number): string {
 }
 
 export default function SyncPage() {
+    const { branding } = useBranding();
     useRouter();
     const queryClient = useQueryClient();
     const [initError, setInitError] = useState("");
@@ -195,15 +197,16 @@ export default function SyncPage() {
                             <div className="relative">
                                 <div className="absolute inset-0 bg-white/10 blur-xl rounded-full" />
                                 <Image
-                                    src="/assets/images/kima.webp"
-                                    alt="Kima"
+                                    src={branding.logoUrl}
+                                     unoptimized
+                                    alt={`${branding.name} logo`}
                                     width={48}
                                     height={48}
                                     className="relative z-(--z-raised)"
                                 />
                             </div>
                             <h1 className="text-4xl font-bold text-white">
-                                Kima Hub
+                                {branding.name}
                             </h1>
                         </div>
                     </div>
