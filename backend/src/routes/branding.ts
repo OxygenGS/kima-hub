@@ -49,8 +49,9 @@ async function normalizeImage(dataUrl: string, field: ImageField): Promise<Buffe
     const pipeline = sharp(input, { limitInputPixels: 4_000_000, failOn: "error" })
         .rotate()
         .resize(field === "logo" ? 512 : 192, field === "logo" ? 512 : 192, {
-            fit: "inside",
+            fit: field === "logo" ? "inside" : "contain",
             withoutEnlargement: field === "logo",
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
         });
     return field === "logo"
         ? pipeline.webp({ quality: 82 }).toBuffer()
