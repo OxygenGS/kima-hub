@@ -4,7 +4,7 @@ import path from "path";
 import rateLimit from "express-rate-limit";
 import { withRetry } from "../utils/async";
 import { logger } from "../utils/logger";
-import { requireAuthOrToken } from "../middleware/auth";
+import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
 import { safeError } from "../utils/errors";
 import { z } from "zod";
 import { spotifyService } from "../services/spotify";
@@ -143,7 +143,7 @@ router.get("/preview/:jobId", async (req, res) => {
  * POST /api/spotify/import/quick
  * Fire-and-forget import: skip preview, fetch + match + download all in background
  */
-router.post("/import/quick", async (req, res) => {
+router.post("/import/quick", requireMusicPermission("canRequestAlbums"), requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: "Unauthorized" });
@@ -181,7 +181,7 @@ router.post("/import/quick", async (req, res) => {
  * POST /api/spotify/import
  * Start importing a Spotify playlist
  */
-router.post("/import", async (req, res) => {
+router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({ error: "Unauthorized" });
