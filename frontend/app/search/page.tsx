@@ -130,7 +130,7 @@ export default function SearchPage() {
                         </div>
 
                         <SearchFilters
-                            activeFilterTab={activeFilterTab}
+                            filterTab={activeFilterTab}
                             onFilterChange={setFilterTab}
                             soulseekEnabled={soulseekEnabled && canDownloadTracks}
                             hasSearched={hasSearched}
