@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandContrastColor } from "../branding-context";
+import { brandContrastColor, brandingBackgroundTextContrast } from "../branding-context";
 
 const luminance = (hex: string): number => {
     const channels = [1, 3, 5].map((index) => {
@@ -16,6 +16,27 @@ const contrastRatio = (foreground: string, background: string) => {
     const b = luminance(background);
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 };
+
+describe("brandingBackgroundTextContrast", () => {
+    it("accepts the default and other dark backgrounds", () => {
+        expect(brandingBackgroundTextContrast("#0a0a0a")).toBeGreaterThan(4.5);
+        expect(brandingBackgroundTextContrast("#202020")).toBeGreaterThan(4.5);
+    });
+
+    it("identifies light backgrounds that obscure normal text", () => {
+        expect(brandingBackgroundTextContrast("#ffffff")).toBeLessThan(4.5);
+        expect(brandingBackgroundTextContrast("#aaaaaa")).toBeLessThan(4.5);
+    });
+
+    it("matches the WCAG formula for body text", () => {
+        for (const hex of ["#0a0a0a", "#303030", "#555555", "#ffffff"]) {
+            expect(brandingBackgroundTextContrast(hex)).toBeCloseTo(
+                contrastRatio("#e5e5e5", hex),
+                6
+            );
+        }
+    });
+});
 
 describe("brandContrastColor", () => {
     it("chooses dark text for light or bright accent colors", () => {
