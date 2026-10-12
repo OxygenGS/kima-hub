@@ -140,3 +140,106 @@ jobs:
                   tags: kima:pr-check
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
+
+aio-smoke:
+        name: All-in-One Fresh-Install Smoke Test
+        runs-on: ubuntu-latest
+        timeout-minutes: 90
+        needs: [build-docker]
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+
+            # The full AIO image includes PyTorch/Essentia and model files.
+            # Free up preinstalled SDKs before loading the image into Docker.
+            - name: Free disk and record runner resources
+              run: |
+                  sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+                  df -h /
+                  free -h
+
+            - uses: docker/setup-buildx-action@v3
+
+            - name: Build and load local AIO image (never push)
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  push: false
+                  load: true
+                  tags: chillverse-listen:aio-ci-smoke
+                  cache-from: type=gha
+                  build-args: |
+                      NEXT_PUBLIC_BUILD_TYPE=ci-smoke
+
+            - name: Boot a fresh isolated AIO instance and check endpoints
+              shell: bash
+              timeout-minutes: 15
+              run: |
+                  set -euo pipefail
+
+                  name="chillverse-aio-ci-smoke"
+                  docker volume create chillverse-ci-aio-data
+                  docker volume create chillverse-ci-aio-music
+
+                  cleanup() {
+                      docker logs --tail 100 "$name" || true
+                      docker rm -f "$name" || true
+                      docker volume rm -f chillverse-ci-aio-data chillverse-ci-aio-music || true
+                  }
+                  trap cleanup EXIT
+
+                  # Only loopback is published on GitHub's disposable runner.
+                  # No secrets, no production mounts, no registry push.
+                  docker run -d --name "$name" \
+                      --memory=6g \
+                      -p 127.0.0.1:3130:3030 \
+                      -v chillverse-ci-aio-data:/data \
+                      -v chillverse-ci-aio-music:/music \
+                      -e DISABLE_CLAP=true \
+                      chillverse-listen:aio-ci-smoke
+
+                  ready=false
+                  for i in $(seq 1 120); do
+                      health="$(docker inspect --format '{{.State.Health.Status}}' "$name")"
+                      state="$(docker inspect --format '{{.State.Status}}' "$name")"
+                      if [ "$health" = "healthy" ]; then
+                          ready=true
+                          break
+                      fi
+                      if [ "$state" = "exited" ] || [ "$state" = "dead" ]; then
+                          echo "Container stopped unexpectedly: $state"
+                          break
+                      fi
+                      sleep 5
+                  done
+
+                  if [ "$ready" != true ]; then
+                      echo "AIO did not become healthy within 10 minutes."
+                      exit 1
+                  fi
+
+                  curl -fsS --max-time 20 http://127.0.0.1:3130/onboarding -o /dev/null
+
+                  curl -fsS --max-time 20 http://127.0.0.1:3130/api/branding \
+                      | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["name"] == "Kima", d; assert d["accentColor"] == "#fca200", d; print("Fresh-install default branding OK")'
+
+                  # Fresh installs must have both permission fields and the
+                  # instance branding table after automatic Prisma migrations.
+                  n="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM information_schema.columns WHERE table_name='User' AND column_name IN ('canRequestAlbums','canDownloadTracks')")"
+                  test "$n" = "2"
+                  table="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM information_schema.tables WHERE table_name='BrandingSettings'")"
+                  test "$table" = "1"
+                  echo "Fresh-install Prisma migrations OK"
+
+                  # An unauthenticated visitor cannot edit installation branding.
+                  status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
+                      -X POST -H 'Content-Type: application/json' \
+                      -d '{"name":"Unauthorized"}' \
+                      http://127.0.0.1:3130/api/branding)"
+                  if [ "$status" != "401" ] && [ "$status" != "403" ]; then
+                      echo "Unexpected unauthenticated branding update status: $status"
+                      exit 1
+                  fi
+
+                  echo "AIO fresh-install smoke test passed"
