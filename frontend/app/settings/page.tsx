@@ -217,13 +217,13 @@ export default function SettingsPage() {
             </div>
 
                 {/* Save Button - Fixed at bottom */}
-                <div className="sticky bottom-0 pt-8 pb-8 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a] to-[#0a0a0a]/80">
+                <div className="sticky bottom-0 pt-8 pb-8 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)] to-transparent">
                     <div className="relative">
                         <button
                             onClick={handleSaveAll}
                             disabled={isSaving}
-                            className="w-full bg-brand text-black font-bold py-3 px-4 rounded-lg
-                                hover:bg-[#f97316] active:scale-[0.98] transition-all
+                            className="w-full bg-brand text-brand-contrast font-bold py-3 px-4 rounded-lg
+                                hover:bg-brand-hover active:scale-[0.98] transition-all
                                 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSaving ? "Saving..." : "Save Changes"}
