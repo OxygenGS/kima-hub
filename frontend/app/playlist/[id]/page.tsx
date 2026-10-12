@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useAudioState, useAudioPlayback, useAudioControls, Track as AudioTrack } from "@/lib/audio-context";
 import { useAudioController } from "@/lib/audio-controller-context";
 import { cn } from "@/utils/cn";
@@ -115,6 +116,7 @@ export default function PlaylistDetailPage() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const { canDownloadTracks } = useMusicPermissions();
     const { currentTrack } = useAudioState();
     const { format: trackFormat } = useTrackFormat();
     const { isPlaying } = useAudioPlayback();
@@ -678,7 +680,7 @@ export default function PlaylistDetailPage() {
                             )}>
                                 {isMissing ? "Missing from disk" : "Failed"}
                             </span>
-                            {!isMissing && (
+                            {!isMissing && canDownloadTracks && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -1295,14 +1297,14 @@ export default function PlaylistDetailPage() {
                                     download
                                 </span>
                             </div>
-                            <button
+                            {canDownloadTracks && <button
                                 onClick={handleRetryAllPending}
                                 disabled={retryingAll}
                                 className="flex items-center gap-1.5 px-3 py-1 text-xs tabular-nums text-red-300 hover:text-red-200 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={cn("w-3 h-3", retryingAll && "animate-spin")} />
                                 Retry All
-                            </button>
+                            </button>}
                         </div>
                     )}
 
