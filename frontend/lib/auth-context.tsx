@@ -11,11 +11,14 @@ import {
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "./api";
+import { getMusicPermissions } from "./music-permissions";
 
 interface User {
     id: string;
     username: string;
     role: string;
+    canRequestAlbums?: boolean;
+    canDownloadTracks?: boolean;
     onboardingComplete?: boolean;
 }
 
@@ -44,6 +47,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
+
+    // Refresh when the user returns to the tab and periodically while visible.
+    // This reflects admin changes without forcing listeners to log out.
+    // A failed refresh leaves the current session alone; the backend enforces
+    // all permissions against the database on every protected request.
+    const refreshUser = useCallback(async () => {
+        const current = await api.getCurrentUser();
+        setUser(current);
+    }, []);
+
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const syncIfVisible = () => {
+            if (document.visibilityState === "visible") {
+                void refreshUser().catch(() => {});
+            }
+        };
+        window.addEventListener("focus", syncIfVisible);
+        document.addEventListener("visibilitychange", syncIfVisible);
+        const interval = window.setInterval(syncIfVisible, 30_000);
+        return () => {
+            window.removeEventListener("focus", syncIfVisible);
+            document.removeEventListener("visibilitychange", syncIfVisible);
+            window.clearInterval(interval);
+        };
+    }, [isAuthenticated, refreshUser]);
 
     useEffect(() => {
         // Check if user has valid session on mount ONLY
@@ -117,11 +146,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 throw new Error("2FA token required");
             }
 
-            setUser(userData);
+            // Login responses are intentionally minimal. Load the current rights
+            // from /auth/me immediately, rather than waiting for a page reload.
+            let authenticatedUser: User = userData;
+            try {
+                authenticatedUser = await api.getCurrentUser();
+            } catch {
+                // Retain the login result; missing flags hide acquisition UI.
+            }
+            setUser(authenticatedUser);
             setIsAuthenticated(true);
 
             // Redirect based on onboarding status
-            if (userData.onboardingComplete === false) {
+            if (authenticatedUser.onboardingComplete === false) {
                 router.push("/onboarding");
             } else {
                 router.push("/");
@@ -161,4 +198,10 @@ export function useAuth() {
         throw new Error("useAuth must be used within an AuthProvider");
     }
     return context;
+}
+
+/** UI-only permission check. Never use this in place of server-side auth. */
+export function useMusicPermissions() {
+    const { user } = useAuth();
+    return getMusicPermissions(user);
 }
