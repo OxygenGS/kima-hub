@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
 
 type IntegrationKey = "lidarr" | "audiobookshelf" | "soulseek";
 type IntegrationResult = { ok: boolean; message: string };
@@ -13,6 +14,7 @@ type IntegrationResult = { ok: boolean; message: string };
 export default function OnboardingPage() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuth();
+    const { branding } = useBranding();
     const [step, setStep] = useState(1);
     // Separate submitting state: account creation + complete/skip
     const [submitting, setSubmitting] = useState(false);
@@ -88,7 +90,7 @@ export default function OnboardingPage() {
                 const healthRes = await fetch("/api/health", { method: "GET" });
                 if (!healthRes.ok) throw new Error("not ready");
             } catch {
-                setError("Cannot reach the server. Check that Kima is fully started and try again.");
+                setError(`Cannot reach the server. Check that ${branding.name} is fully started and try again.`);
                 return;
             }
             const response = await api.post<{
@@ -236,15 +238,16 @@ export default function OnboardingPage() {
                                 <div className="relative">
                                     <div className="absolute inset-0 bg-white/10 blur-xl rounded-full" />
                                     <Image
-                                        src="/assets/images/kima.webp"
-                                        alt="Kima"
+                                        src={branding.logoUrl}
+                                        alt={`${branding.name} logo`}
+                                        unoptimized
                                         width={48}
                                         height={48}
                                         className="relative z-(--z-raised)"
                                     />
                                 </div>
                                 <h1 className="text-4xl font-bold text-white">
-                                    Kima Hub
+                                    {branding.name}
                                 </h1>
                             </div>
                             <p className="text-[var(--text-secondary)] text-lg">
@@ -305,7 +308,7 @@ export default function OnboardingPage() {
                                                 Create Your Admin Account
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                This is the owner account for your Kima server. You&apos;ll manage users, integrations, and settings from here.
+                                                This is the owner account for your {branding.name} server. You&apos;ll manage users, integrations, and settings from here.
                                             </p>
                                         </div>
 
@@ -567,7 +570,7 @@ export default function OnboardingPage() {
 
                                         {/* What happens next */}
                                         <p className="text-sm text-[var(--text-muted)] border-t border-white/10 pt-4">
-                                            After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.
+                                            After finishing, {branding.name} will scan your music library and start enrichment in the background. This may take a few minutes for large collections.
                                         </p>
 
                                         <div className="flex gap-3">
@@ -621,7 +624,7 @@ export default function OnboardingPage() {
 
                         {/* Footer */}
                         <p className="text-center text-[var(--text-muted)] text-sm mt-6" suppressHydrationWarning>
-                            &copy; {new Date().getFullYear()} Kima. Your music, your way.
+                            &copy; {new Date().getFullYear()} {branding.name}. {branding.tagline}
                         </p>
                     </div>
                 </div>
