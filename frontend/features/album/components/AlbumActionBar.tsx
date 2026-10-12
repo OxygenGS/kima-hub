@@ -1,5 +1,6 @@
 import { Play, Pause, Shuffle, Download, ListPlus } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useMusicPermissions } from "@/lib/auth-context";
 import type { Album } from "../types";
 import type { AlbumSource } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
@@ -31,8 +32,9 @@ export function AlbumActionBar({
     isPlayingThisAlbum = false,
     onPause,
 }: AlbumActionBarProps) {
+    const { canRequestAlbums } = useMusicPermissions();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
-    const showDownload = !isOwned && (album.mbid || album.rgMbid);
+    const showDownload = canRequestAlbums && !isOwned && Boolean(album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
 
     const handlePlayPauseClick = () => {
