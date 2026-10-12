@@ -23,6 +23,7 @@ import { AIServicesSection } from "@/features/settings/components/sections/AISer
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
 import { CacheSection } from "@/features/settings/components/sections/CacheSection";
 import { UserManagementSection } from "@/features/settings/components/sections/UserManagementSection";
+import { BrandingSection } from "@/features/settings/components/sections/BrandingSection";
 import { CorruptTracksSection } from "@/features/settings/components/sections/CorruptTracksSection";
 
 // Define sidebar items
@@ -39,6 +40,7 @@ const sidebarItems: SidebarItem[] = [
     { id: "cache", label: "Library Enrichment", adminOnly: true },
     { id: "corrupt-tracks", label: "Corrupt Tracks", adminOnly: true },
     { id: "users", label: "Users", adminOnly: true },
+    { id: "branding", label: "Branding", adminOnly: true },
 ];
 
 export default function SettingsPage() {
@@ -207,6 +209,9 @@ export default function SettingsPage() {
 
                         {/* User Management */}
                         <UserManagementSection />
+
+                        {/* Per-instance, administrator-managed white-label theme */}
+                        <BrandingSection />
                     </>
                 )}
             </div>
