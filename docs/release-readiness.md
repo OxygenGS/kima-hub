@@ -16,6 +16,14 @@ database migration outside the isolated CT 105 test environment.
 - [x] Native select menus, brand focus indicators, mobile active navigation and
       background-contrast warning visually checked.
 - [x] DEV Redis configured with `maxmemory-policy noeviction` and verified.
+- [x] Synthetic pre-fork database upgrade test: an untouched baseline schema
+      (main at `1b390bc6`) was seeded with two accounts and representative
+      settings, artist, album, track, playlist, history, likes and playback state.
+      A `pg_dump -Fc` backup was restored to another PostgreSQL database;
+      the fork's migrations preserved data and applied permission defaults.
+      Admin-customized permissions and branding survived a second migration
+      pass. The backup was also restored independently to the original schema.
+      The **database upgrade job** passed in GitHub Actions run 38313457995.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
@@ -53,8 +61,20 @@ database migration outside the isolated CT 105 test environment.
 - [ ] **Complete fresh-install interactive E2E** (admin onboarding/login,
       saving a custom brand, switching accounts and restarting the AIO image)
       remains to be tested on a disposable instance.
-- [ ] **Test upgrading a disposable copy of an existing database**, including
-      backup, migrations, user rights, metadata, branding and rollback plan.
+- [x] **Automated upgrade of a disposable pre-fork database** including
+      legacy-schema migration history, synthetic user/music/settings fixtures,
+      custom-format backup/restore, two successive migration deploys,
+      preserved original data, explicit fail-closed permission defaults,
+      saved post-upgrade branding/permissions, and backup recovery.
+      Implemented by `db-upgrade` in `.github/workflows/pr-checks.yml` and
+      SQL checks in `.github/ci/`.
+- [ ] **Complete AIO-image upgrade and operational rollback rehearsal.** The
+      automated test exercises schema upgrade and backup/restore on PostgreSQL,
+      but not booting an OLD all-in-one container, upgrading the SAME mounted
+      `/data` volume to the new AIO image, or reverting the image against a
+      restored volume. Verify these separately using disposable data before
+      approving production migration. Do not treat an old image against a
+      newly migrated database as a rollback strategy.
 - [ ] **Test representative audio playback and its controls.** CT 105 currently
       has an empty music library, so media playback remains unverified.
 - [ ] **Security review:** verify admin-only branding mutations, permissions
