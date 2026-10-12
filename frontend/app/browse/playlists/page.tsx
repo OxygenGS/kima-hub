@@ -14,6 +14,7 @@ import {
     ArrowLeft,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
@@ -72,6 +73,8 @@ function SectionHeader({
 export default function BrowsePlaylistsPage() {
     const router = useRouter();
     const { toast } = useToast();
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
 
     const [activeTab, setActiveTab] = useState<BrowseTab>("playlists");
     const [searchQuery, setSearchQuery] = useState("");
@@ -143,7 +146,7 @@ export default function BrowsePlaylistsPage() {
     };
 
     const handleUrlSubmit = async () => {
-        if (!urlInput.trim()) return;
+        if (!canImportPlaylist || !urlInput.trim()) return;
         setIsParsing(true);
 
         try {
@@ -352,13 +355,13 @@ export default function BrowsePlaylistsPage() {
                             )}
                         </form>
 
-                        <button
+                        {canImportPlaylist && <button
                             onClick={() => setShowUrlModal(true)}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-semibold text-[var(--text-secondary)] hover:text-white transition-all"
                         >
                             <Link2 className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Import URL</span>
-                        </button>
+                        </button>}
                     </div>
 
                     {/* Tabs */}
@@ -452,12 +455,12 @@ export default function BrowsePlaylistsPage() {
                                         Try a different search or import a URL
                                         directly
                                     </p>
-                                    <button
+                                    {canImportPlaylist && <button
                                         onClick={() => setShowUrlModal(true)}
                                         className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all"
                                     >
                                         Import by URL
-                                    </button>
+                                    </button>}
                                 </div>
                             :   <div className="grid-media">
                                     {playlists.map((item, idx) =>
@@ -550,7 +553,7 @@ export default function BrowsePlaylistsPage() {
             </div>
 
             {/* URL Import Modal */}
-            {showUrlModal && (
+            {canImportPlaylist && showUrlModal && (
                 <div
                     className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-(--z-modal) p-4 animate-in fade-in duration-200"
                     onClick={() => setShowUrlModal(false)}
