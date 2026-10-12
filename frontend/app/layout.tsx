@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { BrandingProvider } from "@/lib/branding-context";
 import { FeaturesProvider } from "@/lib/features-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { DownloadProvider } from "@/lib/download-context";
@@ -69,6 +70,7 @@ export default function RootLayout({
                 style={{ fontFamily: "var(--font-montserrat)" }}
             >
                 <GlobalErrorBoundary>
+                    <BrandingProvider>
                     <ServiceWorkerRegistration />
                     <GpuTeardownSuppressor />
                     <AuthProvider>
@@ -90,6 +92,7 @@ export default function RootLayout({
                             </QueryProvider>
                         </FeaturesProvider>
                     </AuthProvider>
+                    </BrandingProvider>
                 </GlobalErrorBoundary>
             </body>
         </html>
