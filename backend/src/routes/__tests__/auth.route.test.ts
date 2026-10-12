@@ -340,6 +340,9 @@ describe('PATCH /auth/users/:id/permissions', () => {
     beforeAll(() => { app = createTestApp(); });
     beforeEach(() => {
         jest.clearAllMocks();
+        // Reset pending mockResolvedValueOnce implementations from other suites.
+        (prisma.user.findUnique as jest.Mock).mockReset();
+        (prisma.user.update as jest.Mock).mockReset();
         clearUserCache();
     });
 
