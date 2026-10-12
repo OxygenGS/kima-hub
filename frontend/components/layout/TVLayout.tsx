@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import { useBranding } from "@/lib/branding-context";
 import { cn } from "@/utils/cn";
 import { useAudio } from "@/lib/audio-context";
 import { api } from "@/lib/api";
