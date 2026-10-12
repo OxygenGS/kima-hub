@@ -1,0 +1,3 @@
+ALTER TABLE "User"
+  ADD COLUMN "canRequestAlbums" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN "canDownloadTracks" BOOLEAN NOT NULL DEFAULT false;
