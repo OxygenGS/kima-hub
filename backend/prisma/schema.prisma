@@ -859,6 +859,8 @@ model User {
   username               String                @unique
   passwordHash           String
   role                   String                @default("user")
+  canRequestAlbums       Boolean               @default(false)
+  canDownloadTracks      Boolean               @default(false)
   onboardingComplete     Boolean               @default(false)
   enrichmentSettings     Json?
   twoFactorEnabled       Boolean               @default(false)
