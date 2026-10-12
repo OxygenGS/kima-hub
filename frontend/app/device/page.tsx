@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import { QRCodeSVG } from "qrcode.react";
@@ -35,6 +36,7 @@ interface LinkedDevice {
 export default function DeviceLinkPage() {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const { branding } = useBranding();
     const { toast } = useToast();
     const [linkCode, setLinkCode] = useState<DeviceLinkCode | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -186,7 +188,7 @@ export default function DeviceLinkPage() {
                         Link Mobile Device
                     </h1>
                     <p className="text-[var(--text-secondary)]">
-                        Scan the QR code or enter the code in the Kima app to link your device
+                        Scan the QR code or enter the code in the {branding.name} app to link your device
                     </p>
                 </div>
 
@@ -377,7 +379,7 @@ export default function DeviceLinkPage() {
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
                                 1
                             </span>
-                            <span>Open the Kima app on your mobile device</span>
+                            <span>Open the {branding.name} app on your mobile device</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
