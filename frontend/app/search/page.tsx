@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
@@ -23,6 +24,7 @@ import type { FilterTab } from "@/features/search/types";
 export default function SearchPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { canDownloadTracks } = useMusicPermissions();
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
     const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
@@ -45,7 +47,12 @@ export default function SearchPage() {
         handleDownload,
         handleBulkDownload,
         uniqueUserCount,
-    } = useSoulseekSearch({ query });
+    } = useSoulseekSearch({ query, enabled: canDownloadTracks });
+
+    // A revoked track permission must not leave the P2P tab selected.
+    useEffect(() => {
+        if (!canDownloadTracks && filterTab === "soulseek") setFilterTab("all");
+    }, [canDownloadTracks, filterTab]);
 
     const urlQuery = searchParams.get("q") ?? "";
     const [prevUrlQuery, setPrevUrlQuery] = useState(urlQuery);
@@ -126,7 +133,7 @@ export default function SearchPage() {
                         <SearchFilters
                             filterTab={filterTab}
                             onFilterChange={setFilterTab}
-                            soulseekEnabled={soulseekEnabled}
+                            soulseekEnabled={soulseekEnabled && canDownloadTracks}
                             hasSearched={hasSearched}
                             soulseekResultCount={soulseekResults.length}
                         />
@@ -161,7 +168,7 @@ export default function SearchPage() {
                     )}
 
                 {/* Soulseek Tab */}
-                {filterTab === "soulseek" && hasSearched && (
+                {canDownloadTracks && filterTab === "soulseek" && hasSearched && (
                     <div className="animate-fade-soft">
                         <SoulseekBrowser
                             results={soulseekResults}
