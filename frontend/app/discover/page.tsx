@@ -18,11 +18,13 @@ import { HowItWorks } from "@/features/discover/components/HowItWorks";
 import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context";
 import { DiscoverSettingsTab } from "@/components/activity/DiscoverSettingsTab";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 
 export default function DiscoverWeeklyPage() {
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
+    const { canRequestAlbums } = useMusicPermissions();
     const { setSettingsContent, settingsOwner } = useActivityPanelSettings();
     const queryClient = useQueryClient();
 
@@ -234,7 +236,7 @@ export default function DiscoverWeeklyPage() {
                                         unavailable={playlist.unavailable}
                                         currentPreview={currentPreview}
                                         onTogglePreview={handleTogglePreview}
-                                        onRetryAll={handleRetryUnavailable}
+                                        onRetryAll={canRequestAlbums ? handleRetryUnavailable : undefined}
                                         isRetrying={retryingUnavailable}
                                     />
                                 </section>
@@ -299,7 +301,7 @@ export default function DiscoverWeeklyPage() {
                                         </div>
                                     </div>
 
-                                    <button
+                                    {canRequestAlbums ? <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating}
                                         aria-label={isGenerating ? "Playlist generation in progress" : "Build this week's playlist"}
@@ -321,7 +323,11 @@ export default function DiscoverWeeklyPage() {
                                                 Build This Week&apos;s Playlist
                                             </span>
                                         )}
-                                    </button>
+                                    </button> : (
+                                        <p className="text-center text-sm text-[var(--text-muted)]">
+                                            An administrator can enable album requests to build a new Discover Weekly playlist.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}
