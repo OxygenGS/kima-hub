@@ -38,8 +38,9 @@ services:
     volumes:
       - aio_test_data:/data
       - aio_test_music:/music
+    # A nested Docker/LXC setup might not expose swap accounting.
+    # Cap container RAM; check Proxmox CT memory headroom before starting.
     mem_limit: 6g
-    memswap_limit: 8g
     restart: "no"
 
 volumes:
