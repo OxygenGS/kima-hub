@@ -124,7 +124,7 @@ export function ActivityPanel({
                                     className={cn(
                                         "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors duration-200 relative",
                                         resolvedActiveTab === tab.id
-                                            ? "text-white border-b-2 border-[#f5c518]"
+                                            ? "text-white border-b-2 border-brand"
                                             : "text-[var(--text-secondary)] hover:text-white/70"
                                     )}
                                 >
@@ -136,7 +136,7 @@ export function ActivityPanel({
                                                 "min-w-[18px] h-[18px] px-1 rounded-full text-xs font-semibold flex items-center justify-center ml-1",
                                                 tab.id === "active"
                                                     ? "bg-blue-500 text-white"
-                                                    : "bg-[#f5c518] text-black"
+                                                    : "bg-brand text-brand-contrast"
                                             )}
                                         >
                                             {badge > 99 ? "99+" : badge}
@@ -206,7 +206,7 @@ export function ActivityPanel({
                 {/* Header - Command Index style */}
                 <div className="flex items-center justify-between px-4 py-4 border-b-2 border-white/10">
                     <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full" />
+                        <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                         <h2 className="text-xs tabular-nums font-semibold text-[var(--text-muted)] whitespace-nowrap">
                             Activity Feed
                         </h2>
@@ -238,14 +238,14 @@ export function ActivityPanel({
                                 className={cn(
                                     "flex-1 flex items-center justify-center gap-2 py-2.5 px-2 text-xs tabular-nums font-semibold transition-all duration-200 relative whitespace-nowrap border-l-2",
                                     resolvedActiveTab === tab.id
-                                        ? "bg-[var(--bg-secondary)] border-[#eab308] text-white"
+                                        ? "bg-[var(--bg-secondary)] border-brand text-white"
                                         : "border-transparent text-[var(--text-muted)] hover:text-white hover:bg-white/5"
                                 )}
                             >
                                 <Icon className="w-3.5 h-3.5" />
                                 <span className="hidden lg:inline">{tab.label}</span>
                                 {badge && (
-                                    <span className="text-micro tabular-nums text-[#eab308]">
+                                    <span className="text-micro tabular-nums text-brand">
                                         {badge > 99 ? "99" : badge}
                                     </span>
                                 )}
