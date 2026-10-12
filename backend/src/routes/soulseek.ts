@@ -7,7 +7,7 @@ import { safeError } from "../utils/errors";
  */
 
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireMusicPermission } from "../middleware/auth";
 import { soulseekService, SearchResult } from "../services/soulseek";
 import { getSystemSettings } from "../utils/systemSettings";
 import { randomUUID } from "crypto";
@@ -341,6 +341,7 @@ router.get("/search/:searchId", requireAuth, async (req, res) => {
 router.post(
     "/download",
     requireAuth,
+    requireMusicPermission("canDownloadTracks"),
     requireSoulseekConfigured,
     async (req, res) => {
         let jobId: string | null = null;
