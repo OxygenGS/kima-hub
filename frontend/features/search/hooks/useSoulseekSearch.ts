@@ -38,10 +38,7 @@ export function useSoulseekSearch({
     const searchIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (!enabled) {
-            setSoulseekEnabled(false);
-            return;
-        }
+        if (!enabled) return;
         let cancelled = false;
         const checkSoulseekStatus = async () => {
             try {
