@@ -146,7 +146,8 @@ WORKDIR /app/audio-analyzer-clap
 COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
 
 # Create database readiness check script
-RUN cat > /app/wait-for-db.sh << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /app/wait-for-db.sh <<'EOF'
 #!/bin/bash
 TIMEOUT=${1:-120}
 COUNTER=0
@@ -194,6 +195,7 @@ echo "[wait-for-db] Listing available tables:"
 PGPASSWORD=kima psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
 exit 1
 EOF
+DOCKER_SCRIPT
 
 RUN chmod +x /app/wait-for-db.sh && \
     sed -i 's/\r$//' /app/wait-for-db.sh
@@ -282,7 +284,8 @@ WORKDIR /app
 COPY healthcheck-prod.js /app/healthcheck.js
 
 # Create supervisord config - logs to stdout/stderr for Docker visibility
-RUN cat > /etc/supervisor/conf.d/kima.conf << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /etc/supervisor/conf.d/kima.conf <<'EOF'
 [supervisord]
 nodaemon=true
 logfile=/dev/null
@@ -363,12 +366,14 @@ stderr_logfile_maxbytes=0
 environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",SLEEP_INTERVAL="5",NUM_WORKERS="1",MODEL_IDLE_TIMEOUT="300",INTERNAL_API_SECRET="kima-internal-aio"
 priority=60
 EOF
+DOCKER_SCRIPT
 
 # Fix Windows line endings in supervisor config
 RUN sed -i 's/\r$//' /etc/supervisor/conf.d/kima.conf
 
 # Create startup script with root check
-RUN cat > /app/start.sh << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -e
 
@@ -596,6 +601,7 @@ exec env \
     SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 EOF
+DOCKER_SCRIPT
 
 # Fix Windows line endings (CRLF -> LF) and make executable
 RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
