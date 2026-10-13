@@ -305,7 +305,7 @@ stderr_logfile_maxbytes=0
 priority=10
 
 [program:redis]
-command=/usr/bin/redis-server --dir /data/redis --appendonly yes
+command=/usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
 user=redis
 autostart=true
 autorestart=true
