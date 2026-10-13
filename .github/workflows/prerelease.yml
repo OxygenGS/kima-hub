@@ -10,7 +10,7 @@ name: Pre-release Image
 # Two ways in: push the branch named `prerelease`, or press Run workflow on the
 # Actions tab. Either way the image goes ONLY to this repository's GitHub
 # Container Registry. Docker Hub is the public release channel and stays
-# reserved for version tags -- see docker-publish.yml.
+# using version tags -- see docker-publish.yml.
 #
 # It builds BOTH architectures deliberately. The ARM leg is the fragile one: it
 # compiles PyTorch from source whenever a prebuilt wheel is missing, and that is
@@ -47,7 +47,7 @@ jobs:
             - name: Set image name
               run: |
                   OWNER="${{ github.repository_owner }}"
-                  echo "GHCR_IMAGE=ghcr.io/${OWNER,,}/kima" >> $GITHUB_ENV
+                  echo "GHCR_IMAGE=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_ENV"
 
             # The image carries PyTorch, twelve ML models and a full Postgres,
             # so a default runner runs out of disk partway through the build.
@@ -73,7 +73,7 @@ jobs:
 
             - name: Get short SHA
               id: sha
-              run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+              run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
             - name: Compose tag list
               id: tags
@@ -86,7 +86,7 @@ jobs:
                     echo 'list<<TAGS_EOF'
                     echo "${TAGS}"
                     echo 'TAGS_EOF'
-                  } >> $GITHUB_OUTPUT
+                  } >> "$GITHUB_OUTPUT"
 
             - name: Build and push pre-release
               uses: docker/build-push-action@v5
@@ -116,4 +116,4 @@ jobs:
                     echo '```'
                     echo "docker pull ${GHCR_IMAGE}:prerelease-${{ steps.sha.outputs.short }}"
                     echo '```'
-                  } >> $GITHUB_STEP_SUMMARY
+                  } >> "$GITHUB_STEP_SUMMARY"
