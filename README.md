@@ -1,3 +1,42 @@
+# Kima Hub — Community Fork
+
+> **Independent fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub) by Chevron7Locked.**
+>
+> This repository builds upon the original project, preserving its core functionality while introducing additional user controls, security improvements, and instance customization.
+
+## What Is Different in This Fork?
+
+This fork introduces several improvements over the original Kima Hub:
+
+- **Granular music permissions:** Administrators can independently control whether users may request albums or download individual tracks.
+- **Server-side authorization:** Protected download endpoints enforce permissions independently of frontend visibility.
+- **Instance branding:** Administrators can customize the application name, tagline, colors, logo, and favicon.
+- **Dependency security updates:** Frontend and backend production dependencies have been reviewed and updated to address known vulnerabilities.
+- **Lean production runtime:** Frontend development dependencies are removed from the final running container filesystem.
+- **Migration compatibility:** Existing Kima Hub installations can be upgraded while retaining their users, settings, and music library data.
+
+### Security and Validation
+
+Development validation included 1,193 passing automated tests, targeted authorization checks, and a successful database migration test using a copy of existing production data.
+
+These results do not constitute an independent security audit or guarantee that all vulnerabilities have been eliminated.
+
+### Credits and License
+
+Kima Hub was originally created by **Chevron7Locked**. All original project credit remains with its creator.
+
+This fork is independently maintained and is not an official upstream release.
+
+The original GPLv3 license remains applicable.
+
+---
+
+## Original Kima Hub Documentation
+
+The documentation below is retained from the upstream project. Some installation instructions, release badges, and version references may describe official upstream releases rather than this fork.
+
+---
+
 # kima-hub
 
 [![Docker Image](https://img.shields.io/docker/v/chevron7locked/kima?label=Docker&sort=semver)](https://hub.docker.com/r/chevron7locked/kima)

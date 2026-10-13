@@ -1,5 +1,57 @@
 # Changelog
 
+## Community Fork — October 2026
+
+This changelog documents changes made to the independent fork of Kima Hub, originally developed by Chevron7Locked.
+
+## Unreleased — October 2026
+
+### Added
+
+- Granular permissions for album requests (`canRequestAlbums`).
+- Granular permissions for individual track downloads (`canDownloadTracks`).
+- Backend authorization enforcement for protected download endpoints.
+- Administrator-configurable instance branding, including name, tagline, colors, logo, and favicon.
+- Database migrations supporting the new permissions and branding settings.
+
+### Security
+
+- Updated frontend and backend dependencies to address known vulnerabilities.
+- Verified zero known vulnerabilities in backend and frontend production dependency audits at the time of testing.
+- Removed frontend development dependencies from the running container filesystem.
+- Made the optional Next.js bundle analyzer load only when explicitly enabled.
+- Verified HTTP 401 responses for unauthenticated API requests.
+- Verified HTTP 403 responses for download requests lacking required permissions.
+
+### Validation
+
+- 314 frontend automated tests passed.
+- 879 backend automated tests passed.
+- 1,193 automated tests passed in total.
+- Confirmed successful application startup and health checks.
+- Tested database migration using a restored copy of production data.
+- Successfully deployed the fork using an existing Kima Hub installation.
+- Confirmed preservation of the existing user and 1,152 music tracks during migration.
+- Verified authentication, branding, music playback, and availability of permission controls.
+
+### Known Limitations
+
+- Development dependencies may remain recoverable from earlier Docker image layers.
+- Five high-severity findings remained in frontend development dependencies during the last recorded audit.
+- No independent penetration test or comprehensive security audit has been performed.
+- The complete automated test suite was not rerun after the final runtime-pruning changes.
+
+### Upstream
+
+Original project: https://github.com/Chevron7Locked/kima-hub
+
+This fork is independently maintained and is not an official upstream release.
+
+License: GPLv3.
+
+---
+
+
 All notable changes to Kima will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
