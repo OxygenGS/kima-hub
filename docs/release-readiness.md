@@ -69,10 +69,7 @@ database migration outside the isolated CT 105 test environment.
       user-permission fields, branding table and unauthenticated branding write
       denial. This is NOT a substitute for end-to-end UI, playback or upgrade
       testing.
-- [ ] **Manual all-in-one smoke on dedicated hardware, if available later.**
-      `docker-compose.chillverse-aio-test.yml` uses loopback-only port 3130
-      and separate volumes. Do not start it on CT 105 or load atlas with a
-      large image without a separate resource assessment.
+- [x] **Manual all-in-one smoke on CT 105.** CT 105 was increased to 8 GiB RAM and a roughly 100 GiB disk before the AIO build. The AIO ran healthy on port 3130 with separate /data and /music volumes alongside the existing four-service DEV stack on port 3030. Admin onboarding, regular user visibility, branding persistence and audible 30-second generated MP3 playback were tested on 2026-10-13. This does not authorize production deployment.
 - [ ] **Confirm image ownership and release destination.** The existing publish
       workflow pushes `.../kima:latest` and versioned tags to Docker Hub and
       GHCR. `docker-compose.prod.yml` defaults to the original upstream
@@ -87,9 +84,7 @@ database migration outside the isolated CT 105 test environment.
 - [x] **Automated fresh-install smoke** passed in disposable GitHub Actions
       runner 38311997469, including new database schema, branding defaults
       and frontend onboarding endpoint.
-- [ ] **Complete fresh-install interactive E2E** (admin onboarding/login,
-      saving a custom brand, switching accounts and restarting the AIO image)
-      remains to be tested on a disposable instance.
+- [x] **Manual fresh-install interactive smoke on isolated CT 105 AIO.** Admin onboarding/login, saving a custom brand, switching to regular user Tester and restarting the AIO container were confirmed, with data and settings preserved. Automated browser E2E remains separate.
 - [x] **Automated upgrade of a disposable pre-fork database** including
       legacy-schema migration history, synthetic user/music/settings fixtures,
       custom-format backup/restore, two successive migration deploys,
@@ -113,10 +108,7 @@ database migration outside the isolated CT 105 test environment.
       The CI AIO smoke test generates its own WAV and validates bytes, HTTP
       range/ETag, transcoded MP3, stream authorization, library listing,
       queue persistence and play logging. No production or DEV music was used.
-- [ ] **Interactive playback and controls in a real browser.** A real
-      Play/Pause, seeking, volume, next/previous and browser audio-output check
-      (including mobile where practical) remains unverified. CT 105 has no
-      installed test music. Do not claim speaker playback was proven in CI.
+- [ ] **Finish interactive playback coverage.** On CT 105, a real browser audibly played a generated 30-second MP3; Play/Pause, seeking, volume and normal end-of-track were confirmed on 2026-10-13. Next/previous and mobile browser playback remain unverified. The original CI test alone did not prove speaker playback.
 - [ ] **Security review:** verify admin-only branding mutations, permissions
       on all acquisition endpoints and background jobs, credential handling,
       exposed network ports and release-image dependencies.
