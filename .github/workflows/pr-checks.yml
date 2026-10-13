@@ -231,6 +231,14 @@ jobs:
                   table="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM information_schema.tables WHERE table_name='BrandingSettings'")"
                   test "$table" = "1"
                   echo "Fresh-install Prisma migrations OK"
+                  # AIO PostgreSQL is an internal service, never a network-facing one.
+                  listen="$(docker exec -u postgres "$name" psql -d kima -Atc "SHOW listen_addresses")"
+                  if [ "$listen" != "localhost" ]; then
+                      echo "Unsafe fresh-install PostgreSQL listen_addresses: $listen"
+                      exit 1
+                  fi
+                  echo "Fresh-install PostgreSQL loopback binding OK"
+
 
                   # An unauthenticated visitor cannot edit installation branding.
                   status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
