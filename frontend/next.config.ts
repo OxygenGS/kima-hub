@@ -1,10 +1,4 @@
 import type { NextConfig } from "next";
-import bundleAnalyzer from '@next/bundle-analyzer';
-
-const withBundleAnalyzer = bundleAnalyzer({
-    enabled: process.env.ANALYZE === 'true',
-});
-
 const nextConfig: NextConfig = {
     turbopack: {
         root: __dirname,
@@ -130,4 +124,13 @@ const nextConfig: NextConfig = {
     },
 };
 
-export default withBundleAnalyzer(nextConfig);
+const config = async (): Promise<NextConfig> => {
+    if (process.env.ANALYZE === 'true') {
+        const { default: bundleAnalyzer } = await import('@next/bundle-analyzer');
+        return bundleAnalyzer({ enabled: true })(nextConfig);
+    }
+
+    return nextConfig;
+};
+
+export default config;

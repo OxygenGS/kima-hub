@@ -250,6 +250,10 @@ ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 
 RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
+# Remove development dependencies after the production frontend build.
+# Keep runtime packages such as Next.js, React and React DOM.
+RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
+
 # ============================================
 # POSTGRESQL LEGACY LOCALE COMPATIBILITY
 # ============================================
