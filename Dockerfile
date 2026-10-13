@@ -436,8 +436,10 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     gosu postgres $PG_BIN/initdb -D /data/postgres
 
     # Configure PostgreSQL
-    echo "host all all 0.0.0.0/0 md5" >> /data/postgres/pg_hba.conf
-    echo "listen_addresses='*'" >> /data/postgres/postgresql.conf
+    # AIO services connect to PostgreSQL from inside this container only.
+    # Keep newly initialized databases off the container network interface.
+    # Existing /data volumes retain their original configuration for upgrade safety.
+    echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
 
 # Start PostgreSQL temporarily to create database and user
