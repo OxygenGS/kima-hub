@@ -417,9 +417,9 @@ async function main() {
     // Check for admin password reset
     await checkPasswordReset();
 
-    const server = app.listen(config.port, "0.0.0.0", async () => {
+    const server = app.listen(config.port, config.host, async () => {
     logger.debug(
-        `Kima API running on port ${config.port} (accessible on all network interfaces)`
+        `Kima API listening on ${config.host}:${config.port}`
     );
     server.keepAliveTimeout = 65_000;  // > common LB idle of 60s
     server.headersTimeout = 70_000;    // must exceed keepAliveTimeout
