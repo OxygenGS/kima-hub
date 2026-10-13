@@ -43,6 +43,7 @@ database migration outside the isolated CT 105 test environment.
       history, and out-of-root path rejection. This is an HTTP/API test,
       not an interactive browser/audio-output test.
 - [x] Token-purpose isolation regression suite added in commit `59a03c0` and passed Backend Unit Tests in GitHub Actions run 38360277735 (six jobs green). Covers rejection of refresh tokens as ordinary/API or streaming credentials, stream-ticket rejection on non-stream routes and successful stream-ticket authentication on stream routes. This does **not** close the broader security review.
+- [x] Server-side permission bypasses closed on `POST /offline/albums/:id/download` (`canDownloadTracks`) and `POST /downloads/keep-track` (`canRequestAlbums`); offline denial regression tests added. GitHub Actions run 38362327462 passed all six jobs. Further acquisition-route audit and full security E2E remain open.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
