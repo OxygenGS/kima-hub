@@ -762,7 +762,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /downloads/keep-track - Keep a discovery track (move to permanent library)
-router.post("/keep-track", async (req, res) => {
+router.post("/keep-track", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const { discoveryTrackId } = req.body;
         const userId = req.user!.id;
