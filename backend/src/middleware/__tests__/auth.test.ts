@@ -422,3 +422,80 @@ describe('user row cache', () => {
         expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
     });
 });
+
+
+// Regression coverage: signed tokens with different purposes must not become
+// general API credentials. Tests exercise the real middleware and JWT verifier.
+describe('token purpose isolation', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        clearUserCache();
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue(DB_USER);
+        (prisma.apiKey.findUnique as jest.Mock).mockResolvedValue(null);
+    });
+
+    it.each(['refresh', 'stream'] as const)(
+        'rejects a %s token as a Bearer credential on admin routes',
+        async (purpose) => {
+            const claims = purpose === 'refresh'
+                ? { type: 'refresh' }
+                : { scope: 'stream' };
+            const token = jwt.sign(
+                { userId: DB_USER.id, tokenVersion: DB_USER.tokenVersion, ...claims },
+                TEST_SECRET,
+                { expiresIn: '1h' }
+            );
+            const req = mockReq({
+                path: '/api/system-settings',
+                headers: { authorization: `Bearer ${token}` },
+            });
+            const { res, status } = mockRes();
+            const next = mockNext();
+            await requireAdmin(req, res, next);
+            expect(status).toHaveBeenCalledWith(401);
+            expect(next).not.toHaveBeenCalled();
+        }
+    );
+
+    it('rejects a refresh token even on a stream endpoint', async () => {
+        const token = jwt.sign(
+            { userId: DB_USER.id, tokenVersion: DB_USER.tokenVersion, type: 'refresh' },
+            TEST_SECRET,
+            { expiresIn: '1h' }
+        );
+        const req = mockReq({ path: '/api/library/tracks/t1/stream', query: { token } });
+        const { res, status } = mockRes();
+        const next = mockNext();
+        await requireAuthOrToken(req, res, next);
+        expect(status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stream ticket on a non-stream query-token endpoint', async () => {
+        const token = jwt.sign(
+            { userId: DB_USER.id, tokenVersion: DB_USER.tokenVersion, scope: 'stream' },
+            TEST_SECRET,
+            { expiresIn: '1h' }
+        );
+        const req = mockReq({ path: '/api/library/tracks', query: { token } });
+        const { res, status } = mockRes();
+        const next = mockNext();
+        await requireAuthOrToken(req, res, next);
+        expect(status).toHaveBeenCalledWith(401);
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('accepts the same stream ticket on an actual stream endpoint', async () => {
+        const token = jwt.sign(
+            { userId: DB_USER.id, tokenVersion: DB_USER.tokenVersion, scope: 'stream' },
+            TEST_SECRET,
+            { expiresIn: '1h' }
+        );
+        const req = mockReq({ path: '/api/library/tracks/t1/stream', query: { token } });
+        const { res } = mockRes();
+        const next = mockNext();
+        await requireAuthOrToken(req, res, next);
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(req.user?.id).toBe(DB_USER.id);
+    });
+});
