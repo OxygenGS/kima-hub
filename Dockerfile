@@ -23,7 +23,6 @@ RUN apt-get install -y --no-install-recommends \
     openssl \
     bash \
     gosu \
-    locales \
     # Python for audio analyzer
     python3 \
     python3-pip \
@@ -31,9 +30,6 @@ RUN apt-get install -y --no-install-recommends \
     # Build tools (needed for some Python packages)
     build-essential \
     python3-dev \
-    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen en_US.UTF-8 \
-    && locale -a | grep -qi 'en_US.utf8' \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
@@ -251,6 +247,19 @@ ARG NEXT_PUBLIC_BUILD_TYPE=""
 ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 
 RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build
+
+# ============================================
+# POSTGRESQL LEGACY LOCALE COMPATIBILITY
+# ============================================
+# Existing PostgreSQL 16 volumes from the upstream pgvector image may have
+# lc_messages, lc_time, lc_numeric and lc_monetary set to en_US.utf8.
+# A slim runtime lacks that locale unless explicitly generated.
+# Install this AFTER all expensive ML/frontend builds to reuse cached layers.
+RUN apt-get update && apt-get install -y --no-install-recommends locales \
+    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
+    && locale -a | grep -qi 'en_US.utf8' \
+    && rm -rf /var/lib/apt/lists/*
 
 # ============================================
 # SECURITY HARDENING
