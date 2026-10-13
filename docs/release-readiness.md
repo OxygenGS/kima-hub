@@ -42,6 +42,7 @@ database migration outside the isolated CT 105 test environment.
       permissions disabled, playback queue/state round-trip, persisted play
       history, and out-of-root path rejection. This is an HTTP/API test,
       not an interactive browser/audio-output test.
+- [x] Token-purpose isolation regression suite added in commit `59a03c0` and passed Backend Unit Tests in GitHub Actions run 38360277735 (six jobs green). Covers rejection of refresh tokens as ordinary/API or streaming credentials, stream-ticket rejection on non-stream routes and successful stream-ticket authentication on stream routes. This does **not** close the broader security review.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
