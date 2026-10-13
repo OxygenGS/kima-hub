@@ -37,7 +37,6 @@
     "@tanstack/react-virtual": "^3.13.26",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "deck.gl": "^9.2.11",
     "dompurify": "^3.3.1",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.552.0",
@@ -59,7 +58,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",
     "eslint": "^9",
-    "eslint-config-next": "16.0.1",
+    "eslint-config-next": "16.4.0",
     "tailwindcss": "^4.2.1",
     "typescript": "^5",
     "vitest": "^4.1.8"
