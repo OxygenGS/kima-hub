@@ -44,6 +44,15 @@ database migration outside the isolated CT 105 test environment.
       not an interactive browser/audio-output test.
 - [x] Token-purpose isolation regression suite added in commit `59a03c0` and passed Backend Unit Tests in GitHub Actions run 38360277735 (six jobs green). Covers rejection of refresh tokens as ordinary/API or streaming credentials, stream-ticket rejection on non-stream routes and successful stream-ticket authentication on stream routes. This does **not** close the broader security review.
 - [x] Server-side permission bypasses closed on `POST /offline/albums/:id/download` (`canDownloadTracks`) and `POST /downloads/keep-track` (`canRequestAlbums`); offline denial regression tests added. GitHub Actions run 38362327462 passed all six jobs. Further acquisition-route audit and full security E2E remain open.
+- [x] Manual AIO browser test on CT 105 (2026-10-13): the isolated AIO image
+      booted healthy next to the four-service DEV stack, with separate test
+      volumes and port 3130. Admin onboarding, a regular 'Tester' user,
+      restricted UI navigation, branding persistence after refresh, and
+      account/branding/permission persistence after AIO restart were confirmed.
+      A generated 30-second 440 Hz MP3 was imported and audibly played:
+      Play/Pause, seeking, volume adjustment and normal end-of-track behavior
+      worked in the desktop browser. Next/previous and mobile remain unverified.
+      No production library was used.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
