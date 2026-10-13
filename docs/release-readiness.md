@@ -33,6 +33,15 @@ database migration outside the isolated CT 105 test environment.
       and retained the changes after container replacement. Persistent
       encryption/session secrets were present after the restart. The Docker
       image now includes the en_US.UTF-8 locale required by this old volume.
+- [x] Synthetic AIO audio streaming smoke passed in GitHub Actions run
+      38357655872 (commit `34844024439c32b5e79930bb57adbf7241ec094f`):
+      generated 3-second stereo WAV, verified full-stream byte identity,
+      HTTP Range 206, invalid Range 416, conditional ETag 304, ffprobe-validated
+      low-quality MP3 transcode, URL stream-ticket scoping, denied anonymous
+      and refresh-token streaming, regular-user listening with download
+      permissions disabled, playback queue/state round-trip, persisted play
+      history, and out-of-root path rejection. This is an HTTP/API test,
+      not an interactive browser/audio-output test.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
@@ -89,8 +98,14 @@ database migration outside the isolated CT 105 test environment.
       image against an independently restored OLD `/data` snapshot.
       Complete such a rehearsal before approving a real production migration.
       Never assume an older image can boot a newly migrated database.
-- [ ] **Test representative audio playback and its controls.** CT 105 currently
-      has an empty music library, so media playback remains unverified.
+- [x] **Automated audio streaming/seek/transcode and player-state APIs.**
+      The CI AIO smoke test generates its own WAV and validates bytes, HTTP
+      range/ETag, transcoded MP3, stream authorization, library listing,
+      queue persistence and play logging. No production or DEV music was used.
+- [ ] **Interactive playback and controls in a real browser.** A real
+      Play/Pause, seeking, volume, next/previous and browser audio-output check
+      (including mobile where practical) remains unverified. CT 105 has no
+      installed test music. Do not claim speaker playback was proven in CI.
 - [ ] **Security review:** verify admin-only branding mutations, permissions
       on all acquisition endpoints and background jobs, credential handling,
       exposed network ports and release-image dependencies.
