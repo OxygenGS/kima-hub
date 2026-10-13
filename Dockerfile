@@ -317,7 +317,7 @@ priority=20
 
 [program:backend]
 command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/backend && node dist/index.js"
-environment=TZ="UTC"
+environment=TZ="UTC",HOST="127.0.0.1"
 autostart=true
 autorestart=true
 startretries=3
