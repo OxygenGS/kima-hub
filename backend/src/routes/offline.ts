@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { logger } from "../utils/logger";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { z } from "zod";
 
@@ -13,7 +13,7 @@ const downloadAlbumSchema = z.object({
 });
 
 // POST /offline/albums/:id/download
-router.post("/albums/:id/download", async (req, res) => {
+router.post("/albums/:id/download", requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         const userId = req.user!.id;
         const albumId = req.params.id;
