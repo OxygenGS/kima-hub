@@ -87,7 +87,7 @@ status="$(curl -sS --max-time 20 -o "$tmp/range.wav" -D "$tmp/range.headers" \
     -H "Authorization: Bearer $admin_token" "$stream")"
 assert_status 206 "$status" "Range seek"
 grep -qi "^content-range: bytes 1024-2047/$file_size" "$tmp/range.headers"
-tail -c "+1025" "$tmp/original.wav" | head -c 1024 > "$tmp/expected-range.wav"
+dd if="$tmp/original.wav" of="$tmp/expected-range.wav" bs=1024 skip=1 count=1 status=none
 cmp "$tmp/expected-range.wav" "$tmp/range.wav"
 status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
     -H "Authorization: Bearer $admin_token" \
