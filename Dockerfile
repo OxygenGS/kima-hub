@@ -177,7 +177,7 @@ if [ -f /data/.schema_ready ]; then
 fi
 
 while [ $COUNTER -lt $TIMEOUT ]; do
-    if PGPASSWORD=kima psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
+    if PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
         echo "[wait-for-db] ✓ Database is ready and schema exists!"
         exit 0
     fi
@@ -192,7 +192,7 @@ done
 
 echo "[wait-for-db] ERROR: Database schema not ready after ${TIMEOUT}s"
 echo "[wait-for-db] Listing available tables:"
-PGPASSWORD=kima psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
+PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
 exit 1
 EOF
 DOCKER_SCRIPT
@@ -447,6 +447,23 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
 
+# Generate credentials once per persistent /data volume, before any DB clients start.
+mkdir -p /data/secrets
+chmod 700 /data/secrets
+umask 077
+if [ -f /data/secrets/postgres_password ]; then
+    KIMA_DB_PASSWORD=$(cat /data/secrets/postgres_password)
+else
+    KIMA_DB_PASSWORD=$(openssl rand -hex 32)
+    printf '%s\n' "$KIMA_DB_PASSWORD" > /data/secrets/postgres_password
+fi
+if ! [[ "$KIMA_DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
+    echo 'ERROR: invalid persistent PostgreSQL credential' >&2
+    exit 1
+fi
+chmod 600 /data/secrets/postgres_password
+export KIMA_DB_PASSWORD
+
 # Start PostgreSQL temporarily to create database and user
 gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
 
@@ -461,14 +478,16 @@ if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" |
     # Rename the user if it exists
     if gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'lidify'" | grep -q 1; then
         gosu postgres psql -c "ALTER USER lidify RENAME TO kima;"
-        gosu postgres psql -c "ALTER USER kima WITH PASSWORD 'kima';"
+        echo "Legacy database role renamed; password rotated below."
         echo "✓ User renamed: lidify -> kima"
     fi
 fi
 
 # Create user and database if they don't exist (fresh install)
 gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'kima'" | grep -q 1 || \
-    gosu postgres psql -c "CREATE USER kima WITH PASSWORD 'kima';"
+    gosu postgres psql -c "CREATE USER kima;"
+# Generated hex only, so SQL quoting is safe; rotate existing legacy passwords too.
+gosu postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE kima WITH PASSWORD '${KIMA_DB_PASSWORD}';"
 gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'kima'" | grep -q 1 || \
     gosu postgres psql -c "CREATE DATABASE kima OWNER kima;"
 
@@ -478,7 +497,7 @@ gosu postgres psql -d kima -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Run Prisma migrations
 cd /app/backend
-export DATABASE_URL="postgresql://kima:kima@localhost:5432/kima"
+export DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima"
 echo "Running Prisma migrations..."
 ls -la prisma/migrations/ || echo "No migrations directory!"
 
@@ -543,6 +562,16 @@ gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w stop
 mkdir -p /data/cache/covers /data/cache/transcodes /data/secrets
 
 # Load or generate persistent secrets
+# Persist the AIO internal API secret alongside the existing encryption keys.
+if [ -f /data/secrets/internal_api_secret ]; then
+    INTERNAL_API_SECRET=$(cat /data/secrets/internal_api_secret)
+else
+    INTERNAL_API_SECRET=$(openssl rand -hex 32)
+    printf '%s\n' "$INTERNAL_API_SECRET" > /data/secrets/internal_api_secret
+fi
+chmod 600 /data/secrets/internal_api_secret
+export INTERNAL_API_SECRET
+
 if [ -f /data/secrets/session_secret ]; then
     SESSION_SECRET=$(cat /data/secrets/session_secret)
     echo "Loaded existing SESSION_SECRET"
@@ -566,16 +595,30 @@ fi
 # Write environment file for backend
 cat > /app/backend/.env << ENVEOF
 NODE_ENV=production
-DATABASE_URL=postgresql://kima:kima@localhost:5432/kima
+DATABASE_URL=postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima
 REDIS_URL=redis://localhost:6379
 PORT=3006
 MUSIC_PATH=/music
 TRANSCODE_CACHE_PATH=/data/cache/transcodes
 SESSION_SECRET=$SESSION_SECRET
 SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
-INTERNAL_API_SECRET=kima-internal-aio
+INTERNAL_API_SECRET=$INTERNAL_API_SECRET
 DISABLE_CLAP=${DISABLE_CLAP:-}
 ENVEOF
+
+# Update the built-in supervisor program environment before launching services.
+# Generated credentials use lowercase hex and cannot inject supervisor syntax.
+python3 - <<'PY'
+from pathlib import Path
+import os
+p = Path('/etc/supervisor/conf.d/kima.conf')
+s = p.read_text()
+s = s.replace('postgresql://kima:kima@localhost:5432/kima',
+              'postgresql://kima:' + os.environ['KIMA_DB_PASSWORD'] + '@localhost:5432/kima')
+s = s.replace('INTERNAL_API_SECRET="kima-internal-aio"',
+              'INTERNAL_API_SECRET="' + os.environ['INTERNAL_API_SECRET'] + '"')
+p.write_text(s)
+PY
 
 # Optionally disable CLAP audio analyzer (for low-memory deployments)
 if [ "${DISABLE_CLAP:-false}" = "true" ] || [ "${DISABLE_CLAP:-0}" = "1" ]; then
@@ -596,9 +639,11 @@ fi
 echo "Starting Kima..."
 exec env \
     NODE_ENV=production \
-    DATABASE_URL="postgresql://kima:kima@localhost:5432/kima" \
+    DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima" \
     SESSION_SECRET="$SESSION_SECRET" \
     SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
+    KIMA_DB_PASSWORD="$KIMA_DB_PASSWORD" \
+    INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 EOF
 DOCKER_SCRIPT
