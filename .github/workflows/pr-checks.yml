@@ -244,6 +244,30 @@ jobs:
 
                   echo "AIO fresh-install smoke test passed"
 
+            # Reuse the just-loaded AIO image to test the real start.sh
+            # against an OLD PostgreSQL data directory. No second big image
+            # build or pushed registry image is necessary.
+            - name: Checkout pinned pre-fork Kima database schema
+              uses: actions/checkout@v4
+              with:
+                  ref: 1b390bc60cf915b6314da382cbd7a1ee3ce2f6ee
+                  path: baseline
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  cache: npm
+                  cache-dependency-path: backend/package-lock.json
+
+            - name: Install migration tooling for legacy volume
+              working-directory: backend
+              run: npm ci
+
+            - name: Upgrade existing AIO /data and verify a second startup
+              shell: bash
+              timeout-minutes: 25
+              run: bash .github/ci/aio-volume-upgrade.sh
+
     db-upgrade:
         name: Existing Kima Database Upgrade & Restore
         runs-on: ubuntu-latest
