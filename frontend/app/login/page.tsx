@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import Image from "next/image";
+import { useBranding } from "@/lib/branding-context";
 import { Loader2 } from "lucide-react";
 import { GalaxyBackground } from "@/components/ui/GalaxyBackground";
 
@@ -36,6 +37,7 @@ function LoginErrorHandler({
 
 export default function LoginPage() {
     const { login } = useAuth();
+    const { branding } = useBranding();
     const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -146,15 +148,16 @@ export default function LoginPage() {
                             <div className="relative">
                                 <div className="absolute inset-0 bg-white/10 blur-xl rounded-full group-hover:bg-white/20 transition-all duration-300" />
                                 <Image
-                                    src="/assets/images/kima.webp"
-                                    alt="Kima"
+                                    src={branding.logoUrl}
+                                    alt={branding.name}
+                                    unoptimized
                                     width={40}
                                     height={40}
                                     className="relative z-(--z-raised)"
                                 />
                             </div>
                             <span className="text-3xl font-bold text-white">
-                                Kima
+                                {branding.name}
                             </span>
                         </div>
                     </div>
@@ -165,7 +168,7 @@ export default function LoginPage() {
                             Welcome back
                         </h1>
                         <p className="text-[var(--text-secondary)] text-center mb-8">
-                            Sign in to continue to Kima
+                            Sign in to continue to {branding.name}
                         </p>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -347,7 +350,7 @@ export default function LoginPage() {
 
                     {/* Footer */}
                     <p className="text-center text-[var(--text-muted)] text-sm mt-6" suppressHydrationWarning>
-                        © {new Date().getFullYear()} Kima. Your music, your way.
+                        © {new Date().getFullYear()} {branding.name}. {branding.tagline}.
                     </p>
                 </div>
             </div>

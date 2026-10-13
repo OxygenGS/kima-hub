@@ -14,6 +14,7 @@ const envSchema = z.object({
         .string()
         .min(32, "SESSION_SECRET must be at least 32 characters"),
     PORT: z.string().optional(),
+    HOST: z.string().optional(),
     NODE_ENV: z.enum(["development", "production", "test"]).optional(),
     MUSIC_PATH: z.string().min(1, "MUSIC_PATH is required"),
 });
@@ -64,6 +65,7 @@ export const USER_AGENT = `Kima/${APP_VERSION} (https://github.com/Chevron7Locke
 export const config = {
     version: APP_VERSION,
     port: parseInt(process.env.PORT || "3006", 10),
+    host: process.env.HOST || "0.0.0.0",
     nodeEnv: process.env.NODE_ENV || "development",
     // DATABASE_URL and REDIS_URL are validated by envSchema above, so they're guaranteed to exist
     databaseUrl: process.env.DATABASE_URL!,

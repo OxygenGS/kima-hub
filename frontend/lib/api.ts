@@ -417,6 +417,14 @@ class ApiClient {
         });
     }
 
+    // Generic PATCH method for partial updates
+    async patch<T = unknown>(endpoint: string, data: unknown): Promise<T> {
+        return this.request<T>(endpoint, {
+            method: "PATCH",
+            body: JSON.stringify(data),
+        });
+    }
+
     // Generic GET method for convenience
     async get<T = unknown>(endpoint: string): Promise<T> {
         return this.request<T>(endpoint, {
@@ -502,6 +510,8 @@ class ApiClient {
             id: string;
             username: string;
             role: string;
+            canRequestAlbums: boolean;
+            canDownloadTracks: boolean;
             onboardingComplete?: boolean;
             enrichmentSettings?: { enabled: boolean; lastRun?: string };
             createdAt: string;

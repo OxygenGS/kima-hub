@@ -146,7 +146,8 @@ WORKDIR /app/audio-analyzer-clap
 COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
 
 # Create database readiness check script
-RUN cat > /app/wait-for-db.sh << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /app/wait-for-db.sh <<'EOF'
 #!/bin/bash
 TIMEOUT=${1:-120}
 COUNTER=0
@@ -176,7 +177,7 @@ if [ -f /data/.schema_ready ]; then
 fi
 
 while [ $COUNTER -lt $TIMEOUT ]; do
-    if PGPASSWORD=kima psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
+    if PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
         echo "[wait-for-db] ✓ Database is ready and schema exists!"
         exit 0
     fi
@@ -191,9 +192,10 @@ done
 
 echo "[wait-for-db] ERROR: Database schema not ready after ${TIMEOUT}s"
 echo "[wait-for-db] Listing available tables:"
-PGPASSWORD=kima psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
+PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
 exit 1
 EOF
+DOCKER_SCRIPT
 
 RUN chmod +x /app/wait-for-db.sh && \
     sed -i 's/\r$//' /app/wait-for-db.sh
@@ -248,6 +250,23 @@ ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 
 RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
+# Remove development dependencies after the production frontend build.
+# Keep runtime packages such as Next.js, React and React DOM.
+RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
+
+# ============================================
+# POSTGRESQL LEGACY LOCALE COMPATIBILITY
+# ============================================
+# Existing PostgreSQL 16 volumes from the upstream pgvector image may have
+# lc_messages, lc_time, lc_numeric and lc_monetary set to en_US.utf8.
+# A slim runtime lacks that locale unless explicitly generated.
+# Install this AFTER all expensive ML/frontend builds to reuse cached layers.
+RUN apt-get update && apt-get install -y --no-install-recommends locales \
+    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
+    && locale -a | grep -qi 'en_US.utf8' \
+    && rm -rf /var/lib/apt/lists/*
+
 # ============================================
 # SECURITY HARDENING
 # ============================================
@@ -269,7 +288,8 @@ WORKDIR /app
 COPY healthcheck-prod.js /app/healthcheck.js
 
 # Create supervisord config - logs to stdout/stderr for Docker visibility
-RUN cat > /etc/supervisor/conf.d/kima.conf << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /etc/supervisor/conf.d/kima.conf <<'EOF'
 [supervisord]
 nodaemon=true
 logfile=/dev/null
@@ -289,7 +309,7 @@ stderr_logfile_maxbytes=0
 priority=10
 
 [program:redis]
-command=/usr/bin/redis-server --dir /data/redis --appendonly yes
+command=/usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
 user=redis
 autostart=true
 autorestart=true
@@ -301,7 +321,7 @@ priority=20
 
 [program:backend]
 command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/backend && node dist/index.js"
-environment=TZ="UTC"
+environment=TZ="UTC",HOST="127.0.0.1"
 autostart=true
 autorestart=true
 startretries=3
@@ -350,12 +370,14 @@ stderr_logfile_maxbytes=0
 environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",SLEEP_INTERVAL="5",NUM_WORKERS="1",MODEL_IDLE_TIMEOUT="300",INTERNAL_API_SECRET="kima-internal-aio"
 priority=60
 EOF
+DOCKER_SCRIPT
 
 # Fix Windows line endings in supervisor config
 RUN sed -i 's/\r$//' /etc/supervisor/conf.d/kima.conf
 
 # Create startup script with root check
-RUN cat > /app/start.sh << 'EOF'
+RUN <<'DOCKER_SCRIPT'
+cat > /app/start.sh <<'EOF'
 #!/bin/bash
 set -e
 
@@ -423,9 +445,28 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     gosu postgres $PG_BIN/initdb -D /data/postgres
 
     # Configure PostgreSQL
-    echo "host all all 0.0.0.0/0 md5" >> /data/postgres/pg_hba.conf
-    echo "listen_addresses='*'" >> /data/postgres/postgresql.conf
+    # AIO services connect to PostgreSQL from inside this container only.
+    # Keep newly initialized databases off the container network interface.
+    # Existing /data volumes retain their original configuration for upgrade safety.
+    echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
+
+# Generate credentials once per persistent /data volume, before any DB clients start.
+mkdir -p /data/secrets
+chmod 700 /data/secrets
+umask 077
+if [ -f /data/secrets/postgres_password ]; then
+    KIMA_DB_PASSWORD=$(cat /data/secrets/postgres_password)
+else
+    KIMA_DB_PASSWORD=$(openssl rand -hex 32)
+    printf '%s\n' "$KIMA_DB_PASSWORD" > /data/secrets/postgres_password
+fi
+if ! [[ "$KIMA_DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
+    echo 'ERROR: invalid persistent PostgreSQL credential' >&2
+    exit 1
+fi
+chmod 600 /data/secrets/postgres_password
+export KIMA_DB_PASSWORD
 
 # Start PostgreSQL temporarily to create database and user
 gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
@@ -441,14 +482,16 @@ if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" |
     # Rename the user if it exists
     if gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'lidify'" | grep -q 1; then
         gosu postgres psql -c "ALTER USER lidify RENAME TO kima;"
-        gosu postgres psql -c "ALTER USER kima WITH PASSWORD 'kima';"
+        echo "Legacy database role renamed; password rotated below."
         echo "✓ User renamed: lidify -> kima"
     fi
 fi
 
 # Create user and database if they don't exist (fresh install)
 gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'kima'" | grep -q 1 || \
-    gosu postgres psql -c "CREATE USER kima WITH PASSWORD 'kima';"
+    gosu postgres psql -c "CREATE USER kima;"
+# Generated hex only, so SQL quoting is safe; rotate existing legacy passwords too.
+gosu postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE kima WITH PASSWORD '${KIMA_DB_PASSWORD}';"
 gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'kima'" | grep -q 1 || \
     gosu postgres psql -c "CREATE DATABASE kima OWNER kima;"
 
@@ -458,7 +501,7 @@ gosu postgres psql -d kima -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Run Prisma migrations
 cd /app/backend
-export DATABASE_URL="postgresql://kima:kima@localhost:5432/kima"
+export DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima"
 echo "Running Prisma migrations..."
 ls -la prisma/migrations/ || echo "No migrations directory!"
 
@@ -523,6 +566,16 @@ gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w stop
 mkdir -p /data/cache/covers /data/cache/transcodes /data/secrets
 
 # Load or generate persistent secrets
+# Persist the AIO internal API secret alongside the existing encryption keys.
+if [ -f /data/secrets/internal_api_secret ]; then
+    INTERNAL_API_SECRET=$(cat /data/secrets/internal_api_secret)
+else
+    INTERNAL_API_SECRET=$(openssl rand -hex 32)
+    printf '%s\n' "$INTERNAL_API_SECRET" > /data/secrets/internal_api_secret
+fi
+chmod 600 /data/secrets/internal_api_secret
+export INTERNAL_API_SECRET
+
 if [ -f /data/secrets/session_secret ]; then
     SESSION_SECRET=$(cat /data/secrets/session_secret)
     echo "Loaded existing SESSION_SECRET"
@@ -546,16 +599,30 @@ fi
 # Write environment file for backend
 cat > /app/backend/.env << ENVEOF
 NODE_ENV=production
-DATABASE_URL=postgresql://kima:kima@localhost:5432/kima
+DATABASE_URL=postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima
 REDIS_URL=redis://localhost:6379
 PORT=3006
 MUSIC_PATH=/music
 TRANSCODE_CACHE_PATH=/data/cache/transcodes
 SESSION_SECRET=$SESSION_SECRET
 SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
-INTERNAL_API_SECRET=kima-internal-aio
+INTERNAL_API_SECRET=$INTERNAL_API_SECRET
 DISABLE_CLAP=${DISABLE_CLAP:-}
 ENVEOF
+
+# Update the built-in supervisor program environment before launching services.
+# Generated credentials use lowercase hex and cannot inject supervisor syntax.
+python3 - <<'PY'
+from pathlib import Path
+import os
+p = Path('/etc/supervisor/conf.d/kima.conf')
+s = p.read_text()
+s = s.replace('postgresql://kima:kima@localhost:5432/kima',
+              'postgresql://kima:' + os.environ['KIMA_DB_PASSWORD'] + '@localhost:5432/kima')
+s = s.replace('INTERNAL_API_SECRET="kima-internal-aio"',
+              'INTERNAL_API_SECRET="' + os.environ['INTERNAL_API_SECRET'] + '"')
+p.write_text(s)
+PY
 
 # Optionally disable CLAP audio analyzer (for low-memory deployments)
 if [ "${DISABLE_CLAP:-false}" = "true" ] || [ "${DISABLE_CLAP:-0}" = "1" ]; then
@@ -576,11 +643,14 @@ fi
 echo "Starting Kima..."
 exec env \
     NODE_ENV=production \
-    DATABASE_URL="postgresql://kima:kima@localhost:5432/kima" \
+    DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima" \
     SESSION_SECRET="$SESSION_SECRET" \
     SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
+    KIMA_DB_PASSWORD="$KIMA_DB_PASSWORD" \
+    INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 EOF
+DOCKER_SCRIPT
 
 # Fix Windows line endings (CRLF -> LF) and make executable
 RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh

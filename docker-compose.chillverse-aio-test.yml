@@ -1,0 +1,48 @@
+# Isolated local smoke test for the existing all-in-one Dockerfile.
+#
+# IMPORTANT: This is deliberately NOT the public production installer.
+# It does not pull/publish upstream images, share data with the four-service
+# development stack, or bind a music/download directory from the host.
+#
+# Check free RAM and Docker disk space before building: the all-in-one image
+# includes PostgreSQL, Redis, and large Python/AI dependencies.
+# It also runs audio analyzer processes; do not run on constrained hardware.
+#
+# Suggested commands (CT 105 only, after resource check):
+#   docker compose -f docker-compose.chillverse-aio-test.yml config
+#   docker compose -f docker-compose.chillverse-aio-test.yml build
+#   docker compose -f docker-compose.chillverse-aio-test.yml up -d --no-build
+#   docker compose -f docker-compose.chillverse-aio-test.yml ps
+#
+# The web port defaults to loopback-only. To view on a desktop, use an SSH
+# tunnel to 127.0.0.1:3130; never expose an unconfigured onboarding instance
+# to the public Internet.
+#
+# IMPORTANT: Do not use 'down -v' unless you intentionally want to erase
+# this test's own database and uploaded branding. Never reuse production data.
+name: chillverse-listen-aio-test
+
+services:
+  aio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BUILD_TYPE: aio-test
+    image: chillverse-listen:aio-test-local
+    ports:
+      - "${AIO_TEST_BIND_ADDRESS:-127.0.0.1}:3130:3030"
+    environment:
+      TZ: ${TZ:-Europe/Amsterdam}
+      DISABLE_CLAP: "true"
+    volumes:
+      - aio_test_data:/data
+      - aio_test_music:/music
+    # A nested Docker/LXC setup might not expose swap accounting.
+    # Cap container RAM; check Proxmox CT memory headroom before starting.
+    mem_limit: 6g
+    restart: "no"
+
+volumes:
+  aio_test_data:
+  aio_test_music:

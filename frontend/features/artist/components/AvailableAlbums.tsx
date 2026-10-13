@@ -6,6 +6,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { PlayableCard } from "@/components/ui/PlayableCard";
 import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
 
 interface AvailableAlbumsProps {
@@ -33,6 +34,7 @@ function LazyAlbumCard({
     isPendingDownload: (mbid: string) => boolean;
     index: number;
 }) {
+    const { canRequestAlbums } = useMusicPermissions();
     const [coverArt, setCoverArt] = useState<string | null>(() => {
         // Initial cover art from props
         if (source === "library" && album.coverArt) {
@@ -93,11 +95,11 @@ function LazyAlbumCard({
                 <Disc3 className="w-12 h-12 text-[var(--text-muted)]" />
             }
             circular={false}
-            badge="download"
+            badge={canRequestAlbums ? "download" : null}
             showPlayButton={false}
             colors={colors}
             isDownloading={isPendingDownload(albumMbid)}
-            onDownload={(e) => onDownloadAlbum(album, e)}
+            onDownload={canRequestAlbums ? (e) => onDownloadAlbum(album, e) : undefined}
             tvCardIndex={index}
         />
     );

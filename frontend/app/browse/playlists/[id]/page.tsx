@@ -16,6 +16,7 @@ import {
     VolumeX,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -57,6 +58,8 @@ export default function DeezerPlaylistDetailPage() {
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const playlistId = params.id as string;
 
     const [playlist, setPlaylist] = useState<DeezerPlaylistFull | null>(null);
@@ -185,7 +188,7 @@ export default function DeezerPlaylistDetailPage() {
     };
 
     const handleImport = () => {
-        if (!playlist) return;
+        if (!playlist || !canImportPlaylist) return;
         router.push(`/import/playlist?url=${encodeURIComponent(playlist.url)}`);
     };
 
@@ -332,7 +335,7 @@ export default function DeezerPlaylistDetailPage() {
                 <div className="max-w-[1800px] mx-auto">
                     <div className="flex items-center gap-3">
                         {/* Download/Import Button */}
-                        <button
+                        {canImportPlaylist && <button
                             onClick={handleImport}
                             disabled={isImporting}
                             className="h-10 px-5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] transition-all flex items-center gap-2 font-bold text-sm text-white disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
@@ -343,7 +346,7 @@ export default function DeezerPlaylistDetailPage() {
                                 <Download className="w-4 h-4" />
                             )}
                             <span>{isImporting ? "Importing" : "Import Playlist"}</span>
-                        </button>
+                        </button>}
 
                         {/* Volume Control */}
                         {playingTrackId && (

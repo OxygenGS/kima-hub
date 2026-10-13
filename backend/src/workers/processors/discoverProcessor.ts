@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import { logger } from "../../utils/logger";
 import { discoverWeeklyService } from "../../services/discoverWeekly";
 import { eventBus } from "../../services/eventBus";
+import { prisma } from "../../utils/db";
 
 export interface DiscoverJobData {
     userId: string;
@@ -23,6 +24,21 @@ export async function processDiscoverWeekly(
     logger.debug(
         `[DiscoverJob ${job.id}] Generating Discover Weekly for user ${userId}`
     );
+
+    // Permissions can change after a cron job is queued.
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, canRequestAlbums: true },
+    });
+    if (!user || (user.role !== "admin" && !user.canRequestAlbums)) {
+        logger.info(`[DiscoverJob ${job.id}] Skipped: user lacks album request permission`);
+        return {
+            success: false,
+            playlistName: "",
+            songCount: 0,
+            error: "Album requests not permitted",
+        };
+    }
 
     await job.updateProgress(10);
 

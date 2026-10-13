@@ -23,11 +23,13 @@ import { useAuth } from "@/lib/auth-context";
 import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
+import { useBranding } from "@/lib/branding-context";
 
 export function TopBar() {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuth();
+    const { branding } = useBranding();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -212,7 +214,7 @@ export function TopBar() {
 
     return (
         <header
-            className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
+            className="fixed top-0 left-0 right-0 bg-[var(--bg-primary)] flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
             style={{
                 height: isMobileOrTablet
                     ? "calc(58px + var(--standalone-safe-area-top, 0px))"
@@ -270,7 +272,7 @@ export function TopBar() {
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                             />
                         </div>
                     </form>
@@ -301,14 +303,16 @@ export function TopBar() {
                             className="flex items-center gap-2 group"
                         >
                             <Image
-                                src="/assets/images/kima.webp"
-                                alt="Kima"
+                                src={branding.logoUrl}
+                                alt={branding.name}
+                                unoptimized
                                 width={32}
                                 height={32}
                                 priority
                                 className="group-hover:scale-105 transition-transform"
                             />
                         </Link>
+                        <span className="ml-2 text-sm font-semibold text-white max-w-40 truncate">{branding.name}</span>
                         <span className="ml-2 px-1.5 py-0.5 text-micro font-medium text-[var(--text-muted)] bg-white/5 rounded border border-white/10">
                             v{APP_VERSION}
                         </span>
@@ -351,7 +355,7 @@ export function TopBar() {
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
-                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                                 />
                             </div>
                         </form>

@@ -1,5 +1,6 @@
 import { Play, Pause, Shuffle, Download, Radio } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useMusicPermissions } from "@/lib/auth-context";
 import type { Artist } from "../types";
 import type { Album } from "../types";
 import type { ArtistSource } from "../types";
@@ -34,10 +35,11 @@ export function ArtistActionBar({
     isPlayingThisArtist = false,
     onPause,
 }: ArtistActionBarProps) {
+    const { canRequestAlbums } = useMusicPermissions();
     const availableAlbums = albums.filter(
         (album) => album.availability !== "unavailable"
     );
-    const showDownloadAll = source === "discovery" || availableAlbums.length > 0;
+    const showDownloadAll = canRequestAlbums && (source === "discovery" || availableAlbums.length > 0);
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library" && onStartRadio;
 

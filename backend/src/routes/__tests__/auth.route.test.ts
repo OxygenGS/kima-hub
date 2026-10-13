@@ -326,6 +326,90 @@ describe('Admin-only routes', () => {
     });
 });
 
+// ── Per-user music permissions ─────────────────────────────────────────────────
+
+describe('PATCH /auth/users/:id/permissions', () => {
+    let app: express.Application;
+    const token = (role: string) => generateToken({
+        id: BASE_USER.id,
+        username: BASE_USER.username,
+        role,
+        tokenVersion: 1,
+    });
+
+    beforeAll(() => { app = createTestApp(); });
+    beforeEach(() => {
+        jest.clearAllMocks();
+        // Reset pending mockResolvedValueOnce implementations from other suites.
+        (prisma.user.findUnique as jest.Mock).mockReset();
+        (prisma.user.update as jest.Mock).mockReset();
+        clearUserCache();
+    });
+
+    it('rejects a non-admin even if permission values are valid', async () => {
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'user' });
+        const res = await request(app)
+            .patch('/auth/users/another-user/permissions')
+            .set('Authorization', `Bearer ${token('user')}`)
+            .send({ canRequestAlbums: true });
+        expect(res.status).toBe(403);
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        {},
+        { canRequestAlbums: 'true' },
+        { canDownloadTracks: 1 },
+        { role: 'admin' },
+    ])('rejects malformed permission updates: %p', async (body) => {
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
+        const res = await request(app)
+            .patch('/auth/users/another-user/permissions')
+            .set('Authorization', `Bearer ${token('admin')}`)
+            .send(body);
+        expect(res.status).toBe(400);
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('updates only allowed permission fields', async () => {
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
+        (prisma.user.update as jest.Mock).mockResolvedValue({
+            id: 'another-user',
+            username: 'listener',
+            role: 'user',
+            canRequestAlbums: true,
+            canDownloadTracks: false,
+        });
+        const res = await request(app)
+            .patch('/auth/users/another-user/permissions')
+            .set('Authorization', `Bearer ${token('admin')}`)
+            .send({ canRequestAlbums: true });
+        expect(res.status).toBe(200);
+        expect(res.body.canRequestAlbums).toBe(true);
+        expect(prisma.user.update).toHaveBeenCalledWith({
+            where: { id: 'another-user' },
+            data: { canRequestAlbums: true },
+            select: {
+                id: true,
+                username: true,
+                role: true,
+                canRequestAlbums: true,
+                canDownloadTracks: true,
+            },
+        });
+    });
+
+    it('reports a missing user as 404', async () => {
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
+        (prisma.user.update as jest.Mock).mockRejectedValue({ code: 'P2025' });
+        const res = await request(app)
+            .patch('/auth/users/missing/permissions')
+            .set('Authorization', `Bearer ${token('admin')}`)
+            .send({ canDownloadTracks: true });
+        expect(res.status).toBe(404);
+    });
+});
+
 // ── DELETE /auth/account ──────────────────────────────────────────────────────
 
 describe('DELETE /auth/account', () => {

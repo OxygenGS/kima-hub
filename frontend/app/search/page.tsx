@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
@@ -23,6 +24,7 @@ import type { FilterTab } from "@/features/search/types";
 export default function SearchPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { canDownloadTracks } = useMusicPermissions();
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
     const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
@@ -45,7 +47,10 @@ export default function SearchPage() {
         handleDownload,
         handleBulkDownload,
         uniqueUserCount,
-    } = useSoulseekSearch({ query });
+    } = useSoulseekSearch({ query, enabled: canDownloadTracks });
+
+    // Render the library tab immediately when track rights are revoked.
+    // Avoid a state update inside an effect (and keep the full search usable).
 
     const urlQuery = searchParams.get("q") ?? "";
     const [prevUrlQuery, setPrevUrlQuery] = useState(urlQuery);
@@ -62,8 +67,9 @@ export default function SearchPage() {
         isDiscoverSearching ||
         isSoulseekSearching ||
         isSoulseekPolling;
-    const showLibrary = filterTab === "all" || filterTab === "library";
-    const showDiscover = filterTab === "all" || filterTab === "discover";
+    const activeFilterTab: FilterTab = !canDownloadTracks && filterTab === "soulseek" ? "all" : filterTab;
+    const showLibrary = activeFilterTab === "all" || activeFilterTab === "library";
+    const showDiscover = activeFilterTab === "all" || activeFilterTab === "discover";
 
     const hasTopResult = libraryResults?.artists?.[0] || topArtist;
     const hasTracks =
@@ -72,7 +78,7 @@ export default function SearchPage() {
         hasSearched &&
         hasTopResult &&
         hasTracks &&
-        filterTab !== "soulseek" &&
+        activeFilterTab !== "soulseek" &&
         (showLibrary || showDiscover);
 
     const handleTVSearch = (searchQuery: string) => {
@@ -124,9 +130,9 @@ export default function SearchPage() {
                         </div>
 
                         <SearchFilters
-                            filterTab={filterTab}
+                            filterTab={activeFilterTab}
                             onFilterChange={setFilterTab}
-                            soulseekEnabled={soulseekEnabled}
+                            soulseekEnabled={soulseekEnabled && canDownloadTracks}
                             hasSearched={hasSearched}
                             soulseekResultCount={soulseekResults.length}
                         />
@@ -143,7 +149,7 @@ export default function SearchPage() {
 
                 {/* Loading state - only when no results yet */}
                 {hasSearched &&
-                    filterTab !== "soulseek" &&
+                    activeFilterTab !== "soulseek" &&
                     (isLibrarySearching ||
                         isDiscoverSearching ||
                         isSoulseekSearching) &&
@@ -161,7 +167,7 @@ export default function SearchPage() {
                     )}
 
                 {/* Soulseek Tab */}
-                {filterTab === "soulseek" && hasSearched && (
+                {canDownloadTracks && activeFilterTab === "soulseek" && hasSearched && (
                     <div className="animate-fade-soft">
                         <SoulseekBrowser
                             results={soulseekResults}
@@ -177,7 +183,7 @@ export default function SearchPage() {
                 )}
 
                 {/* All / Library / Discover Tabs */}
-                {filterTab !== "soulseek" && (
+                {activeFilterTab !== "soulseek" && (
                     <div className="section-stack">
                         {show2ColumnLayout ?
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-8 animate-fade-soft">
@@ -201,7 +207,7 @@ export default function SearchPage() {
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
                                         Tracks
                                     </h2>
-                                    {filterTab === "all" ?
+                                    {activeFilterTab === "all" ?
                                         <UnifiedSongsList
                                             tracks={
                                                 libraryResults?.tracks ?? []
@@ -210,7 +216,7 @@ export default function SearchPage() {
                                             downloadingFiles={downloadingFiles}
                                             onDownload={handleDownload}
                                         />
-                                    : filterTab === "library" ?
+                                    : activeFilterTab === "library" ?
                                         <LibraryTracksList
                                             tracks={
                                                 libraryResults?.tracks ?? []
@@ -243,7 +249,7 @@ export default function SearchPage() {
                                             <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
                                             Tracks
                                         </h2>
-                                        {filterTab === "all" ?
+                                        {activeFilterTab === "all" ?
                                             <UnifiedSongsList
                                                 tracks={
                                                     libraryResults?.tracks ?? []
@@ -256,7 +262,7 @@ export default function SearchPage() {
                                                 }
                                                 onDownload={handleDownload}
                                             />
-                                        : filterTab === "library" ?
+                                        : activeFilterTab === "library" ?
                                             <LibraryTracksList
                                                 tracks={
                                                     libraryResults?.tracks ?? []

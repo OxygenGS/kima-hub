@@ -18,6 +18,8 @@
     --color-brand-hover: #e69200;
     --color-brand-light: #fcb84d;
     --color-brand-dark: #d48c00;
+    /* Contrasting text on configurable accent backgrounds. */
+    --color-brand-contrast: #000000;
 
     /* ── Motion ───────────────────────────────────────────────────────────
      *
@@ -89,6 +91,11 @@
 }
 
 :root {
+    /* The interface is dark-only. Tell Chromium/Firefox/native controls to
+     * render their popups with a dark palette, including <select> menus.
+     * Otherwise the OS can paint a white popup behind white option text. */
+    color-scheme: dark;
+
     /* Kima Design System - Dark Theme Only */
 
     /* Background Layers */
@@ -159,6 +166,24 @@
 
 * {
     box-sizing: border-box;
+}
+
+/* Native select popup colors must be explicit: the browser/OS draws the popup
+ * outside our Tailwind-styled control, and inherited light text on a white OS
+ * popup is illegible. These defaults apply to every native select in the app.
+ * Accessibility/forced-color modes remain free to override the palette. */
+select {
+    color-scheme: dark;
+}
+
+select option,
+select optgroup {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+select option:disabled {
+    color: var(--text-muted);
 }
 
 /* ── Type roles ───────────────────────────────────────────────────────────

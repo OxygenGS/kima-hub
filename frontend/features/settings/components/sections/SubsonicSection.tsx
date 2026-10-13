@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { SettingsSection, SettingsRow } from "../ui";
 import { useAuth } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 
@@ -15,6 +16,7 @@ interface ApiKey {
 
 export function SubsonicSection() {
     const { user } = useAuth();
+    const { branding } = useBranding();
 
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [generating, setGenerating] = useState(false);
@@ -117,7 +119,7 @@ export function SubsonicSection() {
 
             <SettingsRow
                 label="Username"
-                description="Use your Kima username in the client"
+                description={`Use your ${branding.name} username in the client`}
             >
                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
                     {user?.username}
@@ -184,7 +186,7 @@ export function SubsonicSection() {
                 >
                     <div className="space-y-1 text-xs tabular-nums text-[var(--text-muted)]">
                         <p>1. Server URL — paste the URL above</p>
-                        <p>2. Username — your Kima username</p>
+                        <p>2. Username — your {branding.name} username</p>
                         <p>3. Password / API key — paste the token above</p>
                     </div>
                 </SettingsRow>

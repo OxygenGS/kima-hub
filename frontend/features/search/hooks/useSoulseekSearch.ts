@@ -7,6 +7,7 @@ import type { SoulseekResult } from "../types";
 
 interface UseSoulseekSearchProps {
     query: string;
+    enabled?: boolean;
 }
 
 interface UseSoulseekSearchReturn {
@@ -23,6 +24,7 @@ interface UseSoulseekSearchReturn {
 
 export function useSoulseekSearch({
     query,
+    enabled = true,
 }: UseSoulseekSearchProps): UseSoulseekSearchReturn {
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -36,22 +38,26 @@ export function useSoulseekSearch({
     const searchIdRef = useRef<string | null>(null);
 
     useEffect(() => {
+        if (!enabled) return;
+        let cancelled = false;
         const checkSoulseekStatus = async () => {
             try {
                 const status = await api.getSlskdStatus();
-                setSoulseekEnabled(Boolean(status.enabled));
+                if (!cancelled) setSoulseekEnabled(Boolean(status.enabled));
             } catch (error) {
-                console.error("Failed to check Soulseek status:", error);
-                setSoulseekEnabled(false);
+                if (!cancelled) {
+                    console.error("Failed to check Soulseek status:", error);
+                    setSoulseekEnabled(false);
+                }
             }
         };
-
-        checkSoulseekStatus();
-    }, []);
+        void checkSoulseekStatus();
+        return () => { cancelled = true; };
+    }, [enabled]);
 
     // Soulseek search with SSE streaming
     useEffect(() => {
-        if (!query.trim() || !soulseekEnabled) return;
+        if (!enabled || !query.trim() || !soulseekEnabled) return;
 
         let cancelled = false;
 
@@ -122,7 +128,7 @@ export function useSoulseekSearch({
             setHasActiveSearch(false);
             setSoulseekResults([]);
         };
-    }, [query, soulseekEnabled]);
+    }, [query, soulseekEnabled, enabled]);
 
     // Fallback completion: the SSE "complete" event can be dropped (connection
     // blip, or the backend never emits it). Without a terminal signal
@@ -137,6 +143,7 @@ export function useSoulseekSearch({
     }, [hasActiveSearch, isComplete]);
 
     const handleDownload = useCallback(async (result: SoulseekResult) => {
+        if (!enabled) return;
         const downloadKey = `${result.username}:${result.path}`;
         try {
             setDownloadingFiles((prev) => new Set([...prev, downloadKey]));
@@ -177,7 +184,7 @@ export function useSoulseekSearch({
                 return newSet;
             });
         }
-    }, [toast, queryClient]);
+    }, [toast, queryClient, enabled]);
 
     const handleBulkDownload = useCallback(async (results: SoulseekResult[]) => {
         for (const result of results) {
@@ -191,11 +198,11 @@ export function useSoulseekSearch({
     );
 
     return {
-        soulseekResults,
-        isSoulseekSearching,
-        isSoulseekPolling: !isComplete && !isSoulseekSearching && hasActiveSearch && !!query.trim() && soulseekEnabled,
+        soulseekResults: enabled ? soulseekResults : [],
+        isSoulseekSearching: enabled && isSoulseekSearching,
+        isSoulseekPolling: enabled && !isComplete && !isSoulseekSearching && hasActiveSearch && !!query.trim() && soulseekEnabled,
         isSearchComplete: isComplete,
-        soulseekEnabled,
+        soulseekEnabled: enabled && soulseekEnabled,
         downloadingFiles,
         handleDownload,
         handleBulkDownload,

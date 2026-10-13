@@ -654,6 +654,21 @@ model SpotifyImportJob {
   @@index([userId])
 }
 
+// Instance-wide appearance. Stored independently of users and the media library.
+// Images are normalized to small raster files before being persisted.
+model BrandingSettings {
+  id                String   @id @default("default")
+  name              String   @default("Kima")
+  tagline           String   @default("Your music, your way")
+  accentColor       String   @default("#fca200")
+  backgroundColor   String   @default("#0a0a0a")
+  logoData          Bytes?
+  logoContentType   String?
+  faviconData       Bytes?
+  faviconContentType String?
+  updatedAt         DateTime @updatedAt
+}
+
 model SystemSettings {
   id                          String   @id @default("default")
   lidarrEnabled               Boolean  @default(true)
@@ -859,6 +874,8 @@ model User {
   username               String                @unique
   passwordHash           String
   role                   String                @default("user")
+  canRequestAlbums       Boolean               @default(false)
+  canDownloadTracks      Boolean               @default(false)
   onboardingComplete     Boolean               @default(false)
   enrichmentSettings     Json?
   twoFactorEnabled       Boolean               @default(false)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
-import { SettingsSection, SettingsInput, SettingsSelect } from "../ui";
+import { SettingsSection, SettingsInput, SettingsSelect, SettingsToggle } from "../ui";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -12,6 +12,8 @@ interface User {
     id: string;
     username: string;
     role: "user" | "admin";
+    canRequestAlbums: boolean;
+    canDownloadTracks: boolean;
     createdAt: string;
 }
 
@@ -22,6 +24,8 @@ export function UserManagementSection() {
     const [newPassword, setNewPassword] = useState("");
     const [newRole, setNewRole] = useState<"user" | "admin">("user");
     const [creating, setCreating] = useState(false);
+    const [savingPermission, setSavingPermission] = useState<string | null>(null);
+    const [permissionError, setPermissionError] = useState<{ id: string; message: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [createStatus, setCreateStatus] = useState<StatusType>("idle");
@@ -71,6 +75,28 @@ export function UserManagementSection() {
             setCreateMessage(error instanceof Error ? error.message : "Failed");
         } finally {
             setCreating(false);
+        }
+    };
+
+    const handlePermissionChange = async (
+        user: User,
+        permission: "canRequestAlbums" | "canDownloadTracks",
+        checked: boolean
+    ) => {
+        setSavingPermission(user.id);
+        setPermissionError(null);
+        try {
+            const updated = await api.patch<User>(`/auth/users/${user.id}/permissions`, {
+                [permission]: checked,
+            });
+            setUsers((previous) => previous.map((item) => item.id === user.id ? updated : item));
+        } catch (error: unknown) {
+            setPermissionError({
+                id: user.id,
+                message: error instanceof Error ? error.message : "Failed to update permissions",
+            });
+        } finally {
+            setSavingPermission(null);
         }
     };
 
@@ -155,7 +181,7 @@ export function UserManagementSection() {
                         users.map((user) => (
                             <div
                                 key={user.id}
-                                className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all"
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 px-3 rounded-lg hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-semibold text-brand">
@@ -174,14 +200,45 @@ export function UserManagementSection() {
                                     </div>
                                 </div>
 
-                                {currentUser?.id !== user.id && (
-                                    <button
-                                        onClick={() => setConfirmDelete(user.id)}
-                                        className="p-2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                )}
+                                <div className="flex flex-wrap items-center gap-4">
+                                    {user.role === "admin" ? (
+                                        <span className="text-xs text-[var(--text-muted)]">Full access (admin)</span>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                                Album requests
+                                                <SettingsToggle
+                                                    label={`Allow album requests for ${user.username}`}
+                                                    checked={user.canRequestAlbums}
+                                                    disabled={savingPermission === user.id}
+                                                    onChange={(value) => handlePermissionChange(user, "canRequestAlbums", value)}
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                                Track downloads
+                                                <SettingsToggle
+                                                    label={`Allow track downloads for ${user.username}`}
+                                                    checked={user.canDownloadTracks}
+                                                    disabled={savingPermission === user.id}
+                                                    onChange={(value) => handlePermissionChange(user, "canDownloadTracks", value)}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                    {currentUser?.id !== user.id && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Delete ${user.username}`}
+                                            onClick={() => setConfirmDelete(user.id)}
+                                            className="p-2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    {permissionError?.id === user.id && (
+                                        <span role="alert" className="text-xs text-red-400">{permissionError.message}</span>
+                                    )}
+                                </div>
                             </div>
                         ))
                     )}

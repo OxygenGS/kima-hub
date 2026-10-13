@@ -19,6 +19,7 @@ import {
 import { api } from "@/lib/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
+import { useMusicPermissions } from "@/lib/auth-context";
 
 // Types for Spotify Import
 interface SpotifyTrack {
@@ -109,6 +110,9 @@ function ImportPlaylistPageContent() {
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    // Import can acquire both albums and tracks; backend requires both rights.
+    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const hasAutoFetched = useRef(false);
 
     // State
@@ -293,6 +297,7 @@ function ImportPlaylistPageContent() {
 
     // Quick import (skip preview, import everything in background)
     const handleQuickImport = async () => {
+        if (!canImportPlaylist) return;
         if (!url.trim()) {
             toast.error("Please enter a playlist URL");
             return;
@@ -329,7 +334,7 @@ function ImportPlaylistPageContent() {
 
     // Start import
     const handleStartImport = async () => {
-        if (!preview) return;
+        if (!canImportPlaylist || !preview) return;
 
         setIsLoading(true);
         setRefreshStatusMessage(null);
@@ -518,7 +523,7 @@ function ImportPlaylistPageContent() {
                                     "Preview First"
                                 )}
                             </button>
-                            <button
+                            {canImportPlaylist && <button
                                 onClick={handleQuickImport}
                                 disabled={isLoading || !url.trim()}
                                 className="flex-1 py-3 rounded-full font-medium bg-brand text-black hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
@@ -534,8 +539,13 @@ function ImportPlaylistPageContent() {
                                         Import Now
                                     </>
                                 )}
-                            </button>
+                            </button>}
                         </div>
+                        {!canImportPlaylist && (
+                            <p className="text-sm text-[var(--text-muted)]">
+                                Playlist importing requires both album request and track download permissions. You can still preview the playlist.
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -721,7 +731,7 @@ function ImportPlaylistPageContent() {
                         )}
 
                         {/* Albums to download */}
-                        {preview.albumsToDownload.filter((a) => a.albumMbid)
+                        {canImportPlaylist && preview.albumsToDownload.filter((a) => a.albumMbid)
                             .length > 0 && (
                             <div className="bg-white/5 rounded-lg overflow-hidden">
                                 <button
@@ -918,7 +928,7 @@ function ImportPlaylistPageContent() {
                             >
                                 Back
                             </button>
-                            <button
+                            {canImportPlaylist && <button
                                 onClick={handleStartImport}
                                 disabled={
                                     isLoading ||
@@ -942,7 +952,7 @@ function ImportPlaylistPageContent() {
                                 ) : (
                                     "Select albums to download"
                                 )}
-                            </button>
+                            </button>}
                         </div>
                     </div>
                 )}

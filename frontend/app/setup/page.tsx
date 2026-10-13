@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
+import { useBranding } from "@/lib/branding-context";
 
 /**
  * Setup page - now redirects to login since login page handles server URL entry
@@ -11,6 +12,7 @@ import Image from "next/image";
  */
 export default function SetupPage() {
     const router = useRouter();
+    const { branding } = useBranding();
 
     // Redirect to login - login page now handles server URL entry
     useEffect(() => {
@@ -19,12 +21,13 @@ export default function SetupPage() {
 
     // Show loading state while redirecting
     return (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
+        <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center p-6">
             {/* Logo */}
             <div className="mb-8">
                 <Image
-                    src="/assets/images/kima.webp"
-                    alt="Kima"
+                    src={branding.logoUrl}
+                    alt={`${branding.name} logo`}
+                    unoptimized
                     width={120}
                     height={120}
                     className="opacity-90"

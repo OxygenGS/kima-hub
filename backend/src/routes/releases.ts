@@ -12,7 +12,7 @@ import { Router } from "express";
 import { lidarrService, CalendarRelease } from "../services/lidarr";
 import { prisma } from "../utils/db";
 import { ConfigurationError } from "../utils/errors";
-import { requireAuthOrToken } from "../middleware/auth";
+import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
 import { z } from "zod";
 
 const router = Router();
@@ -234,7 +234,7 @@ const downloadReleaseSchema = z.object({
     albumTitle: z.string().min(1),
 });
 
-router.post("/download/:albumMbid", async (req, res) => {
+router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const { albumMbid } = req.params;
         const userId = req.user?.id;

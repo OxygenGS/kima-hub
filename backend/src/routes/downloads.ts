@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { logger } from "../utils/logger";
-import { requireAuthOrToken, requireAdmin } from "../middleware/auth";
+import { requireAuthOrToken, requireAdmin, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { config } from "../config";
 import { getSystemSettings } from "../utils/systemSettings";
@@ -88,7 +88,7 @@ async function verifyArtistName(
 }
 
 // POST /downloads - Create download job
-router.post("/", async (req, res) => {
+router.post("/", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const {
             type,
@@ -762,7 +762,7 @@ router.get("/", async (req, res) => {
 });
 
 // POST /downloads/keep-track - Keep a discovery track (move to permanent library)
-router.post("/keep-track", async (req, res) => {
+router.post("/keep-track", requireMusicPermission("canRequestAlbums"), async (req, res) => {
     try {
         const { discoveryTrackId } = req.body;
         const userId = req.user!.id;

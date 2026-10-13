@@ -2,7 +2,7 @@ import { Router } from "express";
 import axios from "axios";
 import { logger } from "../utils/logger";
 import { z } from "zod";
-import { requireAuthOrToken } from "../middleware/auth";
+import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { sessionLog } from "../utils/playlistLogger";
 import { safeError } from "../utils/errors";
@@ -736,7 +736,7 @@ router.get("/:id/pending/:trackId/preview/stream", async (req, res) => {
  * Retry downloading ALL failed/pending tracks from Soulseek
  * Returns immediately and processes downloads sequentially in background
  */
-router.post("/:id/pending/retry-all", async (req, res) => {
+router.post("/:id/pending/retry-all", requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         const userId = req.user!.id;
         const { id: playlistId } = req.params;
@@ -917,7 +917,7 @@ router.post("/:id/pending/retry-all", async (req, res) => {
  * Retry downloading a failed/pending track from Soulseek
  * Returns immediately and downloads in background
  */
-router.post("/:id/pending/:trackId/retry", async (req, res) => {
+router.post("/:id/pending/:trackId/retry", requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         const userId = req.user!.id;
         const { id: playlistId, trackId: pendingTrackId } = req.params;

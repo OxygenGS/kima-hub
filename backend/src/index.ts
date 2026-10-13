@@ -14,6 +14,7 @@ import libraryRoutes from "./routes/library";
 import playsRoutes from "./routes/plays";
 import settingsRoutes from "./routes/settings";
 import systemSettingsRoutes from "./routes/systemSettings";
+import brandingRoutes from "./routes/branding";
 import listeningStateRoutes from "./routes/listeningState";
 import playbackStateRoutes from "./routes/playbackState";
 import offlineRoutes from "./routes/offline";
@@ -150,6 +151,8 @@ app.use("/api/library", libraryRoutes);
 app.use("/api/plays", apiLimiter, playsRoutes);
 app.use("/api/settings", apiLimiter, settingsRoutes);
 app.use("/api/system-settings", apiLimiter, systemSettingsRoutes);
+// Branding is readable even on the login screen; writes self-check admin rights.
+app.use("/api/branding", apiLimiter, brandingRoutes);
 app.use("/api/listening-state", apiLimiter, listeningStateRoutes);
 app.use("/api/playback-state", playbackStateRoutes); // No rate limit - syncs frequently
 app.use("/api/offline", apiLimiter, offlineRoutes);
@@ -414,9 +417,9 @@ async function main() {
     // Check for admin password reset
     await checkPasswordReset();
 
-    const server = app.listen(config.port, "0.0.0.0", async () => {
+    const server = app.listen(config.port, config.host, async () => {
     logger.debug(
-        `Kima API running on port ${config.port} (accessible on all network interfaces)`
+        `Kima API listening on ${config.host}:${config.port}`
     );
     server.keepAliveTimeout = 65_000;  // > common LB idle of 60s
     server.headersTimeout = 70_000;    // must exceed keepAliveTimeout

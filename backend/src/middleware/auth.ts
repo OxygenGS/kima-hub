@@ -334,6 +334,27 @@ export async function requireAdmin(
     next();
 }
 
+/** Check the current persisted permissions; never trust stale token claims. */
+export function requireMusicPermission(permission: "canRequestAlbums" | "canDownloadTracks") {
+    return async (req: Request, res: Response, next: NextFunction) => {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: req.user.id },
+                select: { role: true, canRequestAlbums: true, canDownloadTracks: true },
+            });
+            if (!user) return res.status(401).json({ error: "Not authenticated" });
+            if (user.role !== "admin" && !user[permission]) {
+                return res.status(403).json({ error: "Music download permission required", permission });
+            }
+            next();
+        } catch (error) {
+            logger.error("Music permission check failed:", error);
+            return res.status(500).json({ error: "Permission check failed" });
+        }
+    };
+}
+
 // For streaming URLs that may use query params or need special handling
 export async function requireAuthOrToken(
     req: Request,
