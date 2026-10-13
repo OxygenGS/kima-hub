@@ -24,6 +24,15 @@ database migration outside the isolated CT 105 test environment.
       Admin-customized permissions and branding survived a second migration
       pass. The backup was also restored independently to the original schema.
       The **database upgrade job** passed in GitHub Actions run 38313457995.
+- [x] All-in-one legacy `/data` upgrade smoke passed on commit
+      `8551f0d45f0498aff1655bfdf8ae6a44b690025d` in GitHub Actions
+      run 38355460274. A disposable PostgreSQL 16 legacy data directory was
+      created with synthetic users/music using pre-fork migrations; the new
+      AIO container mounted that SAME volume, ran migrations, preserved
+      records, accepted branding customization and user permission changes,
+      and retained the changes after container replacement. Persistent
+      encryption/session secrets were present after the restart. The Docker
+      image now includes the en_US.UTF-8 locale required by this old volume.
 - [x] Production CT 101 unchanged.
 
 ## Release blockers / approvals required
@@ -68,13 +77,18 @@ database migration outside the isolated CT 105 test environment.
       saved post-upgrade branding/permissions, and backup recovery.
       Implemented by `db-upgrade` in `.github/workflows/pr-checks.yml` and
       SQL checks in `.github/ci/`.
-- [ ] **Complete AIO-image upgrade and operational rollback rehearsal.** The
-      automated test exercises schema upgrade and backup/restore on PostgreSQL,
-      but not booting an OLD all-in-one container, upgrading the SAME mounted
-      `/data` volume to the new AIO image, or reverting the image against a
-      restored volume. Verify these separately using disposable data before
-      approving production migration. Do not treat an old image against a
-      newly migrated database as a rollback strategy.
+- [x] **AIO startup with pre-fork PostgreSQL `/data` volume** tested
+      successfully in run 38355460274. An old Postgres data directory
+      (from pgvector/pgvector:pg16, **not** from an old upstream AIO image)
+      was attached to the newly built AIO container. The tested migration,
+      fresh startup, removal/recreation of the container, app branding API,
+      and preserved account/library/branding/permission data passed.
+- [ ] **Full old-image-to-new-image and operational rollback rehearsal.**
+      The CI test did NOT start an older monolithic Kima image, copy its
+      original full `/data` layout and secrets, or exercise reverting the
+      image against an independently restored OLD `/data` snapshot.
+      Complete such a rehearsal before approving a real production migration.
+      Never assume an older image can boot a newly migrated database.
 - [ ] **Test representative audio playback and its controls.** CT 105 currently
       has an empty music library, so media playback remains unverified.
 - [ ] **Security review:** verify admin-only branding mutations, permissions
