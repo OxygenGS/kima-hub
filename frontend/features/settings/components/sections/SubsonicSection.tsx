@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ApiKey {
     id: string;
@@ -17,6 +18,7 @@ interface ApiKey {
 export function SubsonicSection() {
     const { user } = useAuth();
     const { branding } = useBranding();
+    const { t, locale } = useLanguage();
 
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [generating, setGenerating] = useState(false);
@@ -62,11 +64,11 @@ export function SubsonicSection() {
             });
             setNewToken(data.apiKey);
             setStatus("success");
-            setMessage("Token generated");
+            setMessage(t("Token generated"));
             await loadApiKeys();
         } catch (error: unknown) {
             setStatus("error");
-            setMessage(error instanceof Error ? error.message : "Failed to generate token");
+            setMessage(error instanceof Error ? error.message : t("Failed to generate token"));
         } finally {
             setGenerating(false);
         }
@@ -90,7 +92,7 @@ export function SubsonicSection() {
     };
 
     const formatDate = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString(undefined, {
+        return new Date(dateStr).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US", {
             year: "numeric",
             month: "short",
             day: "numeric",
@@ -98,11 +100,11 @@ export function SubsonicSection() {
     };
 
     return (
-        <SettingsSection id="subsonic" title="Native Apps">
+        <SettingsSection id="subsonic" title={t("Native Apps")}>
             {/* Connection Info */}
             <SettingsRow
-                label="Server URL"
-                description="Enter this in your Subsonic-compatible client. Admins can set a persistent URL in Storage settings."
+                label={t("Server URL")}
+                description={t("Enter this in your Subsonic-compatible client. Admins can set a persistent URL in Storage settings.")}
             >
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg tabular-nums break-all flex-1 min-w-0">
@@ -112,14 +114,14 @@ export function SubsonicSection() {
                         onClick={() => copyToClipboard(serverUrl)}
                         className="text-xs text-brand hover:text-[#f97316] transition-colors shrink-0"
                     >
-                        Copy
+                        {t("Copy")}
                     </button>
                 </div>
             </SettingsRow>
 
             <SettingsRow
-                label="Username"
-                description={`Use your ${branding.name} username in the client`}
+                label={t("Username")}
+                description={`${t("Use your")} ${branding.name} ${t("username in the client")}`}
             >
                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
                     {user?.username}
@@ -128,15 +130,15 @@ export function SubsonicSection() {
 
             {/* Token Generation */}
             <SettingsRow
-                label="API Token"
-                description="Generate a token to use as the password in your client"
+                label={t("API Token")}
+                description={t("Generate a token to use as the password in your client")}
             >
                 <div className="flex flex-col gap-2">
                     <input
                         type="text"
                         value={deviceName}
                         onChange={(e) => setDeviceName(e.target.value)}
-                        placeholder="Client name (e.g. Amperfy, Symfonium, DSub)"
+                        placeholder={t("Client name (e.g. Amperfy, Symfonium, DSub)")}
                         className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg tabular-nums
                             placeholder:text-[var(--text-muted)] focus:outline-none focus:border-white/20 w-full"
                     />
@@ -147,7 +149,7 @@ export function SubsonicSection() {
                             className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
                                 hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                            {generating ? "Generating..." : "Generate Token"}
+                            {generating ? t("Generating...") : t("Generate Token")}
                         </button>
                         <InlineStatus
                             status={status}
@@ -162,7 +164,7 @@ export function SubsonicSection() {
             {newToken && (
                 <div className="py-4 space-y-3 border-t border-b border-white/5">
                     <p className="text-xs text-[#f59e0b]">
-                        Save this key — it won&apos;t be shown again.
+                        {t("Save this key — it won't be shown again.")}
                     </p>
                     <div className="flex items-start gap-2 min-w-0 overflow-hidden">
                         <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg font-mono break-all flex-1 min-w-0 overflow-hidden">
@@ -172,7 +174,7 @@ export function SubsonicSection() {
                             onClick={() => copyToClipboard(newToken)}
                             className="text-xs text-brand hover:text-[#f97316] transition-colors shrink-0 pt-2"
                         >
-                            Copy
+                            {t("Copy")}
                         </button>
                     </div>
                 </div>
@@ -181,13 +183,13 @@ export function SubsonicSection() {
             {/* Setup guide — shown after a token has been generated */}
             {newToken && (
                 <SettingsRow
-                    label="Setup Guide"
-                    description="How to connect your client"
+                    label={t("Setup Guide")}
+                    description={t("How to connect your client")}
                 >
                     <div className="space-y-1 text-xs tabular-nums text-[var(--text-muted)]">
-                        <p>1. Server URL — paste the URL above</p>
-                        <p>2. Username — your {branding.name} username</p>
-                        <p>3. Password / API key — paste the token above</p>
+                        <p>1. {t("Server URL — paste the URL above")}</p>
+                        <p>2. {t("Username — your")} {branding.name} {t("Username")}</p>
+                        <p>3. {t("Password / API key — paste the token above")}</p>
                     </div>
                 </SettingsRow>
             )}
@@ -195,8 +197,8 @@ export function SubsonicSection() {
             {/* Existing API keys */}
             {apiKeys.length > 0 && (
                 <SettingsRow
-                    label="Active Tokens"
-                    description="Revoke tokens to disconnect clients"
+                    label={t("Active Tokens")}
+                    description={t("Revoke tokens to disconnect clients")}
                 >
                     <div className="space-y-2 w-full">
                         {apiKeys.map((key) => (
@@ -207,8 +209,8 @@ export function SubsonicSection() {
                                 <div className="min-w-0">
                                     <p className="text-xs tabular-nums text-white truncate">{key.name}</p>
                                     <p className="text-xs tabular-nums text-[var(--text-muted)]">
-                                        Created {formatDate(key.createdAt)}
-                                        {key.lastUsed && ` · Last used ${formatDate(key.lastUsed)}`}
+                                        {t("Created")} {formatDate(key.createdAt)}
+                                        {key.lastUsed && ` · ${t("Last used")} ${formatDate(key.lastUsed)}`}
                                     </p>
                                 </div>
                                 <button
@@ -216,7 +218,7 @@ export function SubsonicSection() {
                                     disabled={revoking === key.id}
                                     className="text-xs tabular-nums text-red-400 hover:text-red-300 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {revoking === key.id ? "Revoking..." : "Revoke"}
+                                    {revoking === key.id ? t("Revoking...") : t("Revoke")}
                                 </button>
                             </div>
                         ))}
