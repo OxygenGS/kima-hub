@@ -395,6 +395,11 @@ export const english = {
     "Playlist name...": "Playlist name...",
     "Paste a playlist URL (Spotify, YouTube, SoundCloud...)": "Paste a playlist URL (Spotify, YouTube, SoundCloud...)",
     "Hidden playlists won't appear in your library. Hover and click the eye icon to restore.": "Hidden playlists won't appear in your library. Hover and click the eye icon to restore.",
+    "Repeat: All (loop queue)": "Repeat: All (loop queue)",
+    "Repeat: One (play current track twice)": "Repeat: One (play current track twice)",
+    "Already in selected playlists": "Already in selected playlists",
+    "Added to": "Added to",
+    "percent": "percent",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -793,6 +798,11 @@ export const dutch: Record<TranslationKey, string> = {
     "Playlist name...": "Naam van afspeellijst...",
     "Paste a playlist URL (Spotify, YouTube, SoundCloud...)": "Plak een afspeellijst-URL (Spotify, YouTube, SoundCloud...)",
     "Hidden playlists won't appear in your library. Hover and click the eye icon to restore.": "Verborgen afspeellijsten verschijnen niet in je bibliotheek. Beweeg over de afspeellijst en klik op het oogpictogram om deze terug te zetten.",
+    "Repeat: All (loop queue)": "Herhalen: hele wachtrij",
+    "Repeat: One (play current track twice)": "Herhalen: huidig nummer twee keer",
+    "Already in selected playlists": "Staat al in de geselecteerde afspeellijsten",
+    "Added to": "Toegevoegd aan",
+    "percent": "procent",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
