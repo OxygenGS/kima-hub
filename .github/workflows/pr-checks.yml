@@ -190,9 +190,16 @@ jobs:
                   build-args: |
                       NEXT_PUBLIC_BUILD_TYPE=ci-smoke
 
+            # Node is needed by the real-account Playwright smoke on this runner.
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
             - name: Boot a fresh isolated AIO instance and check endpoints
               shell: bash
-              timeout-minutes: 15
+              timeout-minutes: 35
               run: |
                   set -euo pipefail
 
@@ -273,6 +280,10 @@ jobs:
                   # Runs against this SAME isolated AIO container and /music
                   # volume. Synthetic 440Hz WAV only; no real user media.
                   bash .github/ci/aio-audio-smoke.sh "$name" "http://127.0.0.1:3130"
+
+                  # Real login and Settings/Search locale checks on the same
+                  # throwaway AIO, as both the synthetic admin and listener.
+                  bash .github/ci/aio-auth-locale-smoke.sh "http://127.0.0.1:3130"
 
             # Reuse the just-loaded AIO image to test the real start.sh
             # against an OLD PostgreSQL data directory. No second big image

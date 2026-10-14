@@ -68,7 +68,7 @@ export KIMA_E2E_LOCALE_WALKTHROUGH=1
 npx playwright test tests/e2e/predeploy/authenticated-locale.spec.ts
 ```
 
-Without the opt-in flag the tests are skipped; without credentials, the regular real-account Playwright setup will reject the run. These real-account tests have **not** been executed by CI and must not be described as passed until run against a prepared test server. They do not replace the admin-permissions, downloads or playback acceptance walkthrough.
+Without the opt-in flag the tests are skipped; without credentials, the regular real-account Playwright setup rejects the run. The PR's AIO smoke workflow now **attempts to run** this suite twice (as a real, synthetic administrator and a regular user) inside its disposable localhost-only Docker installation, after the synthetic audio/auth fixture is created. Only describe this as passed once the current GitHub Actions AIO job has actually succeeded. A green automated walkthrough still does **not** replace manual desktop/mobile/TV, admin permissions, downloads, playback or accessibility acceptance.
 
 
 ## Remaining decisions
