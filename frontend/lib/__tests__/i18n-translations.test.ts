@@ -30,6 +30,14 @@ describe("UI translations", () => {
         expect(translate("nl", "An original album title")).toBe("An original album title");
     });
 
+    it("localizes nested album and artist controls", () => {
+        expect(translate("nl", "More Like This")).toBe("Meer zoals dit");
+        expect(translate("nl", "Add to queue")).toBe("Toevoegen aan wachtrij");
+        expect(translate("nl", "Pause preview")).toBe("Voorbeeld pauzeren");
+        expect(translate("nl", "Discography")).toBe("Discografie");
+        expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

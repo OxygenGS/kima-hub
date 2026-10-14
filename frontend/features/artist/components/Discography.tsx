@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import type { Album } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface DiscographyProps {
     albums: Album[];
@@ -22,6 +23,7 @@ export function Discography({
     sortBy,
     onSortChange,
 }: DiscographyProps) {
+    const { t, locale } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -30,7 +32,7 @@ export function Discography({
         <section>
             <SectionHeader
                 color="albums"
-                title="Discography"
+                title={t("Discography")}
                 rightAction={
                     <select
                         value={sortBy}
@@ -39,8 +41,8 @@ export function Discography({
                         }
                         className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-[var(--bg-hover)] [&>option]:text-white"
                     >
-                        <option value="year">Year (Newest)</option>
-                        <option value="dateAdded">Date Added (Recent)</option>
+                        <option value="year">{t("Year (Newest)")}</option>
+                        <option value="dateAdded">{t("Date Added (Recent)")}</option>
                     </select>
                 }
             />
@@ -51,7 +53,7 @@ export function Discography({
                 {albums.map((album, index) => {
                     const subtitle = [
                         album.year,
-                        album.trackCount && `${album.trackCount} tracks`,
+                        album.trackCount && `${album.trackCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${album.trackCount === 1 ? t("track") : t("tracks")}`,
                     ]
                         .filter(Boolean)
                         .join(" • ");
@@ -70,7 +72,7 @@ export function Discography({
                             placeholderIcon={
                                 <Disc3 className="w-12 h-12 text-[var(--text-muted)]" />
                             }
-                            badge="owned"
+                            badge={t("owned")}
                             circular={false}
                             colors={colors}
                             onPlay={() => onPlayAlbum(album.id, album.title)}

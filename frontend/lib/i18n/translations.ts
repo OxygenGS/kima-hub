@@ -979,6 +979,16 @@ export const english = {
     "Downloading...": "Downloading...",
     "Download All": "Download All",
     "Start artist radio": "Start artist radio",
+    "Add to queue": "Add to queue",
+    "Pause preview": "Pause preview",
+    "Play preview": "Play preview",
+    "Disc": "Disc",
+    "More Like This": "More Like This",
+    "Albums Available": "Albums Available",
+    "Singles and EPs": "Singles and EPs",
+    "Discography": "Discography",
+    "Date Added (Recent)": "Date Added (Recent)",
+    "Popular": "Popular",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1961,6 +1971,16 @@ export const dutch: Record<TranslationKey, string> = {
     "Downloading...": "Downloaden...",
     "Download All": "Alles downloaden",
     "Start artist radio": "Artiestenradio starten",
+    "Add to queue": "Toevoegen aan wachtrij",
+    "Pause preview": "Voorbeeld pauzeren",
+    "Play preview": "Voorbeeld afspelen",
+    "Disc": "Schijf",
+    "More Like This": "Meer zoals dit",
+    "Albums Available": "Beschikbare albums",
+    "Singles and EPs": "Singles en ep's",
+    "Discography": "Discografie",
+    "Date Added (Recent)": "Datum toegevoegd (recentste eerst)",
+    "Popular": "Populair",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

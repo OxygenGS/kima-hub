@@ -8,6 +8,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
 import { formatNumber } from "@/utils/formatNumber";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PopularTracksProps {
     tracks: Track[];
@@ -30,11 +31,12 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     previewPlaying,
     onPreview,
 }) => {
+    const { t } = useLanguage();
     const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
 
     return (
         <section>
-            <SectionHeader color="tracks" title="Popular" />
+            <SectionHeader color="tracks" title={t("Popular")} />
             <div data-tv-section="tracks">
                 {tracks.slice(0, 10).map((track, index) => {
                     const isPlaying = currentTrackId === track.id;
@@ -103,7 +105,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                         }
                                     }}
                                     className="w-8 h-8 flex items-center justify-center"
-                                    aria-label={isPlaying ? "Pause" : "Play"}
+                                    aria-label={isPlaying ? t("Pause") : t("Play")}
                                 >
                                     <span
                                         className={cn(

@@ -7,6 +7,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
 import { formatNumber } from "@/utils/formatNumber";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface TrackListProps {
     tracks: Track[];
@@ -52,6 +53,7 @@ const TrackRow = memo(
         onAddToPlaylist,
         onPreview,
     }: TrackRowProps) {
+        const { t } = useLanguage();
         const isMissingTrack = !!track.isMissing;
         const isPreviewOnly = !isOwned || isMissingTrack;
         const displayTrackNumber =
@@ -142,7 +144,7 @@ const TrackRow = memo(
                             handleRowClick(e);
                         }}
                         className="w-full flex items-center justify-center"
-                        aria-label={isPlaying ? "Pause" : "Play"}
+                        aria-label={isPlaying ? t("Pause") : t("Play")}
                     >
                         <span
                             className={cn(
@@ -204,16 +206,16 @@ const TrackRow = memo(
                         <button
                             onClick={handleAddToQueue}
                             className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:translate-y-1 sm:hover:translate-y-0 p-2 hover:bg-[#2a2a2a] rounded-full transition-[opacity,transform] duration-150 text-[var(--text-secondary)] hover:text-white"
-                            aria-label="Add to queue"
-                            title="Add to queue"
+                            aria-label={t("Add to queue")}
+                            title={t("Add to queue")}
                         >
                             <ListPlus className="w-4 h-4" />
                         </button>
                         <button
                             onClick={handleAddToPlaylist}
                             className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:translate-y-1 sm:hover:translate-y-0 p-2 hover:bg-[#2a2a2a] rounded-full transition-[opacity,transform] duration-150 text-[var(--text-secondary)] hover:text-white"
-                            aria-label="Add to playlist"
-                            title="Add to playlist"
+                            aria-label={t("Add to playlist")}
+                            title={t("Add to playlist")}
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -225,7 +227,7 @@ const TrackRow = memo(
                         onClick={handlePreview}
                         className="p-2 rounded-full bg-[var(--bg-hover)] hover:bg-[#2a2a2a] transition-colors text-white"
                         aria-label={
-                            isPreviewPlaying ? "Pause preview" : "Play preview"
+                            isPreviewPlaying ? t("Pause preview") : t("Play preview")
                         }
                     >
                         {isPreviewPlaying ? (
@@ -268,6 +270,7 @@ export const TrackList = memo(function TrackList({
     previewPlaying,
     onPreview,
 }: TrackListProps) {
+    const { t } = useLanguage();
     const isOwned = source === "library";
     const discNumbers = useMemo(
         () => Array.from(new Set(tracks.map((track) => track.discNumber).filter((disc) => disc != null))),
@@ -298,7 +301,7 @@ export const TrackList = memo(function TrackList({
                             <React.Fragment key={track.id}>
                                 {showDiscHeader && (
                                     <div className="px-3 md:px-4 py-2 text-xs font-semibold tracking-wide text-[var(--text-secondary)] bg-[#121212]">
-                                        Disc {discNumber}{discLabel ? ` -- ${discLabel}` : ""}
+                                        {t("Disc")} {discNumber}{discLabel ? ` -- ${discLabel}` : ""}
                                     </div>
                                 )}
                                 <TrackRow
