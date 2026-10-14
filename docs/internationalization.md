@@ -7,7 +7,7 @@ Kima Hub — Oxygen's Fork uses typed, incremental interface translations.
 - English (`en`) is the default interface language; Dutch (`nl`) is available on the login, registration, **first-run onboarding**, and Settings screens.
 - Language changes immediately, applies to all components wired to the translation context, and persists in **this browser** using the `kima-hub-language` local storage key. Tabs of the same origin share the choice.
 - Preferences are **not stored in user accounts** and are **not synchronized between devices**. This does not require database changes or migrations.
-- The current dictionary contains **1,046 matching English/Dutch UI keys** on the language-development branch. This is the number of keys, **not** proof of complete screen coverage.
+- The current dictionary contains **1,047 matching English/Dutch UI keys** on the language-development branch. This is the number of keys, **not** proof of complete screen coverage.
 - Route-level translations cover onboarding, sync, mix details, album/artist pages, and Vibe map/Galaxy/path/blend controls. Navigation, login, many Settings controls, and selected activity panels are also translated.
 - Incomplete areas include nested dialogs, some authenticated-only flows, server-provided errors, third-party metadata, and device-specific interfaces. Do **not** describe the entire application as translated until a real authenticated walkthrough is complete.
 
