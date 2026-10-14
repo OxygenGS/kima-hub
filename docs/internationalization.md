@@ -40,6 +40,7 @@ The isolated Chromium suite (`frontend/tests/e2e/language-selection.spec.ts`) co
 - first-run onboarding language selection and persistence before an account exists;
 - a **mocked** signed-in Settings screen, including persistence on reload and return to English;
 - language synchronization between existing tabs and fallback to English for an unsupported stored locale.
+- Dutch selection on a narrow mobile login/onboarding viewport (375px), with visibility and horizontal reachability checks.
 
 The simulated signed-in test uses a fake local token and intercepted API responses. It verifies UI behavior only: **it does not verify real login, permission enforcement, real Settings API calls, or production authentication**.
 
