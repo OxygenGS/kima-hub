@@ -884,6 +884,7 @@ export const english = {
     "Failed to refresh.": "Failed to refresh.",
     "Import Playlist": "Import Playlist",
     "Back": "Back",
+    "This playlist appears to be empty": "This playlist appears to be empty",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1771,6 +1772,7 @@ export const dutch: Record<TranslationKey, string> = {
     "Failed to refresh.": "Vernieuwen mislukt.",
     "Import Playlist": "Afspeellijst importeren",
     "Back": "Terug",
+    "This playlist appears to be empty": "Deze afspeellijst lijkt leeg te zijn",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
