@@ -82,7 +82,10 @@ export default function DiscoverWeeklyPage() {
     // Build discover settings element (stable across renders via the effect dep array)
     const discoverSettingsRef = useRef<React.ReactNode>(null);
     const settingsOwnerRef = useRef(settingsOwner);
-    settingsOwnerRef.current = settingsOwner;
+    // Refs are synchronized after render, before the settings publishing effect.
+    useEffect(() => {
+        settingsOwnerRef.current = settingsOwner;
+    }, [settingsOwner]);
 
     useEffect(() => {
         const handleBackToActivity = () => {
