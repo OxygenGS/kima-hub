@@ -239,7 +239,7 @@ function ImportPlaylistPageContent() {
             notifiedPreviewFailureRef.current === handledPreviewStatus) return;
         notifiedPreviewFailureRef.current = handledPreviewStatus;
         toast.error(handledPreviewStatus.error || t("Failed to generate preview"));
-    }, [handledPreviewStatus, toast]);
+    }, [handledPreviewStatus, toast, t]);
 
     // Import status: SSE populates cache, HTTP polls as fallback (mirrors preview-status pattern)
     const { data: sseImportStatus } = useQuery<(ImportJob & { jobId?: string }) | null>({
