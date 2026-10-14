@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { memo } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 type ContentColor = "featured" | "tracks" | "albums" | "podcasts" | "audiobooks" | "artists" | "discover";
 
@@ -31,6 +34,7 @@ const SectionHeader = memo(function SectionHeader({
     color = "featured",
 }: SectionHeaderProps) {
     const gradient = GRADIENT_MAP[color];
+    const { t } = useLanguage();
 
     return (
         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
@@ -48,7 +52,7 @@ const SectionHeader = memo(function SectionHeader({
                     href={showAllHref}
                     className="flex items-center gap-1 -my-3 py-3 min-h-[44px] text-xs text-[var(--text-muted)] hover:text-white transition-colors group shrink-0"
                 >
-                    Show all
+                    {t("Show all")}
                     <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                 </Link>
             ) : null}
