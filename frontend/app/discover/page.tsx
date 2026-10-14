@@ -279,7 +279,7 @@ export default function DiscoverWeeklyPage() {
                                             <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Similar artists via Last.fm, grouped by similarity tier")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-brand mb-1">{t("Downloads")}</div>
+                                            <div className="text-xs text-brand mb-1">{t("Downloads (action)")}</div>
                                             <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Full albums to")} <span className="text-[var(--text-muted)]">/music/discovery</span> {t("on your server")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
