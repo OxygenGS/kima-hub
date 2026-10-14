@@ -31,7 +31,9 @@ export function TopBar() {
     const router = useRouter();
     const { logout } = useAuth();
     const { branding } = useBranding();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
+    const downloadStatusText = (count: number, state: "in progress" | "starting..." | "failed") =>
+        `${count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(count === 1 ? "download" : "downloads")} ${t(state)}`;
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -111,8 +113,8 @@ export function TopBar() {
             const refused = /403|forbidden|admin/i.test(message);
             toast.error(
                 refused
-                    ? "Only an admin can scan the library"
-                    : "Could not start the library scan"
+                    ? t("Only an admin can scan the library")
+                    : t("Could not start the library scan")
             );
         }
     };
@@ -120,10 +122,10 @@ export function TopBar() {
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success("Logged out successfully");
+            toast.success(t("Logged out successfully"));
         } catch (error) {
             console.error("Logout error:", error);
-            toast.error("Failed to logout");
+            toast.error(t("Failed to logout"));
         }
     };
 
@@ -238,7 +240,7 @@ export function TopBar() {
                             );
                         }}
                         className="w-11 h-11 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-interactive)] rounded-md text-white hover:bg-[var(--bg-tertiary)] transition-colors duration-200 mr-2 flex-shrink-0"
-                        aria-label="Open menu"
+                        aria-label={t("Open menu")}
                     >
                         <Menu className="w-5 h-5" />
                     </button>
@@ -372,11 +374,11 @@ export function TopBar() {
                                 isPolling
                                     ? t("Library scan in progress")
                                     : hasActiveDownloads
-                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`
+                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
                                     : hasPendingUploads
-                                    ? `${pendingDownloads.length} download(s) starting`
+                                    ? downloadStatusText(pendingDownloads.length, "starting...")
                                     : hasFailedDownloads
-                                    ? `${downloadStatus.failedDownloads.length} download(s) failed`
+                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
                                     : t("Sync library")
                             }
                             className={cn(
@@ -393,11 +395,11 @@ export function TopBar() {
                                 isPolling
                                     ? t("Library scan in progress...")
                                     : hasActiveDownloads
-                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`
+                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
                                     : hasPendingUploads
-                                    ? `${pendingDownloads.length} download(s) starting...`
+                                    ? downloadStatusText(pendingDownloads.length, "starting...")
                                     : hasFailedDownloads
-                                    ? `${downloadStatus.failedDownloads.length} download(s) failed`
+                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
                                     : t("Sync Library")
                             }
                         >
