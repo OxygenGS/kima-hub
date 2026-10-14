@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
+import { LanguageSection } from "@/features/settings/components/sections/LanguageSection";
 import { useAuth } from "@/lib/auth-context";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
@@ -29,6 +32,7 @@ import { CorruptTracksSection } from "@/features/settings/components/sections/Co
 // Define sidebar items
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: "Account" },
+    { id: "language", label: "Language" },
     { id: "subsonic", label: "Native Apps" },
     { id: "playback", label: "Playback" },
     { id: "download-preferences", label: "Download Preferences", adminOnly: true },
@@ -45,6 +49,10 @@ const sidebarItems: SidebarItem[] = [
 
 export default function SettingsPage() {
     const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+    const { t } = useLanguage();
+    const translatedSidebarItems = useMemo(() => sidebarItems.map(item => ({
+        ...item, label: t(item.label as TranslationKey),
+    })), [t]);
     const [isSaving, setIsSaving] = useState(false);
     const [testingServices, setTestingServices] = useState<Record<string, boolean>>({});
     const saveStatus = useInlineStatus();
@@ -106,11 +114,11 @@ export default function SettingsPage() {
         setIsSaving(false);
 
         if (hasError) {
-            saveStatus.setError("Failed to save");
+            saveStatus.setError(t("Failed to save"));
         } else {
-            saveStatus.setSuccess("Saved");
+            saveStatus.setSuccess(t("Saved"));
         }
-    }, [userSettings, systemSettings, isAdmin, saveUserSettings, saveSystemSettings, saveStatus]);
+    }, [userSettings, systemSettings, isAdmin, saveUserSettings, saveSystemSettings, saveStatus, t]);
 
     // Test service wrapper
     const handleTestService = useCallback(async (service: string) => {
@@ -135,10 +143,13 @@ export default function SettingsPage() {
     }
 
     return (
-        <SettingsLayout sidebarItems={sidebarItems} isAdmin={isAdmin}>
+        <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
                 {/* Account Section */}
             <div className="section-stack">
                 <AccountSection />
+
+                {/* Per-browser display language */}
+                <LanguageSection />
 
                 {/* Native Apps - Subsonic */}
                 <SubsonicSection />
@@ -226,7 +237,7 @@ export default function SettingsPage() {
                                 hover:bg-brand-hover active:scale-[0.98] transition-all
                                 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isSaving ? "Saving..." : "Save Changes"}
+                            {isSaving ? t("Saving...") : t("Save Changes")}
                         </button>
                         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
                             <InlineStatus {...saveStatus.props} />
