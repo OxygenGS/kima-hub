@@ -17,9 +17,21 @@ export function useSettingsData() {
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadSettings();
-        }
+        if (!isAuthenticated) return;
+        let active = true;
+        // Initial loading happens after the API resolves; explicit refreshes
+        // continue to use loadSettings below.
+        void api.getSettings()
+            .then((data) => {
+                if (active) setSettings(data);
+            })
+            .catch((error) => {
+                console.error("Failed to load settings:", error);
+            })
+            .finally(() => {
+                if (active) setIsLoading(false);
+            });
+        return () => { active = false; };
     }, [isAuthenticated]);
 
     const loadSettings = async () => {
