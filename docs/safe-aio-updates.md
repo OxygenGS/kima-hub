@@ -21,7 +21,7 @@ Confirm the /data mount is **type=volume**; note the exact volume name, for exam
 
 ## Cold backup of the complete /data volume
 
-Run in the same Compose project and ensure *all writers* to /data are stopped. For a one-container AIO stack, stopping the Kima service stops its embedded PostgreSQL and Redis.
+Run in the same Compose project and ensure *all writers* to /data are stopped. Pull the backup helper image **before** the downtime: `docker image pull alpine:3.20`. Backups are written **outside** the Compose/source directory to prevent accidental Git commits. For a one-container AIO stack, stopping the Kima service stops its embedded PostgreSQL and Redis.
 
 ```bash
 cid="$(docker compose ps -q kima)"
@@ -30,16 +30,18 @@ kind="$(docker inspect "$cid" --format '{{range .Mounts}}{{if eq .Destination "/
 volume="$(docker inspect "$cid" --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}')"
 test "$kind" = volume && test -n "$volume" || { echo "Expected a named /data volume"; exit 1; }
 
-mkdir -p backups
-chmod 700 backups
+backup_dir="$HOME/kima-backups"
+mkdir -p "$backup_dir"
+chmod 700 "$backup_dir"
 backup_file="kima-data-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
 docker compose stop kima
 docker run --rm \
   --mount "type=volume,source=$volume,destination=/source,readonly" \
-  --mount "type=bind,source=$(pwd)/backups,destination=/backup" \
+  --mount "type=bind,source=$backup_dir,destination=/backup" \
   alpine:3.20 tar -C /source -czpf "/backup/$backup_file" .
-test -s "backups/$backup_file" && tar -tzf "backups/$backup_file" >/dev/null
-echo "Saved: backups/$backup_file; original volume: $volume"
+test -s "$backup_dir/$backup_file" && tar -tzf "$backup_dir/$backup_file" >/dev/null
+sha256sum "$backup_dir/$backup_file" > "$backup_dir/$backup_file.sha256"
+echo "Saved: $backup_dir/$backup_file; original volume: $volume"
 ```
 
 **Keep this archive separately from the Docker volume**, preferably on another machine. Check available storage first. The archive contains the database and persistent secrets, and requires restricted access. Listing a tarball checks archive integrity only; a **restore to a separate volume** is needed to prove recoverability. If not upgrading immediately, use docker compose start kima to bring the original container back online.
@@ -64,11 +66,13 @@ Verify the health check, login, existing library, playlists, integration setting
 ```bash
 recovery_volume="kima_rollback_$(date -u +%Y%m%dT%H%M%SZ)"
 backup_file="REPLACE_WITH_VERIFIED_BACKUP.tar.gz"
-test -s "backups/$backup_file" || { echo "Backup missing"; exit 1; }
+backup_dir="$HOME/kima-backups"
+test -s "$backup_dir/$backup_file" || { echo "Backup missing"; exit 1; }
+(cd "$backup_dir" && sha256sum -c "$backup_file.sha256") || exit 1
 docker volume create "$recovery_volume"
 docker run --rm -e "BACKUP_FILE=$backup_file" \
   --mount "type=volume,source=$recovery_volume,destination=/restore" \
-  --mount "type=bind,source=$(pwd)/backups,destination=/backup,readonly" \
+  --mount "type=bind,source=$backup_dir,destination=/backup,readonly" \
   alpine:3.20 sh -c 'tar -xzpf "/backup/$BACKUP_FILE" -C /restore'
 echo "Restored to: $recovery_volume"
 ```
