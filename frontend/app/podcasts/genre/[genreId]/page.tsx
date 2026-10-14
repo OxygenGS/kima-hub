@@ -37,7 +37,7 @@ export default function GenrePage() {
     const genre = GENRE_MAP[genreId];
 
     const [podcasts, setPodcasts] = useState<Podcast[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
     const observerRef = useRef<IntersectionObserver | null>(null);
@@ -94,9 +94,25 @@ export default function GenrePage() {
     }, [loadMorePodcasts, hasMore, loading]);
 
     useEffect(() => {
-        loadMorePodcasts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: initial load should not re-trigger when loadMorePodcasts identity changes
-    }, []);
+        let cancelled = false;
+        // The first page loads asynchronously. While it is pending, the
+        // intersection observer cannot start a second request for offset 0.
+        void api.getPodcastsByGenrePaginated(parseInt(genreId, 10), LIMIT, 0)
+            .then((data) => {
+                if (cancelled) return;
+                setPodcasts(data);
+                setOffset(data.length);
+                setHasMore(data.length === LIMIT);
+            })
+            .catch((error) => {
+                console.error("Failed to load podcasts:", error);
+                if (!cancelled) setHasMore(false);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [genreId]);
 
     const handlePodcastClick = (podcast: Podcast) => {
         router.push(`/podcasts/${podcast.id || podcast.itunesId}`);
