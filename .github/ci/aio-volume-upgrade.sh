@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # GitHub-hosted, synthetic-data-only test:
 # an existing upstream PostgreSQL /data/postgres volume gets mounted into
-# the new Chillverse all-in-one image, migrated, restarted, and verified.
+# the new Kima Hub all-in-one image, migrated, restarted, and verified.
 # No real account data, music, production mounts, or image publishing.
 set -euo pipefail
 
-old="chillverse-ci-legacy-pg"
-aio="chillverse-ci-aio-upgrade"
-data="chillverse-ci-upgrade-data"
-music="chillverse-ci-upgrade-music"
+old="kima-ci-legacy-pg"
+aio="kima-ci-aio-upgrade"
+data="kima-ci-upgrade-data"
+music="kima-ci-upgrade-music"
 image="kima-hub:aio-ci-smoke"
 url="http://127.0.0.1:3131"
 

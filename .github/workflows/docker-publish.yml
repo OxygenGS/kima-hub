@@ -89,7 +89,7 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: false
                   load: true
                   tags: kima:scan
@@ -128,7 +128,7 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: true
                   tags: |
                       ${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.version }}

@@ -11,6 +11,25 @@ on:
         types: [opened, synchronize, reopened]
 
 jobs:
+    naming-audit:
+        name: No Legacy Project Naming
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Check tracked files and filenames
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  if git grep -nI -i -E 'chill[-_[:space:]]*verse' -- .; then
+                      echo "Legacy project name found in tracked content."
+                      exit 1
+                  fi
+                  if git ls-files | grep -E -i 'chill[-_[:space:]]*verse'; then
+                      echo "Legacy project name found in tracked filenames."
+                      exit 1
+                  fi
+                  echo "No legacy project naming remains in the checkout."
+
     lint-frontend:
         name: Frontend Lint & Unit Tests
         runs-on: ubuntu-latest
