@@ -340,10 +340,10 @@ export default function LoginPage() {
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
-                                            Signing in...
+                                            {t("Signing in...")}
                                         </>
                                     ) : (
-                                        "Sign In"
+                                        t("Sign In")
                                     )}
                                 </span>
                             </button>
@@ -359,7 +359,7 @@ export default function LoginPage() {
                                     }}
                                     className="w-full text-xs text-[var(--text-secondary)] hover:text-white/80 transition-colors"
                                 >
-                                    ← Back to login
+                                    {t("← Back to login")}
                                 </button>
                             )}
                         </form>
