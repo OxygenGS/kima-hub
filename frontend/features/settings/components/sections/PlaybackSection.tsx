@@ -4,6 +4,7 @@ import { SettingsSection, SettingsRow, SettingsSelect, SettingsInput } from "../
 import { UserSettings } from "../../types";
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PlaybackSectionProps {
     value: UserSettings["playbackQuality"];
@@ -26,23 +27,28 @@ const SAMPLE_TRACK = {
 
 export function PlaybackSection({ value, onChange }: PlaybackSectionProps) {
     const { format, setFormat } = useTrackFormat();
+    const { t } = useLanguage();
+    const translatedQualityOptions = qualityOptions.map(option => ({
+        ...option,
+        label: t(option.label as "Original (Lossless)" | "High (320 kbps)" | "Medium (192 kbps)" | "Low (128 kbps)"),
+    }));
     const preview = formatTrackDisplay(SAMPLE_TRACK, format);
 
     return (
-        <SettingsSection id="playback" title="Playback">
+        <SettingsSection id="playback" title={t("Playback")}>
             <SettingsRow
-                label="Streaming quality"
-                description="Higher quality uses more bandwidth"
+                label={t("Streaming quality")}
+                description={t("Higher quality uses more bandwidth")}
             >
                 <SettingsSelect
                     value={value}
                     onChange={(v) => onChange(v as UserSettings["playbackQuality"])}
-                    options={qualityOptions}
+                    options={translatedQualityOptions}
                 />
             </SettingsRow>
             <SettingsRow
-                label="Track title format"
-                description="Foobar2000-style format string. Leave empty for default."
+                label={t("Track title format")}
+                description={t("Foobar2000-style format string. Leave empty for default.")}
             >
                 <div className="flex flex-col gap-1.5 w-full max-w-sm">
                     <SettingsInput
@@ -52,7 +58,7 @@ export function PlaybackSection({ value, onChange }: PlaybackSectionProps) {
                     />
                     {format && (
                         <p className="text-micro text-[var(--text-muted)] tabular-nums truncate">
-                            Preview: {preview}
+                            {t("Preview:")} {preview}
                         </p>
                     )}
                 </div>
