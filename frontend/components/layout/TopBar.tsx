@@ -65,13 +65,8 @@ export function TopBar() {
 
     const isPolling = !!scanJobId && (!scanStatus || scanStatus.status === "active");
 
-    // Handle scan completion/failure
-    useEffect(() => {
-        if (!scanStatus || !scanJobId) return;
-        if (scanStatus.status === "completed" || scanStatus.status === "failed") {
-            setScanJobId(null);
-        }
-    }, [scanStatus, scanJobId]);
+    // Terminal SSE status makes isPolling false; the next scan replaces the
+    // job ID. Clearing it in an effect caused an unnecessary render.
 
     // Track download status from context (single source of truth)
     const { pendingDownloads, downloadStatus } = useDownloadContext();
@@ -79,9 +74,23 @@ export function TopBar() {
     // pendingDownloads is optimistic local state that can become stale
     const hasActiveDownloads = downloadStatus.hasActiveDownloads;
 
+    // Freshness depends on wall-clock time, so sample it outside render and
+    // periodically update while optimistic downloads exist. No impure clock
+    // reads occur in React's render phase.
+    const [pendingClock, setPendingClock] = useState<number | null>(null);
+    useEffect(() => {
+        if (pendingDownloads.length === 0) return;
+        const updateClock = () => setPendingClock(Date.now());
+        const initial = window.setTimeout(updateClock, 0);
+        const interval = window.setInterval(updateClock, 5000);
+        return () => {
+            window.clearTimeout(initial);
+            window.clearInterval(interval);
+        };
+    }, [pendingDownloads.length]);
     const hasPendingUploads =
-        pendingDownloads.length > 0 &&
-        pendingDownloads.some((p) => Date.now() - p.timestamp < 30000); // Only count recent pending
+        pendingClock !== null &&
+        pendingDownloads.some((p) => pendingClock - p.timestamp < 30000 && pendingClock >= p.timestamp);
     const hasFailedDownloads = downloadStatus.failedDownloads.length > 0;
 
     const handleSync = async () => {
