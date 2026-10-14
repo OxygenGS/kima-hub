@@ -130,12 +130,12 @@ WHERE "id"='upgrade-listener';
 INSERT INTO "BrandingSettings"
     ("id","name","tagline","accentColor","backgroundColor","updatedAt")
 VALUES
-    ('default','Chillverse Upgrade Fixture','Kept across migrations',
+    ('default','Kima Hub Upgrade Fixture','Kept across migrations',
      '#3dacdb','#0a0a0a',NOW());
 SQL
 
 curl -fsS --max-time 20 "$url/api/branding" | python3 -c \
-    'import sys,json; d=json.load(sys.stdin); assert d["name"]=="Chillverse Upgrade Fixture",d; print("Custom branding served by upgraded AIO")'
+    'import sys,json; d=json.load(sys.stdin); assert d["name"]=="Kima Hub Upgrade Fixture",d; print("Custom branding served by upgraded AIO")'
 
 echo "---- Removing the upgraded AIO container, preserving /data ----"
 docker stop -t 45 "$aio" >/dev/null
@@ -147,7 +147,7 @@ docker exec -i -u postgres "$aio" psql -v ON_ERROR_STOP=1 -d kima \
     < .github/ci/assert-upgrade-second-pass.sql
 
 curl -fsS --max-time 20 "$url/api/branding" | python3 -c \
-    'import sys,json; d=json.load(sys.stdin); assert d["name"]=="Chillverse Upgrade Fixture",d; assert d["accentColor"]=="#3dacdb",d; print("Branding survived AIO container replacement")'
+    'import sys,json; d=json.load(sys.stdin); assert d["name"]=="Kima Hub Upgrade Fixture",d; assert d["accentColor"]=="#3dacdb",d; print("Branding survived AIO container replacement")'
 
 docker exec "$aio" sh -c \
     'test -s /data/secrets/session_secret && test -s /data/secrets/encryption_key'
