@@ -342,6 +342,17 @@ function AnimationDriver({ active }: { active: boolean }) {
     return null;
 }
 
+// Three.js scene objects are intentionally mutable. Keep imperative updates
+// in helpers called from effects, outside React's render/compiler data flow.
+function setPointRaycastThreshold(raycaster: THREE.Raycaster, threshold: number) {
+    raycaster.params.Points = { threshold };
+}
+
+function restoreOrthographicZoom(camera: THREE.OrthographicCamera, zoom: number) {
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
+}
+
 // ---------------------------------------------------------------------------
 // Track Points -- circular shader-based points (1 draw call, no triangular artifacts)
 // ---------------------------------------------------------------------------
@@ -376,8 +387,8 @@ function TrackPoints({
 
     useEffect(() => {
         const prev = raycaster.params.Points?.threshold ?? 1;
-        raycaster.params.Points = { threshold: 18 };
-        return () => { raycaster.params.Points = { threshold: prev }; };
+        setPointRaycastThreshold(raycaster, 18);
+        return () => { setPointRaycastThreshold(raycaster, prev); };
     }, [raycaster]);
 
     const geometry = useMemo(() => {
@@ -866,8 +877,7 @@ function CameraPersistence({ is3D }: { is3D: boolean }) {
             camera.quaternion.set(saved.qx, saved.qy, saved.qz, saved.qw);
         }
         if (!is3D && "zoom" in camera) {
-            (camera as THREE.OrthographicCamera).zoom = saved.zoom;
-            camera.updateProjectionMatrix();
+            restoreOrthographicZoom(camera as THREE.OrthographicCamera, saved.zoom);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // run once on mount
