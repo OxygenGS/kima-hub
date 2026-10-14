@@ -49,9 +49,18 @@ export function SubsonicSection() {
                 }
             });
 
-        void loadApiKeys();
-        // Initial load only: API-key list is refreshed explicitly on mutations.
-    }, [loadApiKeys]);
+        // Initial read is asynchronous, so the effect does not synchronously
+        // invoke a state-updating loader. Mutations use loadApiKeys separately.
+        let cancelled = false;
+        void api.get<{ apiKeys: ApiKey[] }>("/api-keys")
+            .then((data) => {
+                if (!cancelled) setApiKeys(data.apiKeys);
+            })
+            .catch(() => {
+                // Non-fatal: the list remains empty if tokens cannot be loaded.
+            });
+        return () => { cancelled = true; };
+    }, []);
 
     const handleGenerate = async () => {
         const name = deviceName.trim() || "Subsonic";
