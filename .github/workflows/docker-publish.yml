@@ -20,6 +20,11 @@ jobs:
         outputs:
             version: ${{ steps.version.outputs.version }}
         steps:
+            - name: Checkout branch history for stable-tag verification
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
             - name: Require stable SemVer and trusted release context
               id: version
               shell: bash
@@ -53,6 +58,13 @@ jobs:
                       echo "Not a stable version: $VERSION" >&2
                       echo "Use the separate prerelease workflow for candidates." >&2
                       exit 1
+                  fi
+                  if [ "$EVENT_NAME" = "push" ]; then
+                      # A tag on an unmerged feature branch must never ship as stable.
+                      if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+                          echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
+                          exit 1
+                      fi
                   fi
                   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
