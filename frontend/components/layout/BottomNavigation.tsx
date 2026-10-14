@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Library, Sparkles, BookOpen, Mic, ListMusic } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 const navigationItems = [
@@ -41,6 +43,7 @@ const navigationItems = [
 
 export function BottomNavigation() {
     const pathname = usePathname();
+    const { t } = useLanguage();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -52,7 +55,7 @@ export function BottomNavigation() {
         <nav
             className="fixed bottom-0 left-0 right-0 z-(--z-nav) bg-[var(--bg-primary)] border-t border-white/10"
             role="navigation"
-            aria-label="Main navigation"
+            aria-label={t("Main navigation")}
             style={{
                 paddingBottom: 'var(--standalone-safe-area-bottom, 0px)'
             }}
@@ -64,7 +67,7 @@ export function BottomNavigation() {
 
                     return (
                         <Link
-                            key={item.name}
+                            key={t(item.name as TranslationKey)}
                             href={item.href}
                             className={cn(
                                 "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors duration-200",
@@ -72,7 +75,7 @@ export function BottomNavigation() {
                                     ? "text-brand"
                                     : "text-[var(--text-muted)] active:text-[var(--text-primary)]"
                             )}
-                            aria-label={item.name}
+                            aria-label={t(item.name as TranslationKey)}
                             aria-current={isActive ? "page" : undefined}
                         >
                             <Icon
