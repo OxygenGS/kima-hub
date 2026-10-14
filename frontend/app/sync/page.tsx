@@ -30,7 +30,7 @@ function deriveMessage(p: number): string {
 
 export default function SyncPage() {
     const { branding } = useBranding();
-    useRouter();
+    const router = useRouter();
     const queryClient = useQueryClient();
     const [initError, setInitError] = useState("");
     const [initFailed, setInitFailed] = useState(false);
@@ -165,13 +165,13 @@ export default function SyncPage() {
 
             setPostScanDone(true);
             setTimeout(() => {
-                window.location.href = "/";
+                router.push("/");
             }, 1500);
         })();
-    }, [scanStatus]);
+    }, [scanStatus, router]);
 
     const handleSkip = () => {
-        window.location.href = "/";
+        router.push("/");
     };
 
     const steps = [
