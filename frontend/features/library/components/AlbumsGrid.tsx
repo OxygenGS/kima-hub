@@ -1,3 +1,7 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n/language-context";
+
 import React, { memo, useCallback, useMemo, type CSSProperties } from "react";
 import Link from "next/link";
 import { Album } from "../types";
@@ -30,6 +34,7 @@ const AlbumCardItem = memo(
         onPlay,
         onDelete,
     }: AlbumCardItemProps) {
+        const { t } = useLanguage();
         const handlePlay = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
@@ -96,7 +101,7 @@ const AlbumCardItem = memo(
                         <button
                             onClick={handleDelete}
                             className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/80 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all duration-150 border border-white/20"
-                            title="Delete album"
+                            title={t("Delete album")}
                         >
                             <Trash2 className="w-4 h-4 text-white" />
                         </button>
@@ -130,6 +135,7 @@ const AlbumsGrid = memo(function AlbumsGrid({
     isLoading = false,
     gridKey,
 }: AlbumsGridProps) {
+    const { t } = useLanguage();
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -142,8 +148,8 @@ const AlbumsGrid = memo(function AlbumsGrid({
         return (
             <EmptyState
                 icon={<Disc3 className="w-12 h-12" />}
-                title="No albums yet"
-                description="Your library is empty. Sync your music to get started."
+                title={t("No albums yet")}
+                description={t("Your library is empty. Sync your music to get started.")}
             />
         );
     }
