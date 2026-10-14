@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { mergeImportProgress, isTerminalImportStatus } from "@/lib/import-progress";
 
 // Types for Spotify Import
 interface SpotifyTrack {
@@ -207,22 +208,35 @@ function ImportPlaylistPageContent() {
         refetchOnWindowFocus: false,
     });
 
-    // React to SSE-driven preview completion
-    useEffect(() => {
-        if (!ssePreviewStatus || step !== "previewing") return;
+    // A terminal SSE result adjusts this component's state once, during
+    // render, as recommended for state derived from changed query data.
+    // Do not replay an event on unrelated renders (e.g. a typed playlist name).
+    const [handledPreviewStatus, setHandledPreviewStatus] = useState<PreviewStatus | null>(null);
+    if (ssePreviewStatus && step === "previewing" && handledPreviewStatus !== ssePreviewStatus) {
         if (ssePreviewStatus.status === "completed" && ssePreviewStatus.preview) {
             const result = ssePreviewStatus.preview;
+            setHandledPreviewStatus(ssePreviewStatus);
             setPreview(result);
             setPlaylistName(result.playlist.name);
             const downloadableAlbumIds = result.albumsToDownload.map((_a, i) => String(i));
             setSelectedAlbums(new Set(downloadableAlbumIds));
             setStep("preview");
         } else if (ssePreviewStatus.status === "failed") {
-            toast.error(ssePreviewStatus.error || "Failed to generate preview");
+            setHandledPreviewStatus(ssePreviewStatus);
             setStep("input");
             setPreviewJobId(null);
         }
-    }, [ssePreviewStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
+
+    // Notifications are side effects, so keep them in an effect, separately
+    // from the pure render-time state adjustment. Guard against Strict Mode.
+    const notifiedPreviewFailureRef = useRef<PreviewStatus | null>(null);
+    useEffect(() => {
+        if (handledPreviewStatus?.status !== "failed" ||
+            notifiedPreviewFailureRef.current === handledPreviewStatus) return;
+        notifiedPreviewFailureRef.current = handledPreviewStatus;
+        toast.error(handledPreviewStatus.error || "Failed to generate preview");
+    }, [handledPreviewStatus, toast]);
 
     // Import status: SSE populates cache, HTTP polls as fallback (mirrors preview-status pattern)
     const { data: sseImportStatus } = useQuery<(ImportJob & { jobId?: string }) | null>({
@@ -243,28 +257,23 @@ function ImportPlaylistPageContent() {
         refetchOnWindowFocus: false,
     });
 
-    // React to SSE-driven import status changes
-    useEffect(() => {
-        if (!sseImportStatus || !importJob) return;
-
-        const updated: ImportJob = {
-            ...importJob,
-            status: sseImportStatus.status,
-            progress: sseImportStatus.progress ?? importJob.progress,
-            albumsTotal: sseImportStatus.albumsTotal ?? importJob.albumsTotal,
-            albumsCompleted: sseImportStatus.albumsCompleted ?? importJob.albumsCompleted,
-            tracksMatched: sseImportStatus.tracksMatched ?? importJob.tracksMatched,
-            createdPlaylistId: sseImportStatus.createdPlaylistId ?? importJob.createdPlaylistId,
-            error: sseImportStatus.error ?? importJob.error,
-        };
-        setImportJob(updated);
-
-        if (updated.status === "completed" || updated.status === "cancelled") {
-            setStep("complete");
-        } else if (updated.status === "failed") {
+    // Reconcile each observed SSE / poll response at most once. The render
+    // guard avoids mirroring query data in a cascading useEffect, and terminal
+    // results cannot replace a user-initiated cancellation or new import.
+    const [handledImportStatus, setHandledImportStatus] = useState<
+        (ImportJob & { jobId?: string }) | null
+    >(null);
+    if (step === "importing" && sseImportStatus && importJob &&
+        handledImportStatus !== sseImportStatus) {
+        setHandledImportStatus(sseImportStatus);
+        const activeJobId = importJob.id;
+        setImportJob((current) => current?.id === activeJobId
+            ? mergeImportProgress(current, sseImportStatus)
+            : current);
+        if (isTerminalImportStatus(sseImportStatus.status)) {
             setStep("complete");
         }
-    }, [sseImportStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
 
     // Handle URL paste/change
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
