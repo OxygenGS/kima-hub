@@ -31,16 +31,16 @@ The original GPLv3 license remains applicable.
 
 ---
 
-## Original Kima Hub Documentation
+## Project Documentation
 
-The documentation below is retained from the upstream project. Some installation instructions, release badges, and version references may describe official upstream releases rather than this fork.
+The main installation instructions below describe this OxygenGS fork. Other feature and integration sections originated upstream; check image and repository references when adapting specialized deployment examples.
 
 ---
 
 # kima-hub
 
-[![Docker Image](https://img.shields.io/docker/v/chevron7locked/kima?label=Docker&sort=semver)](https://hub.docker.com/r/chevron7locked/kima)
-[![GitHub Release](https://img.shields.io/github/v/release/Chevron7Locked/kima-hub?label=Release)](https://github.com/Chevron7Locked/kima-hub/releases)
+[![Container Registry](https://img.shields.io/badge/Container-GHCR-blue)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
+[![GitHub Release](https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=Release)](https://github.com/OxygenGS/kima-hub/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 A self-hosted, on-demand audio streaming platform that brings the Spotify experience to your personal music library.
@@ -277,173 +277,81 @@ The TV interface is automatically enabled when accessing Kima from an Android TV
 
 ---
 
-## Quick Start
+## Quick Start — OxygenGS Kima Hub
 
-### One Command Install
+This independently maintained fork publishes its stable Docker images to **GitHub Container Registry (GHCR)**, not Docker Hub.
 
-```bash
-docker run -d \
-  --name kima \
-  -p 3030:3030 \
-  -v /path/to/your/music:/music \
-  -v kima_data:/data \
-  chevron7locked/kima:latest
-```
+**Current stable release:** `v1.10.0`  
+**Image:** `ghcr.io/oxygengs/kima-hub:v1.10.0`
 
-That's it! Open http://localhost:3030 and create your account.
+### Recommended: Docker Compose (also compatible with Dockge)
 
-**With GPU acceleration** (requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)):
-
-```bash
-docker run -d \
-  --name kima \
-  --gpus all \
-  -p 3030:3030 \
-  -v /path/to/your/music:/music \
-  -v kima_data:/data \
-  chevron7locked/kima:latest
-```
-
-### What's Included
-
-The Kima container includes everything you need:
-
--   **Web Interface** (port 3030)
--   **API Server** (internal)
--   **PostgreSQL Database** (internal)
--   **Redis Cache** (internal)
-
-### Configuration Options
-
-```bash
-docker run -d \
-  --name kima \
-  -p 3030:3030 \
-  -v /path/to/your/music:/music \
-  -v kima_data:/data \
-  -e SESSION_SECRET=your-secret-key \
-  -e TZ=America/New_York \
-  --add-host=host.docker.internal:host-gateway \
-  chevron7locked/kima:latest
-```
-
-| Variable         | Description            | Default        |
-| ---------------- | ---------------------- | -------------- |
-| `SESSION_SECRET` | Session encryption key | Auto-generated |
-| `TZ`             | Timezone               | UTC            |
-
-### Using Docker Compose
-
-Create a `docker-compose.yml` file:
+Create `compose.yaml` and replace `/path/to/your/music` with the music directory on your host:
 
 ```yaml
 services:
-    kima:
-        image: chevron7locked/kima:latest
-        container_name: kima
-        ports:
-            - "3030:3030"
-        volumes:
-            - /path/to/your/music:/music
-            - kima_data:/data
-        environment:
-            - TZ=America/New_York
-        # Required for Lidarr webhook integration on Linux
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-        restart: unless-stopped
+  kima:
+    image: ghcr.io/oxygengs/kima-hub:v1.10.0
+    container_name: kima
+    ports:
+      - "3030:3030"
+    volumes:
+      - /path/to/your/music:/music
+      - kima_data:/data
+    environment:
+      TZ: UTC
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
 volumes:
-    kima_data:
+  kima_data:
 ```
 
-Then run:
+Start the application:
 
 ```bash
 docker compose up -d
 ```
 
-**Updating with Docker Compose:**
+Open http://localhost:3030 to complete setup. The AIO image includes the frontend, backend, PostgreSQL, Redis and audio analysis services. Alternatively, see [docker-compose.prod.yml](docker-compose.prod.yml) for a configurable Compose example.
+
+### Update with Docker Compose or Dockge
+
+1. Make a verified **PostgreSQL backup** and save your Compose configuration before updating. Image rollback alone does not reverse database migrations.
+2. Check the [releases](https://github.com/OxygenGS/kima-hub/releases) for a new stable version.
+3. Change the `image:` tag in your existing Compose stack to that version. Keep the same `/data` volume, music mounts and environment settings.
+4. In **Dockge**, save the edited Compose configuration and use its pull/redeploy workflow. With Docker Compose, run:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose pull kima
+docker compose up -d --no-deps kima
+docker compose ps
 ```
 
-### Bind-mounting `/data` on Linux
+5. Confirm the container is healthy, then test sign-in, music playback and existing settings.
 
-Named volumes are recommended. If you bind-mount `/data`, make sure required subdirectories exist and are writable by the container service users.
+**Never run `docker compose down -v` on an installation containing data you want to keep.** Avoid using a floating `latest` tag in production if you want controlled, reproducible updates.
+
+### One-container Docker example
 
 ```bash
-mkdir -p /path/to/kima-data/postgres /path/to/kima-data/redis
+docker run -d \
+  --name kima \
+  -p 3030:3030 \
+  -v /path/to/your/music:/music \
+  -v kima_data:/data \
+  --add-host=host.docker.internal:host-gateway \
+  --restart unless-stopped \
+  ghcr.io/oxygengs/kima-hub:v1.10.0
 ```
 
-If startup logs report a permission error, `chown` the host path to the UID/GID shown in the logs (for example, the postgres user).
+### Release channels
 
----
+- **Stable:** `ghcr.io/oxygengs/kima-hub:v1.10.0` (or another published version from [Releases](https://github.com/OxygenGS/kima-hub/releases)); `:latest` follows the newest stable release.
+- **Pre-release:** `ghcr.io/oxygengs/kima-hub:prerelease`, published on demand. Pre-releases are not recommended for production. Use a separate data volume and port when testing; database migrations may not be reversible.
 
-Kima will begin scanning your music library automatically. Depending on the size of your collection, this may take a few minutes to several hours.
-
----
-
-## Release Channels
-
-Kima offers two release channels to match your stability preferences:
-
-### 🟢 Stable (Recommended)
-
-Production-ready releases. Updated when new stable versions are released.
-
-```bash
-docker pull chevron7locked/kima:latest
-# or specific version
-docker pull chevron7locked/kima:v1.10.0
-```
-
-### 🔴 Pre-release (Development)
-
-Unreleased builds, published on demand rather than on a timer — one exists
-because someone deliberately cut it, not because a clock struck 4am.
-They live on GitHub's registry; Docker Hub carries stable releases only.
-
-⚠️ **Not recommended for production** — may be unstable or broken. A pre-release
-build labels itself in the interface (`v1.10.0-prerelease`) so you can always
-tell which channel a running instance came from.
-
-```bash
-docker pull ghcr.io/chevron7locked/kima:prerelease
-```
-
-`:prerelease` always points at the newest one — pull it again whenever you want
-to move up.
-
-**In Compose, the registry prefix is required.** Stable images come from Docker
-Hub, which Docker assumes by default, so `chevron7locked/kima:latest` resolves.
-Pre-releases live on GitHub's registry and will not resolve without the
-`ghcr.io/` prefix — a bare `kima:prerelease` sends Docker looking on Docker Hub
-for an image that isn't there.
-
-```yaml
-services:
-    kima-hub:
-        image: ghcr.io/chevron7locked/kima:prerelease
-```
-
-Every build is also tagged with its commit (`:prerelease-a1b2c3d`). You don't
-need it to follow the channel — it's there for pinning a known-good build or
-for saying which one you were on in a bug report.
-
-⚠️ **Point it at a fresh data volume, not your live one.** A pre-release runs
-any new database migrations on first boot, and Prisma migrations don't roll
-back. Once they've applied, the older image can no longer read that database.
-Use a separate volume and a separate port to run one alongside your real
-instance — or take a backup first if you're deliberately upgrading in place.
-
-> **The old `chevron7locked/kima:nightly` tag is retired.** It was last built
-> successfully on 2026-08-12 and is not updated any more. If you are running it,
-> move to a stable release or to the pre-release channel above.
-
-**For contributors:** See [`CONTRIBUTING.md`](CONTRIBUTING.md) for information on submitting pull requests and contributing to Kima.
+The default `docker-compose.yml` in the repository is an advanced multi-container **source-build/development stack**. For normal installations, use the GHCR AIO image above or `docker-compose.prod.yml`.
 
 ---
 
