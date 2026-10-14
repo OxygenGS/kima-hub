@@ -491,6 +491,12 @@ export const english = {
     "Wild Card": "Wild Card",
     "High": "High",
     "Medium": "Medium",
+    "Generating": "Generating",
+    "Ready": "Ready",
+    "This week's": "This week's",
+    "finds artists similar to ones you already love, picks a representative track from each, then builds your weekly playlist.": "finds artists similar to ones you already love, picks a representative track from each, then builds your weekly playlist.",
+    "Build This Week's Playlist": "Build This Week's Playlist",
+    "Similarity": "Similarity",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -985,6 +991,12 @@ export const dutch: Record<TranslationKey, string> = {
     "Wild Card": "Verrassing",
     "High": "Hoog",
     "Medium": "Gemiddeld",
+    "Generating": "Samenstellen",
+    "Ready": "Gereed",
+    "This week's": "Van deze week",
+    "finds artists similar to ones you already love, picks a representative track from each, then builds your weekly playlist.": "zoekt artiesten die lijken op je favorieten, kiest van elke artiest een passend nummer en stelt zo je wekelijkse afspeellijst samen.",
+    "Build This Week's Playlist": "Afspeellijst van deze week samenstellen",
+    "Similarity": "Overeenkomst",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
