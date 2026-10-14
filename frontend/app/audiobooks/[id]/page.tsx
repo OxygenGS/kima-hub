@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useImageColor } from "@/hooks/useImageColor";
 import { formatTime } from "@/utils/formatTime";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useAudiobookData } from "@/features/audiobook/hooks/useAudiobookData";
 import { useAudiobookActions } from "@/features/audiobook/hooks/useAudiobookActions";
@@ -13,6 +14,7 @@ import { AudiobookActionBar } from "@/features/audiobook/components/AudiobookAct
 import { SectionList } from "@/features/audiobook/components/SectionList";
 
 export default function AudiobookDetailPage() {
+    const { t } = useLanguage();
     const { audiobookId, audiobook, isLoading, refetch, heroImage, colorExtractionImage, metadata } =
         useAudiobookData();
 
@@ -40,7 +42,7 @@ export default function AudiobookDetailPage() {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
                 <p className="text-xs text-[var(--text-muted)]">
-                    Audiobook not found
+                    {t("Audiobook not found")}
                 </p>
             </div>
         );
@@ -103,7 +105,7 @@ export default function AudiobookDetailPage() {
                             <section>
                                 <div className="flex items-center gap-3 mb-6">
                                     <span className="w-1 h-6 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">About</h2>
+                                    <h2 className="text-xl font-bold tracking-tight">{t("About")}</h2>
                                     <span className="flex-1 border-t border-white/10" />
                                 </div>
                                 <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
@@ -124,7 +126,7 @@ export default function AudiobookDetailPage() {
                             <section>
                                 <div className="flex items-center gap-3 mb-6">
                                     <span className="w-1 h-6 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">Series</h2>
+                                    <h2 className="text-xl font-bold tracking-tight">{t("Series")}</h2>
                                     <span className="flex-1 border-t border-white/10" />
                                 </div>
                                 <div className="flex items-center gap-3 text-sm">
@@ -143,7 +145,7 @@ export default function AudiobookDetailPage() {
                     {/* Playback hint */}
                     <div>
                         <p className="text-xs text-[var(--text-muted)] pt-4">
-                            Use the player controls in the bottom bar for playback speed, seeking, and volume.
+                            {t("Use the player controls in the bottom bar for playback speed, seeking, and volume.")}
                         </p>
                     </div>
                 </div>
