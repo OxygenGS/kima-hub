@@ -14,6 +14,8 @@ import {
     useRadioPlayer,
 } from "@/features/home/radioData";
 import type { RadioStation } from "@/features/home/radioData";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { localizedRadioName, localizedRadioDescription } from "@/lib/i18n/radio-labels";
 
 function RadioStationCard({
     station,
@@ -24,8 +26,11 @@ function RadioStationCard({
     loadingStation: string | null;
     onPlay: () => void;
 }) {
+    const { t, locale } = useLanguage();
+    const displayName = localizedRadioName(station, t);
     return (
         <button
+            aria-label={`${t("Play")} ${displayName}`}
             onClick={onPlay}
             disabled={loadingStation !== null}
             className={cn(
@@ -53,10 +58,10 @@ function RadioStationCard({
                 </div>
                 <div>
                     <h3 className="text-base font-bold text-white truncate tracking-tight leading-tight mb-1">
-                        {station.name}
+                        {displayName}
                     </h3>
                     <p className="text-xs tabular-nums text-[var(--text-muted)] truncate">
-                        {station.description}
+                        {localizedRadioDescription(station, t, locale)}
                     </p>
                 </div>
             </div>
@@ -99,6 +104,7 @@ function SectionSkeleton() {
 
 export default function RadioPage() {
     const { loadingStation, startRadio } = useRadioPlayer();
+    const { t, locale } = useLanguage();
 
     const { data: genresData, isLoading: genresLoading, isError: genresError, refetch: refetchGenres } = useQuery({
         queryKey: ["library", "genres"],
@@ -134,17 +140,17 @@ export default function RadioPage() {
                         <div className="flex items-center gap-2 mb-6">
                             <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                             <span className="t-eyebrow">
-                                Radio Active
+                                {t("Radio Active")}
                             </span>
                         </div>
 
                         <div className="flex items-baseline justify-between flex-wrap gap-4">
                             <div>
                                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-3">
-                                    Library Radio
+                                    {t("Library Radio")}
                                 </h1>
                                 <p className="text-sm text-[var(--text-muted)]">
-                                    Continuous shuffle from your personal archive
+                                    {t("Continuous shuffle from your personal archive")}
                                 </p>
                             </div>
 
@@ -154,10 +160,10 @@ export default function RadioPage() {
                                     <>
                                         <div className="border-2 border-white/10 bg-[var(--bg-primary)] px-4 py-3 rounded">
                                             <span className="text-3xl font-bold tabular-nums text-brand">
-                                                {STATIC_STATIONS.length + genreStations.length + decadeStations.length}
+                                                {(STATIC_STATIONS.length + genreStations.length + decadeStations.length).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}
                                             </span>
                                             <span className="text-xs text-[var(--text-muted)] ml-2">
-                                                stations
+                                                {t(STATIC_STATIONS.length + genreStations.length + decadeStations.length === 1 ? "station" : "stations")}
                                             </span>
                                         </div>
                                     </>
@@ -174,7 +180,7 @@ export default function RadioPage() {
                         <section>
                             <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                 <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full" />
-                                <span className="tracking-tight">Quick Start</span>
+                                <span className="tracking-tight">{t("Quick Start")}</span>
                                 <span className="flex-1 border-t border-white/10" />
                             </h2>
                             <div className="grid-media">
@@ -194,11 +200,11 @@ export default function RadioPage() {
                             <section>
                                 <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                     <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
-                                    <span className="tracking-tight">By Genre</span>
+                                    <span className="tracking-tight">{t("By Genre")}</span>
                                     <span className="flex-1 border-t border-white/10" />
                                     {!isLoading && !genresError && (
                                         <span className="text-xs tabular-nums text-[#a855f7]">
-                                            {genreStations.length} genres
+                                            {genreStations.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(genreStations.length === 1 ? "genre" : "genres")}
                                         </span>
                                     )}
                                 </h2>
@@ -207,14 +213,14 @@ export default function RadioPage() {
                                 ) : genresError ? (
                                     <div className="flex items-center gap-3 py-4">
                                         <p className="text-sm text-[var(--text-secondary)]">
-                                            Could not load genre stations.
+                                            {t("Could not load genre stations.")}
                                         </p>
                                         <button
                                             onClick={() => refetchGenres()}
-                                            aria-label="Retry loading genre stations"
+                                            aria-label={t("Retry loading genre stations")}
                                             className="min-h-[44px] px-4 py-2 text-sm border border-[var(--color-brand)] text-[var(--color-brand)] rounded hover:bg-[var(--color-brand)]/10 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--color-brand)]"
                                         >
-                                            Retry
+                                            {t("Retry")}
                                         </button>
                                     </div>
                                 ) : (
@@ -237,11 +243,11 @@ export default function RadioPage() {
                             <section>
                                 <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                     <span className="w-1 h-8 bg-gradient-to-b from-[#22c55e] to-[#16a34a] rounded-full" />
-                                    <span className="tracking-tight">By Decade</span>
+                                    <span className="tracking-tight">{t("By Decade")}</span>
                                     <span className="flex-1 border-t border-white/10" />
                                     {!isLoading && !decadesError && (
                                         <span className="text-xs tabular-nums text-[#22c55e]">
-                                            {decadeStations.length} decades
+                                            {decadeStations.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(decadeStations.length === 1 ? "decade" : "decades")}
                                         </span>
                                     )}
                                 </h2>
@@ -250,14 +256,14 @@ export default function RadioPage() {
                                 ) : decadesError ? (
                                     <div className="flex items-center gap-3 py-4">
                                         <p className="text-sm text-[var(--text-secondary)]">
-                                            Could not load decade stations.
+                                            {t("Could not load decade stations.")}
                                         </p>
                                         <button
                                             onClick={() => refetchDecades()}
-                                            aria-label="Retry loading decade stations"
+                                            aria-label={t("Retry loading decade stations")}
                                             className="min-h-[44px] px-4 py-2 text-sm border border-[var(--color-brand)] text-[var(--color-brand)] rounded hover:bg-[var(--color-brand)]/10 transition-colors focus-visible:outline-2 focus-visible:outline-[var(--color-brand)]"
                                         >
-                                            Retry
+                                            {t("Retry")}
                                         </button>
                                     </div>
                                 ) : (
@@ -282,16 +288,14 @@ export default function RadioPage() {
                                 <div className="flex items-center gap-3 mb-4 pb-3 border-b border-white/10">
                                     <div className="w-2 h-2 bg-brand" />
                                     <span className="text-xs text-[var(--text-secondary)]">
-                                        How It Works
+                                        {t("How It Works")}
                                     </span>
                                 </div>
                                 <h3 className="text-xl font-bold tracking-tight text-white mb-3">
-                                    PERSONALIZED RADIO
+                                    {t("PERSONALIZED RADIO")}
                                 </h3>
                                 <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-2xl">
-                                    Radio stations are generated from your personal music library. As you add more music,
-                                    new genre and decade stations will automatically appear. Each station requires a minimum
-                                    number of tracks to ensure a good listening experience.
+                                    {t("Radio stations are generated from your personal music library. As you add more music, new genre and decade stations will automatically appear. Each station requires a minimum number of tracks to ensure a good listening experience.")}
                                 </p>
                             </div>
                         </section>
