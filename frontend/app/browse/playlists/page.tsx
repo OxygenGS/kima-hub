@@ -112,8 +112,26 @@ export default function BrowsePlaylistsPage() {
     }, []);
 
     useEffect(() => {
-        fetchAllContent();
-    }, [fetchAllContent]);
+        // Initial fetch updates React state only after the API promise resolves.
+        // The existing fetchAllContent callback remains available for retries.
+        let cancelled = false;
+        void api.get<{ playlists: PlaylistPreview[]; genres: Genre[] }>("/browse/all")
+            .then((response) => {
+                if (cancelled) return;
+                setPlaylists(response.playlists);
+                setGenres(response.genres);
+            })
+            .catch((error) => {
+                console.error("Failed to fetch browse content:", error);
+                if (!cancelled) setLoadError(
+                    "Couldn't load playlists. Check your connection and try again.",
+                );
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, []);
 
     const handleSearch = async (e?: React.FormEvent) => {
         e?.preventDefault();
