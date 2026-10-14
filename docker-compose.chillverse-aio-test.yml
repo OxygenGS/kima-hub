@@ -1,3 +1,5 @@
+# RETIRED DEVELOPMENT TEST CONFIGURATION (CT 105 removed).
+# Not intended for installation or deployment; see docker-compose.prod.yml.
 # Isolated local smoke test for the existing all-in-one Dockerfile.
 #
 # IMPORTANT: This is deliberately NOT the public production installer.
