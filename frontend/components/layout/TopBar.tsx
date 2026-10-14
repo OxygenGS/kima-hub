@@ -177,22 +177,16 @@ export function TopBar() {
         };
     }, [searchQuery, router, pathname]);
 
-    // Sync search query with URL on page change
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const q = params.get("q");
-
-        if (pathname === "/search" && q) {
-            // Only update if different to avoid loops
-            if (q !== searchQuery) {
-                setSearchQuery(q);
-            }
-        } else if (pathname !== "/search" && searchQuery) {
-            // Clear search when leaving search page
-            setSearchQuery("");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]); // Only re-run when pathname changes
+    // Synchronize the search field only when changing routes, not when
+    // typing. Guarded same-component state updates avoid a cascading effect.
+    const [searchPathname, setSearchPathname] = useState(pathname);
+    if (searchPathname !== pathname) {
+        setSearchPathname(pathname);
+        const q = pathname === "/search" && typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("q")
+            : null;
+        setSearchQuery(q ?? "");
+    }
 
     // Mirror activity panel open state for aria-expanded
     useEffect(() => {
