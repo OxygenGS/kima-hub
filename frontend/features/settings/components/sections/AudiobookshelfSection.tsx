@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AudiobookshelfSectionProps {
     settings: SystemSettings;
@@ -13,16 +14,17 @@ interface AudiobookshelfSectionProps {
 }
 
 export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }: AudiobookshelfSectionProps) {
+    const { t } = useLanguage();
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
     const handleTest = async () => {
         setTestStatus("loading");
-        setTestMessage("Testing...");
+        setTestMessage(t("Testing..."));
         const result = await onTest("audiobookshelf");
         if (result.success) {
             setTestStatus("success");
-            setTestMessage(result.version ? `v${result.version}` : "Connected");
+            setTestMessage(result.version ? `v${result.version}` : t("Connected"));
         } else {
             setTestStatus("error");
             setTestMessage(result.error || "Failed");
@@ -32,12 +34,12 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
     return (
         <SettingsSection
             id="audiobookshelf"
-            title="Media Servers"
-            description="Connect to external media servers for audiobooks and podcasts"
+            title={t("Media Servers")}
+            description={t("Connect to external media servers for audiobooks and podcasts")}
         >
             <SettingsRow
-                label="Enable Audiobookshelf"
-                description="Connect for audiobooks and podcasts"
+                label={t("Enable Audiobookshelf")}
+                description={t("Connect for audiobooks and podcasts")}
                 htmlFor="abs-enabled"
             >
                 <SettingsToggle
@@ -49,7 +51,7 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
 
             {settings.audiobookshelfEnabled && (
                 <>
-                    <SettingsRow label="Server URL">
+                    <SettingsRow label={t("Server URL")}>
                         <SettingsInput
                             value={settings.audiobookshelfUrl}
                             onChange={(v) => onUpdate({ audiobookshelfUrl: v })}
@@ -58,12 +60,12 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.audiobookshelfApiKey}
                             onChange={(v) => onUpdate({ audiobookshelfApiKey: v })}
-                            placeholder="Enter API key"
+                            placeholder={t("Enter API key")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -76,7 +78,7 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                                 className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
                                     hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
-                                {testStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {testStatus === "loading" ? "Testing..." : t("Test Connection")}
                             </button>
                             <InlineStatus
                                 status={testStatus}
