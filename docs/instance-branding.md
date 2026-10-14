@@ -1,7 +1,7 @@
 # Per-installation branding
 
 The fork has a **Branding** section in **Settings** for administrators. It is
-intentionally not tied to the Chillverse name or any other organization.
+not tied to a specific deployment or organization.
 
 ## Editable properties
 
@@ -44,12 +44,12 @@ the installed-app icon to refresh, depending on their PWA cache policy.
 On CT 105, **after GitHub checks turn green**, run:
 
 ```bash
-cd /opt/chillverse-dev/kima-hub
+cd /path/to/kima-hub
 git pull --ff-only
-docker compose --env-file .env.chillverse-dev -f docker-compose.chillverse-dev.yml build backend
-docker compose --env-file .env.chillverse-dev -f docker-compose.chillverse-dev.yml build frontend
-docker compose --env-file .env.chillverse-dev -f docker-compose.chillverse-dev.yml up -d --no-build backend frontend
-docker compose --env-file .env.chillverse-dev -f docker-compose.chillverse-dev.yml ps
+docker compose --env-file .env.dev -f docker-compose.dev.yml build backend
+docker compose --env-file .env.dev -f docker-compose.dev.yml build frontend
+docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --no-build backend frontend
+docker compose --env-file .env.dev -f docker-compose.dev.yml ps
 ```
 
 The backend applies the new migration automatically on startup. This does not
