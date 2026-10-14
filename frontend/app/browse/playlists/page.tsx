@@ -396,7 +396,7 @@ export default function BrowsePlaylistsPage() {
                                     :   "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
                                 }`}
                             >
-                                Playlists
+                                {t("Playlists")}
                             </button>
                             <button
                                 onClick={() => setActiveTab("genres")}
@@ -406,7 +406,7 @@ export default function BrowsePlaylistsPage() {
                                     :   "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
                                 }`}
                             >
-                                Genres
+                                {t("Genres")}
                             </button>
                         </div>
                     )}
@@ -419,7 +419,7 @@ export default function BrowsePlaylistsPage() {
                                 className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors"
                             >
                                 <ArrowLeft className="w-3.5 h-3.5" />
-                                Genres
+                                {t("Genres")}
                             </button>
                             <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                             <span className="text-xs font-semibold text-white tracking-tight">
@@ -449,7 +449,7 @@ export default function BrowsePlaylistsPage() {
                                 onClick={fetchAllContent}
                                 className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                Try again
+                                {t("Try again")}
                             </button>
                         </div>
                     )}
@@ -476,7 +476,7 @@ export default function BrowsePlaylistsPage() {
                                         onClick={() => setShowUrlModal(true)}
                                         className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all"
                                     >
-                                        Import by URL
+                                        {t("Import by URL")}
                                     </button>}
                                 </div>
                             :   <div className="grid-media">
