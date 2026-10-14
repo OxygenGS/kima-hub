@@ -1061,35 +1061,33 @@ function ImportPlaylistPageContent() {
 
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "failed"
-                                ? "Import Failed"
+                                ? t("Import Failed")
                                 : importJob.status === "cancelled"
-                                ? "Import Cancelled"
-                                : "Import Complete"}
+                                ? t("Import Cancelled")
+                                : t("Import Complete")}
                         </h2>
 
                         {importJob.status === "failed" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
-                                {importJob.error ||
-                                    "Something went wrong while importing."}
+                                {importJob.error || t("Something went wrong while importing.")}
                             </p>
                         ) : importJob.status === "cancelled" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.createdPlaylistId
-                                    ? `Import cancelled. A playlist was created with ${importJob.tracksMatched} matched track${importJob.tracksMatched === 1 ? "" : "s"}.`
-                                    : "Import cancelled. No tracks had been matched yet."}
+                                    ? `${t("Import cancelled. A playlist was created with")} ${number(importJob.tracksMatched)} ${t("matched")} ${t(importJob.tracksMatched === 1 ? "track" : "tracks")}.`
+                                    : t("Import cancelled. No tracks had been matched yet.")}
                             </p>
                         ) : (
                             <>
                                 <p className="text-sm text-[var(--text-secondary)]">
                                     {importJob.tracksMatched > 0
-                                        ? `Added ${importJob.tracksMatched} songs to your playlist`
-                                        : "Playlist created (songs still downloading)"}
+                                        ? `${t("Added")} ${number(importJob.tracksMatched)} ${t("songs to your playlist")}`
+                                        : t("Playlist created (songs still downloading)")}
                                 </p>
                                 {importJob.tracksDownloadable > 0 &&
                                     importJob.tracksMatched < importJob.tracksTotal && (
                                         <p className="text-sm text-amber-400 mt-2">
-                                            {importJob.tracksDownloadable} songs still
-                                            downloading
+                                            {number(importJob.tracksDownloadable)} {t("songs still downloading")}
                                         </p>
                                     )}
                             </>
@@ -1124,7 +1122,7 @@ function ImportPlaylistPageContent() {
                                                 );
                                                 if (result.added > 0) {
                                                     setRefreshStatusMessage(
-                                                        `Added ${result.added} new song(s).`
+                                                        `${t("Added")} ${number(result.added)} ${t("new song(s).")}`
                                                     );
                                                     setImportJob((prev) =>
                                                         prev
@@ -1137,12 +1135,12 @@ function ImportPlaylistPageContent() {
                                                     );
                                                 } else {
                                                     setRefreshStatusMessage(
-                                                        "Albums still downloading. Try again later."
+                                                        t("Albums still downloading. Try again later.")
                                                     );
                                                 }
                                             } catch {
                                                 setRefreshStatusMessage(
-                                                    "Failed to refresh."
+                                                    t("Failed to refresh.")
                                                 );
                                             } finally {
                                                 setIsLoading(false);
@@ -1152,8 +1150,8 @@ function ImportPlaylistPageContent() {
                                         className="px-5 py-2.5 rounded-full text-sm font-medium bg-[var(--bg-primary)] text-white hover:bg-white/20 disabled:opacity-50 transition-colors"
                                     >
                                         {isLoading
-                                            ? "Refreshing..."
-                                            : "Refresh"}
+                                            ? t("Refreshing...")
+                                            : t("Refresh")}
                                     </button>
                                 )}
                             {refreshStatusMessage && (
