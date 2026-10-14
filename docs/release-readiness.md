@@ -1,4 +1,4 @@
-# Chillverse Listen — release readiness (development)
+# Kima Hub — archived development release-readiness checklist
 
 This checklist tracks the fork in `feature/user-permissions` and its draft PR #1.
 It does **not** authorize a production deployment, merge, publication or
@@ -135,7 +135,7 @@ database migration outside the isolated CT 105 test environment.
 
 ## Operational safeguards
 
-- Never commit `.env.chillverse-dev` or real integration secrets.
+- Never commit development `.env` files or real integration secrets.
 - Never mount production music, databases or downloads into CT 105.
 - Keep `main`, release tags, publisher workflows and CT 101 unchanged
   until explicitly approved.

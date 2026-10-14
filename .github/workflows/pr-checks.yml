@@ -167,7 +167,7 @@ jobs:
                   context: .
                   push: false
                   load: true
-                  tags: chillverse-listen:aio-ci-smoke
+                  tags: kima-hub:aio-ci-smoke
                   cache-from: type=gha
                   build-args: |
                       NEXT_PUBLIC_BUILD_TYPE=ci-smoke
@@ -178,14 +178,14 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  name="chillverse-aio-ci-smoke"
-                  docker volume create chillverse-ci-aio-data
-                  docker volume create chillverse-ci-aio-music
+                  name="kima-aio-ci-smoke"
+                  docker volume create kima-ci-aio-data
+                  docker volume create kima-ci-aio-music
 
                   cleanup() {
                       docker logs --tail 100 "$name" || true
                       docker rm -f "$name" || true
-                      docker volume rm -f chillverse-ci-aio-data chillverse-ci-aio-music || true
+                      docker volume rm -f kima-ci-aio-data kima-ci-aio-music || true
                   }
                   trap cleanup EXIT
 
@@ -194,10 +194,10 @@ jobs:
                   docker run -d --name "$name" \
                       --memory=6g \
                       -p 127.0.0.1:3130:3030 \
-                      -v chillverse-ci-aio-data:/data \
-                      -v chillverse-ci-aio-music:/music \
+                      -v kima-ci-aio-data:/data \
+                      -v kima-ci-aio-music:/music \
                       -e DISABLE_CLAP=true \
-                      chillverse-listen:aio-ci-smoke
+                      kima-hub:aio-ci-smoke
 
                   ready=false
                   for i in $(seq 1 120); do
@@ -307,7 +307,7 @@ jobs:
             PGPORT: "5434"
             PGUSER: test
         steps:
-            - name: Checkout Chillverse candidate
+            - name: Checkout Kima Hub candidate
               uses: actions/checkout@v4
 
             - name: Checkout pristine upstream baseline (pinned main)
@@ -384,7 +384,7 @@ jobs:
                   INSERT INTO "BrandingSettings"
                       ("id","name","tagline","accentColor","backgroundColor","updatedAt")
                   VALUES
-                      ('default','Chillverse Upgrade Fixture','Kept across migrations',
+                      ('default','Kima Hub Upgrade Fixture','Kept across migrations',
                        '#3dacdb','#0a0a0a',NOW());
                   SQL
 
