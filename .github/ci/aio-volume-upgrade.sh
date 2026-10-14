@@ -9,7 +9,7 @@ old="chillverse-ci-legacy-pg"
 aio="chillverse-ci-aio-upgrade"
 data="chillverse-ci-upgrade-data"
 music="chillverse-ci-upgrade-music"
-image="chillverse-listen:aio-ci-smoke"
+image="kima-hub:aio-ci-smoke"
 url="http://127.0.0.1:3131"
 
 cleanup() {
