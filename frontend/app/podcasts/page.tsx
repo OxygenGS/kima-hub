@@ -212,10 +212,6 @@ export default function PodcastsPage() {
     }, [sortedPodcasts, currentPage, itemsPerPage]);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [sortBy]);
-
-    useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (
                 dropdownRef.current &&
@@ -233,14 +229,10 @@ export default function PodcastsPage() {
             clearTimeout(searchTimeoutRef.current);
         }
 
-        if (searchQuery.trim().length < 2) {
-            setSearchResults([]);
-            setShowDropdown(false);
-            return;
-        }
+        if (searchQuery.trim().length < 2) return;
 
-        setIsSearching(true);
         searchTimeoutRef.current = setTimeout(async () => {
+            setIsSearching(true);
             try {
                 const results = await api.discoverSearch(searchQuery, "podcasts", 8);
                 const podcastResults =
@@ -365,7 +357,15 @@ export default function PodcastsPage() {
                                     <input
                                         type="text"
                                         value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            setSearchQuery(next);
+                                            if (next.trim().length < 2) {
+                                                setSearchResults([]);
+                                                setShowDropdown(false);
+                                                setIsSearching(false);
+                                            }
+                                        }}
                                         placeholder={t("Quick add...")}
                                         role="combobox"
                                         aria-expanded={showDropdown}
@@ -482,7 +482,10 @@ export default function PodcastsPage() {
                                             </button>
                                             <select
                                                 value={sortBy}
-                                                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                                onChange={(e) => {
+                                                    setSortBy(e.target.value as SortOption);
+                                                    setCurrentPage(1);
+                                                }}
                                                 aria-label={t("Sort podcasts")}
                                                 className="px-3 py-1.5 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg text-white text-xs focus:outline-none focus:border-[#3b82f6]/50 [&>option]:bg-[var(--bg-primary)] [&>option]:text-white cursor-pointer"
                                             >
