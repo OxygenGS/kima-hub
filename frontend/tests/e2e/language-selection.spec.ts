@@ -51,6 +51,39 @@ test.describe("Interface language", () => {
         await page.goto("/login");
         await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
     });
+    test("synchronizes the browser language across existing tabs", async ({ page, context }) => {
+        await page.goto("/login");
+        const secondTab = await context.newPage();
+        await secondTab.goto("/login");
+
+        const firstSelect = page.locator("#login-language");
+        const secondSelect = secondTab.locator("#login-language");
+        await expect(firstSelect).toHaveValue("en");
+        await expect(secondSelect).toHaveValue("en");
+
+        await firstSelect.selectOption("nl");
+        await expect(secondSelect).toHaveValue("nl");
+        await expect(secondTab.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(secondTab.locator("html")).toHaveAttribute("lang", "nl");
+
+        await secondSelect.selectOption("en");
+        await expect(firstSelect).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        await secondTab.close();
+    });
+
+    test("defaults to English for an unrecognized stored language", async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "de");
+        });
+        await page.goto("/login");
+
+        await expect(page.locator("#login-language")).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
     test("changes language on authenticated settings without modifying server preferences", async ({ page }) => {
         // Mock a regular signed-in account. No real user, token, or backend is needed.
         await page.route("**/api/**", async (route) => {

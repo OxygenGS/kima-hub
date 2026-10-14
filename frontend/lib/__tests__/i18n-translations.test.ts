@@ -95,6 +95,12 @@ describe("UI translations", () => {
         expect(prompt).toBe("Vervang Vibe door Vergelijkbaar?");
     });
 
+    it("localizes accessible search filters while preserving underlying options", () => {
+        expect(translate("nl", "File format:")).toBe("Bestandsformaat:");
+        expect(translate("nl", "Sort results by")).toBe("Resultaten sorteren op");
+        expect(translate("nl", "FLAC")).toBe("FLAC");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

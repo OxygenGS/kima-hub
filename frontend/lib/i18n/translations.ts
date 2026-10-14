@@ -1071,6 +1071,8 @@ export const english = {
     "Download file:": "Download file:",
     "Replace {current} with {next}?": "Replace {current} with {next}?",
     "Replace": "Replace",
+    "File format:": "File format:",
+    "Sort results by": "Sort results by",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2145,6 +2147,8 @@ export const dutch: Record<TranslationKey, string> = {
     "Download file:": "Bestand downloaden:",
     "Replace {current} with {next}?": "Vervang {current} door {next}?",
     "Replace": "Vervangen",
+    "File format:": "Bestandsformaat:",
+    "Sort results by": "Resultaten sorteren op",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

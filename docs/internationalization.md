@@ -7,7 +7,7 @@ Kima Hub — Oxygen's Fork uses typed, incremental interface translations.
 - English (`en`) is the default interface language; Dutch (`nl`) is available on the login, registration, **first-run onboarding**, and Settings screens.
 - Language changes immediately, applies to all components wired to the translation context, and persists in **this browser** using the `kima-hub-language` local storage key. Tabs of the same origin share the choice.
 - Preferences are **not stored in user accounts** and are **not synchronized between devices**. This does not require database changes or migrations.
-- The current dictionary contains **1,068 matching English/Dutch UI keys** on the language-development branch. This is the number of keys, **not** proof of complete screen coverage.
+- The current dictionary contains **1,070 matching English/Dutch UI keys** on the language-development branch. This is the number of keys, **not** proof of complete screen coverage.
 - Route-level translations cover onboarding, sync, mix details, album/artist pages, and Vibe map/Galaxy/path/blend controls. Navigation, login, many Settings controls, and selected activity panels are also translated. The Soulseek results browser, filtering labels, grouped results and Vibe operation confirmation prompt also support Dutch.
 - Incomplete areas include nested dialogs, some authenticated-only flows, server-provided errors, third-party metadata, and device-specific interfaces. Do **not** describe the entire application as translated until a real authenticated walkthrough is complete.
 
@@ -38,7 +38,8 @@ The isolated Chromium suite (`frontend/tests/e2e/language-selection.spec.ts`) co
 - public login language selection and reload persistence;
 - changing language without resetting the login form;
 - first-run onboarding language selection and persistence before an account exists;
-- a **mocked** signed-in Settings screen, including persistence on reload and return to English.
+- a **mocked** signed-in Settings screen, including persistence on reload and return to English;
+- language synchronization between existing tabs and fallback to English for an unsupported stored locale.
 
 The simulated signed-in test uses a fake local token and intercepted API responses. It verifies UI behavior only: **it does not verify real login, permission enforcement, real Settings API calls, or production authentication**.
 

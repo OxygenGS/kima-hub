@@ -235,6 +235,8 @@ export function SoulseekBrowser({
                         <button
                             key={pill.value}
                             onClick={() => handleFormatToggle(pill.value)}
+                            aria-label={`${t("File format:")} ${translate(locale, pill.label)}`}
+                            aria-pressed={formatFilters.has(pill.value)}
                             className={cn(
                                 "px-3 py-1.5 text-xs font-semibold rounded-full transition-colors",
                                 formatFilters.has(pill.value)
@@ -250,6 +252,7 @@ export function SoulseekBrowser({
                 {/* Sort selector */}
                 <select
                     value={sortField}
+                    aria-label={t("Sort results by")}
                     onChange={(e) => setSortField(e.target.value as SoulseekSortField)}
                     className="bg-[#282828] text-sm text-[var(--text-primary)] rounded-md px-3 py-1.5 border border-white/10 focus:outline-none focus:border-[var(--color-brand)]/50"
                 >
@@ -269,6 +272,8 @@ export function SoulseekBrowser({
                             viewMode === "flat" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
                         title={t("Flat list")}
+                        aria-label={t("Flat list")}
+                        aria-pressed={viewMode === "flat"}
                     >
                         <List className="w-4 h-4" />
                     </button>
@@ -279,6 +284,8 @@ export function SoulseekBrowser({
                             viewMode === "grouped" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
                         title={t("Group by user")}
+                        aria-label={t("Group by user")}
+                        aria-pressed={viewMode === "grouped"}
                     >
                         <Users className="w-4 h-4" />
                     </button>
