@@ -32,8 +32,10 @@ import { SleepTimer } from "./SleepTimer";
 import { useFeatures } from "@/lib/features-context";
 import { MobileLyricsView } from "@/components/lyrics/MobileLyricsView";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export function OverlayPlayer() {
+    const { t } = useLanguage();
     const {
         currentTrack,
         currentAudiobook,
@@ -127,13 +129,13 @@ export function OverlayPlayer() {
                         returnToPreviousMode();
                     }}
                     className="text-[var(--text-secondary)] hover:text-white transition-colors p-2 -ml-2 rounded-full hover:bg-white/10"
-                    title="Close"
+                    title={t("Close")}
                 >
                     <ChevronDown className="w-7 h-7" />
                 </button>
                 {/* Now Playing indicator */}
                 <span className="text-xs text-[var(--text-muted)] font-medium">
-                    Now Playing
+                    {t("Now Playing")}
                 </span>
                 <div className="w-11" /> {/* Spacer for centering */}
             </div>
@@ -273,7 +275,7 @@ export function OverlayPlayer() {
                             <button
                                 onClick={() => skipBackward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="Rewind 30 seconds"
+                                title={t("Rewind 30 seconds")}
                             >
                                 <RotateCcw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -290,7 +292,7 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "Previous" : "Skip only for music"}
+                            title={canSkip ? t("Previous") : t("Skip only for music")}
                         >
                             <SkipBack className="w-8 h-8" />
                         </button>
@@ -307,12 +309,12 @@ export function OverlayPlayer() {
                             )}
                             title={
                                 audioError
-                                    ? "Retry playback"
+                                    ? t("Retry playback")
                                     : isBuffering
-                                    ? "Buffering..."
+                                    ? t("Buffering...")
                                     : isPlaying
-                                    ? "Pause"
-                                    : "Play"
+                                    ? t("Pause")
+                                    : t("Play")
                             }
                         >
                             {audioError ? (
@@ -334,7 +336,7 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "Next" : "Skip only for music"}
+                            title={canSkip ? t("Next") : t("Skip only for music")}
                         >
                             <SkipForward className="w-8 h-8" />
                         </button>
@@ -344,7 +346,7 @@ export function OverlayPlayer() {
                             <button
                                 onClick={() => skipForward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="Forward 30 seconds"
+                                title={t("Forward 30 seconds")}
                             >
                                 <RotateCw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -369,7 +371,7 @@ export function OverlayPlayer() {
                                     ? "text-[#a855f7]"
                                     : "text-[var(--text-muted)] hover:text-white"
                             )}
-                            title="Shuffle"
+                            title={t("Shuffle")}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -387,10 +389,10 @@ export function OverlayPlayer() {
                             )}
                             title={
                                 repeatMode === "one"
-                                    ? "Repeat One"
+                                    ? t("Repeat One")
                                     : repeatMode === "all"
-                                    ? "Repeat All"
-                                    : "Repeat Off"
+                                    ? t("Repeat All")
+                                    : t("Repeat Off")
                             }
                         >
                             {repeatMode === "one" ? (
@@ -415,8 +417,8 @@ export function OverlayPlayer() {
                                 )}
                                 title={
                                     activeOperation.type !== 'idle'
-                                        ? "Turn off vibe mode"
-                                        : "Match this vibe"
+                                        ? t("Turn off vibe mode")
+                                        : t("Match this vibe")
                                 }
                             >
                                 {isVibeLoading ? (
@@ -440,8 +442,8 @@ export function OverlayPlayer() {
                                         : "text-[var(--text-muted)] hover:text-brand"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Toggle lyrics"
-                                title="Show lyrics"
+                                aria-label={t("Toggle lyrics")}
+                                title={t("Show lyrics")}
                             >
                                 <MicVocal className="w-5 h-5" />
                             </button>
