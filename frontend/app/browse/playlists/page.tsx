@@ -112,7 +112,7 @@ export default function BrowsePlaylistsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         // Initial fetch updates React state only after the API promise resolves.
@@ -134,7 +134,7 @@ export default function BrowsePlaylistsPage() {
                 if (!cancelled) setIsLoading(false);
             });
         return () => { cancelled = true; };
-    }, []);
+    }, [t]);
 
     const handleSearch = async (e?: React.FormEvent) => {
         e?.preventDefault();
