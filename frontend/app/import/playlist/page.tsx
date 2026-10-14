@@ -565,7 +565,7 @@ function ImportPlaylistPageContent() {
                 {step === "previewing" && (
                     <div className="text-center py-12">
                         <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
-                        <h2 className="text-lg font-bold text-white mb-1">Analysing Playlist</h2>
+                        <h2 className="text-lg font-bold text-white mb-1">{t("Analysing Playlist")}</h2>
                         <p className="text-[var(--text-secondary)] text-sm">
                             {ssePreviewStatus?.message || t("Matching tracks to your library...")}
                         </p>
