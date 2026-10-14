@@ -16,7 +16,7 @@ export interface ImportProgress {
 
 export function mergeImportProgress<T extends ImportProgress>(
     current: T,
-    received: Partial<T> & Pick<T, "status">,
+    received: Partial<ImportProgress> & Pick<T, "status">,
 ): T {
     return {
         ...current,
@@ -27,7 +27,7 @@ export function mergeImportProgress<T extends ImportProgress>(
         tracksMatched: received.tracksMatched ?? current.tracksMatched,
         createdPlaylistId: received.createdPlaylistId ?? current.createdPlaylistId,
         error: received.error ?? current.error,
-    };
+    } as T;
 }
 
 export function isTerminalImportStatus(status: string): boolean {
