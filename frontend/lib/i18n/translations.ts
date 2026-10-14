@@ -150,6 +150,13 @@ export const english = {
     "Changed": "Changed",
     "Failed": "Failed",
     "Invalid code": "Invalid code",
+    "Home": "Home",
+    "Search": "Search",
+    "Search...": "Search...",
+    "Notifications": "Notifications",
+    "What do you want to play?": "What do you want to play?",
+    "Library scan in progress": "Library scan in progress",
+    "Library scan in progress...": "Library scan in progress...",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -303,6 +310,13 @@ export const dutch: Record<TranslationKey, string> = {
     "Changed": "Gewijzigd",
     "Failed": "Mislukt",
     "Invalid code": "Ongeldige code",
+    "Home": "Startpagina",
+    "Search": "Zoeken",
+    "Search...": "Zoeken...",
+    "Notifications": "Meldingen",
+    "What do you want to play?": "Wat wil je afspelen?",
+    "Library scan in progress": "Bibliotheek wordt gescand",
+    "Library scan in progress...": "Bibliotheek wordt gescand...",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
