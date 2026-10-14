@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, SettingsSelect } from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
 
 interface LidarrProfile {
@@ -19,6 +20,7 @@ interface LidarrSectionProps {
 }
 
 export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrSectionProps) {
+    const { t } = useLanguage();
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
     const [qualityProfiles, setQualityProfiles] = useState<LidarrProfile[]>([]);
@@ -42,11 +44,11 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
 
     const handleTest = async () => {
         setTestStatus("loading");
-        setTestMessage("Testing...");
+        setTestMessage(t("Testing..."));
         const result = await onTest("lidarr");
         if (result.success) {
             setTestStatus("success");
-            setTestMessage(result.version ? `v${result.version}` : "Connected");
+            setTestMessage(result.version ? `v${result.version}` : t("Connected"));
             fetchProfiles();
         } else {
             setTestStatus("error");
@@ -59,12 +61,12 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
     return (
         <SettingsSection
             id="lidarr"
-            title="Download Services"
-            description="Automate music downloads and library management"
+            title={t("Download Services")}
+            description={t("Automate music downloads and library management")}
         >
             <SettingsRow
-                label="Enable Lidarr"
-                description="Connect to Lidarr for music automation"
+                label={t("Enable Lidarr")}
+                description={t("Connect to Lidarr for music automation")}
                 htmlFor="lidarr-enabled"
             >
                 <SettingsToggle
@@ -76,7 +78,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
 
             {settings.lidarrEnabled && (
                 <>
-                    <SettingsRow label="Lidarr URL">
+                    <SettingsRow label={t("Lidarr URL")}>
                         <SettingsInput
                             value={settings.lidarrUrl}
                             onChange={(v) => onUpdate({ lidarrUrl: v })}
@@ -85,12 +87,12 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.lidarrApiKey}
                             onChange={(v) => onUpdate({ lidarrApiKey: v })}
-                            placeholder="Enter API key"
+                            placeholder={t("Enter API key")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -103,7 +105,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                                 className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
                                     hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
-                                {testStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {testStatus === "loading" ? "Testing..." : t("Test Connection")}
                             </button>
                             <InlineStatus
                                 status={testStatus}
@@ -116,28 +118,28 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                     {hasProfiles && (
                         <>
                             <SettingsRow
-                                label="Quality Profile"
-                                description="Audio quality profile used when adding artists"
+                                label={t("Quality Profile")}
+                                description={t("Audio quality profile used when adding artists")}
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrQualityProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrQualityProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: "Default" },
+                                        { value: "", label: t("Default") },
                                         ...qualityProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />
                             </SettingsRow>
 
                             <SettingsRow
-                                label="Metadata Profile"
-                                description="Metadata profile used when adding artists"
+                                label={t("Metadata Profile")}
+                                description={t("Metadata profile used when adding artists")}
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrMetadataProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrMetadataProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: "Default" },
+                                        { value: "", label: t("Default") },
                                         ...metadataProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />
