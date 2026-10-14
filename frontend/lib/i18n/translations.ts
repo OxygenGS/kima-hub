@@ -882,6 +882,8 @@ export const english = {
     "new song(s).": "new song(s).",
     "Albums still downloading. Try again later.": "Albums still downloading. Try again later.",
     "Failed to refresh.": "Failed to refresh.",
+    "Import Playlist": "Import Playlist",
+    "Back": "Back",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1767,6 +1769,8 @@ export const dutch: Record<TranslationKey, string> = {
     "new song(s).": "nieuwe nummers.",
     "Albums still downloading. Try again later.": "Albums worden nog gedownload. Probeer het later opnieuw.",
     "Failed to refresh.": "Vernieuwen mislukt.",
+    "Import Playlist": "Afspeellijst importeren",
+    "Back": "Terug",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
