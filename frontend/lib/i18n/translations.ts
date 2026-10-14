@@ -929,6 +929,7 @@ export const english = {
     "In": "In",
     "days": "days",
     "days ago": "days ago",
+    "Available": "Available",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1861,6 +1862,7 @@ export const dutch: Record<TranslationKey, string> = {
     "In": "Over",
     "days": "dagen",
     "days ago": "dagen geleden",
+    "Available": "Beschikbaar",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
