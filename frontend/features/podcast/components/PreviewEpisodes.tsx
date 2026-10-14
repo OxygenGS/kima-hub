@@ -6,6 +6,7 @@ import { PodcastPreview } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatDuration } from "@/utils/formatTime";
 import { formatDate } from "../utils";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PreviewEpisodesProps {
     previewData: PodcastPreview;
@@ -19,11 +20,12 @@ export function PreviewEpisodes({
     isSubscribing,
     onSubscribe,
 }: PreviewEpisodesProps) {
+    const { t } = useLanguage();
     return (
         <section>
             <div className="flex items-center gap-3 mb-6">
                 <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Latest Episodes</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t("Latest Episodes")}</h2>
                 <span className="flex-1 border-t border-white/10" />
             </div>
 
@@ -70,12 +72,12 @@ export function PreviewEpisodes({
                                 {isSubscribing ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>Subscribing</span>
+                                        <span>{t("Subscribing")}</span>
                                     </>
                                 ) : (
                                     <>
                                         <Plus className="w-4 h-4" />
-                                        <span>Subscribe to Unlock All Episodes</span>
+                                        <span>{t("Subscribe to Unlock All Episodes")}</span>
                                     </>
                                 )}
                             </button>
@@ -85,7 +87,7 @@ export function PreviewEpisodes({
                     <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-8 text-center">
                         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#3b82f6] to-[#2563eb]" />
                         <p className="text-xs text-[var(--text-muted)] mb-4">
-                            No episodes available for preview
+                            {t("No episodes available for preview")}
                         </p>
                         <button
                             onClick={onSubscribe}
@@ -95,12 +97,12 @@ export function PreviewEpisodes({
                             {isSubscribing ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Subscribing</span>
+                                    <span>{t("Subscribing")}</span>
                                 </>
                             ) : (
                                 <>
                                     <Plus className="w-4 h-4" />
-                                    <span>Subscribe</span>
+                                    <span>{t("Subscribe")}</span>
                                 </>
                             )}
                         </button>
@@ -113,7 +115,7 @@ export function PreviewEpisodes({
                 <div className="mt-8">
                     <div className="flex items-center gap-3 mb-4">
                         <span className="w-1 h-6 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                        <h2 className="text-xl font-bold tracking-tight">About</h2>
+                        <h2 className="text-xl font-bold tracking-tight">{t("About")}</h2>
                         <span className="flex-1 border-t border-white/10" />
                     </div>
                     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-4">
