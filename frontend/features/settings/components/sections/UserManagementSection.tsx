@@ -35,10 +35,6 @@ export function UserManagementSection() {
     const [deleteStatus, setDeleteStatus] = useState<StatusType>("idle");
     const [deleteMessage, setDeleteMessage] = useState("");
 
-    useEffect(() => {
-        loadUsers();
-    }, []);
-
     const loadUsers = async () => {
         try {
             setLoading(true);
@@ -50,6 +46,11 @@ export function UserManagementSection() {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        void loadUsers();
+        // Load on mount only; user actions refresh the list explicitly.
+    }, []);
 
     const handleCreate = async () => {
         if (!newUsername.trim() || newPassword.length < 6) {
