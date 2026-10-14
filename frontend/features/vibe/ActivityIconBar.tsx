@@ -3,6 +3,7 @@
 import { Bell, Download, ListMusic, History } from "lucide-react";
 import { useNotifications, useActiveDownloads } from "@/hooks/useNotifications";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export type ActivityType = "notifications" | "downloads" | "imports" | "history";
 
@@ -12,6 +13,7 @@ interface ActivityIconBarProps {
 }
 
 export function ActivityIconBar({ expandedActivity, onToggleActivity }: ActivityIconBarProps) {
+    const { t } = useLanguage();
     const { unreadCount } = useNotifications();
     const { downloads } = useActiveDownloads();
     const activeDownloadCount = downloads.length;
@@ -35,7 +37,7 @@ export function ActivityIconBar({ expandedActivity, onToggleActivity }: Activity
                             ? "bg-white/10 text-white"
                             : "text-[var(--text-muted)] hover:text-white/70 hover:bg-white/5",
                     )}
-                    title={type.charAt(0).toUpperCase() + type.slice(1)}
+                    title={type === "notifications" ? t("Notifications") : type === "downloads" ? t("Downloads") : type === "imports" ? t("Imports") : t("History")}
                 >
                     <Icon className="w-4 h-4" />
                     {badge > 0 && (
