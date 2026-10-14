@@ -1,3 +1,5 @@
+"use client";
+
 import { useRef } from "react";
 import { Play, Heart, Music } from "lucide-react";
 import Image from "next/image";
@@ -6,6 +8,8 @@ import { DiscoverTrack } from "../types";
 import { api } from "@/lib/api";
 import { formatTime } from "@/utils/formatTime";
 import { tierColors, tierLabels } from "../constants";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 interface TrackListProps {
     tracks: DiscoverTrack[];
@@ -24,6 +28,7 @@ export function TrackList({
     onTogglePlay,
     onLike,
 }: TrackListProps) {
+    const { t } = useLanguage();
     const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
 
     return (
@@ -31,10 +36,10 @@ export function TrackList({
             {/* Table Header */}
             <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 text-xs text-[var(--text-secondary)] border-b border-white/10 mb-2">
                 <span className="text-center">#</span>
-                <span>Title</span>
-                <span>Album</span>
-                <span className="text-center">Match</span>
-                <span className="text-right">Duration</span>
+                <span>{t("Title")}</span>
+                <span>{t("Album")}</span>
+                <span className="text-center">{t("Match")}</span>
+                <span className="text-right">{t("Duration")}</span>
             </div>
 
             {/* Track Rows */}
@@ -84,7 +89,7 @@ export function TrackList({
                                         }
                                     }}
                                     className="w-8 h-8 flex items-center justify-center"
-                                    aria-label={isTrackPlaying && isPlaying ? "Pause" : "Play"}
+                                    aria-label={isTrackPlaying && isPlaying ? t("Pause") : t("Play")}
                                 >
                                     <span
                                         className={cn(
@@ -155,7 +160,7 @@ export function TrackList({
                                         tierColors[track.tier]
                                     )}
                                 >
-                                    {tierLabels[track.tier]?.split(" ")[0]}
+                                    {tierLabels[track.tier] ? t(tierLabels[track.tier] as TranslationKey).split(" ")[0] : track.tier}
                                 </span>
                             </div>
 
@@ -174,8 +179,8 @@ export function TrackList({
                                     )}
                                     title={
                                         track.isLiked
-                                            ? "Unlike"
-                                            : "Keep in library"
+                                            ? t("Unlike")
+                                            : t("Keep in library")
                                     }
                                 >
                                     <Heart
