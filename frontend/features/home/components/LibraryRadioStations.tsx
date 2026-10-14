@@ -3,6 +3,8 @@
 import { useState, useRef, useMemo, useCallback, useEffect, type CSSProperties } from "react";
 import { Radio, Play, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { localizedRadioName, localizedRadioDescription } from "@/lib/i18n/radio-labels";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useLibraryGenresQuery, useLibraryDecadesQuery } from "@/hooks/useQueries";
 import {
@@ -15,6 +17,7 @@ import {
 
 export function LibraryRadioStations() {
     const { loadingStation, startRadio } = useRadioPlayer();
+    const { t, locale } = useLanguage();
     const { data: genresData, isLoading: genresLoading } = useLibraryGenresQuery();
     const { data: decadesData, isLoading: decadesLoading } = useLibraryDecadesQuery();
 
@@ -94,6 +97,7 @@ export function LibraryRadioStations() {
                 data-tv-card-index={globalIdx}
                 tabIndex={0}
                 onClick={() => startRadio(station)}
+                aria-label={`${t("Play")} ${localizedRadioName(station, t)}`}
                 disabled={loadingStation !== null}
                 className={cn(
                     "relative group overflow-hidden",
@@ -123,10 +127,10 @@ export function LibraryRadioStations() {
                 </div>
                 <div>
                     <h3 className="text-sm font-bold text-white truncate tracking-tight leading-tight">
-                        {station.name}
+                        {localizedRadioName(station, t)}
                     </h3>
                     <p className="text-xs text-[var(--text-muted)] truncate">
-                        {station.description}
+                        {localizedRadioDescription(station, t, locale)}
                     </p>
                 </div>
             </div>
@@ -165,7 +169,7 @@ export function LibraryRadioStations() {
                     <button
                         onClick={() => scroll("left")}
                         className="absolute left-0 top-1/2 -translate-y-1/2 z-(--z-raised) w-9 h-9 rounded-lg bg-black/80 flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black border border-white/10 -translate-x-1/2"
-                        aria-label="Scroll left"
+                        aria-label={t("Scroll left")}
                     >
                         <ChevronLeft className="w-5 h-5 text-white" />
                     </button>
@@ -186,7 +190,7 @@ export function LibraryRadioStations() {
                     <button
                         onClick={() => scroll("right")}
                         className="absolute right-0 top-1/2 -translate-y-1/2 z-(--z-raised) w-9 h-9 rounded-lg bg-black/80 flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black border border-white/10 translate-x-1/2"
-                        aria-label="Scroll right"
+                        aria-label={t("Scroll right")}
                     >
                         <ChevronRight className="w-5 h-5 text-white" />
                     </button>
@@ -236,7 +240,7 @@ export function LibraryRadioStations() {
                                 "w-1.5 h-1.5 rounded-full transition-colors",
                                 index === currentPage ? "bg-white" : "bg-white/30 hover:bg-white/50"
                             )}
-                            aria-label={`Go to page ${index + 1}`}
+                            aria-label={`${t("Go to page")} ${index + 1}`}
                         />
                     ))}
                 </div>
