@@ -77,7 +77,7 @@ export function Sidebar() {
             await api.scanLibrary();
         } catch (error) {
             console.error("Failed to trigger library scan:", error);
-            toast.error("Failed to start scan. Please try again.");
+            toast.error(t("Failed to start scan. Please try again."));
         } finally {
             syncTimeoutRef.current = setTimeout(
                 () => setIsSyncing(false),
@@ -153,7 +153,7 @@ export function Sidebar() {
             router.push(`/playlist/${result.id}`);
         } catch (error) {
             console.error("Failed to create playlist:", error);
-            toast.error("Failed to create playlist");
+            toast.error(t("Failed to create playlist"));
         } finally {
             setIsCreating(false);
         }
@@ -464,7 +464,7 @@ export function Sidebar() {
                                                 {isShared && (
                                                     <span
                                                         className="shrink-0 w-1 h-1 rounded-full bg-brand"
-                                                        title={`Shared by ${
+                                                        title={`${t("Shared by")} ${
                                                             playlist.user
                                                                 ?.username ||
                                                             "someone"
