@@ -9,7 +9,7 @@ import {
     useSyncExternalStore,
     type ReactNode,
 } from "react";
-import { translations, type Locale, type TranslationKey } from "./translations";
+import { translate, type Locale, type TranslationKey } from "./translations";
 
 const STORAGE_KEY = "kima-hub-language";
 const CHANGE_EVENT = "kima-hub-language-change";
@@ -58,7 +58,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    const t = useCallback((key: TranslationKey) => translations[locale][key], [locale]);
+    const t = useCallback((key: TranslationKey) => translate(locale, key), [locale]);
     const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
 
     return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
