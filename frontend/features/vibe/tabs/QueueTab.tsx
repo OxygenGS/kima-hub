@@ -8,6 +8,8 @@ import { Play, Pause } from "lucide-react";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { formatTime } from "@/utils/formatTime";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 const OPERATION_STYLES: Record<string, { label: string; borderColor: string }> = {
     drift: { label: "Song Path", borderColor: "var(--color-brand)" },
@@ -17,6 +19,7 @@ const OPERATION_STYLES: Record<string, { label: string; borderColor: string }> =
 };
 
 export function QueueTab() {
+    const { t, locale } = useLanguage();
     const { currentTrack, queue, currentIndex, activeOperation } = useAudioState();
     const { playTracks, pause, resume } = useAudioControls();
     const { isPlaying } = useAudioPlayback();
@@ -44,9 +47,9 @@ export function QueueTab() {
                     className="bg-white/5 border-l-2 px-3 py-2 text-xs text-[var(--text-secondary)] shrink-0"
                     style={{ borderColor: opStyle.borderColor }}
                 >
-                    <span className="font-medium text-[var(--text-primary)]">{opStyle.label}</span>
+                    <span className="font-medium text-[var(--text-primary)]">{t(opStyle.label as TranslationKey)}</span>
                     {" -- "}
-                    {trackCount} track{trackCount !== 1 ? "s" : ""}
+                    {trackCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(trackCount === 1 ? "track" : "tracks")}
                 </div>
             )}
 
@@ -93,7 +96,7 @@ export function QueueTab() {
             <div className="flex-1 overflow-y-auto">
                 {queue.length === 0 && (
                     <div className="flex items-center justify-center py-12 text-center">
-                        <p className="text-sm text-[var(--text-muted)]">Queue is empty</p>
+                        <p className="text-sm text-[var(--text-muted)]">{t("Queue is empty")}</p>
                     </div>
                 )}
                 {queue.map((track, index) => {
