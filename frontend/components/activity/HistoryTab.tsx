@@ -32,12 +32,26 @@ export function HistoryTab() {
     };
 
     useEffect(() => {
-        fetchHistory();
+        let cancelled = false;
+        // Fetch initial history asynchronously; avoid synchronous state updates
+        // from an effect. Subsequent focus events use the normal refresh action.
+        void api.getDownloadHistory()
+            .then((data) => {
+                if (!cancelled) setHistory(data);
+            })
+            .catch((error) => {
+                console.error("Failed to fetch download history:", error);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
 
-        // Refresh on window focus
-        const handleFocus = () => fetchHistory();
+        const handleFocus = () => { void fetchHistory(); };
         window.addEventListener("focus", handleFocus);
-        return () => window.removeEventListener("focus", handleFocus);
+        return () => {
+            cancelled = true;
+            window.removeEventListener("focus", handleFocus);
+        };
     }, []);
 
     const handleClear = async (id: string) => {
