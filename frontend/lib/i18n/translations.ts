@@ -540,6 +540,7 @@ export const english = {
     "Failed to reorder track": "Failed to reorder track",
     "Failed to move track": "Failed to move track",
     "Failed to rename playlist": "Failed to rename playlist",
+    "Shuffle play": "Shuffle play",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1083,6 +1084,7 @@ export const dutch: Record<TranslationKey, string> = {
     "Failed to reorder track": "Volgorde van nummers wijzigen mislukt",
     "Failed to move track": "Nummer verplaatsen mislukt",
     "Failed to rename playlist": "Afspeellijst hernoemen mislukt",
+    "Shuffle play": "Willekeurig afspelen",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
