@@ -1,4 +1,4 @@
-# Chillverse Listen: user music permissions (development)
+# Kima Hub — user music permissions
 
 This document describes the change under development on `feature/user-permissions`. It is **not ready for production deployment**.
 
