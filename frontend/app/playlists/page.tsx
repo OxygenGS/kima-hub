@@ -26,6 +26,7 @@ import {
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 type ActionPanel = "create" | "importUrl" | "importFile" | null;
 
@@ -147,6 +148,7 @@ function PlaylistCard({
     onToggleHide: (playlistId: string, hide: boolean) => void;
     isHiddenView?: boolean;
 }) {
+    const { t, locale } = useLanguage();
     const isShared = playlist.isOwner === false;
     const [isHiding, setIsHiding] = useState(false);
 
@@ -194,8 +196,8 @@ function PlaylistCard({
                             )}
                             title={
                                 playlist.isHidden
-                                    ? "Show playlist"
-                                    : "Hide playlist"
+                                    ? t("Show playlist")
+                                    : t("Hide playlist")
                             }
                         >
                             {playlist.isHidden ? (
@@ -218,7 +220,7 @@ function PlaylistCard({
 "hover:bg-[#f97316] hover:scale-105",
     "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
                         )}
-                        title="Play playlist"
+                        title={t("Play playlist")}
                     >
                         <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
                     </button>
@@ -240,8 +242,8 @@ function PlaylistCard({
                             {playlist.user.username} | {" "}
                         </span>
                     ) : null}
-                    {playlist.trackCount || 0}{" "}
-                    {playlist.trackCount === 1 ? "song" : "songs"}
+                    {(playlist.trackCount || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}{" "}
+                    {t(playlist.trackCount === 1 ? "song" : "songs")}
                 </p>
             </div>
         </Link>
@@ -251,6 +253,7 @@ function PlaylistCard({
 // --- Inline action panels ---
 
 function CreatePanel({ onClose }: { onClose: () => void }) {
+    const { t } = useLanguage();
     const router = useRouter();
     const queryClient = useQueryClient();
     const [name, setName] = useState("");
@@ -278,7 +281,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                 router.push(`/playlist/${result.id}`);
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to create playlist");
+            setError(err instanceof Error ? err.message : t("Failed to create playlist"));
             setIsSubmitting(false);
         }
     };
@@ -290,7 +293,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Playlist name..."
+                placeholder={t("Playlist name...")}
                 className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
                 disabled={isSubmitting}
             />
@@ -304,7 +307,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                         : "bg-white/5 border-white/10 text-[var(--text-muted)] hover:text-white/60"
                 )}
             >
-                {isPublic ? "Public" : "Private"}
+                {isPublic ? t("Public") : t("Private")}
             </button>
             <button
                 type="submit"
@@ -312,7 +315,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >
                 {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Create
+                {t("Create")}
             </button>
             <button
                 type="button"
@@ -329,6 +332,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
 }
 
 function ImportUrlPanel({ onClose }: { onClose: () => void }) {
+    const { t } = useLanguage();
     const [url, setUrl] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -346,13 +350,13 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
         try {
             new URL(trimmed);
         } catch {
-            setError("Enter a valid URL");
+            setError(t("Enter a valid URL"));
             return;
         }
 
         const supportedDomains = ["spotify.com", "deezer.com", "youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "mixcloud.com"];
         if (!supportedDomains.some(domain => trimmed.includes(domain))) {
-            setError("Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud");
+            setError(t("Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud"));
             return;
         }
 
@@ -365,7 +369,7 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
             }));
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to start import");
+            setError(err instanceof Error ? err.message : t("Failed to start import"));
         } finally {
             setIsSubmitting(false);
         }
@@ -378,7 +382,7 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={url}
                 onChange={(e) => { setUrl(e.target.value); setError(null); }}
-                placeholder="Paste a playlist URL (Spotify, YouTube, SoundCloud...)"
+                placeholder={t("Paste a playlist URL (Spotify, YouTube, SoundCloud...)")}
                 className="flex-1 min-w-[220px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
                 disabled={isSubmitting}
             />
@@ -388,7 +392,7 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >
                 {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                Import
+                {t("Import")}
             </button>
             <button
                 type="button"
@@ -406,6 +410,7 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
 }
 
 function ImportM3UPanel({ onClose }: { onClose: () => void }) {
+    const { t, locale } = useLanguage();
     const queryClient = useQueryClient();
     const [file, setFile] = useState<File | null>(null);
     const [playlistName, setPlaylistName] = useState("");
@@ -447,7 +452,7 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
             setResult({ playlistId: res.playlistId, matched: res.matched, total: res.total });
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (err) {
-            setError(err instanceof Error ? err.message : "M3U import failed");
+            setError(err instanceof Error ? err.message : t("M3U import failed"));
             setIsSubmitting(false);
         }
     };
@@ -458,14 +463,14 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center gap-2 text-sm text-white">
                     <Check className="w-4 h-4 text-green-400 shrink-0" />
                     <span>
-                        Created &ldquo;{playlistName}&rdquo; with {result.matched} of {result.total} tracks matched.
+                        {t("Created")} &ldquo;{playlistName}&rdquo; {t("with")} {result.matched.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("of")} {result.total.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("tracks")} {t("matched")}.
                     </span>
                 </div>
                 <Link
                     href={`/playlist/${result.playlistId}`}
                     className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors"
                 >
-                    View Playlist
+                    {t("View Playlist")}
                 </Link>
                 <button
                     type="button"
@@ -498,7 +503,7 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
                         type="text"
                         value={playlistName}
                         onChange={(e) => setPlaylistName(e.target.value)}
-                        placeholder="Playlist name..."
+                        placeholder={t("Playlist name...")}
                         className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
                         disabled={isSubmitting}
                     />
@@ -508,7 +513,7 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        Create Playlist
+                        {t("Create Playlist")}
                     </button>
                     <button
                         type="button"
@@ -574,6 +579,7 @@ function EmptyState({
     setActiveAction: (a: ActionPanel) => void;
     canImportPlaylist: boolean;
 }) {
+    const { t } = useLanguage();
     if (showHiddenTab) {
         return (
         <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-12">
@@ -581,7 +587,7 @@ function EmptyState({
                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                     <div className="w-2 h-2 bg-brand" />
                     <span className="text-xs text-[var(--text-secondary)]">
-                        No Hidden Playlists
+                        {t("No Hidden Playlists")}
                     </span>
                 </div>
                 <div className="flex flex-col items-center text-center">
@@ -589,10 +595,10 @@ function EmptyState({
                         <ListMusic className="w-8 h-8 text-white/10" />
                     </div>
                     <h2 className="text-2xl font-bold tracking-tight text-white mb-2">
-                        No hidden playlists
+                        {t("No hidden playlists")}
                     </h2>
                     <p className="text-xs text-[var(--text-muted)] max-w-sm leading-relaxed">
-                        You haven&apos;t hidden any playlists
+                        {t("You haven't hidden any playlists")}
                     </p>
                 </div>
             </div>
@@ -606,7 +612,7 @@ function EmptyState({
             <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                 <div className="w-2 h-2 bg-brand" />
                 <span className="text-xs text-[var(--text-secondary)]">
-                    Getting Started
+                    {t("Getting Started")}
                 </span>
             </div>
 
@@ -621,8 +627,8 @@ function EmptyState({
                             <Plus className="w-5 h-5 text-brand" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">Create your first playlist</h3>
-                            <p className="text-xs text-[var(--text-muted)]">Start from scratch</p>
+                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Create your first playlist")}</h3>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Start from scratch")}</p>
                         </div>
                     </button>
                     {activeAction === "create" && (
@@ -642,8 +648,8 @@ function EmptyState({
                             <Link2 className="w-5 h-5 text-[var(--text-muted)]" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">Import from Spotify or Deezer</h3>
-                            <p className="text-xs text-[var(--text-muted)]">Paste a playlist URL</p>
+                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Import from Spotify or Deezer")}</h3>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Paste a playlist URL")}</p>
                         </div>
                     </button>
                     {activeAction === "importUrl" && (
@@ -663,8 +669,8 @@ function EmptyState({
                             <FileMusic className="w-5 h-5 text-[var(--text-muted)]" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">Import from M3U file</h3>
-                            <p className="text-xs tabular-nums text-[var(--text-muted)]">Upload .m3u or .m3u8</p>
+                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Import from M3U file")}</h3>
+                            <p className="text-xs tabular-nums text-[var(--text-muted)]">{t("Upload .m3u or .m3u8")}</p>
                         </div>
                     </button>
                     {activeAction === "importFile" && (
@@ -684,8 +690,8 @@ function EmptyState({
                             <Compass className="w-5 h-5 text-[var(--text-muted)]" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">Browse public playlists</h3>
-                            <p className="text-xs text-[var(--text-muted)]">Discover shared music</p>
+                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Browse public playlists")}</h3>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Discover shared music")}</p>
                         </div>
                     </Link>
                 </div>
@@ -698,6 +704,7 @@ function EmptyState({
 
 export default function PlaylistsPage() {
     useRouter();
+    const { t, locale } = useLanguage();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
     const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const { playTracks } = useAudioControls();
@@ -802,23 +809,23 @@ export default function PlaylistsPage() {
                     <div className="flex items-center gap-2 mb-4">
                         <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                         <span className="t-eyebrow">
-                            Your Library
+                            {t("Your Library")}
                         </span>
                     </div>
 
                     <div className="flex items-end justify-between gap-4">
                         <div>
                             <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none">
-                                Playlists
+                                {t("Playlists")}
                             </h1>
                             <div className="flex items-center gap-3 mt-3 text-xs tabular-nums text-[var(--text-muted)]">
                                 <span className="font-bold text-white text-sm normal-case tracking-tight">
-                                    {visiblePlaylists.length} {visiblePlaylists.length === 1 ? "playlist" : "playlists"}
+                                    {visiblePlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(visiblePlaylists.length === 1 ? "playlist" : "playlists")}
                                 </span>
                                 {hiddenPlaylists.length > 0 && (
                                     <>
                                         <span className="text-[var(--text-muted)]">|</span>
-                                        <span>{hiddenPlaylists.length} hidden</span>
+                                        <span>{hiddenPlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("hidden")}</span>
                                     </>
                                 )}
                             </div>
@@ -836,8 +843,8 @@ export default function PlaylistsPage() {
                                     )}
                                 >
                                     {showHiddenTab
-                                        ? "Show All"
-                                        : `Hidden (${hiddenPlaylists.length})`}
+                                        ? t("Show All")
+                                        : `${t("Hidden")} (${hiddenPlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")})`}
                                 </button>
                             )}
                         </div>
@@ -847,20 +854,20 @@ export default function PlaylistsPage() {
                     <div className="flex flex-wrap items-center gap-2 mt-5">
                         <ActionButton
                             icon={Plus}
-                            label="Create"
+                            label={t("Create")}
                             active={activeAction === "create"}
                             onClick={() => toggleAction("create")}
                             primary
                         />
                         {canImportPlaylist && <ActionButton
                             icon={Link2}
-                            label="Import URL"
+                            label={t("Import URL")}
                             active={activeAction === "importUrl"}
                             onClick={() => toggleAction("importUrl")}
                         />}
                         <ActionButton
                             icon={FileMusic}
-                            label="Import File"
+                            label={t("Import File")}
                             active={activeAction === "importFile"}
                             onClick={() => toggleAction("importFile")}
                         />
@@ -869,7 +876,7 @@ export default function PlaylistsPage() {
                             className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:bg-white/5 border border-white/10 hover:text-white/70 hover:border-white/20 transition-all"
                         >
                             <Compass className="w-4 h-4" />
-                            <span className="hidden sm:inline">Browse</span>
+                            <span className="hidden sm:inline">{t("Browse")}</span>
                         </Link>
                     </div>
 
@@ -897,8 +904,7 @@ export default function PlaylistsPage() {
                     {showHiddenTab && (
                         <div className="mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10">
                             <p className="text-xs text-[var(--text-muted)]">
-                                Hidden playlists won&apos;t appear in your library. Hover
-                                and click the eye icon to restore.
+                                {t("Hidden playlists won't appear in your library. Hover and click the eye icon to restore.")}
                             </p>
                         </div>
                     )}
@@ -909,7 +915,7 @@ export default function PlaylistsPage() {
                             <div className="flex items-center gap-3 mb-6">
                                 <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full shrink-0" />
                                 <h2 className="text-2xl font-bold tracking-tight">
-                                    {showHiddenTab ? "Hidden" : "All Playlists"}
+                                    {showHiddenTab ? t("Hidden") : t("All Playlists")}
                                 </h2>
                                 <span className="text-xs tabular-nums text-brand">
                                     {displayedPlaylists.length}
