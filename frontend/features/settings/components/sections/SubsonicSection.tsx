@@ -29,6 +29,15 @@ export function SubsonicSection() {
     const [revoking, setRevoking] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState("");
 
+    const loadApiKeys = async () => {
+        try {
+            const data = await api.get<{ apiKeys: ApiKey[] }>("/api-keys");
+            setApiKeys(data.apiKeys);
+        } catch {
+            // Non-fatal — keys list stays empty
+        }
+    };
+
     useEffect(() => {
         api.get<{ publicUrl: string }>("/system-settings/public-config")
             .then((data) => {
@@ -40,17 +49,9 @@ export function SubsonicSection() {
                 }
             });
 
-        loadApiKeys();
+        void loadApiKeys();
+        // Initial load only: API-key list is refreshed explicitly on mutations.
     }, []);
-
-    const loadApiKeys = async () => {
-        try {
-            const data = await api.get<{ apiKeys: ApiKey[] }>("/api-keys");
-            setApiKeys(data.apiKeys);
-        } catch {
-            // Non-fatal — keys list stays empty
-        }
-    };
 
     const handleGenerate = async () => {
         const name = deviceName.trim() || "Subsonic";
