@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Trash2 } from "lucide-react";
 import { SettingsSection, SettingsInput, SettingsSelect, SettingsToggle } from "../ui";
 import { Modal } from "@/components/ui/Modal";
@@ -35,7 +35,7 @@ export function UserManagementSection() {
     const [deleteStatus, setDeleteStatus] = useState<StatusType>("idle");
     const [deleteMessage, setDeleteMessage] = useState("");
 
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
         try {
             setLoading(true);
             const data = await api.get<User[]>("/auth/users");
@@ -45,12 +45,12 @@ export function UserManagementSection() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         void loadUsers();
         // Load on mount only; user actions refresh the list explicitly.
-    }, []);
+    }, [loadUsers]);
 
     const handleCreate = async () => {
         if (!newUsername.trim() || newPassword.length < 6) {
