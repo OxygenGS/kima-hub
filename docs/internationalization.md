@@ -57,6 +57,20 @@ Repository CI separately runs frontend/backend tests, TypeScript, database upgra
 
 For real authenticated E2E suites, the existing `frontend/playwright.config.ts` requires `KIMA_TEST_USERNAME`, `KIMA_TEST_PASSWORD`, and the isolated test server URL; do not commit secrets or use real production data.
 
+A **separate opt-in real-account language walkthrough** now lives in `frontend/tests/e2e/predeploy/authenticated-locale.spec.ts`. It tests Dutch on authenticated Settings and Search, route navigation, reload persistence, restoring English, and the mobile Settings selector. To run it on a disposable **nonproduction** instance:
+
+```bash
+cd frontend
+export KIMA_UI_BASE_URL="http://127.0.0.1:3030"  # Replace with your isolated test instance URL
+export KIMA_TEST_USERNAME="<dedicated-test-user>"
+export KIMA_TEST_PASSWORD="<dedicated-test-password>"
+export KIMA_E2E_LOCALE_WALKTHROUGH=1
+npx playwright test tests/e2e/predeploy/authenticated-locale.spec.ts
+```
+
+Without the opt-in flag the tests are skipped; without credentials, the regular real-account Playwright setup will reject the run. These real-account tests have **not** been executed by CI and must not be described as passed until run against a prepared test server. They do not replace the admin-permissions, downloads or playback acceptance walkthrough.
+
+
 ## Remaining decisions
 
 - Complete residual dialogs and authenticated-only interface translations.
