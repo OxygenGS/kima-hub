@@ -76,7 +76,7 @@ export default function SeriesDetailPage() {
 
         loadSeries();
         return () => { cancelled = true; };
-    }, [seriesName, isAuthenticated, toast]);
+    }, [seriesName, isAuthenticated, toast, t]);
 
     const getCoverUrl = (coverUrl: string | null, size = 300) => {
         if (!coverUrl) return null;
