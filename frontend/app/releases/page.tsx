@@ -49,7 +49,21 @@ export default function ReleasesPage() {
     };
 
     useEffect(() => {
-        fetchReleases();
+        let cancelled = false;
+        // The first load is already in a loading state; update after the request.
+        void api.get<ReleaseRadarData>("/releases/radar?daysBack=30&daysAhead=90")
+            .then((response) => {
+                if (!cancelled) setData(response);
+            })
+            .catch((err: unknown) => {
+                if (!cancelled) setError(
+                    err instanceof Error ? err.message : "Failed to fetch releases",
+                );
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
     }, []);
 
     const handleDownload = async (albumMbid: string, releaseId: string | number) => {
