@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { useRouter } from "next/navigation";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useImageColor } from "@/hooks/useImageColor";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { usePodcastData } from "@/features/podcast/hooks/usePodcastData";
 import { usePodcastActions } from "@/features/podcast/hooks/usePodcastActions";
@@ -16,6 +17,7 @@ import { PreviewEpisodes } from "@/features/podcast/components/PreviewEpisodes";
 import { SimilarPodcasts } from "@/features/podcast/components/SimilarPodcasts";
 
 export default function PodcastDetailPage() {
+    const { t } = useLanguage();
     const router = useRouter();
     const {
         podcastId,
@@ -63,7 +65,7 @@ export default function PodcastDetailPage() {
                         onClick={() => router.back()}
                         className="text-xs text-[var(--text-muted)] underline underline-offset-2 hover:text-gray-400 transition-colors"
                     >
-                        Go back
+                        {t("Go back")}
                     </button>
                 </div>
             </div>
@@ -81,7 +83,7 @@ export default function PodcastDetailPage() {
     if (!podcast && !previewData) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">Podcast not found</p>
+                <p className="text-xs text-[var(--text-muted)]">{t("Podcast not found")}</p>
             </div>
         );
     }
@@ -209,7 +211,7 @@ export default function PodcastDetailPage() {
                             <section>
                                 <div className="flex items-center gap-3 mb-6">
                                     <span className="w-1 h-6 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">About</h2>
+                                    <h2 className="text-xl font-bold tracking-tight">{t("About")}</h2>
                                     <span className="flex-1 border-t border-white/10" />
                                 </div>
                                 <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
