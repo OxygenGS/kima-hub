@@ -40,9 +40,14 @@ interface LanguageContextValue {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
+/** Locale from browser storage, available even outside LanguageProvider. */
+export function useStoredLocale(): Locale {
+    return useSyncExternalStore(subscribe, readLocale, () => "en" as Locale);
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
     // A stable English snapshot on the server avoids hydration differences.
-    const locale = useSyncExternalStore(subscribe, readLocale, () => "en" as Locale);
+    const locale = useStoredLocale();
 
     useEffect(() => {
         document.documentElement.lang = locale;

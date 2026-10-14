@@ -101,6 +101,14 @@ describe("UI translations", () => {
         expect(translate("nl", "FLAC")).toBe("FLAC");
     });
 
+    it("translates route and critical error recovery controls", () => {
+        expect(translate("nl", "Something went wrong")).toBe("Er is iets misgegaan");
+        expect(translate("nl", "Reload Page")).toBe("Pagina opnieuw laden");
+        expect(translate("nl", "Reload Application")).toBe("Applicatie opnieuw laden");
+        expect(translate("en", "Application Error")).toBe("Application Error");
+        expect(translate("nl", "Raw unexpected API exception")).toBe("Raw unexpected API exception");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

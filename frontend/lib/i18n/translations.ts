@@ -1073,6 +1073,13 @@ export const english = {
     "Replace": "Replace",
     "File format:": "File format:",
     "Sort results by": "Sort results by",
+    "Something went wrong": "Something went wrong",
+    "An unexpected error occurred. Please try again.": "An unexpected error occurred. Please try again.",
+    "An unexpected error occurred. Please try reloading the page.": "An unexpected error occurred. Please try reloading the page.",
+    "Reload Page": "Reload Page",
+    "Application Error": "Application Error",
+    "A critical error occurred. Please reload the page.": "A critical error occurred. Please reload the page.",
+    "Reload Application": "Reload Application",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2149,6 +2156,13 @@ export const dutch: Record<TranslationKey, string> = {
     "Replace": "Vervangen",
     "File format:": "Bestandsformaat:",
     "Sort results by": "Resultaten sorteren op",
+    "Something went wrong": "Er is iets misgegaan",
+    "An unexpected error occurred. Please try again.": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
+    "An unexpected error occurred. Please try reloading the page.": "Er is een onverwachte fout opgetreden. Laad de pagina opnieuw.",
+    "Reload Page": "Pagina opnieuw laden",
+    "Application Error": "Applicatiefout",
+    "A critical error occurred. Please reload the page.": "Er is een ernstige fout opgetreden. Laad de pagina opnieuw.",
+    "Reload Application": "Applicatie opnieuw laden",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
