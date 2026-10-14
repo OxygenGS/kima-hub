@@ -1,4 +1,4 @@
-# Contributing to Kima
+# Contributing to Kima Hub — Oxygen's Fork
 
 First off, thanks for taking the time to contribute! 🎉
 
@@ -17,7 +17,7 @@ All development happens on the `main` branch:
 -   Preview images are built on demand, not on a schedule: push the `prerelease`
     branch, or run the **Pre-release Image** workflow from the Actions tab. They
     publish to this repository's GitHub Container Registry only
--   Stable releases are created via version tags, and those publish to Docker Hub
+-   Stable releases are created via version tags and published to `ghcr.io/oxygengs/kima-hub`
 
 ## Making Contributions
 
