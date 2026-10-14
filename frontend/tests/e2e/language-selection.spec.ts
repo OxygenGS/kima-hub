@@ -84,6 +84,29 @@ test.describe("Interface language", () => {
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
     });
 
+    test("keeps language controls usable in narrow mobile viewports", async ({ page }) => {
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.goto("/login");
+
+        const loginLanguage = page.locator("#login-language");
+        await expect(loginLanguage).toBeVisible();
+        await loginLanguage.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Inloggen" })).toBeVisible();
+
+        await page.goto("/onboarding");
+        const onboardingLanguage = page.locator("#onboarding-language");
+        await expect(onboardingLanguage).toBeVisible();
+        await expect(onboardingLanguage).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+
+        // Language selection must remain horizontally reachable on mobile.
+        const selectBounds = await onboardingLanguage.boundingBox();
+        expect(selectBounds).not.toBeNull();
+        expect(selectBounds!.x).toBeGreaterThanOrEqual(0);
+        expect(selectBounds!.x + selectBounds!.width).toBeLessThanOrEqual(375);
+    });
+
     test("changes language on authenticated settings without modifying server preferences", async ({ page }) => {
         // Mock a regular signed-in account. No real user, token, or backend is needed.
         await page.route("**/api/**", async (route) => {
