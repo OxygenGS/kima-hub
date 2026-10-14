@@ -68,10 +68,22 @@ export default function DeviceLinkPage() {
     }, [toast]);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadDevices();
-        }
-    }, [isAuthenticated, loadDevices]);
+        if (!isAuthenticated) return;
+        let cancelled = false;
+        // Initial request resolves asynchronously; manual refresh uses loadDevices.
+        void api.request<LinkedDevice[]>("/device-link/devices")
+            .then((response) => {
+                if (!cancelled) setDevices(response);
+            })
+            .catch((err) => {
+                console.error("Failed to load devices:", err);
+                if (!cancelled) toast.error("Failed to load linked devices");
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingDevices(false);
+            });
+        return () => { cancelled = true; };
+    }, [isAuthenticated, toast]);
 
     // Generate a new link code
     const generateCode = async () => {
