@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import Image from "next/image";
@@ -25,9 +25,9 @@ export default function OnboardingPage() {
     const [integrationResults, setIntegrationResults] = useState<
         Partial<Record<IntegrationKey, IntegrationResult>>
     >({});
-    const [initialLoading, setInitialLoading] = useState(true);
+    const [hasFinishedInitialAuth, setHasFinishedInitialAuth] = useState(false);
+    const initialLoading = !hasFinishedInitialAuth;
     const [error, setError] = useState("");
-    const hasCheckedSession = useRef(false);
     const showPasswordMismatch = error === "Passwords don't match";
     const showPasswordTooShort =
         error === "Password must be at least 6 characters";
@@ -37,21 +37,13 @@ export default function OnboardingPage() {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
-    // Use auth context state instead of duplicate API call
-    useEffect(() => {
-        // Wait for auth context to finish loading
-        if (authLoading) return;
-
-        // Only check once to prevent re-renders
-        if (hasCheckedSession.current) return;
-        hasCheckedSession.current = true;
-
-        // If user exists and hasn't completed onboarding, skip to step 2
-        if (user && !user.onboardingComplete) {
-            setStep(2);
-        }
-        setInitialLoading(false);
-    }, [authLoading, user]);
+    // Adjust this component's own state once the initial auth check finishes.
+    // React permits a guarded render-time adjustment, avoiding the extra
+    // effect render while still skipping account creation for existing users.
+    if (!authLoading && !hasFinishedInitialAuth) {
+        setHasFinishedInitialAuth(true);
+        if (user && !user.onboardingComplete) setStep(2);
+    }
 
     // Step 2: Integrations
     const [lidarr, setLidarr] = useState({
