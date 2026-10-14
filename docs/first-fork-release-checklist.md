@@ -10,7 +10,7 @@ Last reviewed: **2026-10-14**. This is the **current** release checklist for PR 
 - [x] The disposable AIO ran **six real-login Playwright tests**: admin and regular user each verified locale switch across Settings/Search and reload, mobile language selection, and translated Collection UI while preserving the fixture's original song title. Details: AIO job `116067800418` (three tests passed per role).
 - [x] Browser-only CI also covers first-run locale choice, same-origin cross-tab persistence, invalid saved locale, and mock authenticated Settings without real credentials.
 - [x] Only synthetic AIO music/accounts were used; Docker images were built locally on GitHub runners **without publishing**. No production database or mounts were tested or modified.
-- [x] Fork-owned release image destination identified: `ghcr.io/oxygengs/kima-hub`. The current `docker-compose.prod.yml` uses that registry. Use an **explicit version tag**, not `latest`, for reproducible upgrades.
+- [x] Fork-owned release image destination identified: `ghcr.io/oxygengs/kima-hub`. Both `docker-compose.prod.yml` and `docker-compose.server.yml` use that registry and pin the currently published `v1.10.0` by default. Set `VERSION` explicitly for later releases. CI validates image origin, `/music` and `/data` mounts and supported Compose sysctls.
 
 ## Open before merging or publishing anything
 
@@ -27,8 +27,9 @@ Last reviewed: **2026-10-14**. This is the **current** release checklist for PR 
 
 - Stable images: `ghcr.io/oxygengs/kima-hub:vMAJOR.MINOR.PATCH` and `:latest`. The stable `.github/workflows/docker-publish.yml` accepts **tag pushes only**, requires strict `vMAJOR.MINOR.PATCH` and a commit reachable from the default branch, and uses serialized publishing. No manual stable release dispatch. Protect version tags from force updates in repository settings. Confirm workflow validation in CI and before release.
 - Pre-release images: manual dispatch **only** via `.github/workflows/prerelease.yml`, with `:prerelease` and unique `:prerelease-<sha>` tags. Arbitrary workflow input is suffix-validated before use. This is a **publishing** action: never dispatch without approval.
-- `docker-compose.prod.yml` defaults to `latest` if `VERSION` is omitted; release instructions should set `VERSION` explicitly.
-- Do not use `docker compose down -v` for an existing installation containing data to preserve.
+- Both normal and extended AIO Compose files default to published `v1.10.0` until a new version is approved; override with an explicitly chosen `VERSION` when updating. Preserve the Dockge/Compose project name and original `/data` volume (renaming a stack may allocate a fresh named volume).
+- `vm.overcommit_memory` is a host-level kernel parameter and cannot be applied through Compose container `sysctls`. Do not ask Compose to modify it; only a host administrator may choose an appropriate host setting.
+- Back up the complete existing `/data` volume and encryption/session material alongside Compose and database backups; test rollback with an independent pre-upgrade volume copy. Do not use `docker compose down -v` for an existing installation containing data to preserve.
 
 ## Recommended sequence
 

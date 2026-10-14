@@ -331,7 +331,9 @@ docker compose ps
 
 5. Confirm the container is healthy, then test sign-in, music playback and existing settings.
 
-**Never run `docker compose down -v` on an installation containing data you want to keep.** Avoid using a floating `latest` tag in production if you want controlled, reproducible updates.
+**Preserve the existing Compose project name and /data volume when updating with Dockge or Compose.** A renamed Dockge stack or Compose project may create a different named volume even when the YAML still says `kima_data`, making an existing installation appear empty. Check the actual volume name before changing the stack name or moving its directory. **Back up the complete /data volume, including database and stored encryption/session secrets, plus your Compose file, before a major upgrade.** A PostgreSQL-only backup is not a complete AIO recovery plan. Test any rollback against a separately restored pre-upgrade volume; merely switching back to an older image cannot undo database migrations.
+
+**Never run `docker compose down -v` on an installation containing data you want to keep.** The provided `docker-compose.prod.yml` and `docker-compose.server.yml` pin `v1.10.0` by default until a newer fork release is approved; choose an explicit `VERSION` to upgrade. Avoid floating `latest` tags in production for controlled, reproducible updates.
 
 ### One-container Docker example
 

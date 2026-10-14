@@ -147,6 +147,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Validate fork Compose installation and update examples
+              run: bash .github/ci/check-fork-compose.sh
+
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
 
