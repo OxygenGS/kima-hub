@@ -25,8 +25,8 @@ Last reviewed: **2026-10-14**. This is the **current** release checklist for PR 
 
 ## Release-channel guard
 
-- Stable images: `ghcr.io/oxygengs/kima-hub:vMAJOR.MINOR.PATCH` and `:latest`. The stable `.github/workflows/docker-publish.yml` is being hardened to reject non-stable tags and manual dispatch from non-default branches **before registry login or image publishing**. Confirm that new guard passes review/CI.
-- Pre-release images: explicit opt-in to `.github/workflows/prerelease.yml`, with `:prerelease` and unique `:prerelease-<sha>` tags. This is a **publishing** action: never dispatch without approval.
+- Stable images: `ghcr.io/oxygengs/kima-hub:vMAJOR.MINOR.PATCH` and `:latest`. The stable `.github/workflows/docker-publish.yml` accepts **tag pushes only**, requires strict `vMAJOR.MINOR.PATCH` and a commit reachable from the default branch, and uses serialized publishing. No manual stable release dispatch. Protect version tags from force updates in repository settings. Confirm workflow validation in CI and before release.
+- Pre-release images: manual dispatch **only** via `.github/workflows/prerelease.yml`, with `:prerelease` and unique `:prerelease-<sha>` tags. Arbitrary workflow input is suffix-validated before use. This is a **publishing** action: never dispatch without approval.
 - `docker-compose.prod.yml` defaults to `latest` if `VERSION` is omitted; release instructions should set `VERSION` explicitly.
 - Do not use `docker compose down -v` for an existing installation containing data to preserve.
 
