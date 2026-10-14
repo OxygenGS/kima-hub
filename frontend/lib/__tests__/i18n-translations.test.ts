@@ -59,6 +59,12 @@ describe("UI translations", () => {
         expect(translate("nl", "User playlist title")).toBe("User playlist title");
     });
 
+    it("localizes Vibe map status and fallback labels", () => {
+        expect(translate("nl", "Map rendering failed")).toBe("Kaartweergave mislukt");
+        expect(translate("nl", "Computing music map")).toBe("Muziekkaart berekenen");
+        expect(translate("nl", "Dismiss")).toBe("Sluiten");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

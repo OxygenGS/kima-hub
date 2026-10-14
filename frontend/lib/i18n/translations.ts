@@ -1039,6 +1039,12 @@ export const english = {
     "Tap another track to complete the song path": "Tap another track to complete the song path",
     "No lyrics available": "No lyrics available",
     "Lyrics": "Lyrics",
+    "Map rendering failed": "Map rendering failed",
+    "Computing music map": "Computing music map",
+    "Failed to load music map": "Failed to load music map",
+    "No tracks with vibe analysis yet": "No tracks with vibe analysis yet",
+    "Run enrichment to generate embeddings": "Run enrichment to generate embeddings",
+    "Dismiss": "Dismiss",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2081,6 +2087,12 @@ export const dutch: Record<TranslationKey, string> = {
     "Tap another track to complete the song path": "Tik op een ander nummer om de route te voltooien",
     "No lyrics available": "Geen songtekst beschikbaar",
     "Lyrics": "Songtekst",
+    "Map rendering failed": "Kaartweergave mislukt",
+    "Computing music map": "Muziekkaart berekenen",
+    "Failed to load music map": "Muziekkaart laden mislukt",
+    "No tracks with vibe analysis yet": "Nog geen nummers met Vibe-analyse",
+    "Run enrichment to generate embeddings": "Voer verrijking uit om muziekkenmerken te berekenen",
+    "Dismiss": "Sluiten",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
