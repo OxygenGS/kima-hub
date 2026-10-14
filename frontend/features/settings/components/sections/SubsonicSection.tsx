@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SettingsSection, SettingsRow } from "../ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
@@ -29,14 +29,14 @@ export function SubsonicSection() {
     const [revoking, setRevoking] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState("");
 
-    const loadApiKeys = async () => {
+    const loadApiKeys = useCallback(async () => {
         try {
             const data = await api.get<{ apiKeys: ApiKey[] }>("/api-keys");
             setApiKeys(data.apiKeys);
         } catch {
             // Non-fatal — keys list stays empty
         }
-    };
+    }, []);
 
     useEffect(() => {
         api.get<{ publicUrl: string }>("/system-settings/public-config")
@@ -51,7 +51,7 @@ export function SubsonicSection() {
 
         void loadApiKeys();
         // Initial load only: API-key list is refreshed explicitly on mutations.
-    }, []);
+    }, [loadApiKeys]);
 
     const handleGenerate = async () => {
         const name = deviceName.trim() || "Subsonic";
