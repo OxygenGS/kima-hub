@@ -1,6 +1,6 @@
-# Kima Hub — Community Fork
+# Kima Hub — Oxygen's Fork
 
-> **Independent fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub) by Chevron7Locked.**
+> **An independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub), originally developed by Chevron7Locked. Maintained by [OxygenGS](https://github.com/OxygenGS).**
 >
 > This repository builds upon the original project, preserving its core functionality while introducing additional user controls, security improvements, and instance customization.
 
@@ -25,7 +25,7 @@ These results do not constitute an independent security audit or guarantee that 
 
 Kima Hub was originally created by **Chevron7Locked**. All original project credit remains with its creator.
 
-This fork is independently maintained and is not an official upstream release.
+This is Oxygen's independently maintained fork, not an official release of the original project.
 
 The original GPLv3 license remains applicable.
 
