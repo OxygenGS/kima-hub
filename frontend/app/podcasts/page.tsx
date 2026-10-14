@@ -12,6 +12,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { usePodcastsQuery, useTopPodcastsQuery, queryKeys } from "@/hooks/useQueries";
 import Image from "next/image";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 const getProxiedImageUrl = (imageUrl: string | undefined): string | null => {
     if (!imageUrl) return null;
@@ -106,6 +108,7 @@ function SectionHeader({
 }
 
 export default function PodcastsPage() {
+    const { t, locale } = useLanguage();
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -152,7 +155,7 @@ export default function PodcastsPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.podcasts() });
         } catch (error) {
             console.error("Failed to refresh podcasts:", error);
-            toast.error(`Failed to refresh podcasts: ${error instanceof Error ? error.message : "Unknown error"}`);
+            toast.error(`${t("Failed to refresh podcasts:")} ${error instanceof Error ? error.message : t("Unknown error")}`);
         } finally {
             setIsRefreshingAll(false);
         }
@@ -165,7 +168,7 @@ export default function PodcastsPage() {
         try {
             new URL(url);
         } catch {
-            setRssError("Please enter a valid URL");
+            setRssError(t("Please enter a valid URL"));
             return;
         }
 
@@ -285,17 +288,17 @@ export default function PodcastsPage() {
                         <div className="flex items-center gap-2 mb-6">
                             <div className="w-1.5 h-1.5 bg-[#3b82f6] rounded-full" />
                             <span className="t-eyebrow">
-                                Podcast Library
+                                {t("Podcast Library")}
                             </span>
                         </div>
 
                         <div className="flex items-end justify-between flex-wrap gap-4">
                             <div>
                                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-3">
-                                    Podcasts
+                                    {t("Podcasts")}
                                 </h1>
                                 <p className="text-sm text-[var(--text-muted)]">
-                                    Subscribe, discover, and listen
+                                    {t("Subscribe, discover, and listen")}
                                 </p>
                                 <div className="mt-3">
                                     {showRssInput ? (
@@ -317,11 +320,11 @@ export default function PodcastsPage() {
                                                         className="px-4 py-2.5 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2 transition-all whitespace-nowrap"
                                                     >
                                                         {isSubscribingRss ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                                                        Subscribe
+                                                        {t("Subscribe")}
                                                     </button>
                                                     <button
                                                         onClick={() => { setShowRssInput(false); setRssUrl(""); setRssError(null); }}
-                                                        aria-label="Cancel RSS input"
+                                                        aria-label={t("Cancel RSS input")}
                                                         className="p-2.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-all"
                                                     >
                                                         <X className="w-4 h-4" />
@@ -334,7 +337,7 @@ export default function PodcastsPage() {
                                         <button
                                             onClick={() => setShowRssInput(true)}
                                             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-xs"
-                                            title="Add podcast by RSS feed URL"
+                                            title={t("Add podcast by RSS feed URL")}
                                         >
                                             <Rss className="w-3.5 h-3.5" />
                                             <span className="hidden md:inline">Add RSS Feed</span>
@@ -348,10 +351,10 @@ export default function PodcastsPage() {
                                 {podcasts.length > 0 && (
                                     <div className="border-2 border-white/10 bg-[var(--bg-primary)] px-4 py-3 rounded hidden sm:block">
                                         <span className="text-3xl font-bold tabular-nums text-[#3b82f6]">
-                                            {podcasts.length}
+                                            {podcasts.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}
                                         </span>
                                         <span className="text-xs text-[var(--text-muted)] ml-2">
-                                            subscribed
+                                            {t("subscribed")}
                                         </span>
                                     </div>
                                 )}
@@ -363,11 +366,11 @@ export default function PodcastsPage() {
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Quick add..."
+                                        placeholder={t("Quick add...")}
                                         role="combobox"
                                         aria-expanded={showDropdown}
                                         aria-controls="podcast-search-listbox"
-                                        aria-label="Search podcasts to subscribe"
+                                        aria-label={t("Search podcasts to subscribe")}
                                         aria-autocomplete="list"
                                         className="w-full pl-10 pr-4 py-2.5 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-[#3b82f6]/50 transition-all text-sm tabular-nums"
                                     />
@@ -382,7 +385,7 @@ export default function PodcastsPage() {
                                         <div
                                             id="podcast-search-listbox"
                                             role="listbox"
-                                            aria-label="Podcast search results"
+                                            aria-label={t("Podcast search results")}
                                             className="absolute top-full left-0 mt-2 w-full bg-[var(--bg-secondary)] border-2 border-white/10 rounded-lg overflow-hidden z-(--z-dropdown) max-h-96 overflow-y-auto"
                                         >
                                             {searchResults.map((result) => {
@@ -429,7 +432,7 @@ export default function PodcastsPage() {
                                                                     router.push(`/podcasts/${result.id}`);
                                                                     setShowDropdown(false);
                                                                 }}
-                                                                aria-label={`Subscribe to ${result.name}`}
+                                                                aria-label={`${t("Subscribe to")} ${result.name}`}
                                                                 className="min-h-[44px] min-w-[44px] rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] flex items-center justify-center transition-colors"
                                                             >
                                                                 <Plus className="w-3.5 h-3.5 text-white" />
@@ -447,7 +450,7 @@ export default function PodcastsPage() {
                                         searchQuery.length >= 2 && (
                                             <div className="absolute top-full left-0 mt-2 w-full bg-[var(--bg-secondary)] border-2 border-white/10 rounded-lg p-4 z-(--z-dropdown)">
                                                 <p className="text-xs text-[var(--text-muted)] text-center">
-                                                    No podcasts found
+                                                    {t("No podcasts found")}
                                                 </p>
                                             </div>
                                         )}
@@ -464,7 +467,7 @@ export default function PodcastsPage() {
                         {podcasts.length > 0 && (
                             <section>
                                 <SectionHeader
-                                    title="My Podcasts"
+                                    title={t("My Podcasts")}
                                     count={podcasts.length}
                                     rightAction={
                                         <div className="flex items-center gap-2">
@@ -472,20 +475,20 @@ export default function PodcastsPage() {
                                                 onClick={handleRefreshAll}
                                                 disabled={isRefreshingAll}
                                                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all text-xs disabled:opacity-50"
-                                                title="Check all podcasts for new episodes"
+                                                title={t("Check all podcasts for new episodes")}
                                             >
                                                 <RefreshCw className={cn("w-3.5 h-3.5", isRefreshingAll && "animate-spin")} />
-                                                <span className="hidden md:inline">{isRefreshingAll ? "Refreshing..." : "Refresh All"}</span>
+                                                <span className="hidden md:inline">{isRefreshingAll ? t("Refreshing...") : t("Refresh All")}</span>
                                             </button>
                                             <select
                                                 value={sortBy}
                                                 onChange={(e) => setSortBy(e.target.value as SortOption)}
-                                                aria-label="Sort podcasts"
+                                                aria-label={t("Sort podcasts")}
                                                 className="px-3 py-1.5 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg text-white text-xs focus:outline-none focus:border-[#3b82f6]/50 [&>option]:bg-[var(--bg-primary)] [&>option]:text-white cursor-pointer"
                                             >
-                                                <option value="title">Title</option>
-                                                <option value="author">Author</option>
-                                                <option value="recent">Episodes</option>
+                                                <option value="title">{t("Title")}</option>
+                                                <option value="author">{t("Author")}</option>
+                                                <option value="recent">{t("Episodes")}</option>
                                             </select>
                                             <select
                                                 value={itemsPerPage}
@@ -493,7 +496,7 @@ export default function PodcastsPage() {
                                                     setItemsPerPage(Number(e.target.value));
                                                     setCurrentPage(1);
                                                 }}
-                                                aria-label="Podcasts per page"
+                                                aria-label={t("Podcasts per page")}
                                                 className="px-3 py-1.5 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg text-white text-xs tabular-nums focus:outline-none focus:border-[#3b82f6]/50 [&>option]:bg-[var(--bg-primary)] [&>option]:text-white cursor-pointer"
                                             >
                                                 <option value={25}>25</option>
@@ -531,7 +534,7 @@ export default function PodcastsPage() {
                         {/* Top Podcasts */}
                         {topPodcasts.length > 0 && (
                             <section>
-                                <SectionHeader title="Top Podcasts" />
+                                <SectionHeader title={t("Top Podcasts")} />
                                 <div
                                     className="grid-media"
                                     data-tv-section="top-podcasts"
@@ -566,13 +569,13 @@ export default function PodcastsPage() {
 
                                 >
                                     <SectionHeader
-                                        title={genreName}
+                                        title={t(genreName as TranslationKey)}
                                         rightAction={
                                             <button
                                                 onClick={() => router.push(`/podcasts/genre/${genreId}`)}
                                                 className="text-xs text-[var(--text-muted)] hover:text-[#3b82f6] transition-colors"
                                             >
-                                                View All
+                                                {t("View All")}
                                             </button>
                                         }
                                     />
@@ -601,10 +604,10 @@ export default function PodcastsPage() {
                                     <div className="flex flex-col items-center text-center">
                                         <Mic2 className="w-16 h-16 text-[var(--text-muted)] mb-6" />
                                         <h2 className="text-2xl font-bold tracking-tight text-white mb-2">
-                                            Discover Podcasts
+                                            {t("Discover Podcasts")}
                                         </h2>
                                         <p className="text-sm text-[var(--text-muted)] max-w-md">
-                                            Search for podcasts above to subscribe and start listening
+                                            {t("Search for podcasts above to subscribe and start listening")}
                                         </p>
                                     </div>
                                 </div>
