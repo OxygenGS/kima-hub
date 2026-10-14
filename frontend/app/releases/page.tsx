@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
 import Link from "next/link";
 import Image from "next/image";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface ReleaseItem {
     id: number | string;
@@ -31,6 +33,9 @@ interface ReleaseRadarData {
 }
 
 export default function ReleasesPage() {
+    const { t, locale } = useLanguage();
+    const intlLocale = locale === "nl" ? "nl-NL" : "en-US";
+    const count = (n: number) => n.toLocaleString(intlLocale);
     const [data, setData] = useState<ReleaseRadarData | null>(null);
     const [loading, setLoading] = useState(true);
     const [downloadingId, setDownloadingId] = useState<string | number | null>(null);
@@ -83,12 +88,12 @@ export default function ReleasesPage() {
         const now = new Date();
         const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return "Today";
-        if (diffDays === 1) return "Tomorrow";
-        if (diffDays > 0 && diffDays <= 7) return `In ${diffDays} days`;
-        if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)} days ago`;
+        if (diffDays === 0) return t("Today");
+        if (diffDays === 1) return t("Tomorrow");
+        if (diffDays > 0 && diffDays <= 7) return `${t("In")} ${count(diffDays)} ${t("days")}`;
+        if (diffDays < 0 && diffDays >= -7) return `${count(Math.abs(diffDays))} ${t("days ago")}`;
 
-        return date.toLocaleDateString("en-US", {
+        return date.toLocaleDateString(intlLocale, {
             month: "short",
             day: "numeric",
             year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
@@ -107,8 +112,8 @@ export default function ReleasesPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen text-[var(--text-secondary)]">
                 <Music2 className="w-12 h-12 mb-4 opacity-40" />
-                <p>Failed to load releases</p>
-                <p className="text-sm">{error}</p>
+                <p>{t("Failed to load releases")}</p>
+                <p className="text-sm">{translate(locale, error)}</p>
             </div>
         );
     }
@@ -124,16 +129,16 @@ export default function ReleasesPage() {
                     <div className="flex items-center gap-3 mb-2">
                         <Calendar className="w-6 h-6 text-amber-400" />
                         <span className="text-amber-400 text-sm font-medium">
-                            Release Radar
+                            {t("Release Radar")}
                         </span>
                     </div>
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-2">
-                        New & Upcoming
+                        {t("New & Upcoming")}
                     </h1>
                     <p className="text-[var(--text-secondary)] text-sm md:text-base max-w-xl">
-                        {data?.monitoredArtistCount || 0} monitored artists •
-                        {data?.upcoming.length || 0} upcoming •
-                        {data?.recent.length || 0} recent releases
+                        {count(data?.monitoredArtistCount || 0)} {t("monitored artists")} •
+                        {count(data?.upcoming.length || 0)} {t("upcoming")} •
+                        {count(data?.recent.length || 0)} {t("recent releases")}
                     </p>
                 </div>
             </div>
@@ -144,7 +149,7 @@ export default function ReleasesPage() {
                     <section>
                         <div className="flex items-center gap-3 mb-6">
                             <Clock className="w-5 h-5 text-amber-400" />
-                            <h2 className="text-xl font-semibold text-white">Coming Soon</h2>
+                            <h2 className="text-xl font-semibold text-white">{t("Coming Soon")}</h2>
                             <span className="text-[var(--text-muted)] text-sm">({data.upcoming.length})</span>
                         </div>
 
@@ -167,7 +172,7 @@ export default function ReleasesPage() {
                     <section>
                         <div className="flex items-center gap-3 mb-6">
                             <Disc className="w-5 h-5 text-emerald-400" />
-                            <h2 className="text-xl font-semibold text-white">Just Dropped</h2>
+                            <h2 className="text-xl font-semibold text-white">{t("Just Dropped")}</h2>
                             <span className="text-[var(--text-muted)] text-sm">({data.recent.length})</span>
                         </div>
 
@@ -189,15 +194,15 @@ export default function ReleasesPage() {
                 {(!data?.upcoming?.length && !data?.recent?.length) && (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <Calendar className="w-16 h-16 text-[var(--text-muted)] mb-6" />
-                        <h3 className="text-xl font-medium text-white mb-2">No releases found</h3>
+                        <h3 className="text-xl font-medium text-white mb-2">{t("No releases found")}</h3>
                         <p className="text-[var(--text-secondary)] max-w-md mb-6">
-                            Add artists to Lidarr and enable monitoring to see their upcoming and recent releases here.
+                            {t("Add artists to Lidarr and enable monitoring to see their upcoming and recent releases here.")}
                         </p>
                         <Link
                             href="/settings"
                             className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
                         >
-                            Configure Lidarr
+                            {t("Configure Lidarr")}
                             <ArrowRight className="w-4 h-4" />
                         </Link>
                     </div>
@@ -219,6 +224,7 @@ function ReleaseCard({
     isDownloading: boolean;
 }) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t, locale } = useLanguage();
     const isUpcoming = release.status === 'upcoming';
     const hasIt = release.inLibrary;
 
@@ -248,13 +254,14 @@ function ReleaseCard({
                     hasIt ? "bg-emerald-500/90 text-black" : "bg-white/20 text-white"
                 )}>
                     {isUpcoming ? formatDate(release.releaseDate) :
-                     hasIt ? "In Library" : "Available"}
+                     hasIt ? t("In Library") : t("Available")}
                 </div>
 
                 {/* Download Button Overlay */}
                 {canRequestAlbums && release.canDownload && !hasIt && (
                     <button
                         onClick={() => onDownload(release.albumMbid, release.id)}
+                        aria-label={`${t("Download")} ${release.title}`}
                         disabled={isDownloading}
                         className={cn(
                             "absolute inset-0 flex items-center justify-center",
@@ -288,7 +295,7 @@ function ReleaseCard({
                 </p>
                 {isUpcoming && (
                     <p className="text-xs text-amber-400/80">
-                        {new Date(release.releaseDate).toLocaleDateString("en-US", {
+                        {new Date(release.releaseDate).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US", {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
