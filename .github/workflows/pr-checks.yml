@@ -27,16 +27,15 @@ jobs:
               working-directory: frontend
               run: npm ci
 
-            - name: Run ESLint
-              working-directory: frontend
-              run: npm run lint
-
-            # These 303 tests existed for months without ever running in CI --
-            # nothing in any workflow referenced vitest. They take under a
-            # second and this job has already paid for `npm ci`.
+            # Run the unit suite before lint so pre-existing lint errors do not
+            # prevent tests from executing. ESLint still fails this job.
             - name: Run frontend unit tests
               working-directory: frontend
               run: npm run test:unit
+
+            - name: Run ESLint
+              working-directory: frontend
+              run: npm run lint
 
     typecheck:
         name: TypeScript Typecheck
