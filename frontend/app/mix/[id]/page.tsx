@@ -42,11 +42,11 @@ export default function MixPage() {
     const { data: mix, isLoading } = useMixQuery(mixId);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Calculate total duration
-    const totalDuration = useMemo(() => {
-        if (!mix?.tracks) return 0;
-        return mix.tracks.reduce((sum: number, track: MixTrack) => sum + (track.duration || 0), 0);
-    }, [mix?.tracks]);
+    // The source query can return a fresh tracks array. This inexpensive
+    // calculation does not need compiler-sensitive manual memoization.
+    const totalDuration = mix?.tracks?.reduce(
+        (sum: number, track: MixTrack) => sum + (track.duration || 0), 0
+    ) ?? 0;
 
     const formatTotalDuration = (seconds: number) => {
         const hours = Math.floor(seconds / 3600);
