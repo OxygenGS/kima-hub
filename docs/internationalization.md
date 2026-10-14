@@ -57,7 +57,7 @@ Repository CI separately runs frontend/backend tests, TypeScript, database upgra
 
 For real authenticated E2E suites, the existing `frontend/playwright.config.ts` requires `KIMA_TEST_USERNAME`, `KIMA_TEST_PASSWORD`, and the isolated test server URL; do not commit secrets or use real production data.
 
-A **separate opt-in real-account language walkthrough** now lives in `frontend/tests/e2e/predeploy/authenticated-locale.spec.ts`. It tests Dutch on authenticated Settings and Search, route navigation, reload persistence, restoring English, and the mobile Settings selector. To run it on a disposable **nonproduction** instance:
+A **separate opt-in real-account language walkthrough** now lives in `frontend/tests/e2e/predeploy/authenticated-locale.spec.ts`. It tests Dutch on authenticated Settings and Search, route navigation, reload persistence, restoring English, and the mobile Settings selector. On the disposable AIO runner only, `KIMA_E2E_EXPECT_SYNTHETIC_MUSIC=1` also enables a fixture-backed Collection test that checks translated headings/tab labels while preserving the original song title. To run it on a disposable **nonproduction** instance:
 
 ```bash
 cd frontend
@@ -68,7 +68,7 @@ export KIMA_E2E_LOCALE_WALKTHROUGH=1
 npx playwright test tests/e2e/predeploy/authenticated-locale.spec.ts
 ```
 
-Without the opt-in flag the tests are skipped; without credentials, the regular real-account Playwright setup rejects the run. The PR's AIO smoke workflow now **attempts to run** this suite twice (as a real, synthetic administrator and a regular user) inside its disposable localhost-only Docker installation, after the synthetic audio/auth fixture is created. Only describe this as passed once the current GitHub Actions AIO job has actually succeeded. A green automated walkthrough still does **not** replace manual desktop/mobile/TV, admin permissions, downloads, playback or accessibility acceptance.
+Without the opt-in flag the tests are skipped; without credentials, the regular real-account Playwright setup rejects the run. The PR's AIO smoke workflow runs this suite for a real synthetic administrator and a regular user inside its disposable localhost-only Docker installation, after creating its audio/auth fixture. The first two authenticated scenarios **passed for both roles on commit `109dd46`**, with full GitHub AIO, image-build and database-upgrade checks green. The new fixture-backed library scenario must pass on its own current commit before acceptance. A green automated walkthrough still does **not** replace manual desktop/mobile/TV, admin permissions, downloads, playback or accessibility acceptance.
 
 
 ## Remaining decisions

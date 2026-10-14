@@ -10,6 +10,7 @@ fi
 url="$1"
 export KIMA_UI_BASE_URL="$url"
 export KIMA_E2E_LOCALE_WALKTHROUGH=1
+export KIMA_E2E_EXPECT_SYNTHETIC_MUSIC=1
 
 # These are non-secret synthetic fixture credentials from aio-audio-smoke.sh.
 # This CI runner is isolated; none of these accounts exist on production.

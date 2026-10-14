@@ -45,6 +45,35 @@ test.describe("Authenticated language walkthrough", () => {
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
     });
 
+    test("keeps real library tracks unchanged when translating collection controls", async ({ page }) => {
+        test.skip(
+            process.env.KIMA_E2E_EXPECT_SYNTHETIC_MUSIC !== "1",
+            "This regression requires the disposable AIO's synthetic audio fixture.",
+        );
+        await loginAsTestUser(page);
+        await page.goto("/collection?tab=tracks");
+
+        await expect(page.getByRole("heading", { name: "Collection", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Tracks", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByText("CI Generated 440Hz Tone", { exact: true }).first()).toBeVisible();
+
+        await page.goto("/settings#language");
+        await page.locator("#language-select").selectOption("nl");
+        await page.goto("/collection?tab=tracks");
+
+        await expect(page.getByRole("heading", { name: "Collectie", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Nummers", exact: true })).toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByText("CI Generated 440Hz Tone", { exact: true }).first()).toBeVisible();
+        await expect(page.getByText("Titel", { exact: true }).first()).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await page.goto("/settings#language");
+        await page.locator("#language-select").selectOption("en");
+        await page.goto("/collection?tab=tracks");
+        await expect(page.getByRole("heading", { name: "Collection", exact: true })).toBeVisible();
+        await expect(page.getByText("CI Generated 440Hz Tone", { exact: true }).first()).toBeVisible();
+    });
+
     test("makes the saved language selector usable after login on a mobile viewport", async ({ page }) => {
         await page.setViewportSize({ width: 375, height: 812 });
         await loginAsTestUser(page);
