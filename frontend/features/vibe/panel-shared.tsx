@@ -10,6 +10,8 @@ import { HistoryTab } from "@/components/activity/HistoryTab";
 import type { ActivityType } from "./ActivityIconBar";
 import { cn } from "@/utils/cn";
 import { X } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export type VibeTab = "now-playing" | "queue" | "lyrics";
 
@@ -42,10 +44,11 @@ export function ActivityHeader({
     type: ActivityType;
     onClose: () => void;
 }) {
+    const { locale } = useLanguage();
     return (
         <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 shrink-0">
             <span className="text-xs font-medium text-[var(--text-secondary)]">
-                {ACTIVITY_LABELS[type]}
+                {translate(locale, ACTIVITY_LABELS[type])}
             </span>
             <button
                 onClick={onClose}
@@ -64,6 +67,7 @@ export function TabBar({
     activeTab: VibeTab;
     onTabClick: (tab: VibeTab) => void;
 }) {
+    const { locale } = useLanguage();
     return (
         <div className="flex border-b border-white/5 shrink-0">
             {TABS.map((tab) => (
@@ -77,7 +81,7 @@ export function TabBar({
                             : "text-[var(--text-secondary)] hover:text-white/70",
                     )}
                 >
-                    {tab.label}
+                    {translate(locale, tab.label)}
                 </button>
             ))}
         </div>

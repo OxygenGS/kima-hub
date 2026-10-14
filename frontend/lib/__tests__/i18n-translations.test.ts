@@ -52,6 +52,13 @@ describe("UI translations", () => {
         expect(translate("nl", "owned")).toBe("in bezit");
     });
 
+    it("localizes Vibe path, blend and lyrics labels without translating media", () => {
+        expect(translate("nl", "Generate Path")).toBe("Route maken");
+        expect(translate("nl", "Play Result")).toBe("Resultaat afspelen");
+        expect(translate("nl", "No lyrics available")).toBe("Geen songtekst beschikbaar");
+        expect(translate("nl", "User playlist title")).toBe("User playlist title");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

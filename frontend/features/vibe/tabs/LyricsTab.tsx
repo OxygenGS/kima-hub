@@ -3,9 +3,11 @@
 import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useLyricsSync } from "@/hooks/useLyricsSync";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { cn } from "@/utils/cn";
 
 export function LyricsTab() {
+    const { t } = useLanguage();
     const {
         lines,
         activeIndex,
@@ -37,7 +39,7 @@ export function LyricsTab() {
     if (!hasLyrics) {
         return (
             <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-[var(--text-muted)]">No lyrics available</p>
+                <p className="text-sm text-[var(--text-muted)]">{t("No lyrics available")}</p>
             </div>
         );
     }
