@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { api, MoodType, MoodBucketPreset } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { Track } from "@/lib/audio-state-context";
@@ -122,26 +122,26 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
         if (isOpen) setIsVisible(true);
     }
 
-    const loadPresets = useCallback(async () => {
-        try {
-            const data = await api.getMoodBucketPresets();
-            setPresets(data);
-        } catch (error) {
-            console.error("Failed to load mood presets:", error);
-            toast.error("Failed to load mood presets");
-        } finally {
-            setLoading(false);
-        }
-    }, [toast]);
-
     useEffect(() => {
-        if (isOpen) {
-            void loadPresets();
-        } else {
+        if (!isOpen) {
             const timeout = setTimeout(() => setIsVisible(false), 200);
             return () => clearTimeout(timeout);
         }
-    }, [isOpen, loadPresets]);
+
+        let active = true;
+        void api.getMoodBucketPresets()
+            .then((data) => {
+                if (active) setPresets(data);
+            })
+            .catch((error) => {
+                console.error("Failed to load mood presets:", error);
+                if (active) toast.error("Failed to load mood presets");
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => { active = false; };
+    }, [isOpen, toast]);
 
     const generateMix = async (mood: MoodType) => {
         const config = MOOD_CONFIG[mood];
