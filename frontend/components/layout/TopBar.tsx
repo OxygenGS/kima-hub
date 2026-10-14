@@ -24,12 +24,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export function TopBar() {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuth();
     const { branding } = useBranding();
+    const { t } = useLanguage();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -250,8 +252,8 @@ export function TopBar() {
                                 ? "bg-white text-black"
                                 : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white"
                         )}
-                        aria-label="Home"
-                        title="Home"
+                        aria-label={t("Home")}
+                        title={t("Home")}
                     >
                         <Home className="w-5 h-5" />
                     </Link>
@@ -267,8 +269,8 @@ export function TopBar() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search..."
-                                aria-label="Search"
+                                placeholder={t("Search...")}
+                                aria-label={t("Search")}
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
@@ -287,8 +289,8 @@ export function TopBar() {
                         aria-expanded={isActivityPanelOpen}
                         aria-controls="activity-panel-mobile"
                         className="w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-colors duration-200 ml-2 flex-shrink-0 relative"
-                        aria-label="Notifications"
-                        title="Notifications"
+                        aria-label={t("Notifications")}
+                        title={t("Notifications")}
                     >
                         <Bell className="w-5 h-5" />
                     </button>
@@ -328,8 +330,8 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white hover:scale-105"
                             )}
-                            aria-label="Home"
-                            title="Home"
+                            aria-label={t("Home")}
+                            title={t("Home")}
                         >
                             <Home className="w-6 h-6" />
                         </Link>
@@ -350,8 +352,8 @@ export function TopBar() {
                                     onChange={(e) =>
                                         setSearchQuery(e.target.value)
                                     }
-                                    placeholder="What do you want to play?"
-                                    aria-label="Search"
+                                    placeholder={t("What do you want to play?")}
+                                    aria-label={t("Search")}
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
@@ -368,14 +370,14 @@ export function TopBar() {
                             disabled={isPolling}
                             aria-label={
                                 isPolling
-                                    ? "Library scan in progress"
+                                    ? t("Library scan in progress")
                                     : hasActiveDownloads
                                     ? `${downloadStatus.activeDownloads.length} download(s) in progress`
                                     : hasPendingUploads
                                     ? `${pendingDownloads.length} download(s) starting`
                                     : hasFailedDownloads
                                     ? `${downloadStatus.failedDownloads.length} download(s) failed`
-                                    : "Sync library"
+                                    : t("Sync library")
                             }
                             className={cn(
                                 "flex items-center gap-2 px-3 h-11 rounded-full transition-all duration-200 text-sm font-medium",
@@ -389,14 +391,14 @@ export function TopBar() {
                             )}
                             title={
                                 isPolling
-                                    ? "Library scan in progress..."
+                                    ? t("Library scan in progress...")
                                     : hasActiveDownloads
                                     ? `${downloadStatus.activeDownloads.length} download(s) in progress`
                                     : hasPendingUploads
                                     ? `${pendingDownloads.length} download(s) starting...`
                                     : hasFailedDownloads
                                     ? `${downloadStatus.failedDownloads.length} download(s) failed`
-                                    : "Sync Library"
+                                    : t("Sync Library")
                             }
                         >
                             <RefreshCw
@@ -416,16 +418,16 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "text-[var(--text-secondary)] hover:text-white"
                             )}
-                            aria-label="Settings"
-                            title="Settings"
+                            aria-label={t("Settings")}
+                            title={t("Settings")}
                         >
                             <Settings className="w-5 h-5" />
                         </Link>
                         <button
                             onClick={handleLogout}
                             className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 text-red-400 hover:text-red-300"
-                            aria-label="Logout"
-                            title="Logout"
+                            aria-label={t("Logout")}
+                            title={t("Logout")}
                         >
                             <Power className="w-5 h-5" />
                         </button>
