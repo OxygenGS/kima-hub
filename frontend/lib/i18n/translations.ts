@@ -1553,3 +1553,13 @@ export const translations: Record<Locale, Record<TranslationKey, string>> = {
     en: english,
     nl: dutch,
 };
+
+/**
+ * Preserve unknown labels verbatim. The UI sometimes receives category names
+ * from external providers; those are user content, not translation keys.
+ */
+export function translate(locale: Locale, key: string): string {
+    if (!Object.prototype.hasOwnProperty.call(translations[locale], key)) return key;
+    const value = translations[locale][key as TranslationKey];
+    return typeof value === "string" ? value : key;
+}
