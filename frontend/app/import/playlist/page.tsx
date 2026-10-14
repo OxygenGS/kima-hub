@@ -688,8 +688,7 @@ function ImportPlaylistPageContent() {
                                     <div className="flex items-center gap-2">
                                         <Check className="w-4 h-4 text-green-400" />
                                         <span className="text-sm font-medium text-white">
-                                            {preview.summary.inLibrary} songs in
-                                            your library
+                                            {number(preview.summary.inLibrary)} {t("songs in your library")}
                                         </span>
                                     </div>
                                     {expandedSection === "matched" ? (
@@ -767,7 +766,7 @@ function ImportPlaylistPageContent() {
                                                             "Unknown Album"
                                                 ).length
                                             }{" "}
-                                            albums to download
+                                            {t("albums to download")}
                                         </span>
                                     </div>
                                     {expandedSection === "download" ? (
@@ -785,11 +784,11 @@ function ImportPlaylistPageContent() {
                                             >
                                                 {selectedAlbums.size ===
                                                 preview.albumsToDownload.length
-                                                    ? "Deselect All"
-                                                    : "Select All"}
+                                                    ? t("Deselect All")
+                                                     : t("Select All")}
                                             </button>
                                             <span className="text-xs text-[var(--text-muted)]">
-                                                {selectedAlbums.size} selected
+                                                {number(selectedAlbums.size)} {t("selected")}
                                             </span>
                                         </div>
                                         <div className="max-h-48 overflow-y-auto">
@@ -840,7 +839,7 @@ function ImportPlaylistPageContent() {
                                                                     {
                                                                         album.trackCount
                                                                     }{" "}
-                                                                    songs
+                                                                    {t("songs")}
                                                                 </div>
                                                             </div>
                                                         </label>
@@ -869,8 +868,7 @@ function ImportPlaylistPageContent() {
                                     <div className="flex items-center gap-2">
                                         <X className="w-4 h-4 text-red-400" />
                                         <span className="text-sm font-medium text-white">
-                                            {preview.summary.notFound} songs not
-                                            found
+                                            {number(preview.summary.notFound)} {t("songs not found")}
                                         </span>
                                     </div>
                                     {expandedSection === "notfound" ? (
@@ -956,13 +954,13 @@ function ImportPlaylistPageContent() {
                                     </>
                                 ) : preview.summary.inLibrary > 0 &&
                                   selectedAlbums.size > 0 ? (
-                                    `Import ${preview.summary.inLibrary} songs + Download ${selectedAlbums.size} albums`
+                                    `${t("Import")} ${number(preview.summary.inLibrary)} ${t("songs")} + ${t("Download")} ${number(selectedAlbums.size)} ${t("albums")}`
                                 ) : preview.summary.inLibrary > 0 ? (
-                                    `Import ${preview.summary.inLibrary} songs`
+                                    `${t("Import")} ${number(preview.summary.inLibrary)} ${t("songs")}`
                                 ) : selectedAlbums.size > 0 ? (
-                                    `Download ${selectedAlbums.size} albums`
+                                    `${t("Download")} ${number(selectedAlbums.size)} ${t("albums")}`
                                 ) : (
-                                    "Select albums to download"
+                                    t("Select albums to download")
                                 )}
                             </button>}
                         </div>
@@ -975,41 +973,40 @@ function ImportPlaylistPageContent() {
                         <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "fetching"
-                                ? "Fetching Playlist"
+                                ? t("Fetching Playlist")
                                 : importJob.status === "downloading"
-                                ? "Queueing Album Downloads"
+                                ? t("Queueing Album Downloads")
                                 : importJob.status === "scanning"
-                                ? "Scanning Library"
+                                ? t("Scanning Library")
                                 : importJob.status === "creating_playlist" ||
                                   importJob.status === "matching_tracks"
-                                ? "Creating Playlist"
+                                ? t("Creating Playlist")
                                 : importJob.status === "pending"
-                                ? "Starting Import"
-                                : "Starting Import"}
+                                ? t("Starting Import")
+                                : t("Starting Import")}
                         </h2>
                         <p className="text-sm text-[var(--text-secondary)] mb-6">
                             {importJob.status === "fetching" && (
-                                <>Fetching tracks and matching to your library...</>
+                                <>{t("Fetching tracks and matching to your library...")}</>
                             )}
                             {importJob.status === "downloading" && (
                                 <>
-                                    Queued {importJob.albumsCompleted} of{" "}
-                                    {importJob.albumsTotal} albums
+                                    {t("Queued")} {number(importJob.albumsCompleted)} {t("of")}{" "}{number(importJob.albumsTotal)} {t("albums")}
                                 </>
                             )}
                             {importJob.status === "pending" && (
                                 <>
                                     {importJob.albumsTotal > 0
-                                        ? `Waiting for ${importJob.albumsTotal - importJob.albumsCompleted} downloads to complete`
-                                        : "Preparing import..."}
+                                        ? `${t("Waiting for")} ${number(importJob.albumsTotal - importJob.albumsCompleted)} ${t("downloads to complete")}`
+                                        : t("Preparing import...")}
                                 </>
                             )}
                             {importJob.status === "scanning" && (
-                                <>Importing downloaded files into library</>
+                                <>{t("Importing downloaded files into library")}</>
                             )}
                             {(importJob.status === "creating_playlist" ||
                                 importJob.status === "matching_tracks") && (
-                                <>Adding {importJob.tracksMatched} songs</>
+                                <>{t("Adding")} {number(importJob.tracksMatched)} {t("songs")}</>
                             )}
                         </p>
                         <div className="w-full max-w-xs mx-auto bg-white/10 rounded-full h-1.5">
@@ -1019,8 +1016,7 @@ function ImportPlaylistPageContent() {
                             />
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mt-3">
-                            {importJob.progress}% complete • downloads continue
-                            in the background
+                            {number(importJob.progress)}% {t("complete • downloads continue in the background")}
                         </p>
                         {/* Cancel button */}
                         <button
@@ -1038,8 +1034,7 @@ function ImportPlaylistPageContent() {
                             )}
                         </button>
                         <p className="text-xs text-[var(--text-muted)] mt-2">
-                            Playlist will be created with tracks downloaded so
-                            far
+                            {t("Playlist will be created with tracks downloaded so far")}
                         </p>
                     </div>
                 )}
