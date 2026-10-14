@@ -4,6 +4,8 @@ import { Track } from "@/lib/audio-state-context";
 import { shuffleArray } from "@/utils/shuffle";
 import { useToast } from "@/lib/toast-context";
 import { useState } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { localizedRadioName } from "@/lib/i18n/radio-labels";
 
 export interface RadioStation {
     id: string;
@@ -137,10 +139,12 @@ function getDecadeName(decade: number): string {
 export function useRadioPlayer() {
     const { toast } = useToast();
     const { playTracks } = useAudioControls();
+    const { t, locale } = useLanguage();
     const [loadingStation, setLoadingStation] = useState<string | null>(null);
 
     const startRadio = async (station: RadioStation) => {
         setLoadingStation(station.id);
+        const stationLabel = localizedRadioName(station, t);
         try {
             const params = new URLSearchParams();
             params.set("type", station.filter.type);
@@ -152,20 +156,20 @@ export function useRadioPlayer() {
             );
 
             if (!response.tracks || response.tracks.length === 0) {
-                toast.error(`No tracks found for ${station.name}`);
+                toast.error(`${t("No tracks found for")} ${stationLabel}`);
                 return;
             }
             if (response.tracks.length < (station.minTracks || 10)) {
-                toast.error(`Not enough tracks for ${station.name} radio (found ${response.tracks.length}, need ${station.minTracks || 10})`);
+                toast.error(`${t("Not enough tracks for")} ${stationLabel} (${t("found")} ${response.tracks.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}, ${t("need")} ${station.minTracks || 10})`);
                 return;
             }
 
             const shuffled = shuffleArray(response.tracks);
             playTracks(shuffled, 0);
-            toast.success(`${station.name} Radio - Shuffling ${shuffled.length} tracks`);
+            toast.success(`${t("Radio started:")} ${stationLabel} — ${t("playing")} ${shuffled.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(shuffled.length === 1 ? "track" : "tracks")}`);
         } catch (error) {
             console.error("Failed to start radio:", error);
-            toast.error("Failed to start radio station");
+            toast.error(t("Failed to start radio station"));
         } finally {
             setLoadingStation(null);
         }
