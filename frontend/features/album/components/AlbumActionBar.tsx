@@ -1,6 +1,7 @@
 import { Play, Pause, Shuffle, Download, ListPlus } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { Album } from "../types";
 import type { AlbumSource } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
@@ -33,6 +34,7 @@ export function AlbumActionBar({
     onPause,
 }: AlbumActionBarProps) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
     const showDownload = canRequestAlbums && !isOwned && Boolean(album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
@@ -52,7 +54,7 @@ export function AlbumActionBar({
                 <>
                     <button
                         onClick={handlePlayPauseClick}
-                        aria-label={showPause ? "Pause" : "Play all"}
+                        aria-label={showPause ? t("Pause") : t("Play all")}
                         className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 bg-brand"
                     >
                         {showPause ? (
@@ -66,7 +68,7 @@ export function AlbumActionBar({
                     <button
                         onClick={onShuffle}
                         className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                        title="Shuffle play"
+                        title={t("Shuffle play")}
                     >
                         <Shuffle className="w-5 h-5" />
                     </button>
@@ -75,7 +77,7 @@ export function AlbumActionBar({
                     <button
                         onClick={onAddToPlaylist}
                         className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                        title="Add to playlist"
+                        title={t("Add to playlist")}
                     >
                         <ListPlus className="w-5 h-5" />
                     </button>
@@ -96,7 +98,7 @@ export function AlbumActionBar({
                 >
                     <Download className="w-4 h-4" />
                     <span>
-                        {isPendingDownload ? "Downloading..." : "Download"}
+                        {isPendingDownload ? t("Downloading...") : t("Download")}
                     </span>
                 </button>
             )}

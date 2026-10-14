@@ -11,6 +11,7 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
@@ -30,6 +31,7 @@ import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 
 export default function ArtistPage() {
     const { toast } = useToast();
+    const { t, locale } = useLanguage();
     const router = useRouter();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
@@ -90,10 +92,10 @@ export default function ArtistPage() {
                     artist: albumData.artist,
                 }));
                 playTracks(tracksWithAlbum, 0);
-                toast.success(`Playing ${albumTitle}`);
+                toast.success(`${t("Playing album:")} ${albumTitle}`);
             }
         } catch {
-            toast.error("Failed to play album");
+            toast.error(t("Failed to play album"));
         }
     }
 
@@ -130,28 +132,28 @@ export default function ArtistPage() {
         if (!artist) return;
 
         try {
-            toast.success(`Starting ${artist.name} Radio...`);
+            toast.success(`${t("Starting artist radio:")} ${artist.name}...`);
             const response = await api.getRadioTracks("artist", artist.id);
 
             if (response.tracks && response.tracks.length > 0) {
                 // Backend already returns properly formatted tracks - just pass them through
                 playTracks(response.tracks, 0);
                 toast.success(
-                    `Playing ${artist.name} Radio (${response.tracks.length} tracks)`,
+                    `${t("Playing artist radio:")} ${artist.name} (${response.tracks.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${response.tracks.length === 1 ? t("track") : t("tracks")})`,
                 );
             } else {
                 toast.error(
-                    "Not enough similar music in your library for artist radio",
+                    t("Not enough similar music in your library for artist radio"),
                 );
             }
         } catch {
-            toast.error("Failed to start artist radio");
+            toast.error(t("Failed to start artist radio"));
         }
     }
 
     // Loading state
     if (loading) {
-        return <LoadingScreen message="Loading artist..." />;
+        return <LoadingScreen message={t("Loading artist...")} />;
     }
 
     // Error or not found state
@@ -161,16 +163,16 @@ export default function ArtistPage() {
                 <div className="text-center space-y-4">
                     <div className="text-6xl text-[var(--text-muted)]">♪</div>
                     <h1 className="text-2xl font-semibold text-white">
-                        Artist Not Found
+                        {t("Artist Not Found")}
                     </h1>
                     <p className="text-neutral-400">
-                        This artist isn&apos;t in your library yet.
+                        {t("This artist isn't in your library yet.")}
                     </p>
                     <button
                         onClick={() => router.back()}
                         className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-colors"
                     >
-                        Go Back
+                        {t("Go Back")}
                     </button>
                 </div>
             </div>

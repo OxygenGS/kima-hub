@@ -6,6 +6,7 @@ import { Artist, ArtistSource, Album } from "../types";
 import { ReactNode, lazy, Suspense } from "react";
 import { useArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Lazy load MetadataEditor - modal component opened on user action
 const MetadataEditor = lazy(() => import("@/components/MetadataEditor").then(mod => ({ default: mod.MetadataEditor })));
@@ -32,6 +33,7 @@ export function ArtistHero({
     children,
 }: ArtistHeroProps) {
     const displayData = useArtistDisplayData(artist);
+    const { t, locale } = useLanguage();
     const ownedAlbums = albums.filter((a) => a.owned);
 
     // Use background image if provided, otherwise fall back to hero image
@@ -100,7 +102,7 @@ export function ArtistHero({
                     {/* Artist Info - Bottom Aligned */}
                     <div className="flex-1 min-w-0 pb-1">
                         <p className="text-xs font-medium text-[var(--text-secondary)] mb-1">
-                            Artist
+                            {t("Artist")}
                         </p>
                         <div className="flex items-center gap-3 group mb-2">
                             <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight line-clamp-2">
@@ -108,7 +110,7 @@ export function ArtistHero({
                             </h1>
                             {displayData.hasUserOverrides && (
                                 <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded-full border border-amber-500/30 shrink-0">
-                                    Edited
+                                    {t("Edited")}
                                 </span>
                             )}
                             {source === "library" && (
@@ -144,20 +146,20 @@ export function ArtistHero({
                             {artist.listeners && artist.listeners > 0 && (
                                 <>
                                     <span>
-                                        {artist.listeners.toLocaleString()}{" "}
-                                        listeners
+                                        {artist.listeners.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}{" "}
+                                        {artist.listeners === 1 ? t("listener") : t("listeners")}
                                     </span>
                                     <span className="mx-1">•</span>
                                 </>
                             )}
                             {albums.length > 0 && (
                                 <>
-                                    <span>{albums.length} albums</span>
+                                    <span>{albums.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {albums.length === 1 ? t("album") : t("albums")}</span>
                                     {ownedAlbums.length > 0 && (
                                         <>
                                             <span className="mx-1">•</span>
                                             <span className="text-brand">
-                                                {ownedAlbums.length} owned
+                                                {ownedAlbums.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("owned")}
                                             </span>
                                         </>
                                     )}

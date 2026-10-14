@@ -22,6 +22,14 @@ describe("UI translations", () => {
         expect(translate("nl", "My custom mix")).toBe("My custom mix");
     });
 
+    it("translates album and artist interface labels while preserving media metadata", () => {
+        expect(translate("nl", "Artist Not Found")).toBe("Artiest niet gevonden");
+        expect(translate("nl", "Album not found")).toBe("Album niet gevonden");
+        expect(translate("nl", "Downloading...")).toBe("Downloaden...");
+        expect(translate("nl", "Start artist radio")).toBe("Artiestenradio starten");
+        expect(translate("nl", "An original album title")).toBe("An original album title");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
