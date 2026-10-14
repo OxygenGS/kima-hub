@@ -2,6 +2,7 @@
 
 import { Play, Pause, RotateCcw, CheckCircle } from "lucide-react";
 import type { Audiobook } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AudiobookActionBarProps {
     audiobook: Audiobook;
@@ -24,6 +25,7 @@ export function AudiobookActionBar({
     onMarkAsCompleted,
     formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`,
 }: AudiobookActionBarProps) {
+    const { t } = useLanguage();
     const hasProgress = audiobook.progress && audiobook.progress.progress > 0;
     const isFinished = audiobook.progress?.isFinished;
     const showingPause = isThisBookPlaying && isPlaying;
@@ -35,7 +37,7 @@ export function AudiobookActionBar({
                 <button
                     onClick={onPlayPause}
                     className="w-10 h-10 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] transition-all flex items-center justify-center hover:scale-105 active:scale-95"
-                    title={showingPause ? "Pause" : (hasProgress && !isFinished ? "Resume" : "Play")}
+                    title={showingPause ? t("Pause") : (hasProgress && !isFinished ? t("Resume") : t("Play"))}
                 >
                     {showingPause ? (
                         <Pause className="w-4 h-4 text-black" />
@@ -75,14 +77,14 @@ export function AudiobookActionBar({
                         <button
                             onClick={onResetProgress}
                             className="p-2 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
-                            title="Reset progress"
+                            title={t("Reset progress")}
                         >
                             <RotateCcw className="w-4 h-4" />
                         </button>
                         <button
                             onClick={onMarkAsCompleted}
                             className="p-2 rounded-lg text-green-400/60 hover:text-green-400 hover:bg-green-500/10 border border-transparent hover:border-green-500/20 transition-all"
-                            title="Mark as completed"
+                            title={t("Mark as completed")}
                         >
                             <CheckCircle className="w-4 h-4" />
                         </button>
@@ -93,10 +95,10 @@ export function AudiobookActionBar({
                     <button
                         onClick={onResetProgress}
                         className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 transition-all"
-                        title="Listen again"
+                        title={t("Listen again")}
                     >
                         <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Listen Again</span>
+                        <span>{t("Listen Again")}</span>
                     </button>
                 )}
             </div>
