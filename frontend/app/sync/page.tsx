@@ -6,6 +6,8 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import Image from "next/image";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 function deriveProgress(p: number): number {
     return Math.min(p, 90);
@@ -30,6 +32,7 @@ function deriveMessage(p: number): string {
 
 export default function SyncPage() {
     const { branding } = useBranding();
+    const { locale, t } = useLanguage();
     const router = useRouter();
     const queryClient = useQueryClient();
     const [initError, setInitError] = useState("");
@@ -175,10 +178,10 @@ export default function SyncPage() {
     };
 
     const steps = [
-        { id: "tracks", label: "Scanning tracks" },
-        { id: "library", label: "Building library" },
-        { id: "albums", label: "Organizing albums" },
-        { id: "indexes", label: "Creating indexes" },
+        { id: "tracks", label: t("Scanning tracks") },
+        { id: "library", label: t("Building library") },
+        { id: "albums", label: t("Organizing albums") },
+        { id: "indexes", label: t("Creating indexes") },
     ];
 
     return (
@@ -217,10 +220,10 @@ export default function SyncPage() {
                             {/* Title + status message */}
                             <div>
                                 <h2 className="text-2xl font-bold text-white mb-1">
-                                    {syncing ? "Setting Things Up" : "Ready to Go!"}
+                                    {syncing ? t("Setting Things Up") : t("Ready to Go!")}
                                 </h2>
                                 <p className="text-[var(--text-secondary)]">
-                                    {error || message}
+                                    {translate(locale, error || message)}
                                 </p>
                             </div>
 
@@ -234,7 +237,7 @@ export default function SyncPage() {
                                         />
                                     </div>
                                     <p className="text-xs text-[var(--text-muted)] text-center">
-                                        {progress}% complete
+                                        {progress}% {t("complete")}
                                     </p>
                                 </div>
                             )}
@@ -302,13 +305,13 @@ export default function SyncPage() {
                             onClick={handleSkip}
                             className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white/70 transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 rounded"
                         >
-                            Skip for now
+                            {t("Skip for now")}
                         </button>
                     </div>
 
                     {/* Footer note */}
                     <p className="text-center text-[var(--text-muted)] text-xs mt-6">
-                        Enrichment and metadata analysis will continue in the background once you&apos;re in.
+                        {t("Enrichment and metadata analysis will continue in the background once you're in.")}
                     </p>
                 </div>
             </div>

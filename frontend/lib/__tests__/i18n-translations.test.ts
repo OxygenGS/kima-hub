@@ -13,6 +13,15 @@ describe("UI translations", () => {
         expect(translations.nl["Language"]).toBe("Taal");
         expect(translations.nl["Sign In"]).toBe("Inloggen");
     });
+    it("localizes scan and mix actions without rewriting external data", () => {
+        expect(translate("nl", "Setting Things Up")).toBe("Bezig met instellen");
+        expect(translate("nl", "Syncing audiobooks...")).toBe("Luisterboeken synchroniseren...");
+        expect(translate("nl", "Scan failed. You can skip and try again later.")).toContain("Scannen mislukt");
+        expect(translate("nl", "Save as Playlist")).toBe("Opslaan als afspeellijst");
+        expect(translate("nl", "Added to queue:")).toBe("Toegevoegd aan wachtrij:");
+        expect(translate("nl", "My custom mix")).toBe("My custom mix");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
