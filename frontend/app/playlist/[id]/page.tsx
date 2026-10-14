@@ -650,7 +650,7 @@ export default function PlaylistDetailPage() {
                                 <button
                                     onClick={() => handlePlayPreview(pending.id)}
                                     className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors"
-                                    title="Play 30s Deezer preview"
+                                    title={t("Play 30s Deezer preview")}
                                 >
                                     {isPreviewPlaying ? (
                                         <Volume2 className="w-5 h-5 text-brand animate-pulse" />
@@ -695,7 +695,7 @@ export default function PlaylistDetailPage() {
                                             ? "text-brand"
                                             : "text-[var(--text-muted)] hover:text-white/60"
                                     )}
-                                    title="Retry download"
+                                    title={t("Retry download")}
                                 >
                                     {isRetrying ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -712,7 +712,7 @@ export default function PlaylistDetailPage() {
                                     }}
                                     disabled={isRemoving}
                                     className="p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-red-400 transition-all"
-                                    title="Remove from playlist"
+                                    title={t("Remove from playlist")}
                                 >
                                     {isRemoving ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -767,7 +767,7 @@ export default function PlaylistDetailPage() {
                                 handlePlayTrack(trackIndex);
                             }}
                             className="w-8 h-8 flex items-center justify-center"
-                            aria-label={isCurrentlyPlaying && isPlaying ? "Pause" : "Play"}
+                            aria-label={isCurrentlyPlaying && isPlaying ? t("Pause") : t("Play")}
                         >
                             <span
                                 className={cn(
@@ -795,7 +795,7 @@ export default function PlaylistDetailPage() {
                                     handleDragStart(playlistItem.id);
                                 }}
                                 onDragEnd={handleDragEnd}
-                                aria-label="Drag to reorder"
+                                aria-label={t("Drag to reorder")}
                                 className="w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:opacity-100 transition-all cursor-grab active:cursor-grabbing text-[var(--text-muted)] hover:text-white"
                             >
                                 <GripVertical className="w-4 h-4" />
@@ -872,31 +872,31 @@ export default function PlaylistDetailPage() {
                                 e.stopPropagation();
                                 handleAddToQueue(playlistItem.track);
                             }}
-                            title="Add to Queue"
+                            title={t("Add to Queue")}
                         >
                             <ListPlus className="w-4 h-4" />
                         </button>
                         {playlist?.isOwner && (
                             <>
                                 <button
-                                aria-label="Move track up"
+                                aria-label={t("Move track up")}
                                 className="hidden md:flex p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleMoveTrackUp(playlistItem.id);
                                 }}
-                                title="Move up"
+                                title={t("Move up")}
                                 >
                                     <ChevronUp className="w-4 h-4" />
                                 </button>
                                 <button
-                                    aria-label="Move track down"
+                                    aria-label={t("Move track down")}
                                 className="hidden md:flex p-1.5 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleMoveTrackDown(playlistItem.id);
                                 }}
-                                title="Move down"
+                                title={t("Move down")}
                                 >
                                     <ChevronDown className="w-4 h-4" />
                                 </button>
@@ -906,7 +906,7 @@ export default function PlaylistDetailPage() {
                                         e.stopPropagation();
                                         handleRemoveTrack(playlistItem.track.id);
                                     }}
-                                    title="Remove from Playlist"
+                                    title={t("Remove from Playlist")}
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>
@@ -928,7 +928,7 @@ export default function PlaylistDetailPage() {
     if (!playlist) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">Playlist not found</p>
+                <p className="text-xs text-[var(--text-muted)]">{t("Playlist not found")}</p>
             </div>
         );
     }
@@ -966,7 +966,7 @@ export default function PlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Playlists
+                            {t("Playlists")}
                         </button>
 
                         {/* System status */}
@@ -1086,7 +1086,7 @@ export default function PlaylistDetailPage() {
                                             <span className="text-[var(--text-muted)]">|</span>
                                         </>
                                     )}
-                                    <span>{playlist.items?.length || 0} songs</span>
+                                    <span>{(playlist.items?.length || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t((playlist.items?.length || 0) === 1 ? "song" : "songs")}</span>
                                     {totalDuration > 0 && (
                                         <>
                                             <span className="text-[var(--text-muted)]">|</span>
@@ -1107,7 +1107,7 @@ export default function PlaylistDetailPage() {
                     {playlist.items && playlist.items.length > 0 && (
                         <button
                             onClick={handlePlayPlaylist}
-                            aria-label={isThisPlaylistPlaying && isPlaying ? "Pause" : "Play all"}
+                            aria-label={isThisPlaylistPlaying && isPlaying ? t("Pause") : t("Play all")}
                             className="h-12 w-12 rounded-lg bg-brand hover:bg-[#f97316] hover:scale-105 flex items-center justify-center transition-all"
                         >
                             {isThisPlaylistPlaying && isPlaying ? (
@@ -1143,7 +1143,7 @@ export default function PlaylistDetailPage() {
                                 playTracks(shuffled, 0);
                             }}
                             className="h-8 w-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-white transition-all"
-                            title="Shuffle play"
+                            title={t("Shuffle play")}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -1164,7 +1164,7 @@ export default function PlaylistDetailPage() {
                                         : "text-[var(--text-muted)] hover:text-white/60",
                                     shareLoading && "opacity-50 cursor-not-allowed"
                                 )}
-                                title="Share playlist"
+                                title={t("Share playlist")}
                             >
                                 {shareLoading ? (
                                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -1179,7 +1179,7 @@ export default function PlaylistDetailPage() {
                                     <div className="flex items-center gap-2 mb-2">
                                         <LinkIcon className="w-3.5 h-3.5 text-brand" />
                                         <span className="text-xs text-[var(--text-secondary)]">
-                                            Share Link
+                                            {t("Share Link")}
                                         </span>
                                         <button
                                             onClick={() => setShowSharePopover(false)}
@@ -1223,7 +1223,7 @@ export default function PlaylistDetailPage() {
                                         }}
                                         className="text-micro text-[var(--text-muted)] hover:text-red-400/70 transition-colors mt-1"
                                     >
-                                        Revoke link
+                                        {t("Revoke link")}
                                     </button>
                                 </div>
                             )}
@@ -1277,7 +1277,7 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
                             className="h-8 w-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-red-400 transition-all"
-                            title="Delete Playlist"
+                            title={t("Delete Playlist")}
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
@@ -1294,9 +1294,7 @@ export default function PlaylistDetailPage() {
                             <div className="flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4 text-red-400" />
                                 <span className="text-xs tabular-nums text-red-300">
-                                    {playlist.pendingCount} track
-                                    {playlist.pendingCount !== 1 ? "s" : ""} failed to
-                                    download
+                                    {playlist.pendingCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(playlist.pendingCount === 1 ? "track" : "tracks")} {t("failed to download")}
                                 </span>
                             </div>
                             {canDownloadTracks && <button
@@ -1305,7 +1303,7 @@ export default function PlaylistDetailPage() {
                                 className="flex items-center gap-1.5 px-3 py-1 text-xs tabular-nums text-red-300 hover:text-red-200 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={cn("w-3 h-3", retryingAll && "animate-spin")} />
-                                Retry All
+                                {t("Retry All")}
                             </button>}
                         </div>
                     )}
@@ -1315,7 +1313,7 @@ export default function PlaylistDetailPage() {
                             {/* Section header */}
                             <div className="flex items-center gap-3 mb-6">
                                 <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full shrink-0" />
-                                <h2 className="text-2xl font-bold tracking-tight">Tracks</h2>
+                                <h2 className="text-2xl font-bold tracking-tight">{t("Tracks")}</h2>
                                 <span className="text-xs tabular-nums text-brand">
                                     {playlist.items?.length || 0}
                                 </span>
@@ -1327,10 +1325,10 @@ export default function PlaylistDetailPage() {
                                 so they share one heading. See TRACK_GRID. */}
                             <div className={cn("hidden md:grid", TRACK_GRID, "gap-4 px-4 py-2 text-xs text-[var(--text-muted)] border-b border-white/10 mb-2")}>
                                 <span className="text-center">#</span>
-                                <span>Title</span>
-                                <span>Album</span>
-                                <span className="text-right">Duration</span>
-                                <span className="sr-only">Actions</span>
+                                <span>{t("Title")}</span>
+                                <span>{t("Album")}</span>
+                                <span className="text-right">{t("Duration")}</span>
+                                <span className="sr-only">{t("Actions")}</span>
                             </div>
 
                             {/* Track Rows -- window-virtualized */}
@@ -1367,7 +1365,7 @@ export default function PlaylistDetailPage() {
                                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                                     <div className="w-2 h-2 bg-brand" />
                                     <span className="text-xs text-[var(--text-secondary)]">
-                                        Empty Playlist
+                                        {t("Empty Playlist")}
                                     </span>
                                 </div>
 
@@ -1376,10 +1374,10 @@ export default function PlaylistDetailPage() {
                                         <ListMusic className="w-8 h-8 text-white/10" />
                                     </div>
                                     <h3 className="text-2xl font-bold tracking-tight text-white mb-2">
-                                        No tracks yet
+                                        {t("No tracks yet")}
                                     </h3>
                                     <p className="text-xs text-[var(--text-muted)]">
-                                        Add some tracks to get started
+                                        {t("Add some tracks to get started")}
                                     </p>
                                 </div>
                             </div>
@@ -1393,10 +1391,10 @@ export default function PlaylistDetailPage() {
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
                 onConfirm={handleDeletePlaylist}
-                title="Delete Playlist?"
-                message={`Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`}
-                confirmText="Delete"
-                cancelText="Cancel"
+                title={t("Delete Playlist?")}
+                message={`${t("Are you sure you want to delete")} "${playlist.name}"? ${t("This action cannot be undone.")}`}
+                confirmText={t("Delete")}
+                cancelText={t("Cancel")}
                 variant="danger"
             />
         </div>
