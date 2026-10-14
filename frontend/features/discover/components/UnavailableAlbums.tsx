@@ -94,7 +94,7 @@ export function UnavailableAlbums({
                                             )
                                         }
                                         className="w-8 h-8 flex items-center justify-center"
-                                        aria-label={`${t(isPreviewPlaying ? "Pause" : "Play")} ${album.title}`}
+                                        aria-label={`${t(isPreviewPlaying ? "Pause" : "Play")} ${album.album}`}
                                     >
                                         {isPreviewPlaying ? (
                                             <Pause className="w-4 h-4 text-orange-400 fill-current" />
