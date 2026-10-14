@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Search as SearchIcon } from "lucide-react";
 import { useIsTV } from "@/lib/tv-utils";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface TVSearchInputProps {
     initialQuery?: string;
@@ -11,6 +12,7 @@ interface TVSearchInputProps {
 
 export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProps) {
     const isTV = useIsTV();
+    const { t } = useLanguage();
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState(initialQuery);
     const [isFocused, setIsFocused] = useState(false);
@@ -58,7 +60,7 @@ export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProp
                         onKeyDown={handleKeyDown}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
-                        placeholder="Press Enter to search..."
+                        placeholder={t("Press Enter to search...")}
                         autoCapitalize="none"
                         autoCorrect="off"
                         autoComplete="off"
@@ -82,7 +84,7 @@ export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProp
                     />
                     {query && (
                         <div className="absolute right-5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
-                            Press Enter to search
+                            {t("Press Enter to search")}
                         </div>
                     )}
                 </div>
