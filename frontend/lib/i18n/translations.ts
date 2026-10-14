@@ -770,6 +770,8 @@ export const english = {
     "Allow track downloads for": "Allow track downloads for",
     "Delete User": "Delete User",
     "Are you sure you want to delete this user? This action cannot be undone.": "Are you sure you want to delete this user? This action cannot be undone.",
+    "Soulseek": "Soulseek",
+    "Logo": "Logo",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1543,6 +1545,8 @@ export const dutch: Record<TranslationKey, string> = {
     "Allow track downloads for": "Nummers downloaden toestaan voor",
     "Delete User": "Gebruiker verwijderen",
     "Are you sure you want to delete this user? This action cannot be undone.": "Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+    "Soulseek": "Soulseek",
+    "Logo": "Logo",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
