@@ -1,6 +1,8 @@
-# Chillverse Listen — AIO installation and DEV validation (draft)
+# Kima Hub — archived AIO development installation notes
 
-This document describes the currently tested **development build**, not a published release. The AIO image is built locally on the isolated CT 105 test system from `feature/user-permissions`. Do not use upstream Kima release image names for Chillverse. Do not apply these commands to CT 101.
+**Archived historical document (October 2026).** This describes the retired CT 105 development setup, not a supported installation method. For current installation instructions, use the [README](../README.md) and the published `ghcr.io/oxygengs/kima-hub` image.
+
+This document describes the former **development build**, not the current published release. The AIO image is built locally on the isolated CT 105 test system from `feature/user-permissions`. Do not use upstream Kima release image names for Chillverse. Do not apply these commands to CT 101.
 
 ## Requirements and isolation
 
