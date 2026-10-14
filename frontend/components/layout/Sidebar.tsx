@@ -92,10 +92,13 @@ export function Sidebar() {
         };
     }, []);
 
-    // Close mobile menu when route changes
-    useEffect(() => {
+    // Keep mobile navigation closed after a route change. React allows this
+    // guarded same-component state adjustment during render (no effect loop).
+    const [menuPathname, setMenuPathname] = useState(pathname);
+    if (menuPathname !== pathname) {
+        setMenuPathname(pathname);
         setIsMobileMenuOpen(false);
-    }, [pathname]);
+    }
 
     // Close mobile menu on escape key
     useEffect(() => {
