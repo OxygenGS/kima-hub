@@ -1050,6 +1050,7 @@ export const english = {
     "Switch to 3D": "Switch to 3D",
     "Click to explore": "Click to explore",
     "WASD to move -- Mouse to look -- R for boost -- ESC to exit": "WASD to move -- Mouse to look -- R for boost -- ESC to exit",
+    "Close dialog": "Close dialog",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2103,6 +2104,7 @@ export const dutch: Record<TranslationKey, string> = {
     "Switch to 3D": "Overschakelen naar 3D",
     "Click to explore": "Klik om te verkennen",
     "WASD to move -- Mouse to look -- R for boost -- ESC to exit": "WASD om te bewegen -- muis om rond te kijken -- R om te versnellen -- ESC om te stoppen",
+    "Close dialog": "Dialoogvenster sluiten",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

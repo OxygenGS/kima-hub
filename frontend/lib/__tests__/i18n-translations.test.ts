@@ -72,6 +72,13 @@ describe("UI translations", () => {
         expect(translate("nl", "Song Path")).toBeTruthy();
     });
 
+    it("translates shared confirmation dialog controls without altering user messages", () => {
+        expect(translate("nl", "Confirm")).toBeTruthy();
+        expect(translate("nl", "Cancel")).toBeTruthy();
+        expect(translate("nl", "Close dialog")).toBe("Dialoogvenster sluiten");
+        expect(translate("nl", "Delete playlist named by user")).toBe("Delete playlist named by user");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
