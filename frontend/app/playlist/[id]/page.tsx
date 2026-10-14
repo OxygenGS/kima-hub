@@ -46,6 +46,7 @@ import {
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
 import { useDoubleTapList } from "@/hooks/useDoubleTap";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface Track {
     id: string;
@@ -111,6 +112,7 @@ const TRACK_GRID = "grid-cols-[64px_minmax(0,2fr)_minmax(0,1fr)_56px_136px]";
 const TRACK_GRID_MD = "md:grid-cols-[64px_minmax(0,2fr)_minmax(0,1fr)_56px_136px]";
 
 export default function PlaylistDetailPage() {
+    const { t, locale } = useLanguage();
     const controller = useAudioController();
     const params = useParams();
     const router = useRouter();
@@ -204,7 +206,7 @@ export default function PlaylistDetailPage() {
             audio.onerror = (e) => {
                 console.error("Deezer preview playback failed:", e);
                 setPlayingPreviewId(null);
-                toast.error("Preview playback failed");
+                toast.error(t("Preview playback failed"));
             };
             previewAudioRef.current = audio;
 
@@ -212,7 +214,7 @@ export default function PlaylistDetailPage() {
         } catch (err) {
             console.error("Failed to play Deezer preview:", err);
             setPlayingPreviewId(null);
-            toast.error("No preview available");
+            toast.error(t("No preview available"));
         }
     };
 
@@ -234,11 +236,11 @@ export default function PlaylistDetailPage() {
                     });
                 }, 10000);
             } else {
-                toast.error(result.message || "Track not found on Soulseek");
+                toast.error(result.message || t("Track not found on Soulseek"));
             }
         } catch (error) {
             console.error("Failed to retry download:", error);
-            toast.error("Failed to retry download");
+            toast.error(t("Failed to retry download"));
         } finally {
             setRetryingTrackId(null);
         }
@@ -256,18 +258,18 @@ export default function PlaylistDetailPage() {
                 );
                 window.dispatchEvent(new CustomEvent("open-activity-panel"));
                 queryClient.invalidateQueries({ queryKey: ["notifications"] });
-                toast.success(`Retrying ${result.queued} tracks`);
+                toast.success(`${t("Retrying")} ${result.queued.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(result.queued === 1 ? "track" : "tracks")}`);
                 setTimeout(() => {
                     queryClient.invalidateQueries({
                         queryKey: queryKeys.playlist(playlistId),
                     });
                 }, 15000);
             } else {
-                toast.info(result.message || "No tracks to retry");
+                toast.info(result.message || t("No tracks to retry"));
             }
         } catch (error) {
             console.error("Failed to retry all downloads:", error);
-            toast.error("Failed to retry downloads");
+            toast.error(t("Failed to retry downloads"));
         } finally {
             setRetryingAll(false);
         }
@@ -283,7 +285,7 @@ export default function PlaylistDetailPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (error) {
             console.error("Failed to remove pending track:", error);
-            toast.error("Failed to remove pending track");
+            toast.error(t("Failed to remove pending track"));
         } finally {
             setRemovingTrackId(null);
         }
@@ -318,7 +320,7 @@ export default function PlaylistDetailPage() {
             }
         } catch (error) {
             console.error("Failed to toggle playlist visibility:", error);
-            toast.error("Failed to update playlist visibility");
+            toast.error(t("Failed to update playlist visibility"));
         } finally {
             setIsHiding(false);
         }
@@ -331,9 +333,9 @@ export default function PlaylistDetailPage() {
                 playlistId,
                 data: { isPublic: !playlist.isPublic },
             });
-            toast.success(playlist.isPublic ? "Playlist set to private" : "Playlist set to public");
+            toast.success(playlist.isPublic ? t("Playlist set to private") : t("Playlist set to public"));
         } catch {
-            toast.error("Failed to update playlist visibility");
+            toast.error(t("Failed to update playlist visibility"));
         }
     };
 
@@ -369,7 +371,7 @@ export default function PlaylistDetailPage() {
             await removeTrack({ playlistId, trackId });
         } catch (error) {
             console.error("Failed to remove track:", error);
-            toast.error("Failed to remove track");
+            toast.error(t("Failed to remove track"));
         }
     };
 
@@ -384,7 +386,7 @@ export default function PlaylistDetailPage() {
             router.push("/playlists");
         } catch (error) {
             console.error("Failed to delete playlist:", error);
-            toast.error("Failed to delete playlist");
+            toast.error(t("Failed to delete playlist"));
         }
     };
 
@@ -402,7 +404,7 @@ export default function PlaylistDetailPage() {
             setShowSharePopover(true);
         } catch (err) {
             console.error("Failed to create share link:", err);
-            toast.error("Failed to create share link");
+            toast.error(t("Failed to create share link"));
         } finally {
             setShareLoading(false);
         }
@@ -413,10 +415,10 @@ export default function PlaylistDetailPage() {
         try {
             await navigator.clipboard.writeText(shareUrl);
             setShareCopied(true);
-            toast.success("Link copied to clipboard");
+            toast.success(t("Link copied to clipboard"));
             setTimeout(() => setShareCopied(false), 2000);
         } catch {
-            toast.error("Failed to copy link");
+            toast.error(t("Failed to copy link"));
         }
     };
 
@@ -445,9 +447,9 @@ export default function PlaylistDetailPage() {
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         if (hours > 0) {
-            return `${hours} hr ${mins} min`;
+            return `${hours} ${t("hr")} ${mins} ${t("min")}`;
         }
-        return `${mins} min`;
+        return `${mins} ${t("min")}`;
     };
 
     const handlePlayPlaylist = () => {
@@ -550,7 +552,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: targetItemId,
             });
         } catch {
-            toast.error("Failed to reorder track");
+            toast.error(t("Failed to reorder track"));
         }
         handleDragEnd();
     };
@@ -570,7 +572,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: idx === 1 ? null : playlist.items[idx - 2].id,
             });
         } catch {
-            toast.error("Failed to move track");
+            toast.error(t("Failed to move track"));
         }
     };
 
@@ -585,7 +587,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: playlist.items[idx + 1].id,
             });
         } catch {
-            toast.error("Failed to move track");
+            toast.error(t("Failed to move track"));
         }
     };
 
@@ -1031,7 +1033,7 @@ export default function PlaylistDetailPage() {
                                                         setIsEditingName(false);
                                                     } catch {
                                                         editSaveRef.current = false;
-                                                        toast.error("Failed to rename playlist");
+                                                        toast.error(t("Failed to rename playlist"));
                                                     }
                                                 } else {
                                                     setIsEditingName(false);
@@ -1052,7 +1054,7 @@ export default function PlaylistDetailPage() {
                                                     await updatePlaylist({ playlistId, data: { name: trimmed } });
                                                     setIsEditingName(false);
                                                 } catch {
-                                                    toast.error("Failed to rename playlist");
+                                                    toast.error(t("Failed to rename playlist"));
                                                 }
                                             } else {
                                                 setIsEditingName(false);
@@ -1214,9 +1216,9 @@ export default function PlaylistDetailPage() {
                                                 setShareUrl(null);
                                                 setShareToken(null);
                                                 setShowSharePopover(false);
-                                                toast.success("Share link revoked");
+                                                toast.success(t("Share link revoked"));
                                             } catch {
-                                                toast.error("Failed to revoke share link");
+                                                toast.error(t("Failed to revoke share link"));
                                             }
                                         }}
                                         className="text-micro text-[var(--text-muted)] hover:text-red-400/70 transition-colors mt-1"
