@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
 import { api } from "@/lib/api";
@@ -232,6 +232,18 @@ const confirmMeta: Record<
     },
 };
 
+// URL hash is an external navigation signal, not state to copy in an effect.
+function subscribeEnrichmentHash(onChange: () => void) {
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+}
+function readEnrichmentHash() {
+    return window.location.hash === "#enrichment-failures";
+}
+function readServerEnrichmentHash() {
+    return false;
+}
+
 export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
     const { musicCNN, vibeEmbeddings, loading: featuresLoading } = useFeatures();
     const [syncing, setSyncing] = useState(false);
@@ -257,15 +269,14 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
         };
     } | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [showInlineFailures, setShowInlineFailures] = useState(false);
+    const hashRequestsFailures = useSyncExternalStore(
+        subscribeEnrichmentHash, readEnrichmentHash, readServerEnrichmentHash
+    );
+    // A manual choice can override the deep-link default (including hiding).
+    const [failureListChoice, setFailureListChoice] = useState<boolean | null>(null);
+    const showInlineFailures = failureListChoice ?? hashRequestsFailures;
     const queryClient = useQueryClient();
     const syncStartTimeRef = useRef<number>(0);
-
-    useEffect(() => {
-        if (window.location.hash === "#enrichment-failures") {
-            setShowInlineFailures(true);
-        }
-    }, []);
 
     // This query is the one that answers "is enrichment doing anything", so it
     // is the only one that keeps a heartbeat while idle -- and at 30s rather
@@ -920,7 +931,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         {totalFailures > 0 && (
                             <div className="mt-4 pt-3 border-t border-white/10">
                                 <button
-                                    onClick={() => setShowInlineFailures(!showInlineFailures)}
+                                    onClick={() => setFailureListChoice(!showInlineFailures)}
                                     className="flex items-center gap-2 text-xs tabular-nums text-red-400/70 hover:text-red-400 transition-colors"
                                 >
                                     <AlertTriangle className="w-3 h-3" />
