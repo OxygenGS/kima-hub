@@ -505,7 +505,7 @@ export default function DeezerPlaylistDetailPage() {
                                 {t("No tracks found")}
                             </h3>
                             <p className="text-xs text-[var(--text-muted)]">
-                                This playlist appears to be empty
+                                {t("This playlist appears to be empty")}
                             </p>
                         </div>
                     )}
