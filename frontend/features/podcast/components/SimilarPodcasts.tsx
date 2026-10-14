@@ -6,6 +6,7 @@ import { Mic2 } from "lucide-react";
 import { SimilarPodcast } from "../types";
 import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SimilarPodcastsProps {
     podcasts: SimilarPodcast[];
@@ -18,6 +19,7 @@ const getProxiedImageUrl = (imageUrl: string | undefined): string | null => {
 
 export function SimilarPodcasts({ podcasts }: SimilarPodcastsProps) {
     const router = useRouter();
+    const { t } = useLanguage();
 
     if (!podcasts || podcasts.length === 0) {
         return null;
@@ -27,7 +29,7 @@ export function SimilarPodcasts({ podcasts }: SimilarPodcastsProps) {
         <section>
             <div className="flex items-center gap-3 mb-6">
                 <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Fans Also Like</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t("Fans Also Like")}</h2>
                 <span className="text-xs tabular-nums text-[#3b82f6]">
                     {podcasts.length}
                 </span>
