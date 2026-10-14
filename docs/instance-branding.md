@@ -39,18 +39,6 @@ SVG and arbitrary remote-image URLs are not accepted.
 Changes are applied at runtime. Existing browsers may need a reload for
 the installed-app icon to refresh, depending on their PWA cache policy.
 
-## DEV deployment
+## Deployment
 
-On CT 105, **after GitHub checks turn green**, run:
-
-```bash
-cd /path/to/kima-hub
-git pull --ff-only
-docker compose --env-file .env.dev -f docker-compose.dev.yml build backend
-docker compose --env-file .env.dev -f docker-compose.dev.yml build frontend
-docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --no-build backend frontend
-docker compose --env-file .env.dev -f docker-compose.dev.yml ps
-```
-
-The backend applies the new migration automatically on startup. This does not
-touch the separate production CT 101.
+Branding is configured at runtime under **Settings → Branding**. The production installer uses the AIO image from GHCR; refer to the [README](../README.md) for the supported Docker Compose and Dockge procedures. The former CT 105 development stack has been retired.
