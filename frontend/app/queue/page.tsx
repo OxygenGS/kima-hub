@@ -10,6 +10,7 @@ import { useAudioState, useAudioControls } from "@/lib/audio-context";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import {
     Music,
@@ -27,6 +28,7 @@ export default function QueuePage() {
     const { queue, currentTrack, currentIndex, setQueue } = useAudioState();
     const { playTracks, removeFromQueue, clearQueue } = useAudioControls();
     const { toast } = useToast();
+    const { t, locale } = useLanguage();
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -36,17 +38,17 @@ export default function QueuePage() {
 
     const handleClearQueue = () => {
         clearQueue();
-        toast.success("Queue cleared");
+        toast.success(t("Queue cleared"));
     };
 
     const handleRemoveTrack = (index: number) => {
         removeFromQueue(index);
-        toast.success("Removed from queue");
+        toast.success(t("Removed from queue"));
     };
 
     const handlePlayFromQueue = (index: number) => {
         playTracks(queue, index);
-        toast.success("Playing from queue");
+        toast.success(t("Playing from queue"));
     };
 
     const handleMoveUp = (index: number) => {
@@ -91,12 +93,11 @@ export default function QueuePage() {
                             <div className="flex items-center gap-3 mb-2">
                                 <ListMusic className="w-8 h-8 text-purple-400" />
                                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white">
-                                    Queue
+                                    {t("Queue")}
                                 </h1>
                             </div>
                             <p className="text-[var(--text-secondary)]">
-                                {queue.length} track
-                                {queue.length !== 1 ? "s" : ""} in queue
+                                {queue.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(queue.length === 1 ? "track" : "tracks")} {t("in queue")}
                             </p>
                         </div>
                         {queue.length > 0 && (
@@ -105,7 +106,7 @@ export default function QueuePage() {
                                 onClick={handleClearQueue}
                             >
                                 <Trash2 className="w-4 h-4 mr-2" />
-                                Clear Queue
+                                {t("Clear Queue")}
                             </Button>
                         )}
                     </div>
@@ -115,10 +116,10 @@ export default function QueuePage() {
                 {queue.length === 0 && (
                     <EmptyState
                         icon={<ListMusic />}
-                        title="No tracks in queue"
-                        description="Start playing music to see your queue here"
+                        title={t("No tracks in queue")}
+                        description={t("Start playing music to see your queue here")}
                         action={{
-                            label: "Browse Library",
+                            label: t("Browse Library"),
                             onClick: () => router.push("/collection"),
                         }}
                     />
@@ -128,7 +129,7 @@ export default function QueuePage() {
                 {currentTrack && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Now Playing
+                            {t("Now Playing")}
                         </h2>
                         <Card>
                             <div className="flex items-center gap-4 p-4 bg-[var(--bg-hover)] border-l-2 border-purple-500">
@@ -184,7 +185,7 @@ export default function QueuePage() {
                 {nextTracks.length > 0 && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Next Up ({nextTracks.length})
+                            {t("Next Up")} ({nextTracks.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")})
                         </h2>
                         <Card>
                             <div className="divide-y divide-[#1c1c1c]">
@@ -250,7 +251,7 @@ export default function QueuePage() {
                                                         currentIndex + 1
                                                     }
                                                     className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                                                    aria-label={`Move ${track.displayTitle ?? track.title} up`}
+                                                    aria-label={`${t("Move")} ${track.displayTitle ?? track.title} ${t("up")}`}
                                                 >
                                                     <ChevronUp className="w-4 h-4" />
                                                 </button>
@@ -265,7 +266,7 @@ export default function QueuePage() {
                                                         queue.length - 1
                                                     }
                                                     className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                                                    aria-label={`Move ${track.displayTitle ?? track.title} down`}
+                                                    aria-label={`${t("Move")} ${track.displayTitle ?? track.title} ${t("down")}`}
                                                 >
                                                     <ChevronDown className="w-4 h-4" />
                                                 </button>
@@ -276,7 +277,7 @@ export default function QueuePage() {
                                                         )
                                                     }
                                                     className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors flex items-center justify-center"
-                                                    aria-label={`Play ${track.displayTitle ?? track.title}`}
+                                                    aria-label={`${t("Play")} ${track.displayTitle ?? track.title}`}
                                                 >
                                                     <Play className="w-4 h-4" />
                                                 </button>
@@ -287,7 +288,7 @@ export default function QueuePage() {
                                                         )
                                                     }
                                                     className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-red-500/10 rounded-md transition-colors text-red-400 flex items-center justify-center"
-                                                    aria-label={`Remove ${track.displayTitle ?? track.title} from queue`}
+                                                    aria-label={`${t("Remove")} ${track.displayTitle ?? track.title} ${t("from queue")}`}
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>
@@ -304,7 +305,7 @@ export default function QueuePage() {
                 {previousTracks.length > 0 && (
                     <section className="bg-[#111] rounded-lg p-6">
                         <h2 className="text-xl font-semibold text-white mb-4">
-                            Previously Played ({previousTracks.length})
+                            {t("Previously Played")} ({previousTracks.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")})
                         </h2>
                         <Card>
                             <div className="divide-y divide-[#1c1c1c]">
