@@ -48,9 +48,20 @@ export function UserManagementSection() {
     }, []);
 
     useEffect(() => {
-        void loadUsers();
-        // Load on mount only; user actions refresh the list explicitly.
-    }, [loadUsers]);
+        // Initial read is asynchronous; mutation handlers call loadUsers to refresh.
+        let cancelled = false;
+        void api.get<User[]>("/auth/users")
+            .then((data) => {
+                if (!cancelled) setUsers(data);
+            })
+            .catch((error) => {
+                console.error("Failed to load users:", error);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, []);
 
     const handleCreate = async () => {
         if (!newUsername.trim() || newPassword.length < 6) {
