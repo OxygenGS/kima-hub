@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface OperationConfirmToastProps {
     currentOpName: string;
@@ -31,6 +33,10 @@ export function OperationConfirmToast({
     onConfirm,
     onCancel,
 }: OperationConfirmToastProps) {
+    const { t, locale } = useLanguage();
+    const replacePrompt = t("Replace {current} with {next}?")
+        .replace("{current}", translate(locale, getOperationName(currentOpName)))
+        .replace("{next}", translate(locale, getOperationName(newOpName)));
     const [visible, setVisible] = useState(false);
     const onCancelRef = useRef(onCancel);
 
@@ -63,20 +69,19 @@ export function OperationConfirmToast({
             )}
         >
             <span className="text-sm text-[var(--text-primary)] whitespace-nowrap">
-                Replace {getOperationName(currentOpName)} with{" "}
-                {getOperationName(newOpName)}?
+                {replacePrompt}
             </span>
             <button
                 onClick={onConfirm}
                 className="px-3 py-1 bg-brand text-black text-sm font-medium rounded hover:bg-[var(--color-brand)]/90 transition-colors"
             >
-                Replace
+                {t("Replace")}
             </button>
             <button
                 onClick={onCancel}
                 className="px-3 py-1 text-[var(--text-secondary)] text-sm hover:text-white transition-colors"
             >
-                Cancel
+                {t("Cancel")}
             </button>
         </div>
     );

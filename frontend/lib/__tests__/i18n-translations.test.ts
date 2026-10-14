@@ -79,6 +79,22 @@ describe("UI translations", () => {
         expect(translate("nl", "Delete playlist named by user")).toBe("Delete playlist named by user");
     });
 
+    it("localizes Soulseek result controls without rewriting search filters or filenames", () => {
+        expect(translate("nl", "No Soulseek results found")).toBe("Geen Soulseek-resultaten gevonden");
+        expect(translate("nl", "Quality")).toBe("Kwaliteit");
+        expect(translate("nl", "Group by user")).toBe("Groeperen per gebruiker");
+        expect(translate("nl", "Download file:")).toBe("Bestand downloaden:");
+        expect(translate("nl", "FLAC")).toBe("FLAC");
+        expect(translate("nl", "Artist - Album.flac")).toBe("Artist - Album.flac");
+    });
+
+    it("localizes operation replacement prompts without changing operation IDs", () => {
+        const prompt = translate("nl", "Replace {current} with {next}?")
+            .replace("{current}", translate("nl", "Vibe"))
+            .replace("{next}", translate("nl", "Similar"));
+        expect(prompt).toBe("Vervang Vibe door Vergelijkbaar?");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
