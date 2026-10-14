@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
 import { useToast } from "@/lib/toast-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
 import {
     ArrowLeft,
     Book,
@@ -40,6 +41,7 @@ interface Audiobook {
 }
 
 export default function SeriesDetailPage() {
+    const { t } = useLanguage();
     const params = useParams();
     const router = useRouter();
     const { isAuthenticated } = useAuth();
@@ -65,7 +67,7 @@ export default function SeriesDetailPage() {
             } catch (error: unknown) {
                 if (!cancelled) {
                     console.error("Failed to load series:", error);
-                    toast.error("Failed to load series");
+                    toast.error(t("Failed to load series"));
                 }
             } finally {
                 if (!cancelled) setIsLoading(false);
@@ -93,7 +95,7 @@ export default function SeriesDetailPage() {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
                 <p className="text-xs text-[var(--text-muted)]">
-                    No books found in this series
+                    {t("No books found in this series")}
                 </p>
             </div>
         );
@@ -135,14 +137,14 @@ export default function SeriesDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Audiobooks
+                            {t("Audiobooks")}
                         </button>
 
                         {/* System status */}
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full" />
                             <span className="t-eyebrow">
-                                Series
+                                {t("Series")}
                             </span>
                         </div>
 
@@ -210,7 +212,7 @@ export default function SeriesDetailPage() {
                     <div>
                         <div className="flex items-center gap-3 mb-6">
                             <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                            <h2 className="text-2xl font-bold tracking-tight">Books in Series</h2>
+                            <h2 className="text-2xl font-bold tracking-tight">{t("Books in Series")}</h2>
                             <span className="text-xs tabular-nums text-[#f59e0b]">
                                 {books.length}
                             </span>
@@ -317,7 +319,7 @@ export default function SeriesDetailPage() {
                                             {/* Progress */}
                                             {book.progress?.isFinished ? (
                                                 <span className="text-xs text-green-400 shrink-0">
-                                                    Finished
+                                                    {t("Finished")}
                                                 </span>
                                             ) : book.progress && book.progress.progress > 0 ? (
                                                 <span className="text-xs tabular-nums text-[#f59e0b] shrink-0">
