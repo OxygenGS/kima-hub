@@ -72,7 +72,7 @@ export function Discography({
                             placeholderIcon={
                                 <Disc3 className="w-12 h-12 text-[var(--text-muted)]" />
                             }
-                            badge={t("owned")}
+                            badge="owned"
                             circular={false}
                             colors={colors}
                             onPlay={() => onPlayAlbum(album.id, album.title)}

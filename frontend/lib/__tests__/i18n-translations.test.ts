@@ -46,6 +46,12 @@ describe("UI translations", () => {
         expect(translate("nl", "Soulseek")).toBe("Soulseek");
     });
 
+    it("keeps badge identifiers stable while translating displayed badges", () => {
+        expect(translate("nl", "Owned")).toBe("In bezit");
+        expect(translate("nl", "Download Album")).toBe("Album downloaden");
+        expect(translate("nl", "owned")).toBe("in bezit");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");

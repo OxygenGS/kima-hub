@@ -1017,6 +1017,8 @@ export const english = {
     "Password must be at least 6 characters": "Password must be at least 6 characters",
     "Failed to save configuration": "Failed to save configuration",
     "Failed to complete setup": "Failed to complete setup",
+    "Owned": "Owned",
+    "Download Album": "Download Album",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2037,6 +2039,8 @@ export const dutch: Record<TranslationKey, string> = {
     "Password must be at least 6 characters": "Wachtwoord moet minimaal 6 tekens bevatten",
     "Failed to save configuration": "Configuratie opslaan mislukt",
     "Failed to complete setup": "Installatie afronden mislukt",
+    "Owned": "In bezit",
+    "Download Album": "Album downloaden",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

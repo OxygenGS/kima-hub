@@ -7,6 +7,7 @@ import { Card, CardProps } from "./Card";
 import { cn } from "@/utils/cn";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { CachedImage } from "./CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Kima brand amber for all on-page play buttons
 const KIMA_YELLOW = "var(--color-brand)";
@@ -48,6 +49,7 @@ const PlayableCard = memo(function PlayableCard({
     tvCardIndex,
     ...props
 }: PlayableCardProps) {
+    const { t } = useLanguage();
     // Memoize the image source to prevent unnecessary re-renders
     const memoizedCoverArt = useMemo(() => coverArt, [coverArt]);
     // Handle Link click to prevent navigation when clicking on interactive elements
@@ -118,7 +120,7 @@ const PlayableCard = memo(function PlayableCard({
                     {badge === "owned" && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-500/20 border border-green-500/30 rounded-full text-xs font-medium text-green-400">
                             <Check className="w-3 h-3" />
-                            Owned
+                            {t("Owned")}
                         </span>
                     )}
                     {badge === "download" && (
@@ -142,8 +144,8 @@ const PlayableCard = memo(function PlayableCard({
                                 :   "bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/30 hover:border-yellow-500/50 text-yellow-400 hover:text-yellow-300",
                             )}
                             title={
-                                isDownloading ? "Downloading..." : (
-                                    "Download Album"
+                                isDownloading ? t("Downloading...") : (
+                                    t("Download Album")
                                 )
                             }
                         >
@@ -153,7 +155,7 @@ const PlayableCard = memo(function PlayableCard({
                                     isDownloading && "animate-pulse",
                                 )}
                             />
-                            {isDownloading ? "Downloading..." : "Download"}
+                            {isDownloading ? t("Downloading...") : t("Download")}
                         </button>
                     )}
                 </div>

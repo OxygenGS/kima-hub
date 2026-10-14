@@ -28,7 +28,7 @@ export function SimilarAlbums({ similarAlbums, colors, onNavigate }: SimilarAlbu
             subtitle={album.artist?.name}
             placeholderIcon={<Disc3 className="w-12 h-12 text-[var(--text-muted)]" />}
             circular={false}
-            badge={album.owned ? t("owned") : undefined}
+            badge={album.owned ? "owned" : undefined}
             colors={colors}
             showPlayButton={false}
             onClick={() => onNavigate(album.id)}
