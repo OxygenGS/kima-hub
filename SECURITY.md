@@ -1,6 +1,6 @@
-# Security — Kima Hub Community Fork
+# Security — Kima Hub — Oxygen's Fork
 
-This is an independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub) by Chevron7Locked.
+This is Oxygen's independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub), originally developed by Chevron7Locked and maintained by [OxygenGS](https://github.com/OxygenGS).
 
 This document describes the security improvements implemented in this fork, their validation, and known limitations.
 
