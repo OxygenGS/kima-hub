@@ -1045,6 +1045,11 @@ export const english = {
     "No tracks with vibe analysis yet": "No tracks with vibe analysis yet",
     "Run enrichment to generate embeddings": "Run enrichment to generate embeddings",
     "Dismiss": "Dismiss",
+    "Recenter": "Recenter",
+    "Switch to 2D": "Switch to 2D",
+    "Switch to 3D": "Switch to 3D",
+    "Click to explore": "Click to explore",
+    "WASD to move -- Mouse to look -- R for boost -- ESC to exit": "WASD to move -- Mouse to look -- R for boost -- ESC to exit",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2093,6 +2098,11 @@ export const dutch: Record<TranslationKey, string> = {
     "No tracks with vibe analysis yet": "Nog geen nummers met Vibe-analyse",
     "Run enrichment to generate embeddings": "Voer verrijking uit om muziekkenmerken te berekenen",
     "Dismiss": "Sluiten",
+    "Recenter": "Opnieuw centreren",
+    "Switch to 2D": "Overschakelen naar 2D",
+    "Switch to 3D": "Overschakelen naar 3D",
+    "Click to explore": "Klik om te verkennen",
+    "WASD to move -- Mouse to look -- R for boost -- ESC to exit": "WASD om te bewegen -- muis om rond te kijken -- R om te versnellen -- ESC om te stoppen",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

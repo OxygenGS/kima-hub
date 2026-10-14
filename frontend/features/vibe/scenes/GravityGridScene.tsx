@@ -15,6 +15,7 @@ import type { MapTrack } from "../types";
 import type { VibeOperation } from "@/lib/audio-state-context";
 import { useDoubleClickById } from "@/hooks/useDoubleTap";
 import { computeClusterLabels } from "../mapUtils";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export interface VibeSceneProps {
     tracks: MapTrack[];
@@ -1139,6 +1140,7 @@ export function GravityGridScene({
     onTrackContextMenu,
     onBackgroundClick,
 }: VibeSceneProps) {
+    const { t } = useLanguage();
     const [is3D, setIs3D] = useState(false);
     const [isLocked, setIsLocked] = useState(false);
     const [animated, setAnimated] = useState(true);
@@ -1183,20 +1185,23 @@ export function GravityGridScene({
             <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-(--z-raised) flex gap-2">
                 <button
                     onClick={() => setAnimated(!animated)}
+                    aria-label={animated ? t("Pause") : t("Play")}
                     className={`px-3 py-1.5 rounded-lg backdrop-blur-md border text-xs font-medium transition-colors bg-black/20 border-white/8 hover:bg-black/30 ${
                         animated ? "text-[var(--text-muted)] hover:text-white/70" : "text-[var(--text-muted)] hover:text-white/40"
                     }`}
                 >
-                    {animated ? "Pause" : "Play"}
+                    {animated ? t("Pause") : t("Play")}
                 </button>
                 <button
                     onClick={() => recenterRef.current?.()}
+                    aria-label={t("Recenter")}
                     className="px-3 py-1.5 rounded-lg backdrop-blur-md border text-xs font-medium transition-colors bg-black/20 border-white/8 text-[var(--text-muted)] hover:text-white/70 hover:bg-black/30"
                 >
-                    Recenter
+                    {t("Recenter")}
                 </button>
                 <button
                     onClick={() => setIs3D(!is3D)}
+                    aria-label={is3D ? t("Switch to 2D") : t("Switch to 3D")}
                     className="px-3 py-1.5 rounded-lg backdrop-blur-md border text-xs font-medium transition-colors bg-black/20 border-white/8 text-[var(--text-muted)] hover:text-white/70 hover:bg-black/30"
                 >
                     {is3D ? "2D" : "3D"}
@@ -1211,7 +1216,7 @@ export function GravityGridScene({
                         style={{ left: contextMenu.x, top: contextMenu.y }}
                     >
                         {(["vibe", "similar", "drift"] as const).map((op) => {
-                            const label = op === "drift" ? "Song Path" : op.charAt(0).toUpperCase() + op.slice(1);
+                            const label = op === "drift" ? t("Song Path") : op === "vibe" ? t("Vibe") : t("Similar");
                             return (
                                 <button
                                     key={op}
@@ -1232,9 +1237,9 @@ export function GravityGridScene({
             {is3D && !isLocked && (
                 <div className="absolute inset-0 flex items-center justify-center z-(--z-scene) pointer-events-none">
                     <div className="text-center">
-                        <p className="text-[var(--text-muted)] text-sm mb-1">Click to explore</p>
+                        <p className="text-[var(--text-muted)] text-sm mb-1">{t("Click to explore")}</p>
                         <p className="text-[var(--text-muted)] text-xs">
-                            WASD to move -- Mouse to look -- R for boost -- ESC to exit
+                            {t("WASD to move -- Mouse to look -- R for boost -- ESC to exit")}
                         </p>
                     </div>
                 </div>

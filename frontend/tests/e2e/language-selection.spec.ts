@@ -32,4 +32,23 @@ test.describe("Interface language", () => {
         await expect(page.locator("#username")).toHaveValue("example-user");
         await expect(page.locator("#password")).toHaveValue("example-password");
     });
+    test("allows choosing Dutch during first-run setup without an account", async ({ page }) => {
+        await page.goto("/onboarding");
+        const languageSelect = page.locator("#onboarding-language");
+        await expect(languageSelect).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Create Your Admin Account" })).toBeVisible();
+
+        await page.locator("#username").fill("sample-admin");
+        await languageSelect.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.locator("#username")).toHaveValue("sample-admin");
+
+        await page.reload();
+        await expect(languageSelect).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+
+        await page.goto("/login");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+    });
 });

@@ -65,6 +65,13 @@ describe("UI translations", () => {
         expect(translate("nl", "Dismiss")).toBe("Sluiten");
     });
 
+    it("translates Galaxy controls but preserves camera-mode and keyboard command values", () => {
+        expect(translate("nl", "Recenter")).toBe("Opnieuw centreren");
+        expect(translate("nl", "Switch to 3D")).toBe("Overschakelen naar 3D");
+        expect(translate("nl", "WASD to move -- Mouse to look -- R for boost -- ESC to exit")).toContain("WASD");
+        expect(translate("nl", "Song Path")).toBeTruthy();
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
