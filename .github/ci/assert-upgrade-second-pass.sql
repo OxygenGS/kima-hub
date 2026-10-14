@@ -12,7 +12,7 @@ BEGIN
 
   IF NOT EXISTS (
     SELECT 1 FROM "BrandingSettings"
-    WHERE "id"='default' AND "name"='Chillverse Upgrade Fixture'
+    WHERE "id"='default' AND "name"='Kima Hub Upgrade Fixture'
       AND "tagline"='Kept across migrations'
       AND "accentColor"='#3dacdb' AND "backgroundColor"='#0a0a0a'
   ) THEN RAISE EXCEPTION 'Custom instance branding did not survive the second deploy'; END IF;
