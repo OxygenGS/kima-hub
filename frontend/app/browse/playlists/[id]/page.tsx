@@ -22,6 +22,7 @@ import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 const DeezerIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -58,6 +59,7 @@ export default function DeezerPlaylistDetailPage() {
     const params = useParams();
     const router = useRouter();
     const { toast } = useToast();
+    const { t, locale } = useLanguage();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
     const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const playlistId = params.id as string;
@@ -122,7 +124,7 @@ export default function DeezerPlaylistDetailPage() {
 
     const handlePlayPreview = (track: DeezerTrack) => {
         if (!track.previewUrl) {
-            toast.error("No preview available for this track");
+            toast.error(t("No preview available for this track"));
             return;
         }
 
@@ -157,7 +159,7 @@ export default function DeezerPlaylistDetailPage() {
 
         audio.onerror = () => {
             if (audioRef.current !== audio) return;
-            toast.error("Failed to play preview");
+            toast.error(t("Failed to play preview"));
             setPlayingTrackId(null);
             setIsPreviewPlaying(false);
             audioRef.current = null;
@@ -197,8 +199,8 @@ export default function DeezerPlaylistDetailPage() {
     const formatTotalDuration = (ms: number) => {
         const hours = Math.floor(ms / 3600000);
         const mins = Math.floor((ms % 3600000) / 60000);
-        if (hours > 0) return `${hours} hr ${mins} min`;
-        return `${mins} min`;
+        if (hours > 0) return `${hours} ${t("hr")} ${mins} ${t("min")}`;
+        return `${mins} ${t("min")}`;
     };
 
     if (isLoading) {
@@ -219,21 +221,21 @@ export default function DeezerPlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-8"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Browse
+                            {t("Browse")}
                         </button>
                         <div className="flex flex-col items-center justify-center py-20 text-center">
                             <Music2 className="w-12 h-12 text-white/10 mb-4" />
                             <h3 className="text-lg font-bold text-white mb-2 tracking-tight">
-                                Playlist not found
+                                {t("Playlist not found")}
                             </h3>
                             <p className="text-xs tabular-nums text-[var(--text-muted)] mb-6 max-w-sm">
-                                {error || "This playlist may be private or no longer available."}
+                                {error || t("This playlist may be private or no longer available.")}
                             </p>
                             <button
                                 onClick={() => router.push("/browse/playlists")}
                                 className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all"
                             >
-                                Browse playlists
+                                {t("Browse playlists")}
                             </button>
                         </div>
                     </div>
@@ -271,14 +273,14 @@ export default function DeezerPlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Browse
+                            {t("Browse")}
                         </button>
 
                         {/* System status */}
                         <div className="flex items-center gap-2 mb-4">
                             <DeezerIcon className="w-3.5 h-3.5 text-[#a855f7]" />
                             <span className="text-xs text-[var(--text-secondary)]">
-                                Deezer Playlist
+                                {t("Deezer Playlist")}
                             </span>
                         </div>
 
@@ -316,7 +318,7 @@ export default function DeezerPlaylistDetailPage() {
                                         {playlist.creator}
                                     </span>
                                     <span className="text-[var(--text-muted)]">|</span>
-                                    <span>{playlist.trackCount} songs</span>
+                                    <span>{playlist.trackCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(playlist.trackCount === 1 ? "song" : "songs")}</span>
                                     {totalDuration > 0 && (
                                         <>
                                             <span className="text-[var(--text-muted)]">|</span>
@@ -345,7 +347,7 @@ export default function DeezerPlaylistDetailPage() {
                             ) : (
                                 <Download className="w-4 h-4" />
                             )}
-                            <span>{isImporting ? "Importing" : "Import Playlist"}</span>
+                            <span>{isImporting ? t("Importing") : t("Import Playlist")}</span>
                         </button>}
 
                         {/* Volume Control */}
@@ -353,6 +355,7 @@ export default function DeezerPlaylistDetailPage() {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleToggleMute}
+                                    aria-label={isMuted ? t("Unmute") : t("Mute")}
                                     className="p-2 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
                                 >
                                     {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -361,7 +364,7 @@ export default function DeezerPlaylistDetailPage() {
                                     onClick={stopPreview}
                                     className="px-3 py-1.5 rounded-lg text-xs bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 transition-all"
                                 >
-                                    Stop Preview
+                                    {t("Stop Preview")}
                                 </button>
                             </div>
                         )}
@@ -374,7 +377,7 @@ export default function DeezerPlaylistDetailPage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
-                            title="Open in Deezer"
+                            title={t("Open in Deezer")}
                         >
                             <ExternalLink className="w-4 h-4" />
                         </a>
@@ -389,7 +392,7 @@ export default function DeezerPlaylistDetailPage() {
                         <div>
                             <div className="flex items-center gap-3 mb-6">
                                 <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full shrink-0" />
-                                <h2 className="text-2xl font-bold tracking-tight">Tracks</h2>
+                                <h2 className="text-2xl font-bold tracking-tight">{t("Tracks")}</h2>
                                 <span className="text-xs tabular-nums text-[#a855f7]">
                                     {playlist.trackCount}
                                 </span>
@@ -399,9 +402,9 @@ export default function DeezerPlaylistDetailPage() {
                             {/* Table Header */}
                             <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-3 py-2 text-xs text-[var(--text-muted)] border-b border-white/10 mb-1">
                                 <span className="text-center">#</span>
-                                <span>Title</span>
-                                <span>Album</span>
-                                <span className="text-right">Duration</span>
+                                <span>{t("Title")}</span>
+                                <span>{t("Album")}</span>
+                                <span className="text-right">{t("Duration")}</span>
                             </div>
 
                             <div className="space-y-0.5">
@@ -499,7 +502,7 @@ export default function DeezerPlaylistDetailPage() {
                         <div className="flex flex-col items-center justify-center py-24 text-center">
                             <Music2 className="w-12 h-12 text-white/10 mb-4" />
                             <h3 className="text-lg font-bold text-white mb-2 tracking-tight">
-                                No tracks found
+                                {t("No tracks found")}
                             </h3>
                             <p className="text-xs text-[var(--text-muted)]">
                                 This playlist appears to be empty
