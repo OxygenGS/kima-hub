@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dutch, english, translations } from "../i18n/translations";
+import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
     it("contains a Dutch translation for every English UI key", () => {
@@ -13,4 +13,12 @@ describe("UI translations", () => {
         expect(translations.nl["Language"]).toBe("Taal");
         expect(translations.nl["Sign In"]).toBe("Inloggen");
     });
+    it("preserves external labels when no UI translation exists", () => {
+        expect(translate("nl", "Settings")).toBe("Instellingen");
+        expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
+        expect(translate("nl", "Nieuw genre van provider")).toBe("Nieuw genre van provider");
+        expect(translate("en", "Unknown label")).toBe("Unknown label");
+        expect(translate("nl", "__proto__")).toBe("__proto__");
+    });
+
 });
