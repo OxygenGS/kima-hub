@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Audiobook } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { ColorPalette } from "@/hooks/useImageColor";
 
 interface AudiobookHeroProps {
@@ -35,6 +36,7 @@ export function AudiobookHero({
     formatTime,
     children,
 }: AudiobookHeroProps) {
+    const { t } = useLanguage();
     const router = useRouter();
     const progressPercent = audiobook.progress?.progress || 0;
     const isFinished = audiobook.progress?.isFinished;
@@ -85,14 +87,14 @@ export function AudiobookHero({
                         className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
-                        Audiobooks
+                        {t("Audiobooks")}
                     </button>
 
                     {/* System status */}
                     <div className="flex items-center gap-2 mb-4">
                         <div className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full" />
                         <span className="t-eyebrow">
-                            Audiobook
+                            {t("Audiobook")}
                         </span>
                     </div>
 
