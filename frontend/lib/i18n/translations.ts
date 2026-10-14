@@ -772,6 +772,18 @@ export const english = {
     "Are you sure you want to delete this user? This action cannot be undone.": "Are you sure you want to delete this user? This action cannot be undone.",
     "Soulseek": "Soulseek",
     "Logo": "Logo",
+    "Only an admin can scan the library": "Only an admin can scan the library",
+    "Could not start the library scan": "Could not start the library scan",
+    "Logged out successfully": "Logged out successfully",
+    "Failed to logout": "Failed to logout",
+    "Failed to start scan. Please try again.": "Failed to start scan. Please try again.",
+    "Open menu": "Open menu",
+    "download": "download",
+    "downloads": "downloads",
+    "in progress": "in progress",
+    "starting...": "starting...",
+    "failed": "failed",
+    "Shared by": "Shared by",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -1547,6 +1559,18 @@ export const dutch: Record<TranslationKey, string> = {
     "Are you sure you want to delete this user? This action cannot be undone.": "Weet je zeker dat je deze gebruiker wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
     "Soulseek": "Soulseek",
     "Logo": "Logo",
+    "Only an admin can scan the library": "Alleen een beheerder kan de bibliotheek scannen",
+    "Could not start the library scan": "De bibliotheekscan kon niet worden gestart",
+    "Logged out successfully": "Je bent uitgelogd",
+    "Failed to logout": "Uitloggen mislukt",
+    "Failed to start scan. Please try again.": "De scan kon niet worden gestart. Probeer het opnieuw.",
+    "Open menu": "Menu openen",
+    "download": "download",
+    "downloads": "downloads",
+    "in progress": "bezig",
+    "starting...": "wordt gestart...",
+    "failed": "mislukt",
+    "Shared by": "Gedeeld door",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
