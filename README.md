@@ -527,7 +527,7 @@ nvidia-container-runtime --version
 
 **All-in-One container:**
 ```bash
-docker run -d --gpus all -p 3030:3030 -v /path/to/music:/music -v kima_data:/data chevron7locked/kima:latest
+docker run -d --gpus all -p 3030:3030 -v /path/to/music:/music -v kima_data:/data ghcr.io/oxygengs/kima-hub:v1.10.0
 ```
 
 **Docker Compose:**
