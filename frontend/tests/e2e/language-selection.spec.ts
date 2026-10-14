@@ -26,12 +26,10 @@ test.describe("Interface language", () => {
     test("keeps language selection separate from server-side credentials", async ({ page }) => {
         await page.goto("/login");
         await page.locator("#login-language").selectOption("nl");
-        await expect(page.locator("#username")).toBeEmpty();
-        await expect(page.locator("#password")).toBeEmpty();
-        await expect(page.locator("#username")).toHaveAttribute("name", /.+/).catch(() => {
-            // Existing login inputs do not need a name attribute for submission.
-        });
-        await expect(page.locator("#username")).toHaveAttribute("type", "text");
-        await expect(page.locator("#password")).toHaveAttribute("type", "password");
+        await page.locator("#username").fill("example-user");
+        await page.locator("#password").fill("example-password");
+        await page.locator("#login-language").selectOption("en");
+        await expect(page.locator("#username")).toHaveValue("example-user");
+        await expect(page.locator("#password")).toHaveValue("example-password");
     });
 });
