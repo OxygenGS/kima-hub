@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { X, Plus, Music2, Check } from "lucide-react";
 import { GradientSpinner } from "./GradientSpinner";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface PlaylistSelectorProps {
     isOpen: boolean;
@@ -165,13 +166,17 @@ export function PlaylistSelector({
             <div
                 className="bg-linear-to-b from-[#121212] to-[#121212] rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col border border-white/10 animate-pop"
                 onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="playlist-selector-title"
             >
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 id="playlist-selector-title" className="text-2xl font-bold text-white">
                         {t("Add to Playlist")}
                     </h2>
                     <button
                         onClick={onClose}
+                        aria-label={t("Close dialog")}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     >
                         <X className="w-5 h-5 text-[var(--text-secondary)]" />
@@ -181,7 +186,7 @@ export function PlaylistSelector({
                 {isSaving && (
                     <div className="px-6 py-3 flex items-center gap-3 bg-black/30 border-b border-white/10 text-sm text-[var(--text-primary)]">
                         <GradientSpinner size="sm" />
-                        <span>{loadingMessage || t("Adding...")}</span>
+                        <span>{loadingMessage ? translate(locale, loadingMessage) : t("Adding...")}</span>
                     </div>
                 )}
 
@@ -204,7 +209,7 @@ export function PlaylistSelector({
                             <Music2 className="w-12 h-12 text-[var(--text-muted)] mb-3" />
                             <p className="text-[var(--text-secondary)]">{t("No playlists yet")}</p>
                             <p className="text-[var(--text-muted)] text-sm mt-1">
-                                Create one below to get started
+                                {t("Create one below to get started")}
                             </p>
                         </div>
                     ) : (
