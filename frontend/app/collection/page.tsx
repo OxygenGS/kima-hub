@@ -36,7 +36,8 @@ export default function LibraryPage() {
     const activeTab: Tab = validTabs.includes(tabParam as Tab) ? (tabParam as Tab) : "artists";
 
     // Read page from URL params
-    const urlPage = parseInt(searchParams.get("page") || "1", 10);
+    const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
     // Filter state (owned = your library, discovery = discovery weekly artists)
     const [filter, setFilter] = useState<LibraryFilter>("owned");
@@ -44,15 +45,8 @@ export default function LibraryPage() {
     // Sort and pagination state
     const [sortBy, setSortBy] = useState<SortOption>("name");
     const [itemsPerPage, setItemsPerPage] = useState<number>(40);
-    const [currentPage, setCurrentPage] = useState(urlPage);
-
     // Track previous page to detect pagination changes
     const prevPageRef = useRef(currentPage);
-
-    // Sync currentPage with URL changes (browser back/forward)
-    useEffect(() => {
-        setCurrentPage(urlPage);
-    }, [urlPage]);
 
     const queryClient = useQueryClient();
 
@@ -184,31 +178,9 @@ export default function LibraryPage() {
         deleteTrack,
     } = useLibraryActions();
 
-    // Monotonic key that increments on tab/filter/sort change to remount grids
-    // and replay staggered entrance animations.
-    //
-    // Declared above the effects that call setGridKey, not below them. Both
-    // orders run correctly -- an effect body executes long after the whole
-    // component function has, so the binding is initialised by then -- but
-    // reading a `const` from a line above its declaration puts the reference in
-    // the temporal dead zone as written, which the React Compiler flags and a
-    // future refactor could turn into a real ReferenceError.
+    // Increment when a local filter changes to remount grids and replay
+    // entrance animations. The URL is the source of truth for pagination.
     const [gridKey, setGridKey] = useState(0);
-
-    // Reset page and filter when tab changes
-    useEffect(() => {
-        setCurrentPage(1);
-        // Reset filter to 'owned' when switching to tracks tab (which doesn't support filter)
-        if (activeTab === "tracks") {
-            setFilter("owned");
-        }
-        setGridKey((k) => k + 1);
-    }, [activeTab]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-        setGridKey((k) => k + 1);
-    }, [filter, sortBy, itemsPerPage]);
 
     // Get total items and pages from pagination
     const totalItems = pagination.total;
@@ -225,10 +197,34 @@ export default function LibraryPage() {
     // Change tab function
     const changeTab = useCallback(
         (tab: Tab) => {
+            if (tab === "tracks") setFilter("owned");
+            setGridKey((k) => k + 1);
             router.push(`/collection?tab=${tab}`, { scroll: false });
         },
         [router],
     );
+
+    const resetPageForFilterChange = useCallback(() => {
+        setGridKey((k) => k + 1);
+        if (currentPage !== 1) {
+            router.push(`/collection?tab=${activeTab}`, { scroll: false });
+        }
+    }, [activeTab, currentPage, router]);
+
+    const changeFilter = useCallback((next: LibraryFilter) => {
+        setFilter(next);
+        resetPageForFilterChange();
+    }, [resetPageForFilterChange]);
+
+    const changeSort = useCallback((next: SortOption) => {
+        setSortBy(next);
+        resetPageForFilterChange();
+    }, [resetPageForFilterChange]);
+
+    const changePageSize = useCallback((next: number) => {
+        setItemsPerPage(next);
+        resetPageForFilterChange();
+    }, [resetPageForFilterChange]);
 
     // Update page with URL state - scroll handled by useEffect on currentPage change
     const updatePage = useCallback(
@@ -361,9 +357,9 @@ export default function LibraryPage() {
                         filter={filter}
                         sortBy={sortBy}
                         itemsPerPage={itemsPerPage}
-                        onFilterChange={setFilter}
-                        onSortChange={setSortBy}
-                        onItemsPerPageChange={setItemsPerPage}
+                        onFilterChange={changeFilter}
+                        onSortChange={changeSort}
+                        onItemsPerPageChange={changePageSize}
                         onShuffleLibrary={handleShuffleLibrary}
                     />
                 </div>
