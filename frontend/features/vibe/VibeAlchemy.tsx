@@ -22,7 +22,7 @@ interface SelectedTrack {
 
 export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
     const { replaceOperation } = useAudioControls();
-    const { t, locale } = useLanguage();
+    const { t: translateUi, locale } = useLanguage();
     const [addTracks, setAddTracks] = useState<SelectedTrack[]>([]);
     const [subtractTracks, setSubtractTracks] = useState<SelectedTrack[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -123,12 +123,12 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-scene) w-[calc(100vw-2rem)] sm:w-[480px] max-h-[70vh] bg-black/90 backdrop-blur-lg border border-white/10 rounded-xl flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-                    <FlaskConical className="w-4 h-4" /> {t("Blend")}
+                    <FlaskConical className="w-4 h-4" /> {translateUi("Blend")}
                 </h3>
                 <button
                     onClick={onClose}
                     className="text-[var(--text-muted)] hover:text-white"
-                    aria-label={t("Close alchemy")}
+                    aria-label={translateUi("Close alchemy")}
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -142,7 +142,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                             className={`text-xs mb-2 flex items-center gap-1 ${addingTo === "add" ? "text-emerald-400" : "text-[var(--text-muted)]"}`}
                             aria-pressed={addingTo === "add"}
                         >
-                            <Plus className="w-3 h-3" /> {t("More Like")}
+                            <Plus className="w-3 h-3" /> {translateUi("More Like")}
                         </button>
                         {addTracks.map((t) => (
                             <div
@@ -155,7 +155,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                                 <button
                                     onClick={() => removeTrack(t.id, "add")}
                                     className="text-[var(--text-muted)] hover:text-white"
-                                    aria-label={`${t("Remove")} ${t.title}`}
+                                    aria-label={`${translateUi("Remove")} ${t.title}`}
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
@@ -168,7 +168,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                             className={`text-xs mb-2 flex items-center gap-1 ${addingTo === "subtract" ? "text-rose-400" : "text-[var(--text-muted)]"}`}
                             aria-pressed={addingTo === "subtract"}
                         >
-                            <Minus className="w-3 h-3" /> {t("Less Like")}
+                            <Minus className="w-3 h-3" /> {translateUi("Less Like")}
                         </button>
                         {subtractTracks.map((t) => (
                             <div
@@ -183,7 +183,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                                         removeTrack(t.id, "subtract")
                                     }
                                     className="text-[var(--text-muted)] hover:text-white"
-                                    aria-label={`${t("Remove")} ${t.title}`}
+                                    aria-label={`${translateUi("Remove")} ${t.title}`}
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
@@ -193,14 +193,14 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                 </div>
 
                 <div className="relative">
-                    <label htmlFor="alchemy-search" className="sr-only">{t("Search tracks for alchemy")}</label>
+                    <label htmlFor="alchemy-search" className="sr-only">{translateUi("Search tracks for alchemy")}</label>
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
                     <input
                         id="alchemy-search"
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={`${t("Search to add to")} "${addingTo === "add" ? t("More Like") : t("Less Like")}"...`}
+                        placeholder={`${translateUi("Search to add to")} "${addingTo === "add" ? translateUi("More Like") : translateUi("Less Like")}"...`}
                         className="w-full pl-8 pr-3 py-2 bg-white/8 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
                     />
                 </div>
@@ -232,7 +232,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                     className="w-full px-3 py-2 bg-white/10 hover:bg-white/15 disabled:opacity-30 rounded-lg text-sm text-[var(--text-primary)] hover:text-white flex items-center justify-center gap-2"
                 >
                     <FlaskConical className="w-4 h-4" />{" "}
-                    {mutation.isPending ? t("Computing...") : t("Blend")}
+                    {mutation.isPending ? translateUi("Computing...") : translateUi("Blend")}
                 </button>
                 {computeError && <p className="text-xs text-rose-400/70 text-center mt-1">{translate(locale, computeError)}</p>}
             </div>
@@ -244,7 +244,7 @@ export function VibeAlchemy({ onHighlight, onClose }: VibeAlchemyProps) {
                             onClick={handlePlayResults}
                             className="w-full px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg text-sm text-[var(--text-primary)] hover:text-white flex items-center justify-center gap-2"
                         >
-                            <Play className="w-4 h-4" /> {t("Play Result")} (
+                            <Play className="w-4 h-4" /> {translateUi("Play Result")} (
                             {results.length})
                         </button>
                     </div>
