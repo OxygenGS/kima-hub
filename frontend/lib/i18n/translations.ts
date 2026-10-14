@@ -485,6 +485,12 @@ export const english = {
     "Downloads": "Downloads",
     "Imports": "Imports",
     "History": "History",
+    "High Match": "High Match",
+    "Medium Match": "Medium Match",
+    "Explore": "Explore",
+    "Wild Card": "Wild Card",
+    "High": "High",
+    "Medium": "Medium",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -973,6 +979,12 @@ export const dutch: Record<TranslationKey, string> = {
     "Downloads": "Downloads",
     "Imports": "Importen",
     "History": "Geschiedenis",
+    "High Match": "Hoge overeenkomst",
+    "Medium Match": "Gemiddelde overeenkomst",
+    "Explore": "Ontdekken",
+    "Wild Card": "Verrassing",
+    "High": "Hoog",
+    "Medium": "Gemiddeld",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
