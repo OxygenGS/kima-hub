@@ -1,4 +1,6 @@
-# Chillverse Listen — security review (development)
+# Kima Hub — historical development security review
+
+**Historical security review:** The findings below are from the October 2026 development phase. They are not evidence that findings are resolved or currently exploitable. See [SECURITY.md](../SECURITY.md) for current security information.
 
 Scope: `feature/user-permissions`, initial static review on 2026-10-13. Not a penetration test or release approval. No production changes.
 
