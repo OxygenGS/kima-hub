@@ -6,6 +6,7 @@ import { SettingsSection, SettingsRow, SettingsInput, SettingsSelect } from "../
 import { SystemSettings } from "../../types";
 import { ExternalLink } from "lucide-react";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SoulseekSectionProps {
     settings: SystemSettings;
@@ -16,16 +17,17 @@ interface SoulseekSectionProps {
 
 export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: SoulseekSectionProps) {
     const { branding } = useBranding();
+    const { t } = useLanguage();
     const [testStatus, setTestStatus] = useState<StatusType>("idle");
     const [testMessage, setTestMessage] = useState("");
 
     const handleTest = async () => {
         setTestStatus("loading");
-        setTestMessage("Connecting...");
+        setTestMessage(t("Connecting..."));
         const result = await onTest("soulseek");
         if (result.success) {
             setTestStatus("success");
-            setTestMessage("Connected to Soulseek");
+            setTestMessage(t("Connected to Soulseek"));
         } else {
             setTestStatus("error");
             setTestMessage(result.error || "Connection failed");
@@ -43,23 +45,23 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
     return (
         <SettingsSection
             id="soulseek"
-            title="Soulseek"
-            description="Configure Soulseek for music downloads — directly (P2P) or via an external slskd instance"
+            title={t("Soulseek")}
+            description={t("Configure Soulseek for music downloads — directly (P2P) or via an external slskd instance")}
         >
             <SettingsRow
-                label="Connection Mode"
+                label={t("Connection Mode")}
                 description={
                     isSlskd
-                        ? "Route through a slskd REST API instance. slskd holds its own Soulseek account, so no credentials are needed here."
-                        : `Connect directly using ${branding.name}'s built-in Soulseek client and your account credentials.`
+                        ? t("Route through a slskd REST API instance. slskd holds its own Soulseek account, so no credentials are needed here.")
+                        : `${t("Connect directly using")} ${branding.name} ${t("'s built-in Soulseek client and your account credentials.")}`
                 }
             >
                 <SettingsSelect
                     value={mode}
                     onChange={(v) => onUpdate({ soulseekMode: v as "p2p" | "slskd" })}
                     options={[
-                        { value: "p2p", label: "Built-in (P2P)" },
-                        { value: "slskd", label: "slskd (external)" },
+                        { value: "p2p", label: t("Built-in (P2P)") },
+                        { value: "slskd", label: t("slskd (external)") },
                     ]}
                 />
             </SettingsRow>
@@ -67,10 +69,10 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
             {!isSlskd && (
                 <>
                     <SettingsRow
-                        label="Soulseek Username"
+                        label={t("Soulseek Username")}
                         description={
                             <span className="flex items-center gap-1.5">
-                                Your Soulseek account username
+                                {t("Your Soulseek account username")}
                                 <a
                                     href="https://www.slsknet.org/news/node/1"
                                     target="_blank"
@@ -78,7 +80,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                                     className="inline-flex items-center gap-1 text-brand hover:text-[#f97316] transition-colors"
                                 >
                                     <ExternalLink className="w-3 h-3" />
-                                    Create Account
+                                    {t("Create Account")}
                                 </a>
                             </span>
                         }
@@ -92,8 +94,8 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                     </SettingsRow>
 
                     <SettingsRow
-                        label="Soulseek Password"
-                        description="Your Soulseek account password"
+                        label={t("Soulseek Password")}
+                        description={t("Your Soulseek account password")}
                     >
                         <SettingsInput
                             type="password"
@@ -109,8 +111,8 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
             {isSlskd && (
                 <>
                     <SettingsRow
-                        label="slskd URL"
-                        description="Base URL of your slskd instance (e.g. http://slskd:5030)"
+                        label={t("slskd URL")}
+                        description={t("Base URL of your slskd instance (e.g. http://slskd:5030)")}
                     >
                         <SettingsInput
                             value={settings.slskdUrl || ""}
@@ -121,14 +123,14 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                     </SettingsRow>
 
                     <SettingsRow
-                        label="slskd API Key"
-                        description="API key from your slskd configuration (leave blank if auth is disabled)"
+                        label={t("slskd API Key")}
+                        description={t("API key from your slskd configuration (leave blank if auth is disabled)")}
                     >
                         <SettingsInput
                             type="password"
                             value={settings.slskdApiKey || ""}
                             onChange={(v) => onUpdate({ slskdApiKey: v })}
-                            placeholder="optional"
+                            placeholder={t("optional")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -143,7 +145,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                         className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
                             hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                     >
-                        {testStatus === "loading" ? "Connecting..." : "Test Connection"}
+                        {testStatus === "loading" ? t("Connecting...") : t("Test Connection")}
                     </button>
                     <InlineStatus
                         status={testStatus}
@@ -152,7 +154,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                     />
                 </div>
                 <p className="text-xs text-[var(--text-muted)]">
-                    Downloads will be saved to your Singles folder automatically
+                    {t("Downloads will be saved to your Singles folder automatically")}
                 </p>
             </div>
         </SettingsSection>
