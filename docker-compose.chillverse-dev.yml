@@ -1,3 +1,5 @@
+# RETIRED DEVELOPMENT TEST CONFIGURATION (CT 105 removed).
+# Not intended for installation or deployment; see docker-compose.prod.yml.
 # Isolated, lightweight Chillverse Listen test stack for CT 105.
 # Run with: docker compose --env-file .env.chillverse-dev -f docker-compose.chillverse-dev.yml ...
 # Never bind production music/download folders or point DATABASE_URL at production.

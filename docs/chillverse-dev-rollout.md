@@ -1,6 +1,8 @@
-# Chillverse Listen — DEV AIO rollout gate
+# Kima Hub — archived development rollout checklist
 
-Status: **preparation only**. Development branch: `feature/user-permissions`. No images published; no production deployment authorized.
+**Archived historical document (October 2026).** CT 105 was retired after GHCR v1.10.0 was successfully deployed to CT 101. The steps below are historical and must not be followed as current rollout instructions. See the [README](../README.md) for current installation and updates.
+
+Original status: **preparation only**. Development branch: `feature/user-permissions`. No images published; no production deployment authorized.
 
 ## Environments
 
