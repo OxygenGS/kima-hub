@@ -1,8 +1,8 @@
 # Changelog
 
-## Community Fork — October 2026
+## Oxygen's Fork — October 2026
 
-This changelog documents changes made to the independent fork of Kima Hub, originally developed by Chevron7Locked.
+This changelog documents changes made to Kima Hub — Oxygen's Fork, independently maintained by OxygenGS and originally developed by Chevron7Locked.
 
 ## Unreleased — October 2026
 
