@@ -7,6 +7,8 @@ import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 
 type IntegrationKey = "lidarr" | "audiobookshelf" | "soulseek";
 type IntegrationResult = { ok: boolean; message: string };
@@ -15,6 +17,7 @@ export default function OnboardingPage() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuth();
     const { branding } = useBranding();
+    const { t, locale, setLocale } = useLanguage();
     const [step, setStep] = useState(1);
     // Separate submitting state: account creation + complete/skip
     const [submitting, setSubmitting] = useState(false);
@@ -82,7 +85,7 @@ export default function OnboardingPage() {
                 const healthRes = await fetch("/api/health", { method: "GET" });
                 if (!healthRes.ok) throw new Error("not ready");
             } catch {
-                setError(`Cannot reach the server. Check that ${branding.name} is fully started and try again.`);
+                setError("Cannot reach the server. Check that the server is fully started and try again.");
                 return;
             }
             const response = await api.post<{
@@ -164,13 +167,13 @@ export default function OnboardingPage() {
             }
             setIntegrationResults((prev) => ({
                 ...prev,
-                [type]: { ok: true, message: `${type} connected successfully!` },
+                [type]: { ok: true, message: "Connected successfully!" },
             }));
         } catch (err: unknown) {
             const errorMessage =
                 err instanceof Error ?
                     err.message
-                :   `Failed to connect to ${type}`;
+                :   "Connection failed";
             setIntegrationResults((prev) => ({
                 ...prev,
                 [type]: { ok: false, message: errorMessage },
@@ -219,7 +222,7 @@ export default function OnboardingPage() {
                 <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <GradientSpinner size="lg" />
-                        <p className="text-[var(--text-secondary)] mt-4">Loading...</p>
+                        <p className="text-[var(--text-secondary)] mt-4">{t("Loading...")}</p>
                     </div>
                 </div>
             :   <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center p-6">
@@ -242,17 +245,22 @@ export default function OnboardingPage() {
                                     {branding.name}
                                 </h1>
                             </div>
-                            <p className="text-[var(--text-secondary)] text-lg">
-                                Welcome to your personal music streaming
-                                platform
-                            </p>
+                            <div className="flex items-center justify-center gap-2 mb-5">
+                                <label htmlFor="onboarding-language" className="text-sm text-[var(--text-secondary)]">{t("Display language")}</label>
+                                <select id="onboarding-language" value={locale} onChange={(e) => setLocale(e.target.value as Locale)}
+                                    className="bg-white/10 border border-white/20 rounded-lg text-white text-sm px-3 py-2">
+                                    <option value="en" className="bg-[#111]">{t("English")}</option>
+                                    <option value="nl" className="bg-[#111]">{t("Nederlands")}</option>
+                                </select>
+                            </div>
+                            <p className="text-[var(--text-secondary)] text-lg">{t("Welcome to your personal music streaming platform")}</p>
                         </div>
 
                         {/* Progress Steps */}
                         <div className="flex items-center justify-center gap-3 mb-8">
                             {[
-                                { num: 1, label: "Account" },
-                                { num: 2, label: "Integrations" },
+                                { num: 1, label: t("Account") },
+                                { num: 2, label: t("Integrations") },
                             ].map((s, idx) => (
                                 <div key={s.num} className="flex items-center">
                                     <div className="flex flex-col items-center">
@@ -297,10 +305,10 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Create Your Admin Account
+                                                {t("Create Your Admin Account")}
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                This is the owner account for your {branding.name} server. You&apos;ll manage users, integrations, and settings from here.
+                                                {t("This is the owner account for your")} {branding.name} {t("server. You'll manage users, integrations, and settings from here.")}
                                             </p>
                                         </div>
 
@@ -313,7 +321,7 @@ export default function OnboardingPage() {
                                                     htmlFor="username"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    Username
+                                                    {t("Username")}
                                                 </label>
                                                 <input
                                                     id="username"
@@ -325,7 +333,7 @@ export default function OnboardingPage() {
                                                         )
                                                     }
                                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                                                    placeholder="Choose a username"
+                                                    placeholder={t("Choose a username")}
                                                     required
                                                     minLength={3}
                                                 />
@@ -336,7 +344,7 @@ export default function OnboardingPage() {
                                                     htmlFor="password"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    Password
+                                                    {t("Password")}
                                                 </label>
                                                 <input
                                                     id="password"
@@ -352,7 +360,7 @@ export default function OnboardingPage() {
                                                         "border-red-500/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder="At least 6 characters"
+                                                    placeholder={t("At least 6 characters")}
                                                     required
                                                     minLength={6}
                                                 />
@@ -363,7 +371,7 @@ export default function OnboardingPage() {
                                                     htmlFor="confirmPassword"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    Confirm Password
+                                                    {t("Confirm Password")}
                                                 </label>
                                                 <input
                                                     id="confirmPassword"
@@ -379,14 +387,14 @@ export default function OnboardingPage() {
                                                         "border-red-500/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder="Confirm your password"
+                                                    placeholder={t("Confirm your password")}
                                                     required
                                                 />
                                             </div>
 
                                             {error && (
                                                 <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400">
-                                                    {error}
+                                                    {translate(locale, error)}
                                                 </div>
                                             )}
 
@@ -399,9 +407,9 @@ export default function OnboardingPage() {
                                                     {submitting ?
                                                         <>
                                                             <GradientSpinner size="sm" />
-                                                            Creating Account...
+                                                            {t("Creating Account...")}
                                                         </>
-                                                    : "Continue"}
+                                                    : t("Continue")}
                                                 </span>
                                             </button>
                                         </form>
@@ -412,10 +420,10 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Connect Your Services
+                                                {t("Connect Your Services")}
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                All integrations are optional -- you can enable or change them later in Settings.
+                                                {t("All integrations are optional -- you can enable or change them later in Settings.")}
                                             </p>
                                         </div>
 
@@ -423,7 +431,7 @@ export default function OnboardingPage() {
                                             {/* Lidarr */}
                                             <IntegrationCard
                                                 title="Lidarr"
-                                                description="Automatically find and download albums missing from your library."
+                                                description={t("Automatically find and download albums missing from your library.")}
                                                 localPort="localhost:8686"
                                                 icon={
                                                     <svg
@@ -472,7 +480,7 @@ export default function OnboardingPage() {
                                             {/* Audiobookshelf */}
                                             <IntegrationCard
                                                 title="Audiobookshelf"
-                                                description="Browse and stream your audiobook collection alongside your music."
+                                                description={t("Browse and stream your audiobook collection alongside your music.")}
                                                 localPort="localhost:13378"
                                                 icon={
                                                     <svg
@@ -555,14 +563,14 @@ export default function OnboardingPage() {
                                         {error && (
                                             <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
                                                 <p className="text-sm text-red-500">
-                                                    {error}
+                                                    {translate(locale, error)}
                                                 </p>
                                             </div>
                                         )}
 
                                         {/* What happens next */}
                                         <p className="text-sm text-[var(--text-muted)] border-t border-white/10 pt-4">
-                                            After finishing, {branding.name} will scan your music library and start enrichment in the background. This may take a few minutes for large collections.
+                                            {t("After finishing,")} {branding.name} {t("will scan your music library and start enrichment in the background. This may take a few minutes for large collections.")}
                                         </p>
 
                                         <div className="flex gap-3">
@@ -586,7 +594,7 @@ export default function OnboardingPage() {
                                                 tabIndex={0}
                                                 className="flex-1 bg-white/5 border border-white/10 text-[var(--text-secondary)] font-medium py-3.5 rounded-lg hover:bg-white/10 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
                                             >
-                                                Finish without integrations
+                                                {t("Finish without integrations")}
                                             </button>
                                             <button
                                                 onClick={handleNextStep}
@@ -603,10 +611,10 @@ export default function OnboardingPage() {
                                                     <>
                                                         <span className="flex items-center justify-center gap-2">
                                                             <GradientSpinner size="sm" />
-                                                            Saving...
+                                                            {t("Saving...")}
                                                         </span>
                                                     </>
-                                                : "Save & Finish"}
+                                                : t("Save & Finish")}
                                             </button>
                                         </div>
                                     </div>
@@ -666,6 +674,7 @@ function IntegrationCard({
     result,
     useSoulseekCreds = false,
 }: IntegrationCardProps) {
+    const { t, locale } = useLanguage();
     return (
         <div
             className={`border rounded-lg transition-all ${
@@ -697,7 +706,7 @@ function IntegrationCard({
                         onClick={onToggle}
                         onKeyDown={(e) => e.key === "Enter" && onToggle()}
                         tabIndex={0}
-                        aria-label={`${enabled ? "Disable" : "Enable"} ${title}`}
+                        aria-label={`${enabled ? t("Disable") : t("Enable")} ${title}`}
                         aria-pressed={enabled}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
@@ -717,7 +726,7 @@ function IntegrationCard({
                             type="url"
                             value={url}
                             onChange={(e) => onUrlChange(e.target.value)}
-                            placeholder={`Server URL (e.g., http://${
+                            placeholder={`${t("Server URL")} (${t("e.g.")} http://${
                                 localPort || "localhost:PORT"
                             })`}
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
@@ -730,7 +739,7 @@ function IntegrationCard({
                                     onChange={(e) =>
                                         onUsernameChange?.(e.target.value)
                                     }
-                                    placeholder="Soulseek Username"
+                                    placeholder={t("Soulseek Username")}
                                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
                                 />
                                 <input
@@ -739,12 +748,11 @@ function IntegrationCard({
                                     onChange={(e) =>
                                         onPasswordChange?.(e.target.value)
                                     }
-                                    placeholder="Soulseek Password"
+                                    placeholder={t("Soulseek Password")}
                                     className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
                                 />
                                 <p className="text-xs text-[var(--text-secondary)] mt-2">
-                                    These are your Soulseek network credentials,
-                                    not your Slskd login
+                                    {t("These are your Soulseek network credentials, not your Slskd login")}
                                 </p>
                             </>
                         :   <input
@@ -753,7 +761,7 @@ function IntegrationCard({
                                 onChange={(e) =>
                                     onApiKeyChange?.(e.target.value)
                                 }
-                                placeholder="API Key"
+                                placeholder={t("API Key")}
                                 className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
                             />
                         }
@@ -765,7 +773,7 @@ function IntegrationCard({
                                     : "text-red-400"
                                 }`}
                             >
-                                {result.message}
+                                {translate(locale, result.message)}
                             </p>
                         )}
                         <button
@@ -789,9 +797,9 @@ function IntegrationCard({
                             {testing ?
                                 <span className="flex items-center justify-center gap-2">
                                     <GradientSpinner size="sm" />
-                                    Testing...
+                                    {t("Testing...")}
                                 </span>
-                            : "Test Connection"}
+                            : t("Test Connection")}
                         </button>
                     </div>
                 )}
@@ -823,6 +831,7 @@ function SoulseekCard({
     testing,
     result,
 }: SoulseekCardProps) {
+    const { t, locale } = useLanguage();
     return (
         <div
             className={`border rounded-lg transition-all ${
@@ -858,7 +867,7 @@ function SoulseekCard({
                         <div>
                             <h3 className="text-white font-bold">Soulseek</h3>
                             <p className="text-sm text-[var(--text-secondary)]">
-                                Peer-to-peer search to fill in tracks you don&apos;t own.
+                                {t("Peer-to-peer search to fill in tracks you don't own.")}
                             </p>
                         </div>
                     </div>
@@ -866,7 +875,7 @@ function SoulseekCard({
                         onClick={onToggle}
                         onKeyDown={(e) => e.key === "Enter" && onToggle()}
                         tabIndex={0}
-                        aria-label={`${enabled ? "Disable" : "Enable"} Soulseek`}
+                        aria-label={`${enabled ? t("Disable") : t("Enable")} Soulseek`}
                         aria-pressed={enabled}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
@@ -886,18 +895,18 @@ function SoulseekCard({
                             type="text"
                             value={username}
                             onChange={(e) => onUsernameChange(e.target.value)}
-                            placeholder="Soulseek Username"
+                            placeholder={t("Soulseek Username")}
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
                         />
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => onPasswordChange(e.target.value)}
-                            placeholder="Soulseek Password"
+                            placeholder={t("Soulseek Password")}
                             className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
                         />
                         <p className="text-xs text-[var(--text-secondary)]">
-                            Create an account at{" "}
+                            {t("Create an account at")}{" "}
                             <a
                                 href="https://www.slsknet.org/news/node/1"
                                 target="_blank"
@@ -915,7 +924,7 @@ function SoulseekCard({
                                     : "text-red-400"
                                 }`}
                             >
-                                {result.message}
+                                {translate(locale, result.message)}
                             </p>
                         )}
                         <button
@@ -934,9 +943,9 @@ function SoulseekCard({
                             {testing ?
                                 <span className="flex items-center justify-center gap-2">
                                     <GradientSpinner size="sm" />
-                                    Testing...
+                                    {t("Testing...")}
                                 </span>
-                            : "Test Connection"}
+                            : t("Test Connection")}
                         </button>
                     </div>
                 )}

@@ -38,6 +38,14 @@ describe("UI translations", () => {
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
     });
 
+    it("localizes onboarding setup and connection feedback", () => {
+        expect(translate("nl", "Create Your Admin Account")).toBe("Maak je beheerdersaccount aan");
+        expect(translate("nl", "Connected successfully!")).toBe("Verbinding geslaagd!");
+        expect(translate("nl", "URL and API key are required")).toBe("URL en API-sleutel zijn verplicht");
+        expect(translate("nl", "Finish without integrations")).toBe("Afronden zonder koppelingen");
+        expect(translate("nl", "Soulseek")).toBe("Soulseek");
+    });
+
     it("preserves external labels when no UI translation exists", () => {
         expect(translate("nl", "Settings")).toBe("Instellingen");
         expect(translate("nl", "Psychedelic Rock")).toBe("Psychedelic Rock");
