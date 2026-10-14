@@ -22,9 +22,11 @@ import { ArtistsGrid } from "@/features/library/components/ArtistsGrid";
 import { AlbumsGrid } from "@/features/library/components/AlbumsGrid";
 import { TracksList } from "@/features/library/components/TracksList";
 import { Pagination } from "@/components/ui/Pagination";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export default function LibraryPage() {
     const router = useRouter();
+    const { t } = useLanguage();
     const searchParams = useSearchParams();
     const { playTracks } = useAudioControls();
 
@@ -407,9 +409,9 @@ export default function LibraryPage() {
                     onPageChange={updatePage}
                     disabled={isLoading}
                     label={
-                        activeTab === "artists" ? "Artists"
-                        : activeTab === "albums" ? "Albums"
-                        : "Tracks"
+                        activeTab === "artists" ? t("Artists")
+                        : activeTab === "albums" ? t("Albums")
+                        : t("Tracks")
                     }
                 />
 
@@ -424,21 +426,14 @@ export default function LibraryPage() {
                         })
                     }
                     onConfirm={handleDelete}
-                    title={`Delete ${
-                        deleteConfirm.type === "artist" ? "Artist"
-                        : deleteConfirm.type === "album" ? "Album"
-                        : "Track"
-                    }?`}
-                    message={
-                        deleteConfirm.type === "track" ?
-                            `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete the file from your system.`
-                        : deleteConfirm.type === "album" ?
-                            `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all tracks and files from your system.`
-                        :   `Are you sure you want to delete "${deleteConfirm.title}"? This will permanently delete all albums, tracks, and files from your system.`
-
-                    }
-                    confirmText="Delete"
-                    cancelText="Cancel"
+                    title={deleteConfirm.type === "artist" ? t("Delete artist?") : deleteConfirm.type === "album" ? t("Delete album?") : t("Delete track?")}
+                    message={`${t("Are you sure you want to delete")} "${deleteConfirm.title}"? ${
+                        deleteConfirm.type === "track" ? t("This will permanently delete the file from your system.")
+                        : deleteConfirm.type === "album" ? t("This will permanently delete all tracks and files from your system.")
+                        : t("This will permanently delete all albums, tracks, and files from your system.")
+                    }`}
+                    confirmText={t("Delete")}
+                    cancelText={t("Cancel")}
                     variant="danger"
                 />
             </div>
