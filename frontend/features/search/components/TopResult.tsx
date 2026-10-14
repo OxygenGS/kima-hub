@@ -1,3 +1,7 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n/language-context";
+
 import Link from "next/link";
 import Image from "next/image";
 import { Music, ExternalLink } from "lucide-react";
@@ -10,6 +14,7 @@ interface TopResultProps {
 }
 
 export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
+    const { t } = useLanguage();
     if (!libraryArtist && !discoveryArtist) {
         return null;
     }
@@ -72,18 +77,18 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs font-semibold text-[#eab308]">
-                                Artist
+                                {t("Artist")}
                             </span>
                             <span className="w-1 h-1 rounded-full bg-[#eab308]/50" />
                             <span className="text-xs text-[var(--text-muted)]">
-                                {isLibrary ? "Your Library" : "Discover"}
+                                {isLibrary ? t("Your Library") : t("Discover")}
                             </span>
                         </div>
                         <h3 className="text-4xl font-bold text-white mb-2 leading-tight truncate group-hover:text-[#eab308] transition-colors duration-200">
                             {name}
                         </h3>
                         <div className="flex items-center gap-2 text-[var(--text-secondary)] group-hover:text-gray-300 transition-colors">
-                            <span className="text-sm font-medium">View Profile</span>
+                            <span className="text-sm font-medium">{t("View Profile")}</span>
                             <ExternalLink className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-150" />
                         </div>
                     </div>
