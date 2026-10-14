@@ -168,7 +168,7 @@ export function PlaylistSelector({
             >
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <h2 className="text-2xl font-bold text-white">
-                        Add to Playlist
+                        {t("Add to Playlist")}
                     </h2>
                     <button
                         onClick={onClose}
@@ -281,7 +281,7 @@ export function PlaylistSelector({
 
                 <div className="p-6 border-t border-white/10 bg-[var(--bg-primary)]/50">
                     <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">
-                        Create New Playlist
+                        {t("Create New Playlist")}
                     </p>
                     <div className="flex gap-2 mb-3">
                         <input
@@ -319,7 +319,7 @@ export function PlaylistSelector({
                             <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
                         </div>
                         <span className="text-sm text-[var(--text-secondary)] group-hover:text-gray-300 transition-colors">
-                            Share with other users
+                            {t("Share with other users")}
                         </span>
                     </label>
                 </div>
