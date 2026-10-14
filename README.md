@@ -318,7 +318,7 @@ Open http://localhost:3030 to complete setup. The AIO image includes the fronten
 
 ### Update with Docker Compose or Dockge
 
-1. Make a verified **PostgreSQL backup** and save your Compose configuration before updating. Image rollback alone does not reverse database migrations.
+1. Back up the **entire stopped AIO `/data` volume** (not just PostgreSQL) and save the Compose/Dockge configuration. Follow the [safe AIO update and independent rollback guide](docs/safe-aio-updates.md). An old image cannot safely open a migrated database.
 2. Check the [releases](https://github.com/OxygenGS/kima-hub/releases) for a new stable version.
 3. Change the `image:` tag in your existing Compose stack to that version. Keep the same `/data` volume, music mounts and environment settings.
 4. In **Dockge**, save the edited Compose configuration and use its pull/redeploy workflow. With Docker Compose, run:
