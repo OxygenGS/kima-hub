@@ -1,5 +1,5 @@
 /**
- * Human-reviewed Dutch in-app release notes.
+ * Versioned Dutch in-app release translation draft (editorial sign-off pending).
  *
  * The upstream source of truth stays in backend/src/services/releases/catalog.ts.
  * Only presentation fields are projected here; stable release versions, item
@@ -197,9 +197,9 @@ const dutch: Record<string, VersionCopy> = {
  * Consent notices and destructive confirmations must never display an obsolete
  * translation if upstream changes what is sent or deleted. These expected
  * English originals are pinned to the released 1.11 catalog; a mismatch
- * intentionally falls back to the new original English warning until reviewed.
+ * intentionally falls back to the new original English warning until its translation is updated and checked.
  */
-const reviewedSafetyCopy: Record<string, Record<string, Partial<Record<"discloses" | "confirmMessage", string>>>> = {
+const sourcePinnedSafetyCopy: Record<string, Record<string, Partial<Record<"discloses" | "confirmMessage", string>>>> = {
     "1.11.0": {
         "engine.wipe": {
             confirmMessage:
@@ -231,7 +231,7 @@ export function localizeRelease<T extends ReleaseForCopy>(release: T, locale: Lo
         if (!itemCopy) return item;
         const { links: translatedLinks, ...display } = itemCopy;
         const originalFields = item as unknown as Record<string, unknown>;
-        const safetyCopy = reviewedSafetyCopy[release.version]?.[item.key];
+        const safetyCopy = sourcePinnedSafetyCopy[release.version]?.[item.key];
         const safeDisplay = Object.fromEntries(
             Object.entries(display).filter(([field]) => {
                 const source = originalFields[field];
