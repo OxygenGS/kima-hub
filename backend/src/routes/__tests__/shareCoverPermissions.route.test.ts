@@ -16,6 +16,7 @@ jest.mock("../../utils/logger", () => ({
 jest.mock("../../services/imageStorage", () => ({
     getLocalImagePath: jest.fn(),
     getResizedImagePath: jest.fn(),
+    getCanonicalCoverFilePath: jest.fn(),
 }));
 jest.mock("../../services/audioStreaming", () => ({
     getAudioStreamingService: jest.fn(),
@@ -31,7 +32,7 @@ import os from "os";
 import path from "path";
 import shareRouter from "../share";
 import { prisma } from "../../utils/db";
-import { getLocalImagePath, getResizedImagePath } from "../../services/imageStorage";
+import { getLocalImagePath, getResizedImagePath, getCanonicalCoverFilePath } from "../../services/imageStorage";
 
 const findLink = prisma.shareLink.findUnique as jest.Mock;
 const findTrack = prisma.track.findUnique as jest.Mock;
@@ -39,6 +40,7 @@ const findAlbum = prisma.album.findUnique as jest.Mock;
 const findPlaylistItem = prisma.playlistItem.findFirst as jest.Mock;
 const locateCover = getLocalImagePath as jest.Mock;
 const resizedCover = getResizedImagePath as jest.Mock;
+const safeCover = getCanonicalCoverFilePath as jest.Mock;
 
 const app = express();
 app.use("/share", shareRouter);
@@ -70,6 +72,7 @@ beforeEach(() => {
     findPlaylistItem.mockResolvedValue({ id: "member-1" });
     locateCover.mockReturnValue(fixtureFile);
     resizedCover.mockReturnValue(null);
+    safeCover.mockReturnValue(null);
 });
 
 describe("shared cover art scope", () => {
@@ -79,6 +82,25 @@ describe("shared cover art scope", () => {
         expect(response.headers["cache-control"]).toBe("private, no-store");
         expect(response.headers["content-type"]).toContain("image/jpeg");
         expect(locateCover).toHaveBeenCalledWith("native:albums/allowed.jpg");
+    });
+
+    it("rejects an unsafe cached resize and serves the authorized original instead", async () => {
+        resizedCover.mockReturnValue("/outside/private.jpg");
+        safeCover.mockReturnValue(null);
+        const response = await request(app).get("/share/isolated-share-token/cover-art/native%3Aalbums%2Fallowed.jpg?size=500");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("private, no-store");
+        expect(safeCover).toHaveBeenCalledWith("/outside/private.jpg");
+        expect(locateCover).toHaveBeenCalledWith("native:albums/allowed.jpg");
+    });
+
+    it("serves a validated resized cover with no-store cache policy", async () => {
+        resizedCover.mockReturnValue("/safe/allowed_w500.jpg");
+        safeCover.mockReturnValue(fixtureFile);
+        const response = await request(app).get("/share/isolated-share-token/cover-art/native%3Aalbums%2Fallowed.jpg?size=500");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("private, no-store");
+        expect(safeCover).toHaveBeenCalledWith("/safe/allowed_w500.jpg");
     });
 
     it("denies a different cover even if the token is valid and the image exists", async () => {
