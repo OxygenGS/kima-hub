@@ -245,7 +245,7 @@ test.describe("Interface language", () => {
                                     kind: "choice", key: "gpu.accelerate",
                                     title: "Use an NVIDIA graphics card", summary: "Original English GPU summary",
                                     body: "Original English GPU explanation",
-                                    discloses: "Original English GPU disclosure",
+                                    discloses: "Kima downloads twelve pinned packages (about 2 GB) from PyPI, checks every file against a fixed fingerprint, and installs them in your data folder, where they take about 3.4 GB. Nothing about your library leaves your server.",
                                     defaultValue: false,
                                 },
                             ],
@@ -280,7 +280,7 @@ test.describe("Interface language", () => {
             window.dispatchEvent(new Event("kima-hub-language-change"));
         });
         await expect(modal.getByRole("heading", { name: "Use an NVIDIA graphics card" })).toBeVisible();
-        await expect(modal.getByText("Original English GPU disclosure")).toBeVisible();
+        await expect(modal.getByText(/Kima downloads twelve pinned packages/)).toBeVisible();
         expect(writes).toEqual([]);
     });
 
