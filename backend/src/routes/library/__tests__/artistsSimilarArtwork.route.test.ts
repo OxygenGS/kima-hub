@@ -74,6 +74,22 @@ jest.mock("../../../services/artistSimilarity", () => ({
     enrichSimilarArtists: jest.fn().mockResolvedValue([]),
 }));
 
+// The artist page also requests global popularity before resolving similar artwork.
+// Keep this test offline: provider latency would otherwise consume Jest's 5-second
+// limit and make unrelated artwork assertions depend on internet availability.
+const mockGlobalTopRecordings = jest.fn();
+jest.mock("../../../services/listenBrainz", () => ({
+    listenBrainzService: {
+        getTopRecordingsForArtist: (...args: any[]) => mockGlobalTopRecordings(...args),
+    },
+}));
+const mockDeezerTopTracks = jest.fn();
+jest.mock("../../../services/deezer", () => ({
+    deezerService: {
+        getArtistTopTracks: (...args: any[]) => mockDeezerTopTracks(...args),
+    },
+}));
+
 jest.mock("../../../services/musicbrainz", () => ({
     musicBrainzService: {
         getArtist: jest.fn().mockResolvedValue(null),
@@ -138,6 +154,8 @@ describe("the similar-artists strip and where its pictures come from", () => {
         mockFindArtistArtwork.mockResolvedValue(null);
         mockArtistFindMany.mockResolvedValue([]);
         mockGetSimilarArtists.mockResolvedValue([]);
+        mockGlobalTopRecordings.mockResolvedValue([]);
+        mockDeezerTopTracks.mockResolvedValue([]);
     });
 
     describe("built from the artist's own enriched data", () => {
