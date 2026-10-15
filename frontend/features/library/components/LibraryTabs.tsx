@@ -1,5 +1,7 @@
 import { Tab } from "../types";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface LibraryTabsProps {
   activeTab: Tab;
@@ -14,6 +16,7 @@ const tabs = [
 ];
 
 export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
+  const { locale } = useLanguage();
   return (
     // Soft pills: the chosen one is amber text on a faint amber tint, the rest quiet.
     <div data-tv-section="library-tabs" className="inline-flex items-center gap-1">
@@ -36,7 +39,7 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
                 : "text-[var(--text-muted)] hover:text-white hover:bg-white/5",
             )}
           >
-            {tab.label}
+            {translate(locale, tab.label)}
           </button>
         );
       })}
