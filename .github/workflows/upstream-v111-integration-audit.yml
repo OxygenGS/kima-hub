@@ -87,3 +87,67 @@ jobs:
           name: upstream-integration-locale-browser
           path: frontend/test-results/
           retention-days: 7
+
+  database-compatibility:
+    name: Staged v1.11 migrations on throwaway PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: integration
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d integration"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5435/integration
+      PGPASSWORD: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend Prisma CLI
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+      - name: Rehearse all fork and upstream migration SQL on a fresh DB
+        working-directory: backend
+        run: npx prisma migrate deploy
+      - name: Assert combined upstream and fork schema fundamentals
+        env:
+          PGHOST: localhost
+          PGPORT: "5435"
+          PGUSER: test
+          PGDATABASE: integration
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $check$
+          BEGIN
+            IF (SELECT count(*) FROM information_schema.columns
+                WHERE table_name = 'User'
+                  AND column_name IN ('canRequestAlbums','canDownloadTracks')) <> 2
+              THEN RAISE EXCEPTION 'Fork permissions missing after migration'; END IF;
+            IF to_regclass('public."BrandingSettings"') IS NULL
+              THEN RAISE EXCEPTION 'Fork branding missing after migration'; END IF;
+            IF to_regclass('public."ReleaseAcknowledgement"') IS NULL
+              THEN RAISE EXCEPTION 'Upstream release acknowledgements missing'; END IF;
+            IF to_regclass('public."TrackStage"') IS NULL
+              THEN RAISE EXCEPTION 'Upstream enrichment stage model missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name='Play' AND column_name='heard')
+              THEN RAISE EXCEPTION 'Upstream play tracking field missing'; END IF;
+            IF (SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL) < 110
+              THEN RAISE EXCEPTION 'Not all staged migrations applied'; END IF;
+          END
+          $check$;
+          SQL
