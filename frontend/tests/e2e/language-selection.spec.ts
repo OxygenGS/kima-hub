@@ -227,7 +227,7 @@ test.describe("Interface language", () => {
         await page.goto("/share/public-ci-share");
         await expect(page.locator("html")).toHaveAttribute("lang", "nl");
         await expect(page.getByRole("heading", { name: "CI Shared Album Name" })).toBeVisible();
-        await expect(page.getByText("CI Original Track Title", { exact: true })).toBeVisible();
+        await expect(page.getByText("CI Original Track Title", { exact: true }).first()).toBeVisible();
         await expect(page.getByRole("button", { name: "Afspelen" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Vorig nummer" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Volgend nummer" })).toBeVisible();
