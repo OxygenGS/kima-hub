@@ -7,7 +7,7 @@ const consent = {
     title: "Use an NVIDIA graphics card",
     summary: "Optional. Run the heaviest job on your graphics card; off unless you turn it on.",
     body: "Original English paragraphs describing how this works.",
-    discloses: "Original details about PyPI downloads and your library.",
+    discloses: "Kima downloads twelve pinned packages (about 2 GB) from PyPI, checks every file against a fixed fingerprint, and installs them in your data folder, where they take about 3.4 GB. Nothing about your library leaves your server.",
     defaultValue: false as const,
     requires: "admin" as const,
 };
@@ -20,7 +20,7 @@ const wipe = {
     cta: "Wipe and re-run",
     run: "wipeEnrichment" as const,
     confirmTitle: "Wipe and re-run enrichment?",
-    confirmMessage: "Original server-side warning.",
+    confirmMessage: "Clears what Kima worked out about your music: which recording each track is, audio analysis, vibe data, the vibe map, artist bios and similar artists. Then it works it all out again with the new engine. Your music, playlists, plays, likes and edits stay. Takes a few hours on a large library; the vibe map is back when it finishes.",
     confirmLabel: "Wipe and re-run",
     olderLibraryOnly: true,
     requires: "admin" as const,
@@ -59,7 +59,7 @@ describe("versioned Dutch release copy", () => {
         expect(gpu.kind).toBe("choice");
         expect(gpu.key).toBe("gpu.accelerate");
         expect(gpu.requires).toBe("admin");
-        expect(consent.discloses).toBe("Original details about PyPI downloads and your library.");
+        expect(consent.discloses).toContain("twelve pinned packages");
     });
 
     it("does not change what a destructive action does or the link it opens", () => {
@@ -75,6 +75,21 @@ describe("versioned Dutch release copy", () => {
         expect(action.links?.[0]?.label).toBe("Voortgang bekijken in Instellingen");
         expect(action.links?.[0]?.href).toBe("/settings#cache");
         expect(localizeReleaseItem("1.11.0", wipe, "nl").confirmTitle).toContain("opnieuw opbouwen");
+    });
+
+    it("falls back to current English when a reviewed security warning changes upstream", () => {
+        const modified = {
+            ...release,
+            items: [
+                { ...consent, discloses: "New source notice: Kima now transfers library data." },
+                { ...wipe, confirmMessage: "New source notice: this action deletes music files." },
+            ],
+        };
+        const translated = localizeRelease(modified, "nl");
+        expect(translated.items[0].discloses).toBe(modified.items[0].discloses);
+        expect(translated.items[1].confirmMessage).toBe(modified.items[1].confirmMessage);
+        expect(translated.items[0].title).toBe("Een NVIDIA-videokaart gebruiken");
+        expect(translated.items[1].title).toBe("Analysegegevens wissen en opnieuw opbouwen");
     });
 
     it("preserves the author's attribution while translating the text for known 1.11", () => {
