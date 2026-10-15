@@ -289,9 +289,13 @@ jobs:
           SQL
 
   provisional-full-source-merge:
-    name: Temporary v1.11 full-source merge and compile gap report
+    name: Temporary v1.11 source compile preview (${{ matrix.conflicts }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        conflicts: [ours, theirs]
     permissions:
       contents: read
     steps:
@@ -301,14 +305,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - name: Preview all conflict-free upstream changes, keep fork for 141 conflicts
+      - name: Preview conflict-free upstream changes using selected conflict policy
         shell: bash
+        env:
+          V111_CONFLICT_STRATEGY: ${{ matrix.conflicts }}
         run: bash .github/ci/v111-provisional-merge-check.sh
       - name: Upload temporary compile gap report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v111-provisional-source-compile-gaps
+          name: v111-provisional-source-compile-gaps-${{ matrix.conflicts }}
           path: audit/
           if-no-files-found: warn
           retention-days: 14
