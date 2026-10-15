@@ -184,7 +184,7 @@ jobs:
   aio-image-build:
     name: Build actual v1.11 AIO Docker image (strictly no push)
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 90
     permissions:
       contents: read
     needs: [frontend, backend, fork-safety]
@@ -202,6 +202,18 @@ jobs:
         with:
           context: .
           push: false
-          tags: kima-v111:pr7-no-push
+          load: true
+          tags: kima-hub:aio-ci-smoke
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=ci-smoke
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Boot and exercise disposable merged v1.11 AIO
+        shell: bash
+        timeout-minutes: 35
+        run: bash .github/ci/v111-aio-runtime-smoke.sh
