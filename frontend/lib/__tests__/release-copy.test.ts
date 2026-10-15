@@ -59,7 +59,7 @@ describe("versioned Dutch release copy", () => {
         expect(gpu.kind).toBe("choice");
         expect(gpu.key).toBe("gpu.accelerate");
         expect(gpu.requires).toBe("admin");
-        expect(release.items[0].discloses).toBe("Original details about PyPI downloads and your library.");
+        expect(consent.discloses).toBe("Original details about PyPI downloads and your library.");
     });
 
     it("does not change what a destructive action does or the link it opens", () => {
