@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, memo, useCallback } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { Track } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
@@ -186,6 +188,7 @@ export function TracksList({
     isLoading = false,
     gridKey,
 }: TracksListProps) {
+    const { locale } = useLanguage();
     const { currentTrack } = useAudioState();
     const currentTrackId = currentTrack?.id;
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
@@ -228,7 +231,7 @@ export function TracksList({
         <>
             <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
                 <div className="w-8 text-center text-xs font-semibold text-[var(--text-muted)]">#</div>
-                <div className="text-xs font-semibold text-[var(--text-muted)]">Title</div>
+                <div className="text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Title")}</div>
                 <div className="hidden md:block text-xs font-semibold text-[var(--text-muted)]">Album</div>
                 <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">Duration</div>
             </div>
