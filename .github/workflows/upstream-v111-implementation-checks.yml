@@ -221,3 +221,7 @@ jobs:
         shell: bash
         timeout-minutes: 35
         run: bash .github/ci/aio-real-image-rehearsal.sh
+      - name: Original v1.11 AIO image upgrade and independent rollback (disposable)
+        shell: bash
+        timeout-minutes: 35
+        run: bash .github/ci/aio-v111-real-image-rehearsal.sh
