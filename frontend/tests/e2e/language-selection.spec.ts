@@ -284,6 +284,41 @@ test.describe("Interface language", () => {
         expect(writes).toEqual([]);
     });
 
+    test("switches the Vibe Map empty-library page EN/NL without modifying music data", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        const mutations: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/vibe/") && request.method() !== "GET") mutations.push(request.url());
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "vibe-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/vibe/map") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ tracks: [], trackCount: 0 }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        await page.goto("/vibe");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByText("Nog geen nummers met Vibe-analyse")).toBeVisible();
+        await expect(page.getByText(/Voer bibliotheekverrijking uit om je nummers te analyseren/)).toBeVisible();
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByText("No tracks with vibe analysis yet")).toBeVisible();
+        await expect(page.getByText("Run enrichment to analyse your library; tracks appear here as they finish.")).toBeVisible();
+        expect(mutations).toEqual([]);
+    });
+
     test("localizes real release consent controls without answering or clearing anything", async ({ page }) => {
         await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         await page.route("**/api/**", async (route) => {
