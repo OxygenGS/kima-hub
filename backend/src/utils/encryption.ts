@@ -133,7 +133,10 @@ function decryptLegacy(text: string): string {
 
     const attempt = (key: Buffer): string => {
         const decipher = crypto.createDecipheriv(LEGACY_ALGORITHM, key, iv);
-        return Buffer.concat([decipher.update(encryptedText), decipher.final()]).toString();
+        // Legacy CBC has no authentication: a wrong derived key can rarely pass padding.
+        // Treat malformed UTF-8 as a failed key attempt rather than returning corrupted secrets.
+        const plain = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
+        return new TextDecoder("utf-8", { fatal: true }).decode(plain);
     };
 
     try {
