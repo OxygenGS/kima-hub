@@ -18,6 +18,7 @@ require_text backend/src/routes/auth.ts '"/users/:id/permissions"' "Admin-only p
 require_text backend/src/routes/downloads.ts 'router.post("/", requireMusicPermission("canRequestAlbums")' "Album acquisition guard"
 require_text backend/src/routes/discover.ts 'router.post("/generate", requireMusicPermission("canRequestAlbums")' "Discover generate guard"
 require_text backend/src/routes/discover.ts 'router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums")' "Discover retry guard"
+require_text backend/src/routes/subsonic/mappers.ts 'subsonicError(req, res, SubsonicError.GENERIC, "Internal server error")' "Subsonic internal errors do not expose diagnostics"
 require_text backend/src/routes/subsonic/playback.ts 'if (!(await requireSubsonicDownloadRight(req, res))) return;' "Subsonic explicit downloads check current DB rights"
 require_text backend/src/routes/subsonic/userHelpers.ts 'select: { role: true, canDownloadTracks: true }' "Subsonic current-role and permission lookup"
 require_text backend/src/routes/subsonic/userHelpers.ts '"@_downloadRole": user.role === "admin" || user.canDownloadTracks' "Subsonic reports correct user download role"
