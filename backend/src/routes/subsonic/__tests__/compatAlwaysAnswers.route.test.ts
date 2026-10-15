@@ -82,6 +82,8 @@ describe('compat router answers even when a dependency fails', () => {
 
         expect(res.status).toBe(200);
         expect(res.text).toContain('error');
+        expect(res.text).not.toContain('connection terminated unexpectedly');
+        expect(res.text).toContain('Internal server error');
     });
 
     it('getAvatar answers when the user lookup rejects', async () => {
@@ -93,6 +95,8 @@ describe('compat router answers even when a dependency fails', () => {
 
         expect(res.status).toBe(200);
         expect(res.text).toContain('error');
+        expect(res.text).not.toContain('pool timeout');
+        expect(res.text).toContain('Internal server error');
     });
 
     it('still returns a real share on the happy path', async () => {
