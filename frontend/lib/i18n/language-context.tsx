@@ -14,12 +14,16 @@ import { translate, type Locale, type TranslationKey } from "./translations";
 const STORAGE_KEY = "kima-hub-language";
 const CHANGE_EVENT = "kima-hub-language-change";
 
+// Browsers that refuse localStorage can still change language for this tab.
+// The preference is intentionally not persisted when storage is unavailable.
+let memoryLocale: Locale = "en";
+
 function readLocale(): Locale {
     if (typeof window === "undefined") return "en";
     try {
         return window.localStorage.getItem(STORAGE_KEY) === "nl" ? "nl" : "en";
     } catch {
-        return "en";
+        return memoryLocale;
     }
 }
 
@@ -55,12 +59,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
     const setLocale = useCallback((next: Locale) => {
         if (next !== "en" && next !== "nl") return;
+        memoryLocale = next;
         try {
             window.localStorage.setItem(STORAGE_KEY, next);
-            window.dispatchEvent(new Event(CHANGE_EVENT));
         } catch {
-            // Private-browsing restrictions leave the interface in English.
+            // The choice remains active in this tab even if storage is blocked.
         }
+        window.dispatchEvent(new Event(CHANGE_EVENT));
     }, []);
 
     const t = useCallback((key: TranslationKey) => translate(locale, key), [locale]);

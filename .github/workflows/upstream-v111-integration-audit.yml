@@ -56,3 +56,34 @@ jobs:
       - name: Test auth refresh and storage-denial handling
         working-directory: frontend
         run: npx vitest run lib/__tests__/api-token-refresh.test.ts lib/__tests__/api-storage-denied.test.ts
+
+  public-locale-browser:
+    name: English/Dutch browser behavior in integration branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Exercise locale selection (including blocked browser storage)
+        working-directory: frontend
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npx playwright test --config playwright.public-locale.config.ts
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-integration-locale-browser
+          path: frontend/test-results/
+          retention-days: 7
