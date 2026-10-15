@@ -8,6 +8,8 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 /** Typing somewhere? Then a bare letter is text, not a command. */
 function isTyping(target: EventTarget | null): boolean {
@@ -25,6 +27,8 @@ export function Shortcuts({
     onJump: (index: number) => void;
 }) {
     const [open, setOpen] = useState(false);
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -43,7 +47,7 @@ export function Shortcuts({
 
     const hint = (
         <p className="t-meta hidden shrink-0 lg:block">
-            press <kbd className="t-data px-1 py-0.5 rounded bg-white/[0.08] text-[var(--text-secondary)]">?</kbd> for shortcuts
+            {t("press")} <kbd className="t-data px-1 py-0.5 rounded bg-white/[0.08] text-[var(--text-secondary)]">?</kbd> {t("for shortcuts")}
         </p>
     );
     if (!open) return hint;
@@ -53,14 +57,14 @@ export function Shortcuts({
         {hint}
         <div
             role="dialog"
-            aria-label="keyboard shortcuts"
+            aria-label={t("keyboard shortcuts")}
             className="hidden sm:flex fixed bottom-24 right-6 z-(--z-dropdown) w-[19rem] flex-col gap-4 rounded-xl border border-white/10 bg-[var(--bg-secondary)] p-5 animate-rise"
         >
             <div className="flex items-baseline justify-between gap-4">
-                <h2 className="t-label text-[var(--text-secondary)]">keyboard shortcuts</h2>
+                <h2 className="t-label text-[var(--text-secondary)]">{t("keyboard shortcuts")}</h2>
                 <button
                     onClick={() => setOpen(false)}
-                    aria-label="close"
+                    aria-label={t("close")}
                     className="-mr-1 -mt-1 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 >
                     <X className="w-4 h-4" />
@@ -78,15 +82,15 @@ export function Shortcuts({
 
             <div className="flex flex-col gap-2 border-t border-white/[0.08] pt-4">
                 <div className="flex items-baseline justify-between gap-4">
-                    <span className="t-meta text-[var(--text-secondary)]">move in the hour grid</span>
+                    <span className="t-meta text-[var(--text-secondary)]">{t("move in the hour grid")}</span>
                     <span className="flex gap-1"><Key>←</Key><Key>→</Key><Key>↑</Key><Key>↓</Key></span>
                 </div>
                 <div className="flex items-baseline justify-between gap-4">
-                    <span className="t-meta text-[var(--text-secondary)]">open an hour</span>
+                    <span className="t-meta text-[var(--text-secondary)]">{t("open an hour")}</span>
                     <Key>enter</Key>
                 </div>
                 <div className="flex items-baseline justify-between gap-4">
-                    <span className="t-meta text-[var(--text-secondary)]">close</span>
+                    <span className="t-meta text-[var(--text-secondary)]">{t("close")}</span>
                     <Key>esc</Key>
                 </div>
             </div>
