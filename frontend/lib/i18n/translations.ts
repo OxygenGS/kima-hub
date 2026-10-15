@@ -1281,6 +1281,9 @@ export const english = {
     "Shared Content": "Shared Content",
     "Powered by Kima": "Powered by Kima",
     "Playback position": "Playback position",
+    "TV navigation": "TV navigation",
+    "Skip to main content": "Skip to main content",
+    "Redirecting...": "Redirecting...",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2565,6 +2568,9 @@ export const dutch: Record<TranslationKey, string> = {
     "Shared Content": "Gedeelde muziek",
     "Powered by Kima": "Mogelijk gemaakt door Kima",
     "Playback position": "Afspeelpositie",
+    "TV navigation": "Tv-navigatie",
+    "Skip to main content": "Naar hoofdinhoud springen",
+    "Redirecting...": "Doorsturen...",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

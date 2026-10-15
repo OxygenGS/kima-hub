@@ -12,6 +12,9 @@ import { formatTime, clampTime, formatMediaDuration } from "@/lib/format";
 import { RefreshCw, SkipBack, SkipForward, Shuffle, Repeat } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { KimaMark } from "@/components/ui/KimaMark";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
+import { useBranding } from "@/lib/branding-context";
 
 const tvNavigation = [
     { name: "Home", href: "/" },
@@ -24,6 +27,9 @@ const tvNavigation = [
 ];
 
 export function TVLayout({ children }: { children: React.ReactNode }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
+    const { branding } = useBranding();
     const pathname = usePathname();
     const router = useRouter();
     // Start with nav focused and first tab selected for immediate D-pad usability
@@ -110,6 +116,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     }
 
     const clampedCurrentTime = clampTime(currentTime, duration);
+    const repeatLabel = t(repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat off");
 
     const handleSync = async () => {
         setIsSyncing(true);
@@ -208,11 +215,13 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         <>
             <header className="tv-nav">
                 <Link href="/" className="tv-logo">
-                    <KimaMark size={24} />
-                    <span>Kima</span>
+                    {branding.hasCustomLogo ? (
+                        <CachedImage src={branding.logoUrl} alt="" width={24} height={24} className="object-contain" />
+                    ) : <KimaMark size={24} />}
+                    <span>{branding.name}</span>
                 </Link>
 
-                <nav ref={navRef} className="tv-nav-links">
+                <nav ref={navRef} className="tv-nav-links" aria-label={t("TV navigation")}>
                     {tvNavigation.map((item, index) => {
                         const isActive = pathname === item.href ||
                             (item.href !== "/" && pathname.startsWith(item.href));
@@ -229,7 +238,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                                     setFocusedTabIndex(index);
                                 }}
                             >
-                                {item.name}
+                                {t(item.name)}
                             </Link>
                         );
                     })}
@@ -241,7 +250,8 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     onClick={handleSync}
                     disabled={isSyncing}
                     className="tv-sync-btn"
-                    title="sync library"
+                    title={t("Sync library")}
+                    aria-label={t("Sync library")}
                 >
                     <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
                 </button>
@@ -265,16 +275,18 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={toggleShuffle}
                         className={cn("tv-np-ctrl", isShuffle && "active")}
-                        title="shuffle"
+                        title={t("Shuffle")}
+                        aria-label={t("Shuffle")}
+                        aria-pressed={isShuffle}
                     >
                         <Shuffle className="w-4 h-4" />
                     </button>
 
-                    <button onClick={previous} className="tv-np-ctrl" title="previous">
+                    <button onClick={previous} className="tv-np-ctrl" title={t("Previous track")} aria-label={t("Previous track")}>
                         <SkipBack className="w-4 h-4" />
                     </button>
 
-                    <button onClick={() => isPlaying ? pause() : resumeWithGesture()} className="tv-np-btn">
+                    <button onClick={() => isPlaying ? pause() : resumeWithGesture()} className="tv-np-btn" aria-label={t(isPlaying ? "Pause" : "Play")}>
                         {isPlaying ? (
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                                 <rect x="6" y="4" width="4" height="16" />
@@ -287,14 +299,16 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                         )}
                     </button>
 
-                    <button onClick={next} className="tv-np-ctrl" title="next">
+                    <button onClick={next} className="tv-np-ctrl" title={t("Next track")} aria-label={t("Next track")}>
                         <SkipForward className="w-4 h-4" />
                     </button>
 
                     <button
                         onClick={toggleRepeat}
                         className={cn("tv-np-ctrl", repeatMode !== "off" && "active")}
-                        title={repeatMode === "one" ? "repeat one" : repeatMode === "all" ? "repeat all" : "repeat off"}
+                        title={repeatLabel}
+                        aria-label={repeatLabel}
+                        aria-pressed={repeatMode !== "off"}
                     >
                         <Repeat className="w-4 h-4" />
                         {repeatMode === "one" && <span className="tv-np-repeat-one">1</span>}

@@ -198,6 +198,49 @@ test.describe("Interface language", () => {
     });
 
 
+    test("keeps TV remote navigation stable while labels and branding follow the UI", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "tv-ci", username: "tv-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/branding") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        name: "CI TV", tagline: "Test branding", logoUrl: "/assets/images/kima.webp",
+                        faviconUrl: "/favicon.ico", hasCustomLogo: true, hasCustomFavicon: false,
+                        accentColor: "#fca200", backgroundColor: "#0a0a0a",
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        await page.goto("/?tv=1");
+        const tvNav = page.getByRole("navigation", { name: "Tv-navigatie" });
+        await expect(tvNav).toBeVisible();
+        await expect(tvNav.getByRole("link", { name: "Zoeken" })).toHaveAttribute("href", "/search");
+        await expect(tvNav.getByRole("link", { name: "Ontdekken" })).toHaveAttribute("href", "/discover");
+        await expect(page.getByRole("button", { name: "Bibliotheek synchroniseren" })).toBeVisible();
+        await expect(page.locator(".tv-logo")).toContainText("CI TV");
+        await expect(page.locator(".tv-logo img")).toBeVisible();
+
+        // Emulate the same language-change event emitted by the language selector,
+        // and confirm that neither route destinations nor branding are translated.
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByRole("navigation", { name: "TV navigation" })
+            .getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
+        await expect(page.getByRole("button", { name: "Sync library" })).toBeVisible();
+        await expect(page.locator(".tv-logo")).toContainText("CI TV");
+    });
+
     test("translates a public share player and expired-link error without a login", async ({ page }) => {
         await page.addInitScript(() => {
             // Keep a manually selected language across subsequent navigations.

@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("localizes Android/Google TV navigation and accessibility without changing route keys", () => {
+        expect(translate("nl", "TV navigation")).toBe("Tv-navigatie");
+        expect(translate("nl", "Home")).toBe("Startpagina");
+        expect(translate("nl", "Discovery")).toBe("Ontdekken");
+        expect(translate("nl", "Sync library")).toBe("Bibliotheek synchroniseren");
+        expect(translate("nl", "Repeat one")).toBe("Eén nummer herhalen");
+        expect(translate("nl", "Skip to main content")).toBe("Naar hoofdinhoud springen");
+        expect(translate("en", "TV navigation")).toBe("TV navigation");
+        expect(translate("en", "Sync library")).toBe("Sync library");
+    });
+
     it("localizes anonymous share player errors without translating music data", () => {
         expect(translate("nl", "This link has expired")).toBe("Deze link is verlopen");
         expect(translate("nl", "Share link not found")).toBe("Deellink niet gevonden");

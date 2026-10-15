@@ -18,6 +18,8 @@ import { GradientSpinner } from "../ui/GradientSpinner";
 import { ReactNode } from "react";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useIsTV } from "@/lib/tv-utils";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useActivityPanel, type ActivityPanelTab } from "@/hooks/useActivityPanel";
 
 // Paths that render without the sidebar, top bar and player. Not the same list
@@ -26,6 +28,8 @@ import { useActivityPanel, type ActivityPanelTab } from "@/hooks/useActivityPane
 const publicPaths = ["/login", "/onboarding", "/sync", "/share"];
 
 export function AuthenticatedLayout({ children }: { children: ReactNode }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { isAuthenticated, isLoading } = useAuth();
     const pathname = usePathname();
     const isMobile = useIsMobile();
@@ -73,7 +77,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
             <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
                 <div className="flex flex-col items-center gap-4">
                     <GradientSpinner size="lg" />
-                    <p className="text-[var(--text-secondary)] text-sm">Loading...</p>
+                    <p className="text-[var(--text-secondary)] text-sm">{t("Loading...")}</p>
                 </div>
             </div>
         );
@@ -94,7 +98,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                     >
-                        Skip to main content
+                        {t("Skip to main content")}
                     </a>
                     <MediaControlsHandler />
                     <WhatsNewGate />
@@ -110,7 +114,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                         href="#main-content"
                         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                     >
-                        Skip to main content
+                        {t("Skip to main content")}
                     </a>
                     <div className="h-screen bg-[var(--bg-primary)] overflow-hidden flex flex-col">
                         <MediaControlsHandler />
@@ -158,7 +162,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     href="#main-content"
                     className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                 >
-                    Skip to main content
+                    {t("Skip to main content")}
                 </a>
                 <div
                     className="h-screen bg-[var(--bg-primary)] overflow-hidden flex flex-col"
@@ -193,7 +197,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
             <div className="flex flex-col items-center gap-4">
                 <GradientSpinner size="lg" />
-                <p className="text-[var(--text-secondary)] text-sm">Redirecting...</p>
+                <p className="text-[var(--text-secondary)] text-sm">{t("Redirecting...")}</p>
             </div>
         </div>
     );
