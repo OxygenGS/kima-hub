@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { LibraryIndex } from "./librarySearch";
 import { useTrackFinder } from "./useTrackFinder";
 import { TrackFinderResults, TrackSearchInput } from "./TrackFinder";
@@ -41,6 +43,8 @@ interface AlchemyColumnProps {
 }
 
 function AlchemyColumn({ column, tracks, active, onSelect, onRemove }: AlchemyColumnProps) {
+    const { locale } = useLanguage();
+    const tr = (label: string) => translate(locale, label);
     const { label, icon: Icon, activeClass } = COLUMNS[column];
     return (
         <div>
@@ -49,7 +53,7 @@ function AlchemyColumn({ column, tracks, active, onSelect, onRemove }: AlchemyCo
                 className={cn("text-xs mb-2 flex items-center gap-1", active ? activeClass : "text-[var(--text-muted)]")}
                 aria-pressed={active}
             >
-                <Icon className="w-3 h-3" /> {label}
+                <Icon className="w-3 h-3" /> {tr(label)}
             </button>
             {tracks.map((t) => (
                 <div key={t.id} className="flex items-center gap-1 mb-1">
@@ -57,7 +61,7 @@ function AlchemyColumn({ column, tracks, active, onSelect, onRemove }: AlchemyCo
                     <button
                         onClick={() => onRemove(t.id)}
                         className="text-[var(--text-muted)] hover:text-white"
-                        aria-label={`Remove ${t.title}`}
+                        aria-label={`${tr("Remove")} ${t.title}`}
                     >
                         <X className="w-3 h-3" />
                     </button>
@@ -68,6 +72,8 @@ function AlchemyColumn({ column, tracks, active, onSelect, onRemove }: AlchemyCo
 }
 
 export function VibeAlchemy({ library, onHighlight, onClose }: VibeAlchemyProps) {
+    const { locale } = useLanguage();
+    const tr = (label: string) => translate(locale, label);
     const { replaceOperation } = useAudioControls();
     const [picked, setPicked] = useState<Record<Column, PickedTrack[]>>({ add: [], subtract: [] });
     const [searchQuery, setSearchQuery] = useState("");
@@ -136,12 +142,12 @@ export function VibeAlchemy({ library, onHighlight, onClose }: VibeAlchemyProps)
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-scene-panel) w-[calc(100%-1.5rem)] sm:w-[480px] max-h-[min(70vh,calc(100%-5rem))] border border-white/10 bg-[rgb(12,8,20)] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.7)] rounded-2xl flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-                    <FlaskConical className="w-4 h-4" /> Blend
+                    <FlaskConical className="w-4 h-4" /> {tr("Blend")}
                 </h3>
                 <button
                     onClick={onClose}
                     className="text-[var(--text-muted)] hover:text-white"
-                    aria-label="Close alchemy"
+                    aria-label={tr("Close alchemy")}
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -164,26 +170,26 @@ export function VibeAlchemy({ library, onHighlight, onClose }: VibeAlchemyProps)
 
                     <TrackSearchInput
                         id="alchemy-search"
-                        label="Search tracks for alchemy"
+                        label={tr("Search tracks for alchemy")}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={`Search to add to "${COLUMNS[addingTo].label}"...`}
+                        placeholder={`${tr("Search to add to")} "${tr(COLUMNS[addingTo].label)}"...`}
                     />
 
                     <TrackFinderResults finder={finder} query={searchQuery} onPick={addToColumn} />
 
                     <Button className="w-full" onClick={runBlend} disabled={picked.add.length === 0} isLoading={mutation.isPending}>
                         {!mutation.isPending && <FlaskConical className="w-4 h-4" />}
-                        {mutation.isPending ? "Computing..." : "Blend"}
+                        {tr(mutation.isPending ? "Computing..." : "Blend")}
                     </Button>
-                    {computeError && <p className="text-xs text-danger-light/70 text-center mt-1">{computeError}</p>}
+                    {computeError && <p className="text-xs text-danger-light/70 text-center mt-1">{tr(computeError)}</p>}
                 </div>
 
                 {results.length > 0 && (
                     <div className="border-t border-white/10">
                         <div className="px-4 py-2">
                             <Button className="w-full" onClick={handlePlayResults}>
-                                <Play className="w-4 h-4" /> Play Result ({results.length})
+                                <Play className="w-4 h-4" /> {tr("Play Result")} ({results.length})
                             </Button>
                         </div>
                         <div>

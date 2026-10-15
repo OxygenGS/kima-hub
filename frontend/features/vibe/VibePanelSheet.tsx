@@ -14,6 +14,8 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Link from "next/link";
 import { Waypoints, Sparkles, AudioWaveform, Play, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 type SnapPoint = "peek" | "half" | "full";
 
@@ -64,6 +66,8 @@ export function VibePanelSheet({
     selectedArtistId,
     intro,
 }: VibePanelSheetProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [snap, setSnap] = useState<SnapPoint>("peek");
     const [activeTab, setActiveTab] = useState<VibeTab>("now-playing");
     const [expandedActivity, setExpandedActivity] = useState<ActivityType | null>(null);
@@ -171,29 +175,29 @@ export function VibePanelSheet({
                         </p>
                     )}
                     <div className="flex gap-2 landscape-short:min-w-0 landscape-short:flex-1">
-                        {onPlay && <SheetAction primary icon={Play} label="Play" onClick={onPlay} aria-label="Play this track" />}
+                        {onPlay && <SheetAction primary icon={Play} label={t("Play")} onClick={onPlay} aria-label={t("Play this track")} />}
                         <SheetAction
                             icon={Sparkles}
-                            label="Match Vibe"
+                            label={t("Match Vibe")}
                             onClick={() => onTrackOperation("vibe")}
-                            aria-label="Match Vibe -- build a queue of similar-sounding tracks"
+                            aria-label={t("Match Vibe -- build a queue of similar-sounding tracks")}
                         />
                         <SheetAction
                             icon={AudioWaveform}
-                            label="Similar"
+                            label={t("Similar")}
                             onClick={() => onTrackOperation("similar")}
-                            aria-label="Similar -- highlight similar tracks on the map"
+                            aria-label={t("Similar -- highlight similar tracks on the map")}
                         />
                         <SheetAction
                             icon={Waypoints}
-                            label="Song Path"
+                            label={t("Song Path")}
                             onClick={onStartSongPath}
-                            aria-label="Song Path -- set this track as the start of a song path, then tap the destination"
+                            aria-label={t("Song Path -- set this track as the start of a song path, then tap the destination")}
                         />
                     </div>
                     {songPathActive && (
                         <p className="text-micro text-[var(--text-secondary)] text-center mt-2 animate-pulse">
-                            Tap another track to complete the song path
+                            {t("Tap another track to complete the song path")}
                         </p>
                     )}
                 </div>

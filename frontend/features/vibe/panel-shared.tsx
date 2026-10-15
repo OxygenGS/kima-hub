@@ -52,6 +52,7 @@ export function ActivityHeader({
             </span>
             <button
                 onClick={onClose}
+                aria-label={translate(locale, "Close")}
                 className="p-1 rounded hover:bg-white/10 transition-colors"
             >
                 <X className="w-3.5 h-3.5 text-[var(--text-muted)]" />

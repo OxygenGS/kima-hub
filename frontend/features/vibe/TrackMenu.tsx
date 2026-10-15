@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AudioWaveform, Play, Sparkles, Waypoints } from "lucide-react";
 import { normalizeNFC } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { MapTrack } from "./types";
 
 interface TrackMenuProps {
@@ -22,6 +24,8 @@ const ITEM = "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-lef
 
 /** Right-click on a star: the same four actions as the track panel, at the pointer. */
 export function TrackMenu({ track, at, avoidRight = 0, onClose, onPlay, onVibe, onSimilar, onSongPath }: TrackMenuProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const ref = useRef<HTMLDivElement>(null);
     const [pos, setPos] = useState(at);
 
@@ -57,17 +61,17 @@ export function TrackMenu({ track, at, avoidRight = 0, onClose, onPlay, onVibe, 
         <div
             ref={ref}
             role="menu"
-            aria-label={`Actions for ${track.title}`}
+            aria-label={`${t("Actions for")} ${track.title}`}
             className="vibe-glass vibe-glass--solid fixed z-(--z-dropdown) w-56 rounded-xl p-1.5 animate-fade-in"
             style={{ left: pos.x, top: pos.y }}
         >
             <p className="truncate px-2.5 pb-1.5 pt-1 text-[11px] text-[var(--text-muted)]">
                 {normalizeNFC(track.title)} · {normalizeNFC(track.artist)}
             </p>
-            <button role="menuitem" type="button" className={ITEM} onClick={run(onPlay)}><Play className="h-3.5 w-3.5" /> Play</button>
-            <button role="menuitem" type="button" className={ITEM} onClick={run(onVibe)}><Sparkles className="h-3.5 w-3.5" /> Match Vibe</button>
-            <button role="menuitem" type="button" className={ITEM} onClick={run(onSimilar)}><AudioWaveform className="h-3.5 w-3.5" /> Show similar</button>
-            <button role="menuitem" type="button" className={ITEM} onClick={run(onSongPath)}><Waypoints className="h-3.5 w-3.5" /> Song Path from here</button>
+            <button role="menuitem" type="button" className={ITEM} onClick={run(onPlay)}><Play className="h-3.5 w-3.5" /> {t("Play")}</button>
+            <button role="menuitem" type="button" className={ITEM} onClick={run(onVibe)}><Sparkles className="h-3.5 w-3.5" /> {t("Match Vibe")}</button>
+            <button role="menuitem" type="button" className={ITEM} onClick={run(onSimilar)}><AudioWaveform className="h-3.5 w-3.5" /> {t("Show similar")}</button>
+            <button role="menuitem" type="button" className={ITEM} onClick={run(onSongPath)}><Waypoints className="h-3.5 w-3.5" /> {t("Song Path from here")}</button>
         </div>,
         document.body,
     );

@@ -3,6 +3,8 @@
 import { Bell, Download, ListMusic, History } from "lucide-react";
 import { useNotifications, useActiveDownloads } from "@/hooks/useNotifications";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export type ActivityType = "notifications" | "downloads" | "imports" | "history";
 
@@ -12,6 +14,8 @@ interface ActivityIconBarProps {
 }
 
 export function ActivityIconBar({ expandedActivity, onToggleActivity }: ActivityIconBarProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { unreadCount } = useNotifications();
     const { downloads } = useActiveDownloads();
     const activeDownloadCount = downloads.length;
@@ -31,7 +35,7 @@ export function ActivityIconBar({ expandedActivity, onToggleActivity }: Activity
                     <button
                         key={type}
                         onClick={() => onToggleActivity(type)}
-                        aria-label={badge > 0 ? `${label} (${badge})` : label}
+                        aria-label={badge > 0 ? `${t(label)} (${badge})` : t(label)}
                         aria-pressed={expandedActivity === type}
                         className={cn(
                             "relative p-2 rounded-md transition-colors",
@@ -39,7 +43,7 @@ export function ActivityIconBar({ expandedActivity, onToggleActivity }: Activity
                                 ? "bg-white/10 text-white"
                                 : "text-[var(--text-muted)] hover:text-white/70 hover:bg-white/5",
                         )}
-                        title={label.toLowerCase()}
+                        title={t(label)}
                     >
                         <Icon className="w-4 h-4" />
                         {badge > 0 && (

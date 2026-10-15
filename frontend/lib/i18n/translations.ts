@@ -1366,6 +1366,13 @@ export const english = {
     "Couldn't find matches for this track": "Couldn't find matches for this track",
     "Couldn't play this track": "Couldn't play this track",
     "Couldn't find a path between those two tracks": "Couldn't find a path between those two tracks",
+    "Start: a track, artist or sound": "Start: a track, artist or sound",
+    "End: a track, artist or sound": "End: a track, artist or sound",
+    "Pick a different track for the end.": "Pick a different track for the end.",
+    "Failed to compute blend": "Failed to compute blend",
+    "Actions for": "Actions for",
+    "Show similar": "Show similar",
+    "Song Path from here": "Song Path from here",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2735,6 +2742,13 @@ export const dutch: Record<TranslationKey, string> = {
     "Couldn't find matches for this track": "Geen vergelijkbare nummers gevonden",
     "Couldn't play this track": "Kon dit nummer niet afspelen",
     "Couldn't find a path between those two tracks": "Kon geen pad tussen deze nummers vinden",
+    "Start: a track, artist or sound": "Begin: nummer, artiest of geluid",
+    "End: a track, artist or sound": "Einde: nummer, artiest of geluid",
+    "Pick a different track for the end.": "Kies een ander nummer als eindpunt.",
+    "Failed to compute blend": "Kon de mix niet berekenen",
+    "Actions for": "Acties voor",
+    "Show similar": "Vergelijkbare nummers tonen",
+    "Song Path from here": "Nummerpad vanaf hier",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
