@@ -467,7 +467,8 @@ export class AudioStreamingService {
         req: Request,
         res: Response,
         filePath: string,
-        mimeType: string
+        mimeType: string,
+        cacheControl = "private, max-age=3600, must-revalidate",
     ): Promise<void> {
         try {
             // Get file stats for size
@@ -488,7 +489,7 @@ export class AudioStreamingService {
                 if (candidates.includes(etag) || candidates.includes("*")) {
                     res.status(304).set({
                         "ETag": etag,
-                        "Cache-Control": "private, max-age=3600, must-revalidate",
+                        "Cache-Control": cacheControl,
                     }).end();
                     return;
                 }
@@ -497,7 +498,7 @@ export class AudioStreamingService {
                 if (!Number.isNaN(ifModifiedSinceMs) && stats.mtime.getTime() <= ifModifiedSinceMs) {
                     res.status(304).set({
                         "ETag": etag,
-                        "Cache-Control": "private, max-age=3600, must-revalidate",
+                        "Cache-Control": cacheControl,
                     }).end();
                     return;
                 }
@@ -536,7 +537,7 @@ export class AudioStreamingService {
             const headers: Record<string, string> = {
                 "Content-Type": mimeType,
                 "Accept-Ranges": "bytes",
-                "Cache-Control": "private, max-age=3600, must-revalidate",
+                "Cache-Control": cacheControl,
                 "Content-Length": contentLength.toString(),
                 "ETag": etag,
                 "Last-Modified": lastModified,
