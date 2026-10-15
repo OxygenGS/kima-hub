@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import { subsonicError, SubsonicError } from "../../utils/subsonicResponse";
+import { prisma } from "../../utils/db";
+import { logger } from "../../utils/logger";
 
 /**
  * True, writing nothing, when the caller is an admin; otherwise writes the
@@ -15,13 +17,43 @@ export function requireSubsonicAdmin(req: Request, res: Response): boolean {
     return true;
 }
 
-export function mapSubsonicUser(user: { username: string; role: string }) {
+/**
+ * Subsonic downloads must use the persisted role and permissions, never
+ * an authentication claim. Its protocol requires HTTP-200 error envelopes.
+ */
+export async function requireSubsonicDownloadRight(req: Request, res: Response): Promise<boolean> {
+    if (!req.user?.id) {
+        subsonicError(req, res, SubsonicError.WRONG_CREDENTIALS, "Authentication required");
+        return false;
+    }
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: { role: true, canDownloadTracks: true },
+        });
+        if (!user) {
+            subsonicError(req, res, SubsonicError.WRONG_CREDENTIALS, "User not found");
+            return false;
+        }
+        if (user.role !== "admin" && !user.canDownloadTracks) {
+            subsonicError(req, res, SubsonicError.NOT_AUTHORIZED, "Download permission required");
+            return false;
+        }
+        return true;
+    } catch (error) {
+        logger.error("[Subsonic] Download permission lookup failed", error);
+        subsonicError(req, res, SubsonicError.GENERIC, "Permission check failed");
+        return false;
+    }
+}
+
+export function mapSubsonicUser(user: { username: string; role: string; canDownloadTracks: boolean }) {
     return {
         "@_username": user.username,
         "@_scrobblingEnabled": true,
         "@_adminRole": user.role === "admin",
         "@_settingsRole": true,
-        "@_downloadRole": true,
+        "@_downloadRole": user.role === "admin" || user.canDownloadTracks,
         "@_uploadRole": false,
         "@_playlistRole": true,
         "@_coverArtRole": false,
