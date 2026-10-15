@@ -199,7 +199,12 @@ test.describe("Interface language", () => {
 
 
     test("translates a public share player and expired-link error without a login", async ({ page }) => {
-        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.addInitScript(() => {
+            // Keep a manually selected language across subsequent navigations.
+            if (!localStorage.getItem("kima-hub-language")) {
+                localStorage.setItem("kima-hub-language", "nl");
+            }
+        });
         await page.route("**/api/share/**", async (route) => {
             const pathname = new URL(route.request().url()).pathname;
             const expired = pathname === "/api/share/expired-ci-share";
