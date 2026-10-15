@@ -72,6 +72,8 @@ model Artist {
   lastSynced          DateTime                 @default(now())
   lastEnriched        DateTime?
   enrichmentStatus    String                   @default("pending")
+  /// Failed enrichment attempts in a row; at STAGE_RETRY_CAP the artist becomes unresolvable.
+  enrichmentFailures  Int                      @default(0)
   searchVector        Unsupported("tsvector")?
   similarArtistsJson  Json?
   displayName         String?
@@ -244,6 +246,7 @@ model DiscoveryBatch {
   completedAt     DateTime?
   version         Int           @default(0)
   jobs            DownloadJob[]
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([status])
@@ -366,20 +369,6 @@ model LikedTrack {
   @@index([userId])
 }
 
-model ListeningState {
-  id         String   @id @default(cuid())
-  userId     String
-  kind       String
-  entityId   String
-  trackId    String?
-  positionMs Int      @default(0)
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, kind, entityId])
-  @@index([userId])
-}
-
 model MoodBucket {
   id        String   @id @default(cuid())
   trackId   String
@@ -403,9 +392,11 @@ model Notification {
   metadata  Json?
   read      Boolean  @default(false)
   cleared   Boolean  @default(false)
+  groupKey  String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, groupKey])
   @@index([userId, cleared, read])
   @@index([userId, cleared, createdAt])
   @@index([createdAt])
@@ -429,6 +420,8 @@ model Play {
   trackId  String
   playedAt DateTime     @default(now())
   source   ListenSource @default(LIBRARY)
+  /// Recorded by the listen rule (enough of the track was heard), so a listen by construction.
+  heard    Boolean      @default(false)
   track    Track        @relation(fields: [trackId], references: [id], onDelete: Cascade)
   user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -654,30 +647,14 @@ model SpotifyImportJob {
   @@index([userId])
 }
 
-// Instance-wide appearance. Stored independently of users and the media library.
-// Images are normalized to small raster files before being persisted.
-model BrandingSettings {
-  id                String   @id @default("default")
-  name              String   @default("Kima")
-  tagline           String   @default("Your music, your way")
-  accentColor       String   @default("#fca200")
-  backgroundColor   String   @default("#0a0a0a")
-  logoData          Bytes?
-  logoContentType   String?
-  faviconData       Bytes?
-  faviconContentType String?
-  updatedAt         DateTime @updatedAt
-}
-
 model SystemSettings {
   id                          String   @id @default("default")
   lidarrEnabled               Boolean  @default(true)
   lidarrUrl                   String?  @default("http://localhost:8686")
   lidarrApiKey                String?
-  openaiEnabled               Boolean  @default(false)
-  openaiApiKey                String?
-  openaiModel                 String?  @default("gpt-4")
-  openaiBaseUrl               String?
+  /// Kima removes junk downloads (no usable music, the wrong album) so Lidarr
+  /// tries the next release; off leaves them to the user's own setup.
+  lidarrRemoveJunk            Boolean  @default(true)
   fanartEnabled               Boolean  @default(false)
   fanartApiKey                String?
   audiobookshelfEnabled       Boolean  @default(false)
@@ -694,6 +671,11 @@ model SystemSettings {
   maxConcurrentDownloads      Int      @default(3)
   downloadRetryAttempts       Int      @default(3)
   transcodeCacheMaxGb         Int      @default(10)
+  /// How many tracks the play queue may hold, per user. The queue is stored as
+  /// track references, so the cost is a JSON column and a POST body rather than
+  /// anything on disk. Clamped 100..100000 on write so a typo cannot take the
+  /// server down.
+  maxQueueLength              Int      @default(10000)
   downloadSource              String   @default("soulseek")
   primaryFailureFallback      String   @default("none")
   updatedAt                   DateTime @updatedAt
@@ -701,14 +683,14 @@ model SystemSettings {
   enrichmentConcurrency       Int      @default(1)
   lidarrWebhookSecret         String?
   audioAnalyzerWorkers        Int      @default(2)
-  lastfmApiKey                String?
+  acoustidApiKey              String?
   soulseekConcurrentDownloads Int      @default(4)
   clapWorkers                 Int      @default(2)
+  gpuOnnxEnabled              Boolean  @default(false)
+  /// Runs MusiCNN analysis on the shared GPU runtime; a switch of its own, separate from sound vectors.
+  gpuAnalysisEnabled          Boolean  @default(false)
   soulseekEnabled             Boolean?
   soulseekDownloadPath        String?
-  lastfmApiSecret             String?
-  lastfmUserKey               String?
-  lastfmEnabled               Boolean?
   publicUrl                   String?
   registrationOpen            Boolean  @default(false)
   lidarrQualityProfileId      Int?
@@ -740,6 +722,10 @@ model Track {
   danceability                Float?
   valence                     Float?
   arousal                     Float?
+  deamValence                 Float?
+  deamArousal                 Float?
+  clapValenceRaw              Float?
+  clapArousalRaw              Float?
   instrumentalness            Float?
   acousticness                Float?
   speechiness                 Float?
@@ -753,7 +739,6 @@ model Track {
   danceabilityMl              Float?
   moodTags                    String[]
   essentiaGenres              String[]
-  lastfmTags                  String[]                 @default([])
   analysisStatus              String                   @default("pending")
   analysisVersion             String?
   analysisMode                String?
@@ -772,29 +757,45 @@ model Track {
   vibeAnalysisStatusUpdatedAt DateTime?
   isrc                        String?
   isrcSource                  String?
-  corrupt                     Boolean                  @default(false)
-  scanStatus                  String                   @default("pending")
-  scanError                   String?
-  scanStartedAt               DateTime?
-  discNumber                  Int?
-  discSubtitle                String?
-  cachedBy                    CachedTrack[]
-  likedBy                     LikedTrack[]
-  moodBuckets                 MoodBucket[]
-  plays                       Play[]
-  playlistItems               PlaylistItem[]
-  album                       Album                    @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  trackGenres                 TrackGenre[]
-  transcodedFiles             TranscodedFile[]
-  subsonicBookmarks           SubsonicBookmark[]
-  trackEmbedding              TrackEmbedding?
-  trackLyrics                 TrackLyrics?
+  // The track's AcoustID fingerprint, for matching duplicates and versions without a
+  // live API call; null until fingerprinted. Its index is an md5(acoustidFingerprint)
+  // expression index made in migration SQL (a btree overflows on ~3.5 kB fingerprints
+  // and Prisma cannot declare one), so do not add @@index here.
+  acoustidFingerprint         String?
+
+  // The MusicBrainz recording the fingerprint lookup matched; null when it found
+  // nothing, never a made-up MBID. A re-ask short-circuits when it is set.
+  recordingMbid String?
+
+  corrupt           Boolean            @default(false)
+  // When a library scan's directory walk first missed the file; null when it is
+  // on disk (the next scan that finds it clears it). A missing track is never
+  // deleted, so its plays, likes and stage answers survive a NAS hiccup; it is
+  // shown as missing and not offered to streaming or enrichment.
+  missingSince      DateTime?
+  scanStatus        String             @default("pending")
+  scanError         String?
+  scanStartedAt     DateTime?
+  discNumber        Int?
+  discSubtitle      String?
+  cachedBy          CachedTrack[]
+  likedBy           LikedTrack[]
+  moodBuckets       MoodBucket[]
+  plays             Play[]
+  playlistItems     PlaylistItem[]
+  album             Album              @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  trackGenres       TrackGenre[]
+  transcodedFiles   TranscodedFile[]
+  subsonicBookmarks SubsonicBookmark[]
+  trackEmbedding    TrackEmbedding?
+  trackLyrics       TrackLyrics?
+  playAuditIgnores  PlayAuditIgnore[]
+  trackStages       TrackStage[]
 
   @@index([analysisStatus])
   @@index([scanStatus])
   @@index([vibeAnalysisStatus])
   @@index([analysisStatus, vibeAnalysisStatus])
-  @@index([lastfmTags], type: Gin, map: "Track_lastfmTags_gin_idx")
   @@index([isrc])
   @@index([albumId])
   @@index([acousticness])
@@ -870,31 +871,31 @@ model UnavailableAlbum {
 }
 
 model User {
-  id                     String                @id @default(cuid())
-  username               String                @unique
+  id                     String                   @id @default(cuid())
+  username               String                   @unique
   passwordHash           String
-  role                   String                @default("user")
-  canRequestAlbums       Boolean               @default(false)
-  canDownloadTracks      Boolean               @default(false)
-  onboardingComplete     Boolean               @default(false)
+  role                   String                   @default("user")
+  // OxygenGS fail-closed music acquisition permissions.
+  canRequestAlbums  Boolean @default(false)
+  canDownloadTracks Boolean @default(false)
+  onboardingComplete     Boolean                  @default(false)
   enrichmentSettings     Json?
-  twoFactorEnabled       Boolean               @default(false)
+  twoFactorEnabled       Boolean                  @default(false)
   twoFactorSecret        String?
   twoFactorRecoveryCodes String?
-  moodMixParams          Json?
-  tokenVersion           Int                   @default(0)
-  createdAt              DateTime              @default(now())
+  tokenVersion           Int                      @default(0)
+  createdAt              DateTime                 @default(now())
   apiKeys                ApiKey[]
   audiobookProgress      AudiobookProgress[]
   cachedTracks           CachedTrack[]
   deviceLinkCodes        DeviceLinkCode[]
   discoverExclusions     DiscoverExclusion[]
   discoveryAlbums        DiscoveryAlbum[]
+  discoveryBatches       DiscoveryBatch[]
   dislikedEntities       DislikedEntity[]
   downloadJobs           DownloadJob[]
   hiddenPlaylists        HiddenPlaylist[]
   likedTracks            LikedTrack[]
-  listeningState         ListeningState[]
   notifications          Notification[]
   plays                  Play[]
   playbackState          PlaybackState?
@@ -910,6 +911,9 @@ model User {
   shareLinks             ShareLink[]
   subsonicBookmarks      SubsonicBookmark[]
   subsonicPlayQueue      SubsonicPlayQueue?
+  releaseAcks            ReleaseAcknowledgement[]
+  releaseChoices         ReleaseChoice[]
+  playAuditIgnores       PlayAuditIgnore[]
 }
 
 model UserDiscoverConfig {
@@ -925,26 +929,39 @@ model UserDiscoverConfig {
 }
 
 model UserMoodMix {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  mood        String
-  trackIds    String[]
-  coverUrls   String[]
-  generatedAt DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  mood           String
+  trackIds       String[]
+  coverUrls      String[]
+  servedTrackIds String[]
+  generatedAt    DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  User           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model UserSettings {
-  userId          String  @id
-  playbackQuality String  @default("original")
-  wifiOnly        Boolean @default(false)
-  offlineEnabled  Boolean @default(false)
-  maxCacheSizeMb  Int     @default(10240)
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String  @id
+  playbackQuality    String  @default("original")
+  wifiOnly           Boolean @default(false)
+  offlineEnabled     Boolean @default(false)
+  maxCacheSizeMb     Int     @default(10240)
+  // Write-only per-user scrobble credential (encrypted, `xc1.` prefix);
+  // never returned in full — see routes/settings.ts.
+  listenbrainzToken  String?
+  // Only read for KIMA_PUBLIC_VIBE_USER: false hides their live listening.
+  shareLiveListening Boolean @default(true)
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A Lidarr download Kima removed from the queue; the row stops any other path removing it again.
+model HandledDownload {
+  downloadId String   @id
+  reason     String
+  createdAt  DateTime @default(now())
 }
 
 model WebhookEvent {
@@ -992,13 +1009,64 @@ model TrackEmbedding {
   embedding     Unsupported("vector")
   model_version String                @default("laion-clap-music") @db.VarChar(50)
   analyzed_at   DateTime              @default(now()) @db.Timestamptz(6)
-  map_x         Float?
-  map_y         Float?
   track         Track                 @relation(fields: [track_id], references: [id], onDelete: Cascade)
+  matchingFeel  MatchingFeel?
+  matchingMap   MatchingMap?
 
   @@index([embedding])
   @@index([model_version])
   @@map("track_embeddings")
+}
+
+/// The feel probe's valence and arousal for a sound vector (services/matching/state.ts);
+/// embedded_at is the analyzed_at of the vector it was computed from.
+model MatchingFeel {
+  track_id    String         @id
+  embedded_at DateTime       @db.Timestamptz(6)
+  probe       String
+  valence     Float          @db.Real
+  arousal     Float          @db.Real
+  embedding   TrackEmbedding @relation(fields: [track_id], references: [track_id], onDelete: Cascade)
+
+  @@map("matching_feel")
+}
+
+/// A track's place on the vibe map and its colour (services/matching/map.ts); embedded_at is the
+/// analyzed_at of the sound vector it was computed from. `colour` is 0 (the logo's azure end) to 1 (amber).
+model MatchingMap {
+  track_id    String         @id
+  embedded_at DateTime       @db.Timestamptz(6)
+  x           Float
+  y           Float
+  z           Float
+  colour      Float
+  laid_out    Boolean
+  embedding   TrackEmbedding @relation(fields: [track_id], references: [track_id], onDelete: Cascade)
+
+  @@map("matching_map")
+}
+
+/// The library-wide part of the matching formula, rebuilt by the similarity
+/// enrichment step whenever its inputs change (services/matching/state.ts).
+model MatchingState {
+  id              String    @id @default("default")
+  version         String
+  fingerprint     String
+  trackCount      Int
+  feelMeanValence Float
+  feelMeanArousal Float
+  feelSdValence   Float
+  feelSdArousal   Float
+  soundSpread     Float
+  genreSpread     Float
+  genreWeight     Float
+  genres          Json
+  builtAt         DateTime  @default(now()) @db.Timestamptz(6)
+  mapVersion      String?
+  mapFrame        Json?
+  mapUpdatedAt    DateTime? @db.Timestamptz(6)
+
+  @@map("matching_state")
 }
 
 model TrackLyrics {
@@ -1074,4 +1142,141 @@ enum ListenSource {
   DISCOVERY
   DISCOVERY_KEPT
   SUBSONIC
+}
+
+/// One row per user per release: its presence means that user closed the release
+/// window for that version, and `dismissedAt` says when.
+model ReleaseAcknowledgement {
+  id          String   @id @default(cuid())
+  userId      String
+  /// The release this acknowledges, e.g. "1.10.1". Compared as a string; the
+  /// server decides which releases are pending, never the client.
+  version     String
+  dismissedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, version])
+  @@index([userId])
+}
+
+/// A decision on one opt-in. Closing the release window without touching a toggle
+/// still writes a row, with `decidedBy = DISMISSED` and the default value (always
+/// off), so there is no third state to read and opt-in counts have a real denominator.
+model ReleaseChoice {
+  id        String          @id @default(cuid())
+  userId    String
+  version   String
+  /// Stable identifier for the thing being consented to, e.g.
+  /// "social.network", "commons.contribute". Survives copy changes.
+  key       String
+  enabled   Boolean         @default(false)
+  decidedBy ChoiceDecidedBy @default(DISMISSED)
+  decidedAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+}
+
+enum ChoiceDecidedBy {
+  /// The user moved the toggle themselves.
+  EXPLICIT
+  /// The window was closed without answering. Recorded at the default.
+  DISMISSED
+}
+
+/// A track the play-history audit has been told to stop flagging. Ignoring is per
+/// track, not per play, so it keeps applying as new plays arrive; an ignored track
+/// still counts plays like any other and is simply never raised again.
+model PlayAuditIgnore {
+  userId    String
+  trackId   String
+  ignoredAt DateTime @default(now())
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, trackId])
+  @@index([userId])
+}
+
+/// One answer per track per stage: `stage` is the question ("recording", "analysis",
+/// "embedding", "fingerprint"), `status` its answer (pending | working | done | failed |
+/// blocked) and `evidence` the probe behind it. `failureClass` is the classifier's
+/// Disposition (DAMAGED | UNSUPPORTED | MULTICANNEL | INCONCLUSIVE), null while nothing has failed.
+model TrackStage {
+  id               String    @id @default(cuid())
+  trackId          String
+  /// Question being answered: "fingerprint" | "recording" | "analysis" | "embedding".
+  stage            String
+  status           String    @default("pending")
+  /// Which producer answers this stage ("analyzer", "clap", "musicbrainz"…).
+  source           String?
+  /// Claims made: each claim's job id carries it (`claimOf`). Retries are counted by `failures`.
+  attempt          Int       @default(0)
+  /// Times a claim was re-offered because its lease expired without an answer.
+  /// That never consumes an attempt; at 3 the record closes.
+  redelivered      Int       @default(0)
+  /// Reported failures of this question; only these use up retries (STAGE_RETRY_CAP).
+  failures         Int       @default(0)
+  lastErrorCode    String?
+  lastErrorMessage String?
+  failureClass     String?
+  /// False means terminal: never offered again until a human re-decides it.
+  retryable        Boolean   @default(true)
+  /// When a retry becomes due. Null on a first, unanswered attempt.
+  nextRetryAt      DateTime?
+  /// How the answer was reached: probe command, return code, stderr, decoder,
+  /// sample rate, channels, duration.
+  evidence         Json?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  /// When a human decided this answer was final, and who.
+  decidedAt        DateTime?
+  decidedBy        String?
+  track            Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  /// One answer per stage per track — this is what stops the same question
+  /// being answered twice into two different rows.
+  @@unique([trackId, stage])
+  /// What the stage queue actually queries: "give me the next work per stage".
+  @@index([stage, status, nextRetryAt])
+  @@map("TrackStage")
+}
+
+/// One record per *source*, so a paused source is one row rather than one per waiting track.
+/// A source pause is a fact about MusicBrainz/AcoustID/
+/// ListenBrainz, not about 2,787 tracks that all happen to be waiting on it.
+model SourceAttempt {
+  id               String    @id @default(cuid())
+  /// "musicbrainz" | "acoustid" | "listenbrainz" | …
+  source           String    @unique
+  status           String    @default("pending")
+  attempt          Int       @default(0)
+  lastErrorCode    String?
+  lastErrorMessage String?
+  failureClass     String?
+  retryable        Boolean   @default(true)
+  nextRetryAt      DateTime?
+  evidence         Json?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  decidedAt        DateTime?
+  decidedBy        String?
+
+  @@map("SourceAttempt")
+}
+
+// OxygenGS instance-level visual branding, retained from the fork.
+model BrandingSettings {
+  id                String   @id @default("default")
+  name              String   @default("Kima")
+  tagline           String   @default("Your music, your way")
+  accentColor       String   @default("#fca200")
+  backgroundColor   String   @default("#0a0a0a")
+  logoData          Bytes?
+  logoContentType   String?
+  faviconData       Bytes?
+  faviconContentType String?
+  updatedAt         DateTime @updatedAt
 }

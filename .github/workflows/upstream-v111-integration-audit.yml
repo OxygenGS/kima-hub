@@ -151,3 +151,50 @@ jobs:
           END
           $check$;
           SQL
+
+  merged-prisma-schema:
+    name: Validate merged Prisma schema and inventory backend type errors
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5435/integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+      - name: Require valid combined upstream and fork Prisma schema
+        working-directory: backend
+        run: |
+          npx prisma validate
+          npx prisma generate
+      - name: Inventory transitional backend TypeScript mismatches
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p audit
+          (cd backend && npm run typecheck) > audit/v111-backend-typecheck.txt 2>&1
+          result=$?
+          echo "## v1.11 backend integration diagnostic" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$result" -eq 0 ]; then
+            echo "Backend typecheck: PASS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            errors="$(grep -c 'error TS' audit/v111-backend-typecheck.txt || true)"
+            echo "Backend typecheck: **NOT YET INTEGRATED** ($errors reported TypeScript errors)." >> "$GITHUB_STEP_SUMMARY"
+            echo "The upstream schema and migrations are staged, but v1.11 backend APIs still need merging." >> "$GITHUB_STEP_SUMMARY"
+            echo "This diagnostic alone does not approve a release." >> "$GITHUB_STEP_SUMMARY"
+            tail -n 70 audit/v111-backend-typecheck.txt >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+      - name: Save backend diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-backend-typecheck-diagnostic
+          path: audit/v111-backend-typecheck.txt
+          if-no-files-found: warn
