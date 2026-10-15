@@ -86,8 +86,8 @@ describe("versioned Dutch release copy", () => {
             ],
         };
         const translated = localizeRelease(modified, "nl");
-        expect(translated.items[0].discloses).toBe(modified.items[0].discloses);
-        expect(translated.items[1].confirmMessage).toBe(modified.items[1].confirmMessage);
+        expect((translated.items[0] as typeof consent).discloses).toBe((modified.items[0] as typeof consent).discloses);
+        expect((translated.items[1] as typeof wipe).confirmMessage).toBe((modified.items[1] as typeof wipe).confirmMessage);
         expect(translated.items[0].title).toBe("Een NVIDIA-videokaart gebruiken");
         expect(translated.items[1].title).toBe("Analysegegevens wissen en opnieuw opbouwen");
     });
