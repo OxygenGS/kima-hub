@@ -138,3 +138,70 @@ jobs:
       - name: Verify actual role checks and request handling with Jest / Supertest
         working-directory: backend
         run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts src/routes/__tests__/discoverGenerateJobHash.route.test.ts src/routes/__tests__/discoverRetryUnavailable.route.test.ts src/routes/__tests__/soulseekPermissions.route.test.ts
+
+  all-backend-tests:
+    name: Full v1.11 backend Jest suite on disposable Postgres and Redis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_full_backend
+        ports:
+          - 5438:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_full_backend"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5438/v111_full_backend
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install and migrate disposable full-suite database
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Run all backend Jest tests with upstream v1.11 code
+        working-directory: backend
+        run: npm test -- --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
+
+  aio-image-build:
+    name: Build actual v1.11 AIO Docker image (strictly no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    permissions:
+      contents: read
+    needs: [frontend, backend, fork-safety]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fork Compose examples (do not deploy)
+        run: bash .github/ci/check-fork-compose.sh
+      - name: Free runner disk for ONNX models and full AIO layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build full merged v1.11 image locally (no registry, no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: kima-v111:pr7-no-push
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
