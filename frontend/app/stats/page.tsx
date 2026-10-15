@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { api } from "@/lib/api";
 import { ShapePlot } from "@/features/stats/components/ShapePlot";
 import { ListeningClock } from "@/features/stats/components/ListeningClock";
@@ -31,6 +33,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 export default function StatsPage() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const { t, locale } = useLanguage();
     const stacked = useMediaQuery("(max-width: 1023px)");
     const compact = useMediaQuery("(max-width: 639px), (max-height: 560px)");
     const [data, setData] = useState<StatsResponse | null>(null);
@@ -73,8 +76,8 @@ export default function StatsPage() {
     if (!data) {
         return (
             <PageMessage
-                title="couldn't load stats"
-                action={{ label: "try again", onClick: () => { setFailed(false); setAttempt((n) => n + 1); } }}
+                title={t("couldn't load stats")}
+                action={{ label: t("try again"), onClick: () => { setFailed(false); setAttempt((n) => n + 1); } }}
             />
         );
     }
@@ -92,15 +95,15 @@ export default function StatsPage() {
 
     const analysed = shelf.analysis.done.toLocaleString();
     const topKey = signature.key?.top[0]?.key;
-    const keyClaim = topKey ? `top key: ${topKey.toLowerCase()}` : "keys";
+    const keyClaim = topKey ? `${t("top key:")} ${topKey.toLowerCase()}` : t("keys");
 
     const sources = (
         <>
-            <Column label="podcasts & audiobooks">
+            <Column label={t("podcasts & audiobooks")}>
                 <SpokenWord spoken={spoken} />
             </Column>
             {hasPlays && (
-                <Column label="play sources">
+                <Column label={t("play sources")}>
                     <SourceSplit listening={listening} />
                 </Column>
             )}
@@ -110,7 +113,7 @@ export default function StatsPage() {
     const chapters: Chapter[] = [
         {
             id: "overview",
-            label: "overview",
+            label: t("overview"),
             content: hasPlays
                 ? <Overview listening={listening} shelf={shelf} signature={signature} period={shown} withShape={!stacked} />
                 : <NoPlays period={shown} />,
@@ -118,7 +121,7 @@ export default function StatsPage() {
         // Where the Overview stacks, the plot has no room beside the figures and gets its own chapter.
         ...(hasPlays && stacked ? [{
             id: "shape",
-            label: "brightness & energy",
+            label: t("brightness & energy"),
             content: (
                 <div className="mx-auto w-full max-w-[max(10rem,calc(var(--fit-h)-13.5rem))]">
                     <ShapePlot listening={listening} period={shown} />
@@ -127,27 +130,27 @@ export default function StatsPage() {
         }] : []),
         ...(hasPlays ? [{
             id: "played",
-            label: "most played",
+            label: t("most played"),
             content: <TopLists listening={listening} period={shown} />,
         }] : []),
         ...(hasPlays && listening.peak ? [{
             id: "rhythm",
-            label: "by hour",
+            label: t("by hour"),
             content: (
                 <Finding
-                    claim={`busiest hour: ${whenLabel(listening.peak.weekday, listening.peak.hour)}`}
-                    note="plays by day and hour · local time"
+                    claim={`${t("busiest hour:")} ${whenLabel(listening.peak.weekday, listening.peak.hour)}`}
+                    note={t("plays by day and hour · local time")}
                     evidence={<ListeningClock listening={listening} period={shown} />}
                 />
             ),
         }] : []),
         ...(hasPlays && signature.key && !stacked ? [{
             id: "mood",
-            label: "keys",
+            label: t("keys"),
             content: (
                 <Finding
-                    claim={frantic ? `highest energy: around ${hourLabel(frantic.hour)}` : keyClaim}
-                    note={`from audio analysis of ${analysed} tracks · click a key to play it`}
+                    claim={frantic ? `${t("highest energy: around")} ${hourLabel(frantic.hour)}` : keyClaim}
+                    note={`${t("from audio analysis of")} ${analysed} ${t("tracks · click a key to play it")}`}
                     evidence={<SignatureSound signature={signature} period={shown} />}
                 />
             ),
@@ -155,32 +158,32 @@ export default function StatsPage() {
         // Stacked, the wheel and the energy curve each need the full panel.
         ...(hasPlays && signature.key && stacked ? [{
             id: "mood",
-            label: "keys",
+            label: t("keys"),
             content: (
                 <Finding
                     claim={keyClaim}
-                    note={`from audio analysis of ${analysed} tracks · tap a key to play it`}
+                    note={`${t("from audio analysis of")} ${analysed} ${t("tracks · tap a key to play it")}`}
                     evidence={<KeyWheel keys={signature.key} period={shown} />}
                 />
             ),
         }] : []),
         ...(hasPlays && stacked && frantic && signature.hourly.length > 3 ? [{
             id: "energy",
-            label: "energy by hour",
+            label: t("energy by hour"),
             content: (
                 <Finding
-                    claim={`highest energy: around ${hourLabel(frantic.hour)}`}
-                    note="average track energy of plays, by hour"
+                    claim={`${t("highest energy: around")} ${hourLabel(frantic.hour)}`}
+                    note={t("average track energy of plays, by hour")}
                     evidence={<EnergyCurve hourly={signature.hourly} />}
                 />
             ),
         }] : []),
         {
             id: "unplayed",
-            label: "unplayed",
+            label: t("unplayed"),
             content: (
                 <Finding
-                    claim={`${shelf.neverPlayed.toLocaleString()} ${shelf.neverPlayed === 1 ? "track" : "tracks"} never played`}
+                    claim={`${shelf.neverPlayed.toLocaleString()} ${shelf.neverPlayed === 1 ? t("track") : t("tracks")} ${t("never played")}`}
                     scope={shown === "all" ? undefined : "all time"}
                     evidence={
                         <div className="flex flex-col gap-(--stat-gap-block)">
@@ -194,21 +197,21 @@ export default function StatsPage() {
         // On compact screens the decades and the sources each get a chapter of their own.
         ...(compact && shelf.decades.length > 1 ? [{
             id: "decades",
-            label: "decades",
+            label: t("decades"),
             content: (
-                <Aside note={shown === "all" ? undefined : "all time"}>
+                <Aside note={shown === "all" ? undefined : t("all time")}>
                     <Decades decades={shelf.decades} />
                 </Aside>
             ),
         }] : []),
         {
             id: "also",
-            label: "other stats",
+            label: t("other stats"),
             content: (
-                <Aside note={shown === "all" ? undefined : "all time"}>
+                <Aside note={shown === "all" ? undefined : t("all time")}>
                     <div className="grid gap-x-12 gap-y-(--stat-gap-block) sm:grid-cols-2 lg:grid-cols-3">
                         {signature.ownedVsPlayed.length > 0 && (
-                            <Column label="library vs played">
+                            <Column label={t("library vs played")}>
                                 <OwnedAgainstPlayed signature={signature} />
                             </Column>
                         )}
@@ -219,23 +222,23 @@ export default function StatsPage() {
         },
         ...(compact ? [{
             id: "sources",
-            label: "sources",
+            label: t("sources"),
             content: (
-                <Aside note={shown === "all" ? undefined : "all time"}>
+                <Aside note={shown === "all" ? undefined : t("all time")}>
                     <div className="flex flex-col gap-(--stat-gap-block)">{sources}</div>
                 </Aside>
             ),
         }] : []),
         ...(system ? [{
             id: "health",
-            label: "server",
+            label: t("server"),
             content: (
                 <Aside note={`kima ${system.version}`}>
                     <ServerPanel system={system} />
                 </Aside>
             ),
         }] : []),
-        { id: "false-starts", label: "play history cleanup", fill: true, content: <FalseStarts /> },
+        { id: "false-starts", label: t("play history cleanup"), fill: true, content: <FalseStarts /> },
     ];
 
     return (
@@ -243,7 +246,7 @@ export default function StatsPage() {
             controls={
                 <>
                     {shown === "all" && hasPlays && listening.firstPlay && (
-                        <p className="t-meta hidden sm:block">since {monthYear(listening.firstPlay)}</p>
+                        <p className="t-meta hidden sm:block">{t("since")} {monthYear(listening.firstPlay)}</p>
                     )}
                     <PeriodPicker value={shown} onChange={setPeriod} busy={reloading} />
                 </>
@@ -251,7 +254,7 @@ export default function StatsPage() {
             status={
                 failed ? (
                     <p className="t-meta text-[var(--text-secondary)]" role="status">
-                        couldn&apos;t load that period · showing {PERIODS.find((p) => p.id === shown)?.label ?? "all time"}
+                        {t("couldn't load that period · showing")} {translate(locale, PERIODS.find((p) => p.id === shown)?.label ?? "all time")}
                     </p>
                 ) : null
             }
@@ -280,29 +283,30 @@ function Overview({
     period: Period;
     withShape: boolean;
 }) {
+    const { t, locale } = useLanguage();
     const heard = percent(shelf.tracks.heard, shelf.tracks.total);
-    const window = PERIODS.find((p) => p.id === period)?.sentence ?? "";
+    const window = translate(locale, PERIODS.find((p) => p.id === period)?.sentence ?? "");
 
     const facts: Array<{ value: string; note: string }> = [
         listening.peak && {
             value: whenLabel(listening.peak.weekday, listening.peak.hour),
-            note: "busiest hour of the week",
+            note: t("busiest hour of the week"),
         },
         signature.concentration && {
-            value: `${signature.concentration.forHalf} ${signature.concentration.forHalf === 1 ? "track" : "tracks"}`,
-            note: signature.concentration.forHalf === 1 ? "makes up half your plays" : "make up half your plays",
+            value: `${signature.concentration.forHalf} ${signature.concentration.forHalf === 1 ? t("track") : t("tracks")}`,
+            note: signature.concentration.forHalf === 1 ? t("makes up half your plays") : t("make up half your plays"),
         },
         signature.key && {
-            value: `${Math.round(signature.key.minorPct)}% minor key`,
-            note: signature.key.top[0]?.key ? `top key: ${signature.key.top[0].key.toLowerCase()}` : "",
+            value: `${Math.round(signature.key.minorPct)}% ${t("minor key")}`,
+            note: signature.key.top[0]?.key ? `${t("top key:")} ${signature.key.top[0].key.toLowerCase()}` : "",
         },
         signature.albumHabit && {
             value: `${Math.round(signature.albumHabit.inOrderPct)}%`,
-            note: "played in album order",
+            note: t("played in album order"),
         },
         signature.era && {
             value: String(signature.era.medianYear),
-            note: "median release year",
+            note: t("median release year"),
         },
     ].filter(Boolean) as Array<{ value: string; note: string }>;
 
@@ -311,22 +315,22 @@ function Overview({
             <div className="flex flex-col gap-(--stat-gap-block)">
                 <h1
                     className="text-[length:var(--stat-hero)] leading-[1.02] font-light tracking-[-0.03em] text-[var(--text-primary)] text-balance"
-                    aria-label={`about ${hoursValue(listening.estimatedSeconds)} hours of music ${window}`.trim()}
+                    aria-label={`${t("about")} ${hoursValue(listening.estimatedSeconds)} ${t("hours of music")} ${window}`.trim()}
                 >
-                    about{" "}
+                    {t("about")}{" "}
                     <span className="t-figure text-[length:var(--stat-hero)]">
                         {hoursValue(listening.estimatedSeconds)}
                     </span>{" "}
-                    hours of music{window ? ` ${window}` : ""}
+                    {t("hours of music")}{window ? ` ${window}` : ""}
                 </h1>
 
                 {/* The hours are an estimate and say so; these four counts are exact.
                     Under 480px four columns cannot hold their labels, so phones get two. */}
                 <dl className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-x-4 gap-y-6 sm:gap-x-8 lg:max-w-[42rem]">
-                    <Reading value={listening.plays.toLocaleString()} label="plays" />
-                    <Reading value={listening.distinctArtists.toLocaleString()} label="artists" />
-                    <Reading value={listening.distinctAlbums.toLocaleString()} label="albums" />
-                    <Reading value={`${heard}%`} label={period === "all" ? "of library played" : "of library played · all time"} />
+                    <Reading value={listening.plays.toLocaleString()} label={t("plays")} />
+                    <Reading value={listening.distinctArtists.toLocaleString()} label={t("artists")} />
+                    <Reading value={listening.distinctAlbums.toLocaleString()} label={t("albums")} />
+                    <Reading value={`${heard}%`} label={period === "all" ? t("of library played") : t("of library played · all time")} />
                 </dl>
 
                 <div className="flex flex-col gap-5">
@@ -361,15 +365,16 @@ function Overview({
 
 /** The Overview when the period holds no plays; the period picker stays above it as the way out. */
 function NoPlays({ period }: { period: Period }) {
+    const { t } = useLanguage();
     return (
         <div className="flex flex-col gap-4">
             <h1 className="text-[length:var(--stat-hero)] leading-[1.02] font-light tracking-[-0.03em] text-[var(--text-primary)]">
-                {period === "all" ? "no plays yet" : "no plays in this period"}
+                {period === "all" ? t("no plays yet") : t("no plays in this period")}
             </h1>
             <p className="t-body leading-relaxed max-w-[48ch]">
                 {period === "all"
-                    ? "a play counts after half the track"
-                    : "try a longer period"}
+                    ? t("a play counts after half the track")
+                    : t("try a longer period")}
             </p>
         </div>
     );
@@ -388,10 +393,11 @@ function PeriodPicker({
     onChange: (p: Period) => void;
     busy: boolean;
 }) {
+    const { t, locale } = useLanguage();
     return (
         <div
             role="group"
-            aria-label="period"
+            aria-label={t("period")}
             aria-busy={busy}
             className={`flex items-baseline gap-4 transition-opacity ${busy ? "opacity-50" : ""}`}
         >
@@ -412,7 +418,7 @@ function PeriodPicker({
                                 : "text-[var(--text-muted)] border-transparent hover:text-[var(--text-secondary)]",
                         ].join(" ")}
                     >
-                        {p.label}
+                        {translate(locale, p.label)}
                     </button>
                 );
             })}
@@ -430,16 +436,17 @@ function PeriodSelect({
     onChange: (p: Period) => void;
     busy: boolean;
 }) {
+    const { t, locale } = useLanguage();
     return (
         <select
-            aria-label="period"
+            aria-label={t("period")}
             aria-busy={busy}
             value={value}
             onChange={(e) => onChange(e.target.value as Period)}
             className={`t-control shrink-0 rounded-lg bg-white/[0.06] px-2 text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${busy ? "opacity-50" : ""}`}
         >
             {PERIODS.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
+                <option key={p.id} value={p.id}>{translate(locale, p.label)}</option>
             ))}
         </select>
     );
@@ -487,10 +494,11 @@ function Frame({
     status?: React.ReactNode;
     children: React.ReactNode;
 }) {
+    const { t } = useLanguage();
     return (
         <div className="page-shell relative flex h-full flex-col pt-6 pb-[var(--stats-under)] compact:pt-1">
             <div className="compact:hidden flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 pb-3">
-                <p className="t-eyebrow">your listening</p>
+                <p className="t-eyebrow">{t("your listening")}</p>
                 <div className="flex items-baseline gap-4">{controls}</div>
             </div>
             {status}
@@ -502,10 +510,11 @@ function Frame({
 /* ── The lists ───────────────────────────────────────────────────────────── */
 
 function TopLists({ listening, period }: { listening: ListeningStats; period: Period }) {
+    const { t } = useLanguage();
     return (
         <div className="grid gap-(--stat-gap-block) sm:grid-cols-2 sm:gap-x-16">
             <Ranked
-                label="artists"
+                label={t("artists")}
                 kind="artist"
                 period={period}
                 items={listening.topArtists.map((a) => ({
@@ -516,7 +525,7 @@ function TopLists({ listening, period }: { listening: ListeningStats; period: Pe
                 }))}
             />
             <Ranked
-                label="tracks"
+                label={t("tracks")}
                 kind="track"
                 period={period}
                 items={listening.topTracks.map((t) => ({
@@ -545,6 +554,7 @@ function Ranked({
     period: Period;
 }) {
     const { play, busy } = usePlaySlice();
+    const { t } = useLanguage();
 
     return (
         <div className="flex flex-col gap-3">
@@ -598,7 +608,7 @@ function Ranked({
                                     type="button"
                                     onClick={() => play("top", { limit: items.length, startIndex: i, token: item.key, period })}
                                     disabled={busy === item.key}
-                                    aria-label={`play ${item.primary}`}
+                                    aria-label={`${t("play")} ${item.primary}`}
                                     className={shared + (busy === item.key ? " opacity-60" : "")}
                                 >
                                     {inner}
@@ -615,6 +625,7 @@ function Ranked({
 }
 
 function Waiting() {
+    const { t } = useLanguage();
     return (
         <Frame controls={<div className="h-4 w-40 rounded bg-white/[0.04] animate-pulse" />}>
             <div className="flex gap-6 border-b border-white/[0.08] py-3">
@@ -622,7 +633,7 @@ function Waiting() {
                     <div key={i} className="h-3 w-16 rounded bg-white/[0.05] animate-pulse" />
                 ))}
             </div>
-            <div className="flex flex-col gap-(--stat-gap-block) pt-6" aria-busy="true" aria-label="loading stats">
+            <div className="flex flex-col gap-(--stat-gap-block) pt-6" aria-busy="true" aria-label={t("loading stats")}>
                 <div className="h-12 w-80 max-w-full rounded bg-white/[0.04] animate-pulse" />
                 <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
                     {[0, 1, 2, 3].map((i) => (

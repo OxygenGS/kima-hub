@@ -117,4 +117,17 @@ describe("UI translations", () => {
         expect(translate("nl", "__proto__")).toBe("__proto__");
     });
 
+
+    it("translates upstream v1.11 Stats without translating music metadata or period IDs", () => {
+        expect(translate("nl", "your listening")).toBe("Je luistergedrag");
+        expect(translate("nl", "most played")).toBe("Meest afgespeeld");
+        expect(translate("nl", "30 days")).toBe("30 dagen");
+        expect(translate("nl", "no plays yet")).toBe("nog niets afgespeeld");
+        expect(translate("nl", "play history cleanup")).toBe("Luistergeschiedenis opschonen");
+        expect(translate("nl", "top key:")).toBe("Meestvoorkomende toonsoort:");
+        expect(translate("nl", "Artist - Original Song")).toBe("Artist - Original Song");
+        expect(translate("nl", "30d")).toBe("30d");
+        expect(translate("nl", "12mo")).toBe("12mo");
+    });
+
 });
