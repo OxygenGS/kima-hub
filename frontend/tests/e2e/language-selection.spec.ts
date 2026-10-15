@@ -241,11 +241,24 @@ test.describe("Interface language", () => {
                         ownedVsPlayed: [], hourly: [],
                     },
                 };
+            } else if (pathname === "/api/stats/false-starts") {
+                body = {
+                    totalRows: 3, totalListens: 3, duplicateRows: 0,
+                    collapsibleRows: 0, heard: 1, skipped: 2,
+                    tooShort: 0, unclear: 0, earliest: "2025-01-01T00:00:00Z",
+                    ignored: [],
+                    tracks: [{
+                        trackId: "ci-history-fixture", title: "CI History Fixture",
+                        artist: "CI Artist", durationSeconds: 180, requiredSeconds: 90,
+                        skipped: 2, heard: 1, listens: 3, rows: 3,
+                        shortestRunSeconds: 5, lastAt: "2025-01-01T00:00:00Z",
+                    }],
+                };
             } else {
                 body = { error: "Unused in isolated Stats localization test" };
             }
             await route.fulfill({
-                status: pathname === "/api/stats" || pathname === "/api/auth/me" ? 200 : 404,
+                status: ["/api/stats", "/api/auth/me", "/api/stats/false-starts"].includes(pathname) ? 200 : 404,
                 contentType: "application/json",
                 body: JSON.stringify(body),
             });
@@ -270,6 +283,14 @@ test.describe("Interface language", () => {
         await expect(page.getByRole("tablist", { name: "statistiekonderdelen" })).toBeVisible();
         await page.getByRole("tab", { name: "Luistergeschiedenis opschonen" }).click();
         await expect(page.getByRole("button", { name: "luistergeschiedenis controleren" })).toBeVisible();
+
+        // A disposable fixture proves dynamic history labels and the caution
+        // before deletion are localized without issuing a destructive API call.
+        await page.getByRole("button", { name: "luistergeschiedenis controleren" }).click();
+        await expect(page.getByText("CI History Fixture", { exact: true })).toBeVisible();
+        await expect(page.getByText("overgeslagen (verwijderbaar)", { exact: true })).toBeVisible();
+        await page.getByRole("checkbox").first().check();
+        await expect(page.getByText("verwijderen wist de overgeslagen afspeelbeurten definitief", { exact: true })).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("lang", "nl");
     });
 
