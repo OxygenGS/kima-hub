@@ -137,26 +137,35 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
         const shareLink = await loadUsableShareLink(req.params.token, res);
         if (!shareLink) return;
 
-        let entity: any = null;
+        // Public endpoints return an explicit safe projection. In particular,
+        // raw Track includes filePath, identity analysis and private metadata;
+        // only the shared music display fields belong in an anonymous response.
+        const sharedTrackSelect = {
+            id: true,
+            title: true,
+            duration: true,
+            trackNo: true,
+            discNumber: true,
+            discSubtitle: true,
+            album: {
+                select: {
+                    title: true,
+                    coverUrl: true,
+                    artist: { select: { name: true } },
+                },
+            },
+        } as const;
+
+        let entity: unknown = null;
 
         if (shareLink.entityType === "playlist") {
             entity = await prisma.playlist.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
+                select: {
+                    id: true,
+                    name: true,
                     items: {
-                        include: {
-                            track: {
-                                include: {
-                                    album: {
-                                        include: {
-                                            artist: {
-                                                select: { id: true, name: true },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
+                        select: { track: { select: sharedTrackSelect } },
                         orderBy: { sort: "asc" },
                     },
                     user: { select: { username: true } },
@@ -165,19 +174,16 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
         } else if (shareLink.entityType === "track") {
             entity = await prisma.track.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
-                    album: {
-                        include: {
-                            artist: { select: { id: true, name: true } },
-                        },
-                    },
-                },
+                select: sharedTrackSelect,
             });
         } else if (shareLink.entityType === "album") {
             entity = await prisma.album.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
-                    artist: { select: { id: true, name: true } },
+                select: {
+                    id: true,
+                    title: true,
+                    coverUrl: true,
+                    artist: { select: { name: true } },
                     tracks: {
                         orderBy: [
                             { discNumber: { sort: "asc", nulls: "first" } },
