@@ -59,6 +59,39 @@ playlist and is not an acquisition operation.
   No server-side flag can prevent a recipient recording or copying delivered
   audio bytes.
 
+## Anonymous share-link scope (verified in source, CI pending)
+
+The `/api/share/:token` JSON response must use **explicit selected display
+fields** for track, playlist and album: title, artist, duration, cover reference,
+track number and playlist ordering. Untrusted recipients must not receive a
+Track's `filePath`, private analysis, service credentials or a Playlist's
+configuration/internal identifiers merely because a shared token is valid.
+
+A `/api/share/:token/cover-art/:coverArtId` request must refer to artwork
+belonging to the token's track, album or a track in its playlist. Do **not**
+treat a valid token as a capability to read arbitrary `native:` covers.
+The route checks the DB relationship **before** opening the image cache.
+Token-protected images use `Cache-Control: private, no-store` to avoid
+year-long caching beyond share revocation or expiry.
+
+`/api/share/:token/stream/:trackId` validates token, expiry and membership
+first; stored paths must remain inside the canonical real filesystem root,
+including symlinks. A file under the root that resolves to an external symlink
+target is forbidden. The stream does **not** depend on a listener's private
+`canDownloadTracks` flag: a share token is a separate intentional audio
+capability. The recipient may still save the streamed bytes.
+
+Dedicated HTTP regressions are in
+`backend/src/routes/__tests__/shareCoverPermissions.route.test.ts`,
+`shareStreamContainment.route.test.ts` and
+`share.route.test.ts`. They cover covers belonging to another share,
+revoked/exhausted tokens, safe metadata projections, symlink escape,
+traversal, missing files and valid in-root shared audio.
+
+**Limits:** These controls are not complete protection against a privileged
+host operator changing files concurrently (TOCTOU) or a CDN overriding cache
+headers. Native front-end and third-party client acceptance is still needed.
+
 ## Regression coverage
 
 - `backend/src/middleware/__tests__/musicPermissions.test.ts`: actual
