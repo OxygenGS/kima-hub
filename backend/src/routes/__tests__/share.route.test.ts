@@ -105,6 +105,7 @@ describe('GET /share/:token -- resolve share link', () => {
 
         const res = await request(app).get('/share/nonexistent-token');
         expect(res.status).toBe(404);
+        expect(res.headers['cache-control']).toBe('private, no-store');
         expect(res.body.error).toBe('Share link not found');
     });
 
@@ -116,6 +117,7 @@ describe('GET /share/:token -- resolve share link', () => {
 
         const res = await request(app).get('/share/valid-token-abc');
         expect(res.status).toBe(410);
+        expect(res.headers['cache-control']).toBe('private, no-store');
         expect(res.body.error).toBe('Share link has expired');
     });
 
@@ -155,6 +157,7 @@ describe('GET /share/:token -- resolve share link', () => {
 
         const res = await request(app).get('/share/valid-token-abc');
         expect(res.status).toBe(200);
+        expect(res.headers['cache-control']).toBe('private, no-store');
         expect(res.body.entityType).toBe('track');
         expect(res.body.entity).toBeDefined();
         expect(res.body.entity.title).toBe('Karma Police');
