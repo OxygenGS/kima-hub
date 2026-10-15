@@ -137,7 +137,7 @@ jobs:
           npx prisma migrate deploy
       - name: Verify actual role checks and request handling with Jest / Supertest
         working-directory: backend
-        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts src/routes/__tests__/discoverGenerateJobHash.route.test.ts src/routes/__tests__/discoverRetryUnavailable.route.test.ts src/routes/__tests__/soulseekPermissions.route.test.ts src/routes/__tests__/releasesDownloadPermissions.route.test.ts src/routes/__tests__/offlinePermissions.route.test.ts src/routes/subsonic/__tests__/downloadPermissions.route.test.ts src/routes/subsonic/__tests__/compatAlwaysAnswers.route.test.ts
+        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts src/routes/__tests__/discoverGenerateJobHash.route.test.ts src/routes/__tests__/discoverRetryUnavailable.route.test.ts src/routes/__tests__/soulseekPermissions.route.test.ts src/routes/__tests__/releasesDownloadPermissions.route.test.ts src/routes/__tests__/offlinePermissions.route.test.ts src/routes/subsonic/__tests__/downloadPermissions.route.test.ts src/routes/subsonic/__tests__/compatAlwaysAnswers.route.test.ts src/routes/__tests__/shareCoverPermissions.route.test.ts
 
   all-backend-tests:
     name: Full v1.11 backend Jest suite on disposable Postgres and Redis
