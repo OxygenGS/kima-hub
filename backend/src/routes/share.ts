@@ -361,7 +361,8 @@ router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, r
             config.music.transcodeCachePath,
             config.music.transcodeCacheMaxGb,
         );
-        await streamingService.streamFileWithRangeSupport(req, res, fullPath, mimeType);
+        // A revoked/expired token must not leave a reusable cached audio file.
+        await streamingService.streamFileWithRangeSupport(req, res, fullPath, mimeType, "private, no-store");
     } catch (error: any) {
         logger.error(`[Share] Stream error: ${error.message}`);
         if (!res.headersSent) {
