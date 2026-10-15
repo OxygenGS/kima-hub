@@ -6,6 +6,11 @@ test "$GITHUB_ACTIONS" = "true"
 test -n "$GITHUB_STEP_SUMMARY"
 mkdir -p audit
 baseline="$(git rev-parse HEAD)"
+strategy="${V111_CONFLICT_STRATEGY:-ours}"
+case "$strategy" in
+  ours|theirs) ;;
+  *) echo "Unknown merge preview strategy: $strategy" >&2; exit 1 ;;
+esac
 ref="refs/remotes/upstream-v111-preview/v1.11.0"
 git fetch --no-tags https://github.com/Chevron7Locked/kima-hub.git "refs/tags/v1.11.0:$ref"
 set +e
@@ -17,8 +22,14 @@ git diff --name-only --diff-filter=U > audit/provisional-conflicts.txt
 number="$(wc -l < audit/provisional-conflicts.txt | tr -d ' ')"
 while IFS= read -r file; do
   test -z "$file" && continue
-  git checkout --ours -- "$file"
-  git add -- "$file"
+  if [ "$strategy" = theirs ] && ! git ls-files --stage -- "$file" | grep -q '^[^[:space:]]\+ [0-9a-f]\+ 3[[:space:]]'; then
+    # Upstream deliberately deleted this file: respect its deletion in the
+    # upstream-first diagnostic (the fork-first keeps the original file).
+    git rm -f -- "$file" >/dev/null
+  else
+    git checkout --"$strategy" -- "$file"
+    git add -- "$file"
+  fi
 done < audit/provisional-conflicts.txt
 test -z "$(git diff --name-only --diff-filter=U)"
 git add -A
@@ -29,7 +40,7 @@ git diff --cached --name-only > audit/provisional-changed-paths.txt
   echo
   echo "- Fork checkout: $baseline"
   echo "- Official upstream tag: v1.11.0"
-  echo "- Conflicts provisionally kept at fork versions: **$number**"
+  echo "- Unresolved conflicts provisionally resolved by strategy **$strategy**: $number"
   echo "- Changed paths in ephemeral Git index: **$(wc -l < audit/provisional-changed-paths.txt | tr -d ' ')**"
   echo "- Merge status: $merge_status (expected to be nonzero if conflicted)"
   echo "- NOT an approved integration or deployment."
