@@ -9,7 +9,7 @@ import { getAudioStreamingService } from "../../services/audioStreaming";
 import { config } from "../../config";
 import { bitrateToQuality, firstArtistGenre, mapSong, wrap } from "./mappers";
 import { normalizeArtistName } from "../../services/artistIdentity";
-import { resolveWithinMusicRoot } from "../library/trackPath";
+import { resolveExistingMusicFile } from "../library/trackPath";
 import { recordPlay } from "../../services/playRecording";
 import { requireSubsonicDownloadRight } from "./userHelpers";
 import { getLiveState, publicUserId, reportLive } from "../../services/liveListening";
@@ -27,7 +27,7 @@ async function streamTrackById(
         return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
     }
 
-    const absolutePath = resolveWithinMusicRoot(track.filePath);
+    const absolutePath = await resolveExistingMusicFile(track.filePath);
     if (!absolutePath) {
         return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
     }
