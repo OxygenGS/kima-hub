@@ -15,6 +15,8 @@ import { useAuth } from "@/lib/auth-context";
 import { WhatsNewWindow, type Release } from "./WhatsNewWindow";
 import { MoodMixChoice } from "./MoodMixChoice";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 // One pending fetch per app session, shared across remounts (the layout switching
 // between phone, desktop and TV), so a remount neither refetches nor replaces the
@@ -51,6 +53,8 @@ export function openWhatsNew(): void {
 }
 
 export function WhatsNewGate() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [queue, setQueue] = useState<Release[]>([]);
     // Following a link to a page defers the window for this user in this tab, so it
     // does not follow them there; nothing is answered or closed by it. sessionStorage
@@ -99,14 +103,14 @@ export function WhatsNewGate() {
                 // Older releases still unread stay ahead of it.
                 setQueue((q) => (q.some((r) => r.version === current.release.version) ? q : [...q, current.release]));
             } catch {
-                notify.error("Couldn't open what's new");
+                notify.error(translate(locale, "Couldn't open what's new"));
             } finally {
                 reopening.current = false;
             }
         };
         window.addEventListener(OPEN_EVENT, reopen);
         return () => window.removeEventListener(OPEN_EVENT, reopen);
-    }, [deferKey]);
+    }, [deferKey, locale]);
 
     if (queue.length === 0 || deferred) return null;
     const wipe = queue.flatMap((r) => r.items).find((i) => i.kind === "action" && i.run === "wipeEnrichment");
@@ -158,7 +162,7 @@ export function WhatsNewGate() {
                             {done.includes(item.key) ? (
                                 <p className="text-sm text-success flex items-center gap-2" data-testid="wipe-started">
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    Wiped. Your library is running through the new engine in the background.
+                                    {t("Wiped. Your library is running through the new engine in the background.")}
                                 </p>
                             ) : (
                                 <button
@@ -169,10 +173,10 @@ export function WhatsNewGate() {
                                     className="self-start min-h-11 py-2.5 px-4 rounded-lg bg-brand hover:bg-brand-hover text-black text-sm font-semibold flex items-center gap-2 transition-colors disabled:opacity-60"
                                 >
                                     {wiping ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                    {wiping ? "Starting..." : item.cta}
+                                    {wiping ? t("Starting...") : t(item.cta)}
                                 </button>
                             )}
-                            {wipeError && <p className="text-sm text-danger-light">{wipeError}</p>}
+                            {wipeError && <p className="text-sm text-danger-light">{t(wipeError)}</p>}
                         </div>
                     ) : null
                 }
@@ -184,10 +188,10 @@ export function WhatsNewGate() {
                         isOpen={true}
                         onClose={() => setConfirming(false)}
                         onConfirm={runWipe}
-                        title={wipe.confirmTitle ?? "Wipe and re-run enrichment?"}
-                        message={wipe.confirmMessage ?? ""}
-                        confirmText={wipe.confirmLabel ?? wipe.cta}
-                        cancelText="Not now"
+                        title={t(wipe.confirmTitle ?? "Wipe and re-run enrichment?")}
+                        message={t(wipe.confirmMessage ?? "")}
+                        confirmText={t(wipe.confirmLabel ?? wipe.cta)}
+                        cancelText={t("Not now")}
                         variant="warning"
                     />
                 </div>
