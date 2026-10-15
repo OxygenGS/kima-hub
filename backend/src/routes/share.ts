@@ -44,6 +44,9 @@ function getMimeType(filePath: string): string {
 
 /** The share link for `token`, or null once the response has gone out: 404 unknown, 410 expired or out of plays. */
 async function loadUsableShareLink(token: string, res: Response) {
+    // Never cache a public capability result past expiry or owner revocation.
+    // This covers metadata and rejected streams/covers, not just 200 audio.
+    res.setHeader("Cache-Control", "private, no-store");
     const shareLink = await prisma.shareLink.findUnique({ where: { token } });
 
     if (!shareLink) {
