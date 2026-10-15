@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("localizes Stats coverage and keyboard hints while preserving physical keys", () => {
+        expect(translate("nl", "tracks played")).toBe("afgespeelde nummers");
+        expect(translate("nl", "albums played")).toBe("afgespeelde albums");
+        expect(translate("nl", "tracks analysed")).toBe("geanalyseerde nummers");
+        expect(translate("nl", "shuffle 40 unplayed")).toContain("40");
+        expect(translate("nl", "keyboard shortcuts")).toBe("sneltoetsen");
+        expect(translate("nl", "move in the hour grid")).toBe("navigeren door het urenraster");
+        expect(translate("nl", "of")).toBe("van");
+        expect(translate("nl", "esc")).toBe("esc");
+        expect(translate("en", "keyboard shortcuts")).toBe("keyboard shortcuts");
+    });
+
     it("provides v1.11 search and collection browser labels", () => {
         expect(translate("nl", "Find Your Sound")).toBe("Vind jouw muziek");
         expect(translate("nl", "Discovery Engine")).toBe("Ontdekkingsfunctie");
