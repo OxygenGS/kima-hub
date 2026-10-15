@@ -136,7 +136,7 @@ router.post("/login", async (req, res) => {
 });
 
 // POST /auth/logout - JWT is stateless, logout is handled client-side
-router.post("/logout", (req, res) => {
+router.post("/logout", (_req, res) => {
     // With JWT, logout is handled by client removing the token
     // No server-side session to destroy
     res.json({ message: "Logged out" });
@@ -272,7 +272,7 @@ router.post("/change-password", requireAuth, authLimiter, async (req, res) => {
 });
 
 // GET /auth/users (Admin only)
-router.get("/users", requireAuth, requireAdmin, async (req, res) => {
+router.get("/users", requireAuth, requireAdmin, async (_req, res) => {
     try {
         const users = await prisma.user.findMany({
             select: {

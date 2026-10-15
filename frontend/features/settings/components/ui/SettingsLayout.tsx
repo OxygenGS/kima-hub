@@ -3,6 +3,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { SettingsSidebar, SidebarItem } from "./SettingsSidebar";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SettingsLayoutProps {
     children: ReactNode;
@@ -11,6 +12,7 @@ interface SettingsLayoutProps {
 }
 
 export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayoutProps) {
+    const { t } = useLanguage();
     const [activeSection, setActiveSection] = useState(sidebarItems[0]?.id || "");
     const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +87,7 @@ export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayo
 
     return (
         <div className="min-h-screen bg-[var(--bg-primary)]">
-            <PageHeader eyebrow="System configuration" title="Settings">
+            <PageHeader eyebrow={t("System Configuration")} title={t("Settings")}>
                 <label className="mt-6 block md:hidden">
                     <span className="sr-only">Jump to section</span>
                     <select

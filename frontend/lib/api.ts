@@ -240,6 +240,21 @@ const authStorage = (): Storage | null => {
     }
 };
 
+// Storage methods can throw SecurityError independently of reading the
+// localStorage property itself (private windows, sandboxed iframes, policies).
+function readStoredToken(key: string): string | null {
+    try { return authStorage()?.getItem(key) ?? null; }
+    catch { return null; }
+}
+function writeStoredToken(key: string, token: string): void {
+    try { authStorage()?.setItem(key, token); }
+    catch { /* An in-memory login remains usable. */ }
+}
+function clearStoredToken(key: string): void {
+    try { authStorage()?.removeItem(key); }
+    catch { /* In-memory session is still cleared. */ }
+}
+
 class ApiClient {
     private token: string | null = null;
     private tokenInitialized: boolean = false;
@@ -247,14 +262,9 @@ class ApiClient {
     private ensurePromise: Promise<"fresh" | RefreshResult> | null = null;
 
     constructor() {
-        const storage = authStorage();
-        if (storage) {
-            this.token = storage.getItem(AUTH_TOKEN_KEY);
-            if (this.token) {
-                this.tokenInitialized = true;
-            }
-            // Note: Refresh token is loaded on-demand via getRefreshToken()
-        }
+        this.token = readStoredToken(AUTH_TOKEN_KEY);
+        if (this.token) this.tokenInitialized = true;
+        // Refresh token is read only when needed.
     }
 
     /**
@@ -262,12 +272,7 @@ class ApiClient {
      * Call this early in the app lifecycle to ensure the token is loaded
      */
     async initToken(): Promise<string | null> {
-        const storage = authStorage();
-        if (!storage) {
-            return null;
-        }
-
-        const storedToken = storage.getItem(AUTH_TOKEN_KEY);
+        const storedToken = readStoredToken(AUTH_TOKEN_KEY);
         if (storedToken) {
             this.token = storedToken;
         }
@@ -292,27 +297,18 @@ class ApiClient {
 
     setToken(token: string, refreshToken?: string) {
         this.token = token;
-        const storage = authStorage();
-        if (storage) {
-            storage.setItem(AUTH_TOKEN_KEY, token);
-            if (refreshToken) {
-                storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-            }
-        }
+        writeStoredToken(AUTH_TOKEN_KEY, token);
+        if (refreshToken) writeStoredToken(REFRESH_TOKEN_KEY, refreshToken);
     }
 
     getRefreshToken(): string | null {
-        const storage = authStorage();
-        return storage ? storage.getItem(REFRESH_TOKEN_KEY) : null;
+        return readStoredToken(REFRESH_TOKEN_KEY);
     }
 
     clearToken() {
         this.token = null;
-        const storage = authStorage();
-        if (storage) {
-            storage.removeItem(AUTH_TOKEN_KEY);
-            storage.removeItem(REFRESH_TOKEN_KEY);
-        }
+        clearStoredToken(AUTH_TOKEN_KEY);
+        clearStoredToken(REFRESH_TOKEN_KEY);
     }
 
     /**
@@ -785,14 +781,11 @@ class ApiClient {
             return this.token;
         }
         // Try to load from storage if on client
-        const storage = authStorage();
-        if (storage) {
-            const storedToken = storage.getItem(AUTH_TOKEN_KEY);
-            if (storedToken) {
-                this.token = storedToken;
-                this.tokenInitialized = true;
-                return storedToken;
-            }
+        const storedToken = readStoredToken(AUTH_TOKEN_KEY);
+        if (storedToken) {
+            this.token = storedToken;
+            this.tokenInitialized = true;
+            return storedToken;
         }
         return null;
     }

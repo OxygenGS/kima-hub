@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
+import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 import { Button } from "@/components/ui/Button";
 import { KimaMark } from "@/components/ui/KimaMark";
 
@@ -15,6 +18,8 @@ type IntegrationResult = { ok: boolean; message: string };
 export default function OnboardingPage() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuth();
+    const { branding } = useBranding();
+    const { locale, setLocale, t } = useLanguage();
     const [step, setStep] = useState(1);
     // Separate submitting state: account creation + complete/skip
     const [submitting, setSubmitting] = useState(false);
@@ -222,11 +227,26 @@ export default function OnboardingPage() {
                 <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <GradientSpinner size="lg" />
-                        <p className="text-[var(--text-secondary)] mt-4">Loading...</p>
+                        <p className="text-[var(--text-secondary)] mt-4">{t("Loading...")}</p>
                     </div>
                 </div>
             :   <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center p-6">
                     <div className="w-full max-w-4xl">
+                        <div className="flex justify-end items-center gap-2 mb-4">
+                            <label className="text-sm text-[var(--text-secondary)]" htmlFor="onboarding-language">
+                                {t("Display language")}
+                            </label>
+                            <select
+                                id="onboarding-language"
+                                aria-label={t("Language")}
+                                value={locale}
+                                onChange={(event) => setLocale(event.target.value as Locale)}
+                                className="rounded-lg border border-white/20 bg-[#171717] px-3 py-2 text-sm text-white"
+                            >
+                                <option value="en">{t("English")}</option>
+                                <option value="nl">{t("Nederlands")}</option>
+                            </select>
+                        </div>
                         <div className="text-center mb-8">
                             <div className="inline-flex items-center gap-4 mb-4">
                                 <div className="relative">
@@ -234,19 +254,18 @@ export default function OnboardingPage() {
                                     <KimaMark size={48} className="relative z-(--z-raised)" />
                                 </div>
                                 <h1 className="text-4xl font-bold text-white">
-                                    Kima Hub
+                                    {branding.name}
                                 </h1>
                             </div>
                             <p className="text-[var(--text-secondary)] text-lg">
-                                Welcome to your personal music streaming
-                                platform
+                                {t("Welcome to your personal music streaming platform")}
                             </p>
                         </div>
 
                         <div className="flex items-center justify-center gap-3 mb-8">
                             {[
-                                { num: 1, label: "Account" },
-                                { num: 2, label: "Integrations" },
+                                { num: 1, label: t("Account") },
+                                { num: 2, label: t("Integrations") },
                             ].map((s, idx) => (
                                 <div key={s.num} className="flex items-center">
                                     <div className="flex flex-col items-center">
@@ -290,7 +309,7 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Create Your Admin Account
+                                                {t("Create Your Admin Account")}
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
                                                 This is the owner account for your Kima server. You&apos;ll manage users, integrations, and settings from here.
@@ -379,7 +398,7 @@ export default function OnboardingPage() {
 
                                             {error && (
                                                 <div className="bg-danger/10 border border-danger/30 rounded-lg p-4 text-sm text-danger-light">
-                                                    {error}
+                                                    {translate(locale, error)}
                                                 </div>
                                             )}
 
@@ -512,7 +531,7 @@ export default function OnboardingPage() {
                                         {error && (
                                             <div className="flex items-center gap-2 p-4 rounded-lg bg-danger/10 border border-danger/20">
                                                 <p className="text-sm text-danger">
-                                                    {error}
+                                                    {translate(locale, error)}
                                                 </p>
                                             </div>
                                         )}

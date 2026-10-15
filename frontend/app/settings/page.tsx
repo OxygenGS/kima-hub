@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/cn";
 import { useAudioState } from "@/lib/audio-context";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -16,6 +18,8 @@ import {
 } from "@/features/settings/components/ui";
 
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
+import { LanguageSection } from "@/features/settings/components/sections/LanguageSection";
+import { BrandingSection } from "@/features/settings/components/sections/BrandingSection";
 import { SubsonicSection } from "@/features/settings/components/sections/SubsonicSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
 import { ScrobblingSection } from "@/features/settings/components/sections/ScrobblingSection";
@@ -32,6 +36,8 @@ import { Button } from "@/components/ui/Button";
 
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: "Account" },
+    { id: "language", label: "Language" },
+    { id: "branding", label: "Branding", adminOnly: true },
     { id: "subsonic", label: "Native Apps" },
     { id: "playback", label: "Playback" },
     { id: "scrobbling", label: "Scrobbling" },
@@ -48,6 +54,11 @@ const sidebarItems: SidebarItem[] = [
 
 export default function SettingsPage() {
     const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+    const { locale } = useLanguage();
+    const translatedSidebarItems = useMemo(
+        () => sidebarItems.map((item) => ({ ...item, label: translate(locale, item.label) })),
+        [locale],
+    );
     const [isSaving, setIsSaving] = useState(false);
     const [testingServices, setTestingServices] = useState<Record<string, boolean>>({});
     const saveStatus = useInlineStatus();
@@ -162,7 +173,7 @@ export default function SettingsPage() {
 
     if (loadError) {
         return (
-            <SettingsLayout sidebarItems={sidebarItems} isAdmin={isAdmin}>
+            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
                 <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6">
                     <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                         Settings could not be loaded
@@ -182,7 +193,7 @@ export default function SettingsPage() {
 
     if (!isLoaded) {
         return (
-            <SettingsLayout sidebarItems={sidebarItems} isAdmin={isAdmin}>
+            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
                 <div className="flex justify-center py-24" aria-busy="true">
                     <GradientSpinner size="md" />
                 </div>
@@ -191,9 +202,11 @@ export default function SettingsPage() {
     }
 
     return (
-        <SettingsLayout sidebarItems={sidebarItems} isAdmin={isAdmin}>
+        <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
             <div className="section-stack">
                 <AccountSection />
+                <LanguageSection />
+                {isAdmin && <BrandingSection />}
 
                 <SubsonicSection />
 
