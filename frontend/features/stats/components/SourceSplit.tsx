@@ -7,6 +7,8 @@
  */
 
 import type { ListeningStats } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 const ORDER = ["LIBRARY", "SUBSONIC", "DISCOVERY", "DISCOVERY_KEPT"] as const;
 
@@ -26,6 +28,8 @@ const INK: Record<string, string> = {
 };
 
 export function SourceSplit({ listening }: { listening: ListeningStats }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { bySource, plays } = listening;
     const segments = ORDER.map((k) => ({ key: k, n: bySource[k] ?? 0 })).filter((s) => s.n > 0);
     if (plays === 0 || segments.length === 0) return null;
@@ -36,8 +40,8 @@ export function SourceSplit({ listening }: { listening: ListeningStats }) {
     if (dominant.n / plays >= 0.97) {
         return (
             <p className="t-body max-w-[44ch]">
-                all plays from{" "}
-                <span className="text-[var(--text-primary)]">{SAY[dominant.key]}</span>
+                {t("all plays from")}{" "}
+                <span className="text-[var(--text-primary)]">{t(SAY[dominant.key])}</span>
             </p>
         );
     }
@@ -70,7 +74,7 @@ export function SourceSplit({ listening }: { listening: ListeningStats }) {
                         key={s.key}
                         className="flex items-baseline justify-between gap-4 border-b border-white/[0.05] py-1.5 last:border-0"
                     >
-                        <dt className="t-body">{SAY[s.key]}</dt>
+                        <dt className="t-body">{t(SAY[s.key])}</dt>
                         <dd className="t-figure text-sm shrink-0">
                             {Math.round((s.n / plays) * 100)}
                             <span className="text-xs font-normal text-[var(--text-muted)]">%</span>
@@ -81,8 +85,8 @@ export function SourceSplit({ listening }: { listening: ListeningStats }) {
 
             {keepRate !== null && (
                 <p className="t-meta max-w-[32ch]">
-                    {offered.toLocaleString()} discover {offered === 1 ? "play" : "plays"} ·{" "}
-                    <span className="t-figure text-xs">{keepRate}%</span> on albums you kept
+                    {offered.toLocaleString()} {t("discover")} {offered === 1 ? t("play count") : t("plays")} ·{" "}
+                    <span className="t-figure text-xs">{keepRate}%</span> {t("on albums you kept")}
                 </p>
             )}
         </div>

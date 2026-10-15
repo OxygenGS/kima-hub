@@ -6,15 +6,19 @@
  */
 
 import { hoursValue } from "../format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { SpokenStats } from "../types";
 
 export function SpokenWord({ spoken }: { spoken: SpokenStats }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { audiobooks, podcasts } = spoken;
 
     if (audiobooks.seconds === 0 && podcasts.seconds === 0) {
         return (
             <p className="t-body max-w-[34ch]">
-                no podcasts or audiobooks yet
+                {t("no podcasts or audiobooks yet")}
             </p>
         );
     }
@@ -24,16 +28,16 @@ export function SpokenWord({ spoken }: { spoken: SpokenStats }) {
             {audiobooks.seconds > 0 && (
                 <Entry
                     value={hoursValue(audiobooks.seconds)}
-                    unit="hours of audiobooks"
+                    unit={t("hours of audiobooks")}
                     lines={[
                         joined([
-                            audiobooks.finished > 0 && `${audiobooks.finished} finished`,
-                            audiobooks.inProgress > 0 && `${audiobooks.inProgress} in progress`,
-                            audiobooks.setAside > 0 && `${audiobooks.setAside} untouched 90+ days`,
+                            audiobooks.finished > 0 && `${audiobooks.finished} ${t("finished")}`,
+                            audiobooks.inProgress > 0 && `${audiobooks.inProgress} ${t("in progress")}`,
+                            audiobooks.setAside > 0 && `${audiobooks.setAside} ${t("untouched 90+ days")}`,
                         ]),
                         audiobooks.current &&
-                            `current: ${audiobooks.current.title} · ${Math.round(audiobooks.current.percent * 100)}%`,
-                        audiobooks.topAuthors[0] && `top author: ${audiobooks.topAuthors[0].name}`,
+                            `${t("current:")} ${audiobooks.current.title} · ${Math.round(audiobooks.current.percent * 100)}%`,
+                        audiobooks.topAuthors[0] && `${t("top author:")} ${audiobooks.topAuthors[0].name}`,
                     ]}
                 />
             )}
@@ -41,16 +45,16 @@ export function SpokenWord({ spoken }: { spoken: SpokenStats }) {
             {podcasts.seconds > 0 && (
                 <Entry
                     value={hoursValue(podcasts.seconds)}
-                    unit="hours of podcasts"
+                    unit={t("hours of podcasts")}
                     lines={[
                         joined([
                             podcasts.subscriptions > 0 &&
-                                `${podcasts.subscriptions} ${podcasts.subscriptions === 1 ? "subscription" : "subscriptions"}`,
+                                `${podcasts.subscriptions} ${t(podcasts.subscriptions === 1 ? "subscription" : "subscriptions")}`,
                             podcasts.finished > 0 &&
-                                `${podcasts.finished} ${podcasts.finished === 1 ? "episode" : "episodes"} finished`,
+                                `${podcasts.finished} ${t(podcasts.finished === 1 ? "episode" : "episodes")} ${t("finished")}`,
                         ]),
                         podcasts.backlog > 0 &&
-                            `${podcasts.backlog.toLocaleString()} unplayed ${podcasts.backlog === 1 ? "episode" : "episodes"}`,
+                            `${podcasts.backlog.toLocaleString()} ${t("unplayed (count)")} ${t(podcasts.backlog === 1 ? "episode" : "episodes")}`,
                     ]}
                 />
             )}

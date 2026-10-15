@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("covers newly integrated Stats listening, sources, and spoken-word labels", () => {
+        expect(translate("nl", "subsonic apps")).toBe("Subsonic-apps");
+        expect(translate("nl", "all plays from")).toBe("alle afspeelbeurten via");
+        expect(translate("nl", "play count")).toBe("afspeelbeurt");
+        expect(translate("nl", "highest energy around")).toBe("hoogste energie rond");
+        expect(translate("nl", "hours of audiobooks")).toBe("uur luisterboeken");
+        expect(translate("nl", "unplayed (count)")).toBe("niet-afgespeelde");
+        expect(translate("en", "hours of podcasts")).toBe("hours of podcasts");
+        expect(translate("nl", "Extern album name")).toBe("Extern album name");
+    });
+
     it("localizes Stats coverage and keyboard hints while preserving physical keys", () => {
         expect(translate("nl", "tracks played")).toBe("afgespeelde nummers");
         expect(translate("nl", "albums played")).toBe("afgespeelde albums");

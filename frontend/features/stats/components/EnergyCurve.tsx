@@ -7,6 +7,8 @@
  */
 
 import { useMemo } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useReveal } from "../useReveal";
 import { hourLabel } from "../format";
 import type { Signature } from "../types";
@@ -27,6 +29,9 @@ function smooth(points: Array<[number, number]>): string {
 }
 
 export function EnergyCurve({ hourly }: { hourly: Signature["hourly"] }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
+    const clockTime = (hour: number) => locale === "nl" ? `${String(hour).padStart(2, "0")}:00` : hourLabel(hour);
     const { ref, shown } = useReveal<HTMLElement>({ threshold: 0.35 });
 
     const { line, band, peak, trough } = useMemo(() => {
@@ -80,16 +85,16 @@ export function EnergyCurve({ hourly }: { hourly: Signature["hourly"] }) {
             {/* The axis, named down the left edge. */}
             <div className="flex flex-col items-end t-label">
                 <div className="flex-[34] flex w-full flex-col items-end justify-between py-0.5">
-                    <span>high</span>
-                    <span>low</span>
+                    <span>{t("high")}</span>
+                    <span>{t("low")}</span>
                 </div>
                 <div className="flex-[12] flex w-full items-center justify-end">
-                    <span>plays</span>
+                    <span>{t("plays")}</span>
                 </div>
             </div>
 
             <svg viewBox={`0 0 ${W} ${H + 12}`} className="w-full" role="img"
-                 aria-label={`highest energy around ${hourLabel(peak!.hour)}, lowest around ${hourLabel(trough!.hour)}`}>
+                 aria-label={`${t("highest energy around")} ${clockTime(peak!.hour)}, ${t("lowest around")} ${clockTime(trough!.hour)}`}>
                 <path d={band} fill="var(--chart-ink-band)" />
                 <path
                     d={line}
@@ -108,7 +113,7 @@ export function EnergyCurve({ hourly }: { hourly: Signature["hourly"] }) {
 
             <span aria-hidden />
             <div className="flex justify-between t-meta">
-                <span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span>
+                <span>{clockTime(0)}</span><span>{clockTime(6)}</span><span>{clockTime(12)}</span><span>{clockTime(18)}</span><span>{clockTime(23)}</span>
             </div>
         </figure>
     );
