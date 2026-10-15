@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Tab, DeleteDialogState } from "@/features/library/types";
@@ -54,6 +56,7 @@ function oneOf<T extends string | number>(raw: string | null, choices: readonly 
 }
 
 export default function LibraryPage() {
+    const { locale } = useLanguage();
     const router = useRouter();
     const searchParams = useSearchParams();
     const { playTracks } = useAudioControls();
@@ -373,7 +376,7 @@ export default function LibraryPage() {
     return (
         <div className="min-h-screen">
             <CollectionMasthead
-                title="Collection"
+                title={translate(locale, "Collection")}
                 heardLine={shelf.heard}
                 fallbackLine={`${totalItems.toLocaleString()} ${activeTab === "artists" ? "artists" : activeTab === "albums" ? "albums" : "tracks"}`}
                 shares={vibe.shares}
