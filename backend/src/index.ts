@@ -9,6 +9,7 @@ import { prisma } from "./utils/db";
 import { logger } from "./utils/logger";
 
 import authRoutes from "./routes/auth";
+import brandingRoutes from "./routes/branding";
 import onboardingRoutes from "./routes/onboarding";
 import libraryRoutes from "./routes/library";
 import playsRoutes from "./routes/plays";
@@ -140,6 +141,8 @@ app.use(
 // Apply rate limiting to auth routes
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth", authRoutes);
+// Public branding reads; the router itself requires admin auth for changes.
+app.use("/api/branding", apiLimiter, brandingRoutes);
 app.use("/api/onboarding/register", authLimiter);
 app.use("/api/onboarding", onboardingRoutes);
 
