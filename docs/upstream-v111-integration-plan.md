@@ -13,6 +13,14 @@ Compared the complete committed file trees of upstream `v1.10.0`, upstream `v1.1
 
 The isolated Git merge audit measured **141 actual unresolved merge paths**: 125 frontend, 9 backend/schema, 4 workflows, and 3 other. See the [per-file conflict inventory](upstream-v111-conflicts.md). The first 168 paths were overlapping changes, not conflicts. Both reports run against the pinned v1.11.0 tag without pushing, publishing or touching production.
 
+## Verified implementation checkpoint (2026-10-15)
+
+The experimental PR #7 implementation is now in a separate draft branch above the PR #6 integration plan. Hosted workflow [38740882417](https://github.com/OxygenGS/kima-hub/actions/runs/38740882417) was **7/7 green** on `d276fa6`, including a locally built, non-published amd64 AIO image booted in disposable CI.
+
+The fresh AIO test verified fork database migrations/permissions/branding, loopback-only PostgreSQL, real admin and standard-account authentication, generated WAV byte identity, seek, MP3 transcoding, rejected forbidden stream access and out-of-library path traversal, 3/3 English/Dutch authenticated Chromium flows per role, and secrets/records after removing and recreating the container with its original disposable volumes.
+
+**This is not an upgrade or rollback certification.** Required before any release or production deployment: (1) original official v1.10 full-image to fork AIO upgrade with independent original-volume restore/rollback; (2) same for official v1.11 full image; (3) arm64 build/runtime validation; (4) full new-screen EN/NL, TV/mobile, security and accessibility review; (5) explicit separate human approvals for merge, publication and CT 101. Do not substitute a schema-only test for either full-image rehearsal. No workflow here should deploy or push a registry image.
+
 ## Material upstream changes to reconcile
 
 - **44 Prisma migrations** between 1.10 and 1.11; verify their ordering, existing fork permission/branding migrations, schema conflicts, dropped API fields, and data preservation with copied volumes.
