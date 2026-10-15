@@ -6,9 +6,10 @@
  */
 
 // All mocks before imports.
-
+const mockStoredMusicUser = jest.fn();
 jest.mock('../../utils/db', () => ({
     prisma: {
+        user: { findUnique: (...args: unknown[]) => mockStoredMusicUser(...args) },
         discoveryBatch: {
             findFirst: jest.fn(),
             create: jest.fn(),
@@ -39,7 +40,7 @@ jest.mock('../../utils/logger', () => ({
 
 // Inject an authenticated user; the real middleware would 401 without a session.
 jest.mock('../../middleware/auth', () => ({
-    requireMusicPermission: () => (_req: any, _res: any, next: any) => next(),
+    requireMusicPermission: jest.requireActual('../../middleware/auth').requireMusicPermission,
     requireAuthOrToken: (req: any, _res: any, next: any) => {
         req.user = { id: 'user-123' };
         next();
@@ -182,6 +183,9 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
     beforeAll(() => { app = makeApp(); });
     beforeEach(() => {
         jest.clearAllMocks();
+        mockStoredMusicUser.mockReset().mockResolvedValue({
+            role: 'admin', canRequestAlbums: false, canDownloadTracks: false,
+        });
         (prisma.discoveryBatch.findFirst as jest.Mock).mockReset();
         mockAcquireAlbum.mockReset();
         mockCheckBatchCompletion.mockReset();
@@ -453,4 +457,16 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
         expect(prisma.$transaction).not.toHaveBeenCalled();
         expect(mockAcquireAlbum).not.toHaveBeenCalled();
     });
+    it('rejects default-user retry requests before creating any download jobs', async () => {
+        mockStoredMusicUser.mockResolvedValue({
+            role: 'user', canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const res = await request(app).post('/discover/retry-unavailable');
+        expect(res.status).toBe(403);
+        expect(res.body.permission).toBe('canRequestAlbums');
+        expect(prisma.discoveryBatch.findFirst).not.toHaveBeenCalled();
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(mockAcquireAlbum).not.toHaveBeenCalled();
+    });
+
 });

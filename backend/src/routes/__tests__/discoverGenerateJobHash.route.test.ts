@@ -4,8 +4,10 @@
  * Failure and edge paths first.
  */
 
+const mockStoredMusicUser = jest.fn();
 jest.mock('../../utils/db', () => ({
     prisma: {
+        user: { findUnique: (...args: unknown[]) => mockStoredMusicUser(...args) },
         discoveryBatch: {
             findFirst: jest.fn(),
         },
@@ -17,7 +19,7 @@ jest.mock('../../utils/logger', () => ({
 }));
 
 jest.mock('../../middleware/auth', () => ({
-    requireMusicPermission: () => (_req: any, _res: any, next: any) => next(),
+    requireMusicPermission: jest.requireActual('../../middleware/auth').requireMusicPermission,
     requireAuthOrToken: (req: any, _res: any, next: any) => {
         req.user = { id: 'user-123' };
         next();
@@ -91,6 +93,9 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue', () 
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockStoredMusicUser.mockReset().mockResolvedValue({
+            role: 'admin', canRequestAlbums: false, canDownloadTracks: false,
+        });
         // No active batch -> the handler proceeds to the enqueue path.
         (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValue(null);
         // add() resolves to a job with an id so the handler can return jobId.
@@ -178,4 +183,27 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue', () 
         // jobId is `discover-weekly-<userId>-<YYYY-MM-DD>` (week key from the helper).
         expect(addArgs[2].jobId).toMatch(/^discover-weekly-user-123-\d{4}-\d{2}-\d{2}$/);
     });
+    it('blocks discovery generation for a default user before queueing work', async () => {
+        mockStoredMusicUser.mockResolvedValue({
+            role: 'user', canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const res = await request(app).post('/discover/generate');
+        expect(res.status).toBe(403);
+        expect(res.body.permission).toBe('canRequestAlbums');
+        expect(discoverQueue.add).not.toHaveBeenCalled();
+        expect(prisma.discoveryBatch.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('allows the generate handler to validate the request after an explicit grant', async () => {
+        mockStoredMusicUser.mockResolvedValue({
+            role: 'user', canRequestAlbums: true, canDownloadTracks: false,
+        });
+        (discoverQueue.getJob as jest.Mock).mockResolvedValue(null);
+        const res = await request(app).post('/discover/generate');
+        expect(res.status).toBe(200);
+        expect(mockStoredMusicUser).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: 'user-123' },
+        }));
+    });
+
 });

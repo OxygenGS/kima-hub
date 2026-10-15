@@ -98,7 +98,7 @@ jobs:
           retention-days: 7
 
   music-permissions-http:
-    name: Real middleware and HTTP album permission regression
+    name: Real middleware and HTTP acquisition permission regression
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -137,4 +137,4 @@ jobs:
           npx prisma migrate deploy
       - name: Verify actual role checks and request handling with Jest / Supertest
         working-directory: backend
-        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts
+        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts src/routes/__tests__/discoverGenerateJobHash.route.test.ts src/routes/__tests__/discoverRetryUnavailable.route.test.ts
