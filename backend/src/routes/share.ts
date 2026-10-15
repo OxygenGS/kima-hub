@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { createRateLimiter } from "../middleware/rateLimiter";
 import path from "path";
 import fs from "fs";
-import { getLocalImagePath, getResizedImagePath } from "../services/imageStorage";
+import { getLocalImagePath, getResizedImagePath, getCanonicalCoverFilePath } from "../services/imageStorage";
 import { getAudioStreamingService } from "../services/audioStreaming";
 import { config } from "../config";
 import { resolveWithinMusicRoot } from "./library/trackPath";
@@ -248,22 +248,24 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
         const width = size ? parseInt(size, 10) : 0;
         if (width >= 16 && width <= 2048) {
             const resizedPath = getResizedImagePath(coverArtId, width);
-            if (resizedPath) {
+            // Cached variants need the same canonical-root validation as the
+            // original image; a resized-name symlink must not escape /covers.
+            const safeResizedPath = resizedPath ? getCanonicalCoverFilePath(resizedPath) : null;
+            if (safeResizedPath) {
                 try {
-                    await fs.promises.access(resizedPath, fs.constants.R_OK);
+                    await fs.promises.access(safeResizedPath, fs.constants.R_OK);
                     res.setHeader("Content-Type", "image/jpeg");
-                    // Expiry/revocation must not leave year-long tokened artwork cached.
                     res.setHeader("Cache-Control", "private, no-store");
-                    return res.sendFile(resizedPath);
+                    return res.sendFile(safeResizedPath);
                 } catch {
-                    // No resized copy yet: serve the original below.
+                    // No readable resized copy yet: serve the authorized original.
                 }
             }
         }
 
         res.setHeader("Content-Type", "image/jpeg");
-        // Expiry/revocation must not leave year-long tokened artwork cached.
-                    res.setHeader("Cache-Control", "private, no-store");
+        // Revoked or expired share tokens must never leave a lasting cached image.
+        res.setHeader("Cache-Control", "private, no-store");
         return res.sendFile(localPath);
     } catch (error: any) {
         logger.error(`[Share] Cover art error: ${error.message}`);
