@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SearchIcon } from "lucide-react";
 import { useSearchData } from "@/features/search/hooks/useSearchData";
@@ -22,6 +24,8 @@ import type { FilterTab } from "@/features/search/types";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 
 export default function SearchPage() {
+    const { locale } = useLanguage();
+    const t = (value: string) => translate(locale, value);
     const searchParams = useSearchParams();
     const router = useRouter();
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
@@ -158,7 +162,7 @@ export default function SearchPage() {
                 {!hasSearched && !isLoading && (
                     <EmptyState
                         icon={<SearchIcon className="w-16 h-16" />}
-                        title="Search your library"
+                        title={t("Search your library")}
                         description="Use the search bar above to find music, artists, and albums"
                     />
                 )}
