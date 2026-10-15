@@ -88,6 +88,33 @@ export class NetworkError extends Error {
     name = "NetworkError";
 }
 
+/** Browser storage access may fail under private/sandboxed or storage-blocked contexts.
+ * Keep the access token in memory when persistence is unavailable.
+ */
+function readAuthStorage(key: string): string | null {
+    try {
+        return typeof window === "undefined" ? null : globalThis.localStorage?.getItem(key) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function writeAuthStorage(key: string, value: string): void {
+    try {
+        if (typeof window !== "undefined") globalThis.localStorage?.setItem(key, value);
+    } catch {
+        // Memory-only authentication remains available until this page closes.
+    }
+}
+
+function removeAuthStorage(key: string): void {
+    try {
+        if (typeof window !== "undefined") globalThis.localStorage?.removeItem(key);
+    } catch {
+        // In-memory credentials are cleared independently.
+    }
+}
+
 class ApiClient {
     private token: string | null = null;
     private tokenInitialized: boolean = false;
@@ -95,14 +122,9 @@ class ApiClient {
     private ensurePromise: Promise<"fresh" | RefreshResult> | null = null;
 
     constructor() {
-        // Try to load token synchronously
-        if (typeof window !== "undefined") {
-            this.token = localStorage.getItem(AUTH_TOKEN_KEY);
-            if (this.token) {
-                this.tokenInitialized = true;
-            }
-            // Note: Refresh token is loaded on-demand via getRefreshToken()
-        }
+        this.token = readAuthStorage(AUTH_TOKEN_KEY);
+        if (this.token) this.tokenInitialized = true;
+        // Refresh token is loaded on demand.
     }
 
     /**
@@ -114,7 +136,7 @@ class ApiClient {
             return null;
         }
 
-        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+        const storedToken = readAuthStorage(AUTH_TOKEN_KEY);
         if (storedToken) {
             this.token = storedToken;
         }
@@ -140,29 +162,20 @@ class ApiClient {
     // Store JWT token and optionally refresh token
     setToken(token: string, refreshToken?: string) {
         this.token = token;
-        if (typeof window !== "undefined") {
-            localStorage.setItem(AUTH_TOKEN_KEY, token);
-            if (refreshToken) {
-                localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-            }
-        }
+        writeAuthStorage(AUTH_TOKEN_KEY, token);
+        if (refreshToken) writeAuthStorage(REFRESH_TOKEN_KEY, refreshToken);
     }
 
     // Get refresh token from storage
     getRefreshToken(): string | null {
-        if (typeof window === "undefined") {
-            return null;
-        }
-        return localStorage.getItem(REFRESH_TOKEN_KEY);
+        return readAuthStorage(REFRESH_TOKEN_KEY);
     }
 
     // Clear both JWT tokens
     clearToken() {
         this.token = null;
-        if (typeof window !== "undefined") {
-            localStorage.removeItem(AUTH_TOKEN_KEY);
-            localStorage.removeItem(REFRESH_TOKEN_KEY);
-        }
+        removeAuthStorage(AUTH_TOKEN_KEY);
+        removeAuthStorage(REFRESH_TOKEN_KEY);
     }
 
     private getBaseUrl(): string {
@@ -681,7 +694,7 @@ class ApiClient {
         }
         // Try to load from localStorage if on client
         if (typeof window !== "undefined") {
-            const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+            const storedToken = readAuthStorage(AUTH_TOKEN_KEY);
             if (storedToken) {
                 this.token = storedToken;
                 this.tokenInitialized = true;
