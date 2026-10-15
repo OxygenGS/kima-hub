@@ -49,7 +49,7 @@ describe("versioned Dutch release copy", () => {
 
     it("translates the complete GPU disclosure while leaving consent off and keys untouched", () => {
         const translated = localizeRelease(release, "nl");
-        const gpu = translated.items[0];
+        const gpu = translated.items[0] as typeof consent;
         expect(gpu.title).toBe("Een NVIDIA-videokaart gebruiken");
         expect(gpu.summary).toContain("uit totdat je het zelf inschakelt");
         expect(gpu.body).toContain("twee tot drie keer");
@@ -63,7 +63,7 @@ describe("versioned Dutch release copy", () => {
     });
 
     it("does not change what a destructive action does or the link it opens", () => {
-        const action = localizeRelease(release, "nl").items[1];
+        const action = localizeRelease(release, "nl").items[1] as typeof wipe;
         expect(action.title).toBe("Analysegegevens wissen en opnieuw opbouwen");
         expect(action.body).toContain("Je muziekbestanden, afspeellijsten, afspeelbeurten, likes");
         expect(action.confirmMessage).toContain("Je muziekbestanden");
