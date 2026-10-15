@@ -18,6 +18,8 @@ require_text backend/src/routes/auth.ts '"/users/:id/permissions"' "Admin-only p
 require_text backend/src/routes/downloads.ts 'router.post("/", requireMusicPermission("canRequestAlbums")' "Album acquisition guard"
 require_text backend/src/routes/discover.ts 'router.post("/generate", requireMusicPermission("canRequestAlbums")' "Discover generate guard"
 require_text backend/src/routes/discover.ts 'router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums")' "Discover retry guard"
+require_text backend/src/routes/offline.ts 'router.post("/albums/:id/download", requireMusicPermission("canDownloadTracks")' "Offline album download guard"
+require_text backend/src/routes/offline.ts 'router.post("/tracks/:id/complete", requireMusicPermission("canDownloadTracks")' "Offline completion permission recheck"
 require_text backend/src/routes/soulseek.ts 'requireMusicPermission("canDownloadTracks")' "Soulseek file download guard"
 require_text backend/src/routes/releases.ts 'router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums")' "Release Radar album download guard"
 require_text backend/src/index.ts 'app.use("/api/branding"' "Instance branding API mounted"
