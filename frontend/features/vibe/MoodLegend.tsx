@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { MOOD_COLORS, isMood, moodLabel } from "./mapUtils";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { MapTrack } from "./types";
 
 interface MoodLegendProps {
@@ -20,6 +22,8 @@ interface MoodLegendProps {
  * analysed yet". Hover lights a mood's tracks; a click keeps it lit.
  */
 export function MoodLegend({ tracks, trackCount, activeMood, scroll = false, onPreview, onToggle }: MoodLegendProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const moods = useMemo(() => {
         const counts = new Map<string, number>();
         for (const t of tracks) counts.set(t.dominantMood, (counts.get(t.dominantMood) ?? 0) + 1);
@@ -28,7 +32,7 @@ export function MoodLegend({ tracks, trackCount, activeMood, scroll = false, onP
         );
     }, [tracks]);
 
-    const total = <span className="shrink-0 text-[11px] tabular-nums text-white/60">{trackCount.toLocaleString()} tracks</span>;
+    const total = <span className="shrink-0 text-[11px] tabular-nums text-white/60">{trackCount.toLocaleString()} {t(trackCount === 1 ? "track" : "tracks")}</span>;
 
     return (
         <>
@@ -38,7 +42,7 @@ export function MoodLegend({ tracks, trackCount, activeMood, scroll = false, onP
                     : "flex flex-wrap gap-1.5"}
                 onMouseLeave={() => onPreview(null)}
                 role="group"
-                aria-label="Moods in your library"
+                aria-label={t("Moods in your library")}
             >
                 {moods.map(([mood, count]) => {
                     const [r, g, b] = MOOD_COLORS[mood] ?? MOOD_COLORS.neutral;
@@ -63,7 +67,7 @@ export function MoodLegend({ tracks, trackCount, activeMood, scroll = false, onP
                                 }}
                             >
                                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: `rgb(${r} ${g} ${b})`, boxShadow: `0 0 6px rgb(${r} ${g} ${b} / 0.8)` }} />
-                                {moodLabel(mood)}
+                                {t(moodLabel(mood))}
                                 <span className="tabular-nums text-white/60">{count.toLocaleString()}</span>
                             </span>
                         </button>

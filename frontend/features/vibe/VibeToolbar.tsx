@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Search, Waypoints, Blend, X } from "lucide-react";
 import { normalizeNFC } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { LibraryMatches } from "./librarySearch";
 import type { VibeMode } from "./types";
 
@@ -25,6 +27,8 @@ const TOOL = "flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm transition
 const RAIL_TOOL = "vibe-glass flex h-11 w-11 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
 
 export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, onPathMode, onAlchemyMode, onReset, clearSignal }: VibeToolbarProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [query, setQuery] = useState("");
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
@@ -81,14 +85,14 @@ export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, on
                     else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
                     else if (e.key === "Enter") { e.preventDefault(); pick(items[Math.min(active, items.length - 1)].id); }
                 }}
-                placeholder="Find a track or artist"
+                placeholder={t("Find a track or artist")}
                 className={compact
                     ? "h-11 w-full rounded-full bg-transparent pl-10 pr-10 text-[15px] text-white placeholder-white/55 caret-[var(--color-brand)] outline-none"
                     : "h-9 w-64 rounded-lg bg-white/[0.04] pl-8 pr-8 text-sm text-white placeholder-white/55 caret-[var(--color-brand)] outline-none transition-colors focus:bg-white/[0.07]"}
-                aria-label="Search tracks or artists"
+                aria-label={t("Search tracks or artists")}
             />
             {query && (
-                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearSearch} className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full text-white/60 hover:text-white ${compact ? "right-0 h-11 w-11" : "right-1.5 p-1"}`} aria-label="Clear search">
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearSearch} className={`absolute top-1/2 -translate-y-1/2 flex items-center justify-center rounded-full text-white/60 hover:text-white ${compact ? "right-0 h-11 w-11" : "right-1.5 p-1"}`} aria-label={t("Clear search")}>
                     <X className="h-3.5 w-3.5" />
                 </button>
             )}
@@ -97,13 +101,13 @@ export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, on
                 <div
                     id="vibe-search-results"
                     role="listbox"
-                    aria-label="Matching tracks"
+                    aria-label={t("Matching tracks")}
                     className={`vibe-glass vibe-glass--solid absolute left-0 top-full z-10 mt-2 overflow-hidden rounded-xl py-1 ${compact ? "-right-[6.5rem] max-h-[60vh] overflow-y-auto overscroll-contain" : "w-full min-w-72"}`}
                 >
                     <p className="px-3 pb-1 pt-1.5 text-[11px] text-white/60" aria-live="polite">
                         {results.count === 0
-                            ? `No tracks match "${query.trim()}"`
-                            : `${results.count.toLocaleString()} ${results.count === 1 ? "match" : "matches"}${results.count > items.length ? ", showing the first " + items.length : ""}`}
+                            ? `${t("No tracks match")} "${query.trim()}"`
+                            : `${results.count.toLocaleString()} ${t(results.count === 1 ? "match" : "matches")}${results.count > items.length ? ", " + t("showing the first") + " " + items.length : ""}`}
                     </p>
                     {items.map((t, i) => (
                         <button
@@ -131,13 +135,13 @@ export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, on
                 <div className="vibe-glass absolute left-3 right-[calc(0.75rem+6.5rem)] top-[max(0.75rem,env(safe-area-inset-top))] z-(--z-dropdown) rounded-full landscape-short:right-[calc(0.75rem+16.25rem)]">
                     {search}
                 </div>
-                <div className="absolute right-3 top-[7.25rem] z-(--z-scene) flex flex-col gap-2 landscape-short:right-[calc(0.75rem+6.5rem)] landscape-short:top-[max(0.75rem,env(safe-area-inset-top))] landscape-short:flex-row" role="toolbar" aria-label="Map tools">
+                <div className="absolute right-3 top-[7.25rem] z-(--z-scene) flex flex-col gap-2 landscape-short:right-[calc(0.75rem+6.5rem)] landscape-short:top-[max(0.75rem,env(safe-area-inset-top))] landscape-short:flex-row" role="toolbar" aria-label={t("Map tools")}>
                     <button
                         type="button"
                         onClick={onPathMode}
                         aria-pressed={pathOn}
                         className={`${RAIL_TOOL} ${pathOn ? "text-[var(--color-brand)]" : "text-white/80"}`}
-                        aria-label="Song Path: build a queue that glides from one track to another"
+                        aria-label={t("Song Path: build a queue that glides from one track to another")}
                     >
                         <Waypoints className="h-[18px] w-[18px]" />
                     </button>
@@ -146,12 +150,12 @@ export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, on
                         onClick={onAlchemyMode}
                         aria-pressed={blendOn}
                         className={`${RAIL_TOOL} ${blendOn ? "text-[var(--color-brand)]" : "text-white/80"}`}
-                        aria-label="Blend: mix tracks you like (and ones you don't) into a new playlist"
+                        aria-label={t("Blend: mix tracks you like (and ones you don't) into a new playlist")}
                     >
                         <Blend className="h-[18px] w-[18px]" />
                     </button>
                     {mode !== "idle" && (
-                        <button type="button" onClick={onReset} className={`${RAIL_TOOL} text-white/80`} aria-label="Clear highlights and paths">
+                        <button type="button" onClick={onReset} className={`${RAIL_TOOL} text-white/80`} aria-label={t("Clear highlights and paths")}>
                             <X className="h-[18px] w-[18px]" />
                         </button>
                     )}
@@ -168,30 +172,30 @@ export function VibeToolbar({ mode, compact, onSearch, results, onPickResult, on
                 onClick={onPathMode}
                 aria-pressed={pathOn}
                 className={`${TOOL} ${pathOn ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/[0.07] hover:text-white"}`}
-                title="song path: build a queue that glides from one track to another"
-                aria-label="Song Path: build a queue that glides from one track to another"
+                title={t("Song Path: build a queue that glides from one track to another")}
+                aria-label={t("Song Path: build a queue that glides from one track to another")}
             >
                 <Waypoints className="h-4 w-4" />
-                <span>Song Path</span>
+                <span>{t("Song Path")}</span>
             </button>
             <button
                 type="button"
                 onClick={onAlchemyMode}
                 aria-pressed={blendOn}
                 className={`${TOOL} ${blendOn ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/[0.07] hover:text-white"}`}
-                title="blend: mix tracks you like (and ones you don't) into a new playlist"
-                aria-label="Blend: mix tracks you like (and ones you don't) into a new playlist"
+                title={t("Blend: mix tracks you like (and ones you don't) into a new playlist")}
+                aria-label={t("Blend: mix tracks you like (and ones you don't) into a new playlist")}
             >
                 <Blend className="h-4 w-4" />
-                <span>Blend</span>
+                <span>{t("Blend")}</span>
             </button>
             {mode !== "idle" && (
                 <button
                     type="button"
                     onClick={onReset}
                     className={`${TOOL} text-white/75 hover:bg-white/[0.07] hover:text-white`}
-                    title="clear highlights and paths"
-                    aria-label="Clear highlights and paths"
+                    title={t("Clear highlights and paths")}
+                    aria-label={t("Clear highlights and paths")}
                 >
                     <X className="h-4 w-4" />
                 </button>

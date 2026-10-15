@@ -8,6 +8,8 @@ import { Play, Pause } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 const OPERATION_STYLES: Record<string, { label: string; borderColor: string }> = {
     drift: { label: "Song Path", borderColor: "var(--color-brand)" },
@@ -31,6 +33,8 @@ function QueueCover({ coverArt }: { coverArt?: string | null }) {
 }
 
 export function QueueTab() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { currentTrack, queue, currentIndex, activeOperation } = useAudioState();
     const { playTracks, pause, resume } = useAudioControls();
     const { isPlaying } = useAudioPlayback();
@@ -57,15 +61,16 @@ export function QueueTab() {
                     className="bg-white/5 border-l-2 px-3 py-2 text-xs text-[var(--text-secondary)] shrink-0"
                     style={{ borderColor: opStyle.borderColor }}
                 >
-                    <span className="font-medium text-[var(--text-primary)]">{opStyle.label}</span>
+                    <span className="font-medium text-[var(--text-primary)]">{t(opStyle.label)}</span>
                     {" -- "}
-                    {trackCount} track{trackCount !== 1 ? "s" : ""}
+                    {trackCount} {t(trackCount === 1 ? "track" : "tracks")}
                 </div>
             )}
 
             {currentTrack && (
                 <button
                     onClick={handleTogglePlayback}
+                    aria-label={t(isPlaying ? "Pause" : "Play")}
                     className="flex items-center gap-3 px-3 py-2.5 bg-white/5 border-b border-white/5 shrink-0 w-full text-left hover:bg-white/8 transition-colors"
                 >
                     <QueueCover coverArt={currentTrack.album?.coverArt} />
@@ -89,7 +94,7 @@ export function QueueTab() {
             <div className="flex-1 overflow-y-auto">
                 {queue.length === 0 && (
                     <div className="flex items-center justify-center py-12 text-center">
-                        <p className="text-sm text-[var(--text-muted)]">Queue is empty</p>
+                        <p className="text-sm text-[var(--text-muted)]">{t("Queue is empty")}</p>
                     </div>
                 )}
                 {queue.map((track, index) => {

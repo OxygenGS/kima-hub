@@ -1,6 +1,10 @@
+"use client";
+
 import type { InputHTMLAttributes, ReactNode } from "react";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { FoundTrack, useTrackFinder } from "./useTrackFinder";
 
 const NOTE = "px-1 text-xs text-white/60";
@@ -32,6 +36,8 @@ interface TrackFinderResultsProps {
 }
 
 export function TrackFinderResults({ finder, query, onPick, className }: TrackFinderResultsProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     return (
         <>
             {finder.items.length > 0 && (
@@ -44,16 +50,16 @@ export function TrackFinderResults({ finder, query, onPick, className }: TrackFi
                         >
                             <p className="text-sm text-[var(--text-primary)] truncate">{track.title}</p>
                             <p className="text-xs text-white/60 truncate">
-                                {track.artist.name}{track.via === "sound" ? " · sounds like it" : ""}
+                                {track.artist.name}{track.via === "sound" ? ` · ${t("sounds like it")}` : ""}
                             </p>
                         </button>
                     ))}
                 </div>
             )}
-            {finder.searching && <FinderNote className={className}>Searching…</FinderNote>}
+            {finder.searching && <FinderNote className={className}>{t("Searching…")}</FinderNote>}
             {finder.empty && (
                 <FinderNote className={className}>
-                    No track or artist matches &ldquo;{query.trim()}&rdquo;. Try part of a title, an artist, or a sound like &ldquo;piano&rdquo;.
+                    {t("No track or artist matches")} &ldquo;{query.trim()}&rdquo;. {t("Try part of a title, an artist, or a sound like")} &ldquo;piano&rdquo;.
                 </FinderNote>
             )}
         </>

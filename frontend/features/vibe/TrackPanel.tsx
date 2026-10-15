@@ -5,6 +5,8 @@ import { AudioWaveform, Play, Sparkles, Waypoints, X } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { api } from "@/lib/api";
 import { normalizeNFC } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { MOOD_COLORS, moodLabel } from "./mapUtils";
 import type { MapTrack } from "./types";
 
@@ -27,6 +29,8 @@ const ACTION_PLAIN = `${ACTION} border-white/10 bg-white/[0.06] hover:bg-white/[
  * reaches the field. Everything shown comes from the map payload itself.
  */
 export function TrackPanel({ track, songPathActive, onClose, onPlay, onVibe, onSimilar, onSongPath }: TrackPanelProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const moods = Object.entries(track.moods ?? {})
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1]);
@@ -56,14 +60,14 @@ export function TrackPanel({ track, songPathActive, onClose, onPlay, onVibe, onS
                     )}
                     {track.albumId && (
                         <Link href={`/album/${track.albumId}`} className="mt-0.5 inline-block text-[11px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline-offset-2 hover:underline">
-                            Open album
+                            {t("Open album")}
                         </Link>
                     )}
                 </div>
                 <button
                     type="button"
                     onClick={onClose}
-                    aria-label="Close track details"
+                    aria-label={t("Close track details")}
                     className="-mr-1.5 -mt-1 rounded-md p-1.5 text-[var(--text-muted)] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                     <X className="h-4 w-4" />
@@ -76,7 +80,7 @@ export function TrackPanel({ track, songPathActive, onClose, onPlay, onVibe, onS
                         const [r, g, b] = MOOD_COLORS[key] ?? MOOD_COLORS.neutral;
                         return (
                             <div key={key} className="grid grid-cols-[5.5rem_1fr] items-center gap-2 text-[11px]">
-                                <span className="text-[var(--text-secondary)]">{moodLabel(key)}</span>
+                                <span className="text-[var(--text-secondary)]">{t(moodLabel(key))}</span>
                                 <div className="h-1 overflow-hidden rounded-full bg-white/[0.07]">
                                     <div className="h-full rounded-full" style={{ width: `${(score / strongest) * 100}%`, background: `rgb(${r} ${g} ${b} / 0.85)` }} />
                                 </div>
@@ -90,13 +94,13 @@ export function TrackPanel({ track, songPathActive, onClose, onPlay, onVibe, onS
                 <dl className="mt-4 grid grid-cols-2 gap-2">
                     {track.energy != null && (
                         <div className="rounded-lg bg-white/[0.04] px-3 py-2">
-                            <dt className="text-micro tracking-[0.12em] text-[var(--text-muted)]">Energy</dt>
+                            <dt className="text-micro tracking-[0.12em] text-[var(--text-muted)]">{t("Energy")}</dt>
                             <dd className="text-sm font-medium tabular-nums text-[var(--text-primary)]">{Math.round(track.energy * 100)}%</dd>
                         </div>
                     )}
                     {track.valence != null && (
                         <div className="rounded-lg bg-white/[0.04] px-3 py-2">
-                            <dt className="text-micro tracking-[0.12em] text-[var(--text-muted)]">Positivity</dt>
+                            <dt className="text-micro tracking-[0.12em] text-[var(--text-muted)]">{t("Positivity")}</dt>
                             <dd className="text-sm font-medium tabular-nums text-[var(--text-primary)]">{Math.round(track.valence * 100)}%</dd>
                         </div>
                     )}
@@ -104,27 +108,27 @@ export function TrackPanel({ track, songPathActive, onClose, onPlay, onVibe, onS
             )}
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={onPlay} aria-label="Play this track" className={`${ACTION} border-[var(--color-brand)]/40 bg-[var(--color-brand)]/15 hover:bg-[var(--color-brand)]/25`}>
-                    <Play className="h-3.5 w-3.5 fill-current" /> Play
+                <button type="button" onClick={onPlay} aria-label={t("Play this track")} className={`${ACTION} border-[var(--color-brand)]/40 bg-[var(--color-brand)]/15 hover:bg-[var(--color-brand)]/25`}>
+                    <Play className="h-3.5 w-3.5 fill-current" /> {t("Play")}
                 </button>
-                <button type="button" onClick={onVibe} aria-label="Build vibe playlist from this track" className={ACTION_PLAIN}>
-                    <Sparkles className="h-3.5 w-3.5" /> Match Vibe
+                <button type="button" onClick={onVibe} aria-label={t("Build vibe playlist from this track")} className={ACTION_PLAIN}>
+                    <Sparkles className="h-3.5 w-3.5" /> {t("Match Vibe")}
                 </button>
-                <button type="button" onClick={onSimilar} aria-label="Find tracks similar to this one" className={ACTION_PLAIN}>
-                    <AudioWaveform className="h-3.5 w-3.5" /> Similar
+                <button type="button" onClick={onSimilar} aria-label={t("Find tracks similar to this one")} className={ACTION_PLAIN}>
+                    <AudioWaveform className="h-3.5 w-3.5" /> {t("Similar")}
                 </button>
                 <button
                     type="button"
                     onClick={onSongPath}
-                    aria-label="Start song path from this track"
+                    aria-label={t("Start song path from this track")}
                     aria-pressed={songPathActive}
                     className={songPathActive ? `${ACTION} border-[var(--color-brand)]/60 bg-[var(--color-brand)]/15` : ACTION_PLAIN}
                 >
-                    <Waypoints className="h-3.5 w-3.5" /> Song Path
+                    <Waypoints className="h-3.5 w-3.5" /> {t("Song Path")}
                 </button>
             </div>
             {songPathActive && (
-                <p className="mt-2 text-center text-[11px] text-[var(--text-secondary)]">Now click the track the path should end on.</p>
+                <p className="mt-2 text-center text-[11px] text-[var(--text-secondary)]">{t("Now click the track the path should end on.")}</p>
             )}
         </aside>
     );
