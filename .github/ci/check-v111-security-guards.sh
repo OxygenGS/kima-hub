@@ -18,6 +18,7 @@ require_text backend/src/routes/auth.ts '"/users/:id/permissions"' "Admin-only p
 require_text backend/src/routes/downloads.ts 'router.post("/", requireMusicPermission("canRequestAlbums")' "Album acquisition guard"
 require_text backend/src/routes/discover.ts 'router.post("/generate", requireMusicPermission("canRequestAlbums")' "Discover generate guard"
 require_text backend/src/routes/discover.ts 'router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums")' "Discover retry guard"
+require_text backend/src/routes/share.ts 'select: sharedTrackSelect' "Anonymous share track response uses a safe projection"
 require_text backend/src/routes/share.ts 'await shareContainsCover(shareLink, coverArtId)' "Public share cover access bound to actual shared content"
 require_text backend/src/routes/share.ts 'res.setHeader("Cache-Control", "private, no-store")' "Tokened share covers must not cache past revocation"
 require_text backend/src/routes/subsonic/mappers.ts 'subsonicError(req, res, SubsonicError.GENERIC, "Internal server error")' "Subsonic internal errors do not expose diagnostics"
