@@ -12,12 +12,11 @@ profileRouter.all("/getUser.view", wrap(async (req, res) => {
         return;
     }
 
-    const target = requested
-        ? await prisma.user.findUnique({
-              where: { username: requested },
-              select: { username: true, role: true },
-          })
-        : { username: req.user!.username, role: req.user!.role };
+    // Always read the persisted rights, not cached Subsonic credentials.
+    const target = await prisma.user.findUnique({
+        where: requested ? { username: requested } : { id: req.user!.id },
+        select: { username: true, role: true, canDownloadTracks: true },
+    });
 
     if (!target) {
         return subsonicError(req, res, SubsonicError.NOT_FOUND, "User not found");
