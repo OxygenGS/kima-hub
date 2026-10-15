@@ -11,6 +11,7 @@ import { bitrateToQuality, firstArtistGenre, mapSong, wrap } from "./mappers";
 import { normalizeArtistName } from "../../services/artistIdentity";
 import { resolveWithinMusicRoot } from "../library/trackPath";
 import { recordPlay } from "../../services/playRecording";
+import { requireSubsonicDownloadRight } from "./userHelpers";
 import { getLiveState, publicUserId, reportLive } from "../../services/liveListening";
 
 export const playbackRouter = Router();
@@ -196,6 +197,9 @@ playbackRouter.all("/stream.view", wrap(async (req, res) => {
 }));
 
 playbackRouter.all("/download.view", wrap(async (req, res) => {
+    // Streaming stays available to listeners; the explicit download endpoint
+    // must check current persisted permissions even for valid app credentials.
+    if (!(await requireSubsonicDownloadRight(req, res))) return;
     const id = req.query.id as string;
     if (!id) return subsonicError(req, res, SubsonicError.MISSING_PARAM, "Required parameter is missing: id");
 
