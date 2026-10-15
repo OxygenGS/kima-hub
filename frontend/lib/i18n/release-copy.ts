@@ -194,6 +194,29 @@ const dutch: Record<string, VersionCopy> = {
 };
 
 /**
+ * Consent notices and destructive confirmations must never display an obsolete
+ * translation if upstream changes what is sent or deleted. These expected
+ * English originals are pinned to the released 1.11 catalog; a mismatch
+ * intentionally falls back to the new original English warning until reviewed.
+ */
+const reviewedSafetyCopy: Record<string, Record<string, Partial<Record<"discloses" | "confirmMessage", string>>>> = {
+    "1.11.0": {
+        "engine.wipe": {
+            confirmMessage:
+                "Clears what Kima worked out about your music: which recording each track is, audio analysis, vibe data, the " +
+                "vibe map, artist bios and similar artists. Then it works it all out again with the new engine. Your music, playlists, plays, likes and edits stay. " +
+                "Takes a few hours on a large library; the vibe map is back when it finishes.",
+        },
+        "gpu.accelerate": {
+            discloses:
+                "Kima downloads twelve pinned packages (about 2 GB) from PyPI, checks every file against a fixed " +
+                "fingerprint, and installs them in your data folder, where they take about 3.4 GB. Nothing about " +
+                "your library leaves your server.",
+        },
+    },
+};
+
+/**
  * Translate only the in-app editorial *display fields*. Saved decisions,
  * API identifiers, authorization flags, commands and link URLs are returned
  * unchanged. Missing/unknown content retains the server's English source.
@@ -207,9 +230,23 @@ export function localizeRelease<T extends ReleaseForCopy>(release: T, locale: Lo
         const itemCopy = copy.items[item.key];
         if (!itemCopy) return item;
         const { links: translatedLinks, ...display } = itemCopy;
+        const originalFields = item as unknown as Record<string, unknown>;
+        const safetyCopy = reviewedSafetyCopy[release.version]?.[item.key];
+        const safeDisplay = Object.fromEntries(
+            Object.entries(display).filter(([field]) => {
+                const source = originalFields[field];
+                // Never introduce an optional field the server did not send.
+                if (typeof source !== "string") return false;
+                if (field === "discloses" || field === "confirmMessage") {
+                    // A missing review baseline must also fail closed.
+                    return source === safetyCopy?.[field];
+                }
+                return true;
+            }),
+        );
         return {
             ...item,
-            ...display,
+            ...safeDisplay,
             links: item.links
                 ? item.links.map((link) => ({
                       ...link,
