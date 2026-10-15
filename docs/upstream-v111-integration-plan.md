@@ -11,7 +11,7 @@ Compared the complete committed file trees of upstream `v1.10.0`, upstream `v1.1
 - **168 paths** were touched on **both sides** (change overlap, **not** the actual Git merge-conflict count).
 - Of those overlapping paths: **133 frontend**, **24 backend**, **1 Prisma schema**, **4 GitHub CI**, **6 other**.
 
-The new `.github/workflows/upstream-v111-integration-audit.yml` dry-runs the actual Git merge and captures the unresolved file list. **Do not equate tree overlap with merge conflicts.** This report runs on its separate draft PR, not on main or a production server.
+The isolated Git merge audit measured **141 actual unresolved merge paths**: 125 frontend, 9 backend/schema, 4 workflows, and 3 other. See the [per-file conflict inventory](upstream-v111-conflicts.md). The first 168 paths were overlapping changes, not conflicts. Both reports run against the pinned v1.11.0 tag without pushing, publishing or touching production.
 
 ## Material upstream changes to reconcile
 
@@ -32,4 +32,6 @@ The new `.github/workflows/upstream-v111-integration-audit.yml` dry-runs the act
 6. Test original full-image upgrades from **both v1.10.0 and v1.11.0** and independently restored rollback volumes, with synthetic accounts and media.
 7. After all automated and manual acceptance, seek separate human approvals for draft PR merge, publishing a release candidate, stable release, and finally production CT 101.
 
-**Current state:** structural inventory and dry-run audit added. Upstream implementation **not yet integrated**; do not call this branch v1.11 compatible yet.
+**Incremental compatibility fixes:** the browser-auth API now tolerates blocked storage and uses memory-only credentials as a fallback. The EN/NL UI language selector likewise works temporarily without storage, and the activity panel no longer crashes during startup. All three dedicated CI checks (merge audit, frontend TypeScript/lint/auth unit tests and Chromium language flow) **passed on `9b62d12`**.
+
+**Current state:** compatibility inventory and small, tested fixes are present. **The functional v1.11 release is not yet merged.** Do not call this branch v1.11-compatible until its 141 conflicts and schema/API/UX regressions are resolved and end-to-end upgrade tests pass.
