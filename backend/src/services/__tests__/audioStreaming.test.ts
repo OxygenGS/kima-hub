@@ -388,6 +388,29 @@ describe("streamFileWithRangeSupport conditional requests", () => {
         await svc.streamFileWithRangeSupport(req, res, filePath, "audio/mpeg");
         expect(res._headers["Cache-Control"]).toBe("private, max-age=3600, must-revalidate");
     });
+
+    it("keeps shared audio out of the browser cache on 200 and partial 206", async () => {
+        const full = makeRes();
+        await svc.streamFileWithRangeSupport(makeReq(), full, filePath, "audio/mpeg", "private, no-store");
+        expect(full._status).toBe(200);
+        expect(full._headers["Cache-Control"]).toBe("private, no-store");
+
+        const partial = makeRes();
+        await svc.streamFileWithRangeSupport(
+            makeReq({ range: "bytes=0-19" }), partial, filePath, "audio/mpeg", "private, no-store"
+        );
+        expect(partial._status).toBe(206);
+        expect(partial._headers["Cache-Control"]).toBe("private, no-store");
+        expect(partial._headers["Content-Range"]).toBe("bytes 0-19/500");
+    });
+
+    it("keeps token-specific cache policy on conditional 304 responses", async () => {
+        const req = makeReq({ "if-none-match": computeEtag() });
+        const res = makeRes();
+        await svc.streamFileWithRangeSupport(req, res, filePath, "audio/mpeg", "private, no-store");
+        expect(res._status).toBe(304);
+        expect(res._headers["Cache-Control"]).toBe("private, no-store");
+    });
 });
 
 // ---------------------------------------------------------------------------
