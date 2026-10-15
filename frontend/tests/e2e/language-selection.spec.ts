@@ -264,6 +264,13 @@ test.describe("Interface language", () => {
         expect(requestedPeriods).toContain("30d");
         // Period values are backend API identifiers, not translated labels.
         expect(requestedPeriods).not.toContain("30 dagen");
+
+        // The new Stats chapters and history-cleanup actions must also follow
+        // the browser language, not just the overview heading.
+        await expect(page.getByRole("tablist", { name: "statistiekonderdelen" })).toBeVisible();
+        await page.getByRole("tab", { name: "Luistergeschiedenis opschonen" }).click();
+        await expect(page.getByRole("button", { name: "luistergeschiedenis controleren" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
     });
 
 });
