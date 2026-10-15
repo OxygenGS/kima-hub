@@ -225,3 +225,38 @@ jobs:
         shell: bash
         timeout-minutes: 35
         run: bash .github/ci/aio-v111-real-image-rehearsal.sh
+
+  arm64-image-build:
+    name: Build v1.11 AIO linux/arm64 image (no push)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    needs: [frontend, backend, fork-safety]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fork Compose examples
+        run: bash .github/ci/check-fork-compose.sh
+      - name: Free disk for ONNX models and AIO layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build native ARM64 AIO locally, never publish
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          load: true
+          tags: kima-hub:aio-ci-smoke
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=ci-smoke-arm64
+          cache-from: type=gha,scope=v111-arm64
+          cache-to: type=gha,mode=max,scope=v111-arm64
+      - name: Assert actual image architecture and run disposable ARM64 AIO smoke
+        shell: bash
+        timeout-minutes: 35
+        run: |
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
+          bash .github/ci/v111-aio-runtime-smoke.sh
