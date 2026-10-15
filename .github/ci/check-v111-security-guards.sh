@@ -18,6 +18,7 @@ require_text backend/src/routes/auth.ts '"/users/:id/permissions"' "Admin-only p
 require_text backend/src/routes/downloads.ts 'router.post("/", requireMusicPermission("canRequestAlbums")' "Album acquisition guard"
 require_text backend/src/routes/discover.ts 'router.post("/generate", requireMusicPermission("canRequestAlbums")' "Discover generate guard"
 require_text backend/src/routes/discover.ts 'router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums")' "Discover retry guard"
+require_text backend/src/routes/share.ts 'streamFileWithRangeSupport(req, res, fullPath, mimeType, "private, no-store")' "Public share streams disable reuse after token revocation"
 require_text backend/src/routes/share.ts 'fs.promises.realpath(candidatePath)' "Public share stream resolves actual filesystem target"
 require_text backend/src/routes/share.ts 'fullPath.startsWith(realMusicRoot + path.sep)' "Public audio realpath stays within actual music root"
 require_text backend/src/routes/share.ts 'select: sharedTrackSelect' "Anonymous share track response uses a safe projection"
