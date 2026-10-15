@@ -1,6 +1,7 @@
 // Shared helper for resolving a Track's stored filePath against the music
 // root, guarding against path traversal (e.g. filePath containing "../../").
 import path from "path";
+import fs from "fs";
 import { config } from "../../config";
 
 /**
@@ -22,4 +23,31 @@ export function resolveWithinMusicRoot(...segments: string[]): string | null {
   }
 
   return absolutePath;
+}
+
+
+/**
+ * Resolve a stored track path to an existing, readable *physical* file inside
+ * the configured music root. Lexical containment alone does not stop a
+ * symlink placed under the root from pointing at a private host file.
+ *
+ * This is a read/stream guard; destructive file operations need their own
+ * write-safe validation. A legitimate symlink for the configured root or
+ * for a track pointing back into the root is allowed.
+ */
+export async function resolveExistingMusicFile(filePath: string): Promise<string | null> {
+  const candidate = resolveWithinMusicRoot(filePath);
+  if (!candidate) return null;
+  try {
+    const [root, actual] = await Promise.all([
+      fs.promises.realpath(config.music.musicPath),
+      fs.promises.realpath(candidate),
+    ]);
+    if (!actual.startsWith(root + path.sep)) return null;
+    const stats = await fs.promises.stat(actual);
+    return stats.isFile() ? actual : null;
+  } catch {
+    // Missing file, broken symlink, unreadable directory or music root.
+    return null;
+  }
 }
