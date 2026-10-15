@@ -1131,6 +1131,17 @@ export const english = {
     "tracks · click a key to play it": "tracks · click a key to play it",
     "tracks · tap a key to play it": "tracks · tap a key to play it",
     "never played": "never played",
+    "press": "press",
+    "for shortcuts": "for shortcuts",
+    "keyboard shortcuts": "keyboard shortcuts",
+    "close": "close",
+    "move in the hour grid": "move in the hour grid",
+    "open an hour": "open an hour",
+    "tracks played": "tracks played",
+    "albums played": "albums played",
+    "artists played": "artists played",
+    "tracks analysed": "tracks analysed",
+    "shuffle 40 unplayed": "shuffle 40 unplayed",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2265,6 +2276,17 @@ export const dutch: Record<TranslationKey, string> = {
     "tracks · click a key to play it": "nummers · klik op een toonsoort om af te spelen",
     "tracks · tap a key to play it": "nummers · tik op een toonsoort om af te spelen",
     "never played": "nooit afgespeeld",
+    "press": "druk op",
+    "for shortcuts": "voor sneltoetsen",
+    "keyboard shortcuts": "sneltoetsen",
+    "close": "sluiten",
+    "move in the hour grid": "navigeren door het urenraster",
+    "open an hour": "open een uur",
+    "tracks played": "afgespeelde nummers",
+    "albums played": "afgespeelde albums",
+    "artists played": "afgespeelde artiesten",
+    "tracks analysed": "geanalyseerde nummers",
+    "shuffle 40 unplayed": "40 niet-afgespeelde nummers willekeurig afspelen",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
