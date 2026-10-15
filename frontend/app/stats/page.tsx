@@ -138,7 +138,7 @@ export default function StatsPage() {
             label: t("by hour"),
             content: (
                 <Finding
-                    claim={`${t("busiest hour:")} ${whenLabel(listening.peak.weekday, listening.peak.hour)}`}
+                    claim={`${t("busiest hour:")} ${whenLabel(listening.peak.weekday, listening.peak.hour, locale)}`}
                     note={t("plays by day and hour · local time")}
                     evidence={<ListeningClock listening={listening} period={shown} />}
                 />
@@ -149,7 +149,7 @@ export default function StatsPage() {
             label: t("keys"),
             content: (
                 <Finding
-                    claim={frantic ? `${t("highest energy: around")} ${hourLabel(frantic.hour)}` : keyClaim}
+                    claim={frantic ? `${t("highest energy: around")} ${hourLabel(frantic.hour, locale)}` : keyClaim}
                     note={`${t("from audio analysis of")} ${analysed} ${t("tracks · click a key to play it")}`}
                     evidence={<SignatureSound signature={signature} period={shown} />}
                 />
@@ -172,7 +172,7 @@ export default function StatsPage() {
             label: t("energy by hour"),
             content: (
                 <Finding
-                    claim={`${t("highest energy: around")} ${hourLabel(frantic.hour)}`}
+                    claim={`${t("highest energy: around")} ${hourLabel(frantic.hour, locale)}`}
                     note={t("average track energy of plays, by hour")}
                     evidence={<EnergyCurve hourly={signature.hourly} />}
                 />
@@ -246,7 +246,7 @@ export default function StatsPage() {
             controls={
                 <>
                     {shown === "all" && hasPlays && listening.firstPlay && (
-                        <p className="t-meta hidden sm:block">{t("since")} {monthYear(listening.firstPlay)}</p>
+                        <p className="t-meta hidden sm:block">{t("since")} {monthYear(listening.firstPlay, locale)}</p>
                     )}
                     <PeriodPicker value={shown} onChange={setPeriod} busy={reloading} />
                 </>
@@ -289,7 +289,7 @@ function Overview({
 
     const facts: Array<{ value: string; note: string }> = [
         listening.peak && {
-            value: whenLabel(listening.peak.weekday, listening.peak.hour),
+            value: whenLabel(listening.peak.weekday, listening.peak.hour, locale),
             note: t("busiest hour of the week"),
         },
         signature.concentration && {

@@ -43,13 +43,17 @@ export function ordinal(n: number): string {
 }
 
 /** "9pm" — one hour of the day, said the way a person says it. */
-export function hourLabel(hour: number): string {
+export function hourLabel(hour: number, locale: "en" | "nl" = "en"): string {
+    if (locale === "nl") return `${String(hour).padStart(2, "0")}:00`;
     return `${hour % 12 === 0 ? 12 : hour % 12}${hour < 12 ? "am" : "pm"}`;
 }
 
 /** "thursday 9pm" — a weekday and an hour. */
-export function whenLabel(weekday: number, hour: number): string {
-    return `${WEEKDAYS[weekday]} ${hourLabel(hour)}`;
+const DUTCH_WEEKDAYS = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+
+/** Respect the UI choice, not the operating system's language or backend IDs. */
+export function whenLabel(weekday: number, hour: number, locale: "en" | "nl" = "en"): string {
+    return `${(locale === "nl" ? DUTCH_WEEKDAYS : WEEKDAYS)[weekday]} ${hourLabel(hour, locale)}`;
 }
 
 export function monthLabel(iso: string): string {
@@ -58,10 +62,11 @@ export function monthLabel(iso: string): string {
     return `${names[Number(m) - 1]} ${y.slice(2)}`;
 }
 
-export function monthYear(iso: string | null): string {
+export function monthYear(iso: string | null, locale?: "en" | "nl"): string {
     if (!iso) return "";
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" }).toLowerCase();
+    const intlLocale = locale === "nl" ? "nl-NL" : locale === "en" ? "en-US" : undefined;
+    return d.toLocaleDateString(intlLocale, { month: "long", year: "numeric" }).toLowerCase();
 }
 
 export function percent(part: number, whole: number): number {
