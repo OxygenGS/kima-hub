@@ -64,6 +64,42 @@ async function loadUsableShareLink(token: string, res: Response) {
 }
 
 /**
+ * A share token grants access to the art attached to its shared tracks,
+ * NOT every native image stored on the server. Use indexed relations so even
+ * large playlists need no unbounded per-request materialization.
+ */
+async function shareContainsCover(
+    shareLink: { entityType: string; entityId: string },
+    coverArtId: string,
+): Promise<boolean> {
+    if (shareLink.entityType === "track") {
+        const track = await prisma.track.findUnique({
+            where: { id: shareLink.entityId },
+            select: { album: { select: { coverUrl: true } } },
+        });
+        return track?.album?.coverUrl === coverArtId;
+    }
+    if (shareLink.entityType === "album") {
+        const album = await prisma.album.findUnique({
+            where: { id: shareLink.entityId },
+            select: { coverUrl: true },
+        });
+        return album?.coverUrl === coverArtId;
+    }
+    if (shareLink.entityType === "playlist") {
+        const item = await prisma.playlistItem.findFirst({
+            where: {
+                playlistId: shareLink.entityId,
+                track: { album: { coverUrl: coverArtId } },
+            },
+            select: { id: true },
+        });
+        return !!item;
+    }
+    return false;
+}
+
+/**
  * POST /api/share - Create a share link (authenticated)
  */
 router.post("/", requireAuth, async (req: Request, res: Response) => {
@@ -183,11 +219,15 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
         const shareLink = await loadUsableShareLink(req.params.token, res);
         if (!shareLink) return;
 
-        const coverArtId = decodeURIComponent(req.params.coverArtId);
+        // Express has already decoded the path parameter once.
+        const coverArtId = req.params.coverArtId;
         const size = req.query.size as string | undefined;
 
         if (!coverArtId.startsWith("native:")) {
             return res.status(404).json({ error: "Cover art not found" });
+        }
+        if (!(await shareContainsCover(shareLink, coverArtId))) {
+            return res.status(403).json({ error: "Cover art not in shared content" });
         }
 
         const localPath = getLocalImagePath(coverArtId);
@@ -202,7 +242,8 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
                 try {
                     await fs.promises.access(resizedPath, fs.constants.R_OK);
                     res.setHeader("Content-Type", "image/jpeg");
-                    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+                    // Expiry/revocation must not leave year-long tokened artwork cached.
+                    res.setHeader("Cache-Control", "private, no-store");
                     return res.sendFile(resizedPath);
                 } catch {
                     // No resized copy yet: serve the original below.
@@ -211,7 +252,8 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
         }
 
         res.setHeader("Content-Type", "image/jpeg");
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        // Expiry/revocation must not leave year-long tokened artwork cached.
+                    res.setHeader("Cache-Control", "private, no-store");
         return res.sendFile(localPath);
     } catch (error: any) {
         logger.error(`[Share] Cover art error: ${error.message}`);
