@@ -197,4 +197,73 @@ test.describe("Interface language", () => {
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
     });
 
+
+    test("localizes the new v1.11 Stats page without rewriting its period identifiers", async ({ page }) => {
+        const requestedPeriods: string[] = [];
+        await page.route("**/api/**", async (route) => {
+            const url = new URL(route.request().url());
+            const pathname = url.pathname;
+            let body: unknown;
+            if (pathname === "/api/auth/me") {
+                body = {
+                    id: "locale-stats-user", username: "locale-stats-user", role: "user",
+                    canRequestAlbums: false, canDownloadTracks: false, onboardingComplete: true,
+                };
+            } else if (pathname === "/api/stats") {
+                const period = url.searchParams.get("period") ?? "all";
+                requestedPeriods.push(period);
+                body = {
+                    period,
+                    listening: {
+                        plays: 0, estimatedSeconds: 0, distinctTracks: 0,
+                        distinctArtists: 0, distinctAlbums: 0, firstPlay: null,
+                        lastPlay: null, bySource: {}, clock: [], peak: null,
+                        shape: [], drift: [], topArtists: [], topTracks: [],
+                    },
+                    shelf: {
+                        tracks: { total: 0, heard: 0 }, albums: { total: 0, heard: 0 },
+                        artists: { total: 0, heard: 0 },
+                        analysis: { done: 0, pending: 0, failed: 0, total: 0 },
+                        neverPlayed: 0, decades: [],
+                    },
+                    spoken: {
+                        audiobooks: {
+                            seconds: 0, finished: 0, inProgress: 0, setAside: 0,
+                            topAuthors: [], current: null,
+                        },
+                        podcasts: {
+                            seconds: 0, finished: 0, inProgress: 0,
+                            subscriptions: 0, backlog: 0,
+                        },
+                    },
+                    signature: {
+                        concentration: null, albumHabit: null, era: null, key: null,
+                        ownedVsPlayed: [], hourly: [],
+                    },
+                };
+            } else {
+                body = { error: "Unused in isolated Stats localization test" };
+            }
+            await route.fulfill({
+                status: pathname === "/api/stats" || pathname === "/api/auth/me" ? 200 : 404,
+                contentType: "application/json",
+                body: JSON.stringify(body),
+            });
+        });
+        await page.addInitScript(() => {
+            localStorage.setItem("auth_token", "synthetic-stats-token");
+            localStorage.setItem("kima-hub-language", "nl");
+        });
+
+        await page.goto("/stats");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByRole("tab", { name: "Overzicht" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "nog niets afgespeeld" })).toBeVisible();
+        await page.getByRole("button", { name: "30 dagen" }).click();
+        await expect(page.getByRole("heading", { name: "niets afgespeeld in deze periode" })).toBeVisible();
+        expect(requestedPeriods).toContain("30d");
+        // Period values are backend API identifiers, not translated labels.
+        expect(requestedPeriods).not.toContain("30 dagen");
+    });
+
 });
