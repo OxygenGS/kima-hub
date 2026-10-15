@@ -1,0 +1,98 @@
+name: Upstream v1.11 Implementation Checks
+
+on:
+  pull_request:
+    branches:
+      - feature/upstream-v1.11-integration
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  fork-safety:
+    name: Verify fork guards survived v1.11 source merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert fork-specific security, branding and locale wiring
+        run: bash .github/ci/check-v111-security-guards.sh
+
+  frontend:
+    name: Updated v1.11 frontend typecheck lint and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        working-directory: frontend
+        run: npm run typecheck
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+      - name: Unit and translation parity checks
+        working-directory: frontend
+        run: npx vitest run
+
+  backend:
+    name: Updated v1.11 backend Prisma and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5435/isolated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+      - name: Verify fork and upstream Prisma types
+        working-directory: backend
+        run: |
+          npx prisma validate
+          npx prisma generate
+      - name: Typecheck v1.11 backend source (must be fixed before release)
+        working-directory: backend
+        run: npm run typecheck
+
+  language-browser:
+    name: EN/NL browser switching on v1.11 implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Verify login/onboarding and language preferences
+        working-directory: frontend
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npx playwright test --config playwright.public-locale.config.ts
+      - name: Attach browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-implementation-language-errors
+          path: frontend/test-results/
+          retention-days: 7
