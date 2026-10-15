@@ -482,28 +482,44 @@ describe("re-opening the fingerprint stage re-opens the no-match-without-AcoustI
             data: { acoustidFingerprint: "AQSEE_ASKED" },
         });
 
-        const work = await retryFailedAndBlocked(50);
-        expect(work.some((w) => w.trackId === id("rfb") && w.stage === "fingerprint")).toBe(true);
+        // A real fpcalc worker runs in the background. If it finishes before
+        // the next assertion, the prerequisite can already be settled and
+        // the recording correctly becomes due. Hold its mocked answer until
+        // we've verified the OPEN gate; never rely on runner scheduling speed.
+        let releaseFingerprint!: (answer: { fingerprint: string; duration: number }) => void;
+        const fingerprintAnswer = new Promise<{ fingerprint: string; duration: number }>((resolve) => {
+            releaseFingerprint = resolve;
+        });
+        jest.mocked(fpcalcService.fingerprintFile).mockReturnValueOnce(fingerprintAnswer);
 
-        // The recording that never asked AcoustID is re-opened alongside the
-        // fingerprint question, so it can use the new fingerprint once the
-        // retry lands. It is NOT offered yet — the fingerprint is still open.
-        expect((await stageRow(id("rfb"), "recording"))?.status).toBe("pending");
-        let next = await getNextWork(50);
-        expect(next.some((w) => w.trackId === id("rfb") && w.stage === "recording")).toBe(false);
+        try {
+            const work = await retryFailedAndBlocked(50);
+            expect(work.some((w) => w.trackId === id("rfb") && w.stage === "fingerprint")).toBe(true);
 
-        // The no-match that DID ask AcoustID stays closed.
-        expect((await stageRow(id("asked"), "recording"))?.status).toBe("failed");
-        expect((await stageRow(id("asked"), "recording"))?.retryable).toBe(false);
+            // Its fingerprint is still being computed, so the re-opened
+            // recording waits rather than searching MusicBrainz prematurely.
+            expect((await stageRow(id("rfb"), "recording"))?.status).toBe("pending");
+            const next = await getNextWork(50);
+            expect(next.some((w) => w.trackId === id("rfb") && w.stage === "recording")).toBe(false);
 
-        // When the retried fingerprint lands, the re-opened recording is due.
-        await waitForFingerprintWork();
-        await putStage(id("rfb"), "fingerprint", "done");
+            // A no-match that DID already ask AcoustID stays closed.
+            expect((await stageRow(id("asked"), "recording"))?.status).toBe("failed");
+            expect((await stageRow(id("asked"), "recording"))?.retryable).toBe(false);
+        } finally {
+            // Always let the background fingerprint task finish, even after
+            // an assertion failure. The test database teardown waits on it.
+            releaseFingerprint({ fingerprint: "AQSEE_RETRIED", duration: 180 });
+            await waitForFingerprintWork();
+        }
+
+        // The mock of persistAcoustidFingerprint intentionally does not update
+        // Track, so set the actual stored value before checking eligibility.
+        expect((await stageRow(id("rfb"), "fingerprint"))?.status).toBe("done");
         await prisma.track.update({
             where: { id: id("rfb") },
             data: { acoustidFingerprint: "AQSEE_RETRIED" },
         });
-        next = await getNextWork(50);
+        const next = await getNextWork(50);
         expect(next.some((w) => w.trackId === id("rfb") && w.stage === "recording")).toBe(true);
     });
 });
