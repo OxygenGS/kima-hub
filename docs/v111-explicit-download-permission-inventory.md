@@ -92,6 +92,38 @@ traversal, missing files and valid in-root shared audio.
 host operator changing files concurrently (TOCTOU) or a CDN overriding cache
 headers. Native front-end and third-party client acceptance is still needed.
 
+## Canonical containment for authenticated music streams
+
+Authenticated browser streaming (`/api/library/tracks/:id/stream`), browser
+prewarming (`/api/library/tracks/:id/prewarm`) and both Subsonic
+`stream.view` and `download.view` now call the same
+`resolveExistingMusicFile` helper before opening audio or scheduling a
+transcode. This resolves **both the actual target and the configured root**
+with `realpath`. A scanned database path, even if lexically inside the
+library, must point to an existing regular file physically inside the music
+root. Legitimate symlinks pointing back inside the music library and a
+symlinked mount for the music root remain supported.
+
+A denied browser stream is a generic `404 Track not available`; prewarm
+returns its usual non-revealing `202`. Subsonic returns protocol error 70
+(Song not found), including for an otherwise authorized file download.
+`canDownloadTracks` remains a **separate** current-DB authorization gate.
+
+Runtime regressions:
+- `backend/src/routes/library/__tests__/trackPath.test.ts`: canonical
+  regular file, root and track symlinks, escaped, missing, traversed and
+  directory cases.
+- `backend/src/routes/__tests__/canonicalMusicStreams.route.test.ts`:
+  actual browser and Subsonic HTTP routes with physical test files;
+  playback, download and prewarming never open escaped files.
+- `.github/ci/check-v111-security-guards.sh`: rejects accidental removal
+  of the route-level calls, in addition to (not instead of) HTTP tests.
+
+**Boundary:** A canonical-path check before opening still has a potential
+time-of-check/time-of-use race if another privileged local actor changes
+filesystem links between checking and opening. Full host-level hardening
+remains a separate operational and security review.
+
 ## Regression coverage
 
 - `backend/src/middleware/__tests__/musicPermissions.test.ts`: actual
