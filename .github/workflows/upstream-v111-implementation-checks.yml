@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# CI builds two full Docker images for every draft commit. Only the newest
+# commit can be merged, so superseded runs should release their runners.
+concurrency:
+  group: ${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   fork-safety:
     name: Verify fork guards survived v1.11 source merge
