@@ -11,6 +11,8 @@ import Link from "next/link";
 import { X, Check, Loader2, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface ReleaseLink {
     label: string;
@@ -77,6 +79,8 @@ export function WhatsNewWindow({
     /** Choices already answered, when a closed release is read again. */
     answered?: Record<string, boolean>;
 }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [choices, setChoices] = useState<Record<string, boolean>>(answered ?? {});
     const [closing, setClosing] = useState(false);
     const [closeError, setCloseError] = useState<string | null>(null);
@@ -213,7 +217,7 @@ export function WhatsNewWindow({
                             <span className="min-w-0 flex-1">
                                 <span className="flex items-baseline justify-between gap-3">
                                     <span className="text-sm font-medium text-white">{item.title}</span>
-                                    {tag && <span className="shrink-0 text-xs text-[var(--text-muted)]">{tag}</span>}
+                                    {tag && <span className="shrink-0 text-xs text-[var(--text-muted)]">{t(tag)}</span>}
                                 </span>
                                 <span className="mt-0.5 block text-sm leading-snug text-[var(--text-secondary)]">{item.summary}</span>
                             </span>
@@ -238,12 +242,12 @@ export function WhatsNewWindow({
     const list = (
         <section aria-labelledby="whats-new-list" className="flex flex-col gap-5">
             <h3 id="whats-new-list" className="text-base font-semibold text-white">
-                What&apos;s new in {shortVersion(release.version)}
+                {t("What's new in")} {shortVersion(release.version)}
             </h3>
-            {group("whats-new-needs", "Needs you", release.items.filter(isDecision))}
-            {group("whats-new-changed", "What changed", release.items.filter((i) => !isDecision(i)))}
+            {group("whats-new-needs", t("Needs you"), release.items.filter(isDecision))}
+            {group("whats-new-changed", t("What changed"), release.items.filter((i) => !isDecision(i)))}
             {older.map((r) => (
-                <div key={r.version}>{group(`whats-new-${r.version}`, `From ${shortVersion(r.version)}`, r.items)}</div>
+                <div key={r.version}>{group(`whats-new-${r.version}`, `${t("From")} ${shortVersion(r.version)}`, r.items)}</div>
             ))}
         </section>
     );
@@ -251,7 +255,7 @@ export function WhatsNewWindow({
     const note = release.note && (
         <section aria-labelledby="whats-new-note" className="flex flex-col gap-4">
             <h3 id="whats-new-note" className="text-base font-semibold text-white">
-                A note from {release.note.from}
+                {t("A note from")} {release.note.from}
             </h3>
             <Body text={release.note.body} />
             <p className="pt-1 text-[0.9375rem] font-medium text-white">{release.note.from}</p>
@@ -267,11 +271,11 @@ export function WhatsNewWindow({
             <ChevronLeft className="w-4 h-4" />
             {wide ? (
                 <>
-                    <span className="lg:hidden">What&apos;s new</span>
-                    <span className="hidden lg:inline">{release.note!.from}&apos;s note</span>
+                    <span className="lg:hidden">{t("What's new")}</span>
+                    <span className="hidden lg:inline">{locale === "nl" ? `${t("A note from")} ${release.note!.from}` : `${release.note!.from}'s note`}</span>
                 </>
             ) : (
-                "What's new"
+                t("What's new")
             )}
         </>
     );
@@ -287,7 +291,7 @@ export function WhatsNewWindow({
                 {backLabel}
             </button>
             <h3 id="whats-new-needs-page" className="text-xl font-semibold tracking-tight text-white text-balance">
-                Needs you
+                {t("Needs you")}
             </h3>
             {waiting.map((item) => (
                 <div key={item.key} className="flex flex-col gap-3 pt-5 border-t border-white/10">
@@ -299,16 +303,16 @@ export function WhatsNewWindow({
                         <div className="flex flex-col gap-3">
                             {item.discloses && (
                                 <p className="text-sm leading-relaxed text-[var(--text-secondary)] max-w-[62ch]">
-                                    <span className="text-white">What leaves your server: </span>
+                                    <span className="text-white">{t("What leaves your server:")} </span>
                                     {item.discloses}
                                 </p>
                             )}
                             <div className="flex gap-2">
-                                <ChoiceButton selected={choices[item.key] === true} onClick={() => answer(item.key, true)} label="Turn it on" />
-                                <ChoiceButton selected={choices[item.key] === false} onClick={() => answer(item.key, false)} label="No thanks" />
+                                <ChoiceButton selected={choices[item.key] === true} onClick={() => answer(item.key, true)} label={t("Turn it on")} />
+                                <ChoiceButton selected={choices[item.key] === false} onClick={() => answer(item.key, false)} label={t("No thanks")} />
                             </div>
                             {choices[item.key] === undefined && (
-                                <p className="text-sm text-[var(--text-muted)]">If you don&apos;t answer, it stays off.</p>
+                                <p className="text-sm text-[var(--text-muted)]">{t("If you don't answer, it stays off.")}</p>
                             )}
                         </div>
                     )}
@@ -332,11 +336,11 @@ export function WhatsNewWindow({
                 <ChevronLeft className="w-4 h-4" />
                 {wide ? (
                     <>
-                        <span className="lg:hidden">What&apos;s new</span>
-                        <span className="hidden lg:inline">{release.note!.from}&apos;s note</span>
+                        <span className="lg:hidden">{t("What's new")}</span>
+                        <span className="hidden lg:inline">{locale === "nl" ? `${t("A note from")} ${release.note!.from}` : `${release.note!.from}'s note`}</span>
                     </>
                 ) : (
-                    "What's new"
+                    t("What's new")
                 )}
             </button>
             <h3 id="whats-new-item" className="text-xl font-semibold tracking-tight text-white text-balance">
@@ -349,19 +353,19 @@ export function WhatsNewWindow({
                 <div className="flex flex-col gap-3">
                     {item.discloses && (
                         <p className="text-sm leading-relaxed text-[var(--text-secondary)] max-w-[62ch]">
-                            <span className="text-white">What leaves your server: </span>
+                            <span className="text-white">{t("What leaves your server:")} </span>
                             {item.discloses}
                         </p>
                     )}
                     <div className="flex gap-2">
-                        <ChoiceButton selected={choices[item.key] === true} onClick={() => answer(item.key, true)} label="Turn it on" />
-                        <ChoiceButton selected={choices[item.key] === false} onClick={() => answer(item.key, false)} label="No thanks" />
+                        <ChoiceButton selected={choices[item.key] === true} onClick={() => answer(item.key, true)} label={t("Turn it on")} />
+                        <ChoiceButton selected={choices[item.key] === false} onClick={() => answer(item.key, false)} label={t("No thanks")} />
                     </div>
                 </div>
             )}
             {item.kind === "action" && renderAction?.(item)}
             {item.kind === "choice" && choices[item.key] === undefined && (
-                <p className="text-sm text-[var(--text-muted)] max-w-[62ch]">If you don&apos;t answer, it stays off.</p>
+                <p className="text-sm text-[var(--text-muted)] max-w-[62ch]">{t("If you don't answer, it stays off.")}</p>
             )}
             {item.kind === "action" && item.ifClosed && !done.includes(item.key) && (
                 <p className="text-sm text-[var(--text-muted)] max-w-[62ch]">{item.ifClosed}</p>
@@ -404,7 +408,7 @@ export function WhatsNewWindow({
                     <button
                         onClick={close}
                         disabled={closing}
-                        aria-label="Close"
+                        aria-label={t("Close")}
                         className="shrink-0 w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors"
                     >
                         {closing ? <Loader2 className="w-5 h-5 animate-spin" /> : <X className="w-5 h-5" />}
@@ -435,7 +439,7 @@ export function WhatsNewWindow({
                     <div className="min-w-0">
                         {closeError ? (
                             <p className="text-xs text-danger-light" data-testid="whatsnew-close-error" role="alert">
-                                {closeError}
+                                {t(closeError)}
                             </p>
                         ) : waiting.length > 0 ? (
                             <p className="text-xs leading-relaxed text-[var(--text-muted)]">
@@ -445,12 +449,12 @@ export function WhatsNewWindow({
                                     data-testid="whatsnew-waiting"
                                     className="text-white underline underline-offset-4 decoration-white/30 hover:decoration-white"
                                 >
-                                    {waiting.length === 1 ? `Needs you: ${waiting[0].title}` : `${waiting.length} things need you`}
+                                    {waiting.length === 1 ? `${t("Needs you:")} ${waiting[0].title}` : `${waiting.length} ${t("things need you")}`}
                                 </button>
-                                <span className="hidden sm:inline">. Anything you don&apos;t answer stays as it is.</span>
+                                <span className="hidden sm:inline">. {t("Anything you don't answer stays as it is.")}</span>
                             </p>
                         ) : (
-                            <p className="text-xs text-[var(--text-muted)]">Press Esc to close.</p>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Press Esc to close.")}</p>
                         )}
                     </div>
                     <Button
@@ -461,7 +465,7 @@ export function WhatsNewWindow({
                         data-testid="whatsnew-done"
                         className="shrink-0"
                     >
-                        {closing ? "Saving..." : unanswered > 0 ? "Close" : "Done"}
+                        {t(closing ? "Saving..." : unanswered > 0 ? "Close" : "Done")}
                     </Button>
                 </footer>
             </div>
