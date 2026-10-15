@@ -268,7 +268,7 @@ test.describe("Interface language", () => {
         await expect(modal.getByText(/Voorheen matchte Kima nummers alleen op geluid/)).toBeVisible();
         await expect(modal.getByRole("link", { name: "Open de sfeermap" })).toHaveAttribute("href", "/vibe");
 
-        await modal.getByRole("button", { name: "Wat is er nieuw" }).first().click();
+        await modal.locator("[data-back]").click(); // Responsive label varies between mobile and desktop.
         await modal.locator('[data-item="gpu.accelerate"]').click();
         await expect(modal.getByText(/Kima downloadt twaalf vastgepinde pakketten/)).toBeVisible();
         await expect(modal.getByText(/geen gegevens uit jouw muziekbibliotheek/)).toBeVisible();
