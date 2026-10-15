@@ -87,6 +87,7 @@ describe("public shared audio canonical-path containment", () => {
         expect(response.status).toBe(200);
         expect(mockStream).toHaveBeenCalledTimes(1);
         expect(mockStream.mock.calls[0][2]).toBe(await fs.promises.realpath(allowedFile));
+        expect(mockStream.mock.calls[0][4]).toBe("private, no-store");
         expect(countPlay).toHaveBeenCalledTimes(1);
     });
 
