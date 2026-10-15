@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("provides v1.11 search and collection browser labels", () => {
+        expect(translate("nl", "Find Your Sound")).toBe("Vind jouw muziek");
+        expect(translate("nl", "Discovery Engine")).toBe("Ontdekkingsfunctie");
+        expect(translate("nl", "Collection")).toBe("Collectie");
+        expect(translate("nl", "Tracks")).toBe("Nummers");
+        expect(translate("nl", "Title")).toBe("Titel");
+        expect(translate("en", "Find Your Sound")).toBe("Find Your Sound");
+    });
+
     it("contains a Dutch translation for every English UI key", () => {
         expect(Object.keys(dutch).sort()).toEqual(Object.keys(english).sort());
         expect(Object.values(dutch).every(value => value.trim().length > 0)).toBe(true);
