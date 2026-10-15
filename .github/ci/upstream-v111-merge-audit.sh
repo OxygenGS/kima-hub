@@ -73,7 +73,7 @@ fi
   echo "English/Dutch UI translation parity still require integration tests."
 } >> "$report"
 
-cat "$report" >> "$GITHUB_STEP_SUMMARY"
+cat "$report" | tee -a "$GITHUB_STEP_SUMMARY"
 echo "Wrote $report ($count unresolved paths)."
 git merge --abort >/dev/null 2>&1 || true
 # Expected conflicts are not a CI infrastructure failure. All are reported.
