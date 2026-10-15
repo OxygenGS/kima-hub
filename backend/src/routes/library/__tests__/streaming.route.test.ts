@@ -33,6 +33,14 @@ jest.mock('../../../config', () => ({
     },
 }));
 
+// The concurrency/play-count suite exercises the HTTP streamer with a
+// synthetic track, not the physical filesystem. Canonical symlink validation
+// is tested independently with real files in trackPath.test.ts and
+// streamingContainment.route.test.ts.
+jest.mock('../trackPath', () => ({
+    resolveExistingMusicFile: jest.fn(async (storedPath: string) => `/music/${storedPath}`),
+}));
+
 jest.mock('../../../services/audioStreaming', () => ({
     getAudioStreamingService: jest.fn(),
     isQuality: (v: unknown) => typeof v === 'string' && ['original', 'high', 'medium', 'low'].includes(v),
