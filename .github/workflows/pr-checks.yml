@@ -312,6 +312,15 @@ jobs:
               timeout-minutes: 25
               run: bash .github/ci/aio-volume-upgrade.sh
 
+            # Pull the real published upstream v1.10.0 AIO image, create
+            # synthetic accounts/media, upgrade a copied /data with this
+            # candidate, and independently restore upstream using old data.
+            # No registry push, no production endpoints or mounts.
+            - name: Real upstream AIO image upgrade and rollback rehearsal
+              shell: bash
+              timeout-minutes: 35
+              run: bash .github/ci/aio-real-image-rehearsal.sh
+
     db-upgrade:
         name: Existing Kima Database Upgrade & Restore
         runs-on: ubuntu-latest
