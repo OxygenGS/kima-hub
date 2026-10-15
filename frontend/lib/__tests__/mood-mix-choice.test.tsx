@@ -20,6 +20,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { MoodMixChoice } from "@/components/whats-new/MoodMixChoice";
+import { LanguageProvider } from "@/lib/i18n/language-context";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,7 +35,7 @@ const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HT
 
 async function render() {
     await act(async () => {
-        root.render(<MoodMixChoice />);
+        root.render(<LanguageProvider><MoodMixChoice /></LanguageProvider>);
     });
 }
 
@@ -45,6 +46,7 @@ async function click(id: string) {
 }
 
 beforeEach(() => {
+    localStorage.removeItem("kima-hub-language");
     vi.clearAllMocks();
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -57,6 +59,17 @@ afterEach(() => {
 });
 
 describe("MoodMixChoice", () => {
+    it("uses Dutch controls while preserving mood-mix names and decision codes", async () => {
+        localStorage.setItem("kima-hub-language", "nl");
+        getState.mockResolvedValue({ mix: MIX, decision: null, playlist: null });
+        await render();
+        expect(q("moodmix-name")!.textContent).toContain("Your Upbeat Mix");
+        expect(q("moodmix-name")!.textContent).toContain("15 nummers");
+        expect(q("moodmix-save")!.textContent).toContain("Opslaan als afspeellijst");
+        expect(q("moodmix-rebuild")!.textContent).toContain("Opnieuw maken");
+        expect(q("moodmix-keep")!.textContent).toContain("Behouden");
+    });
+
     it("shows the mix and all three answers before anything is decided", async () => {
         getState.mockResolvedValue({ mix: MIX, decision: null, playlist: null });
         await render();
