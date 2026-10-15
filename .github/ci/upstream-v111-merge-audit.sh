@@ -73,6 +73,56 @@ fi
   echo "English/Dutch UI translation parity still require integration tests."
 } >> "$report"
 
+# Inventory of upstream-only database migrations and newly introduced UI pages.
+# These files still require semantic review; listing them is not an import.
+git ls-tree -r --name-only HEAD backend/prisma/migrations \
+  | grep -E '^backend/prisma/migrations/[^/]+/migration.sql
+echo "Wrote $report ($count unresolved paths)."
+git merge --abort >/dev/null 2>&1 || true
+# Expected conflicts are not a CI infrastructure failure. All are reported.
+ \
+  | sort > audit/fork-migrations.txt
+git ls-tree -r --name-only "$remote_ref" backend/prisma/migrations \
+  | grep -E '^backend/prisma/migrations/[^/]+/migration.sql
+echo "Wrote $report ($count unresolved paths)."
+git merge --abort >/dev/null 2>&1 || true
+# Expected conflicts are not a CI infrastructure failure. All are reported.
+ \
+  | sort > audit/upstream-migrations.txt
+comm -13 audit/fork-migrations.txt audit/upstream-migrations.txt > audit/upstream-only-migrations.txt
+
+git ls-tree -r --name-only HEAD frontend/app \
+  | grep -E '^frontend/app/.*/page.tsx
+echo "Wrote $report ($count unresolved paths)."
+git merge --abort >/dev/null 2>&1 || true
+# Expected conflicts are not a CI infrastructure failure. All are reported.
+ \
+  | sort > audit/fork-pages.txt
+git ls-tree -r --name-only "$remote_ref" frontend/app \
+  | grep -E '^frontend/app/.*/page.tsx
+echo "Wrote $report ($count unresolved paths)."
+git merge --abort >/dev/null 2>&1 || true
+# Expected conflicts are not a CI infrastructure failure. All are reported.
+ \
+  | sort > audit/upstream-pages.txt
+comm -13 audit/fork-pages.txt audit/upstream-pages.txt > audit/upstream-only-pages.txt
+
+{
+  echo
+  echo "## Missing upstream migrations and new user-facing routes"
+  echo
+  echo "Upstream migration SQL files absent from the fork: **$(wc -l < audit/upstream-only-migrations.txt | tr -d ' ')**"
+  echo
+  sed 's|^|- \`|; s|$|\`|' audit/upstream-only-migrations.txt
+  echo
+  echo "New upstream app page paths absent from the fork: **$(wc -l < audit/upstream-only-pages.txt | tr -d ' ')**"
+  echo
+  sed 's|^|- \`|; s|$|\`|' audit/upstream-only-pages.txt
+  echo
+  echo "New pages require English/Dutch user-facing localization. Migrations must"
+  echo "be combined with the v1.11 schema/backend before they are ever deployed."
+} >> "$report"
+
 cat "$report" | tee -a "$GITHUB_STEP_SUMMARY"
 echo "Wrote $report ($count unresolved paths)."
 git merge --abort >/dev/null 2>&1 || true
