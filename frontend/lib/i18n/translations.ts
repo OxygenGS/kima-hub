@@ -1306,7 +1306,7 @@ export const english = {
     "Wiped. Your library is running through the new engine in the background.": "Wiped. Your library is running through the new engine in the background.",
     "Not now": "Not now",
     "Wipe and re-run enrichment?": "Wipe and re-run enrichment?",
-    "Couldn't load your mood mix.": "Couldn't load your mood mix.",
+    "Couldn't load your mood mix.": "Couldn’t load your mood mix.",
     "Saved as the playlist": "Saved as the playlist",
     "No saved mood mix": "No saved mood mix",
     "Removed.": "Removed.",
