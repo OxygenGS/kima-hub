@@ -43,7 +43,16 @@ git checkout "$base" -- \
   backend/src/routes/auth.ts \
   .github/workflows/docker-publish.yml \
   .github/workflows/prerelease.yml \
-  .github/workflows/pr-checks.yml
+  .github/workflows/pr-checks.yml \
+  docker-compose.prod.yml \
+  docker-compose.server.yml \
+  README.md
+
+# An automation token cannot and should not change GitHub Actions workflows.
+# Restore EVERY workflow to the fork's exact baseline, including deleting
+# new upstream-only workflow files from the staged experimental snapshot.
+git rm -r -f -- .github/workflows >/dev/null
+git checkout "$base" -- .github/workflows
 test -f frontend/lib/i18n/translations.ts
 test -f frontend/lib/i18n/language-context.tsx
 grep -q 'canRequestAlbums' backend/prisma/schema.prisma
@@ -57,7 +66,8 @@ cat > docs/v111-experimental-implementation.md <<EOF
 This branch is a disposable development baseline built from official upstream
 v1.11.0 and fork feature PR #6. The 141 Git merge conflicts were initially
 resolved in favor of upstream, with the fork's permission schema, authentication
-middleware/route and guarded release workflows restored afterward.
+middleware/route, fork Compose/README and ALL guarded release workflows restored.
+The result is a one-parent source snapshot, not a Git merge-parent ancestry.
 
 **DO NOT deploy, publish, create version tags, or merge into main.**
 
@@ -78,8 +88,18 @@ EOF
 
 git add -A
 test -z "$(git diff --name-only --diff-filter=U)"
-git -c user.name=chillverse-integration -c user.email=ci-integration@localhost \
-  commit -m "wip(upstream): experimental v1.11 code baseline with fork security foundations"
+# Store the working source snapshot as a SINGLE-PARENT commit. Including the
+# upstream tag as a merge parent would introduce upstream workflow-history
+# edits, which the correctly permission-limited GitHub token must reject.
+tree="$(git write-tree)"
+snapshot="$(printf '%s\n' 'wip(upstream): experimental v1.11 snapshot with fork security foundations' | \
+  git -c user.name=chillverse-integration -c user.email=ci-integration@localhost \
+  commit-tree "$tree" -p "$base")"
+git reset --hard "$snapshot" >/dev/null
+if test -n "$(git diff --name-only "$base" "$snapshot" -- .github/workflows)"; then
+  echo "Refusing to publish a branch with workflow changes" >&2
+  exit 1
+fi
 echo "About to create ONLY refs/heads/$target (never force push)."
 git push origin "HEAD:refs/heads/$target"
 echo "Experimental branch created. All production and stable refs untouched."
