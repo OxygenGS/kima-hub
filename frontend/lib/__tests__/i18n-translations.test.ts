@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("localizes release actions and mood-mix decisions without rewriting stored choices", () => {
+        expect(translate("nl", "What's new in")).toBe("Nieuw in");
+        expect(translate("nl", "Needs you")).toBe("Jouw aandacht nodig");
+        expect(translate("nl", "Turn it on")).toBe("Inschakelen");
+        expect(translate("nl", "No thanks")).toBe("Nee, bedankt");
+        expect(translate("nl", "Wipe and re-run enrichment?")).toContain("opnieuw uitvoeren");
+        expect(translate("nl", "Save as playlist")).toBe("Opslaan als afspeellijst");
+        expect(translate("nl", "Rebuild")).toBe("Opnieuw maken");
+        expect(translate("nl", "Keep")).toBe("Behouden");
+        expect(translate("en", "What's new")).toBe("What's new");
+        expect(translate("nl", "CI Music Metadata")).toBe("CI Music Metadata");
+    });
+
     it("localizes Android/Google TV navigation and accessibility without changing route keys", () => {
         expect(translate("nl", "TV navigation")).toBe("Tv-navigatie");
         expect(translate("nl", "Home")).toBe("Startpagina");
