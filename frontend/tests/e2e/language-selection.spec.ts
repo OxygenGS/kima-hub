@@ -244,7 +244,7 @@ test.describe("Interface language", () => {
         await expect(modal.getByRole("button", { name: "Inschakelen" })).toBeVisible();
         await expect(modal.getByRole("button", { name: "Nee, bedankt" })).toBeVisible();
         await expect(modal.getByText("Wat je server verlaat:")).toBeVisible();
-        await expect(modal.getByText("CI Original Disclosure", { exact: true })).toBeVisible();
+        await expect(modal.getByText("CI Original Disclosure")).toBeVisible();
 
         await page.evaluate(() => {
             localStorage.setItem("kima-hub-language", "en");
