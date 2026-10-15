@@ -21,10 +21,12 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 
 const VibeMapScene = dynamic(
     () => import("@/features/vibe/map/VibeMapScene").then((m) => ({ default: m.VibeMapScene })),
-    { ssr: false, loading: () => <CenteredNote title="Charting your library" spinner /> },
+    { ssr: false, loading: () => <VibeLoadingNote /> },
 );
 
 // Width the desktop track panel takes from the right edge (20rem + its 1rem inset + a gap).
@@ -43,8 +45,13 @@ function CenteredNote({ title, detail, spinner, action }: { title: string; detai
     );
 }
 
+function VibeLoadingNote() {
+    const { locale } = useLanguage();
+    return <CenteredNote title={translate(locale, "Charting your library")} spinner />;
+}
+
 // A WebGL failure must not take the rest of the app down with it.
-class SceneErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: string | null }> {
+class SceneErrorBoundary extends React.Component<{ children: React.ReactNode; locale: Locale }, { error: string | null }> {
     state = { error: null as string | null };
     static getDerivedStateFromError(error: Error) {
         return { error: error.message };
@@ -53,11 +60,11 @@ class SceneErrorBoundary extends React.Component<{ children: React.ReactNode }, 
         if (this.state.error !== null) {
             return (
                 <CenteredNote
-                    title="The map could not be drawn"
+                    title={translate(this.props.locale, "The map could not be drawn")}
                     detail={this.state.error}
                     action={
                         <Button size="sm" className="mt-3" onClick={() => this.setState({ error: null })}>
-                            Try again
+                            {translate(this.props.locale, "Try again")}
                         </Button>
                     }
                 />
@@ -94,6 +101,8 @@ function toQueueTrack(t: { id: string; title: string; duration?: number; artist:
 }
 
 export default function VibePage() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const {
         mapData, isLoading, computing, error, refetch, trackMap, mode, selectedTrackId, highlightedIds,
         selectTrack, resetMode, setMode, setHighlightedIds,
@@ -325,12 +334,12 @@ export default function VibePage() {
         if (selectedTrackId && mapData && !trackMap.has(selectedTrackId)) selectTrack(null);
     }, [selectedTrackId, mapData, trackMap, selectTrack]);
 
-    if (isLoading) return <CenteredNote title="Charting your library" spinner />;
+    if (isLoading) return <CenteredNote title={t("Charting your library")} spinner />;
     if (computing) {
         return (
             <CenteredNote
-                title="Charting your library"
-                detail="Building the map. Large libraries take a few minutes."
+                title={t("Charting your library")}
+                detail={t("Building the map. Large libraries take a few minutes.")}
                 spinner
             />
         );
@@ -339,11 +348,11 @@ export default function VibePage() {
     if (error) {
         return (
             <CenteredNote
-                title="The music map did not load"
+                title={t("The music map did not load")}
                 detail={error instanceof Error ? error.message : undefined}
                 action={
                     <Button size="sm" className="mt-3" onClick={() => refetch()}>
-                        Try again
+                        {t("Try again")}
                     </Button>
                 }
             />
@@ -351,7 +360,7 @@ export default function VibePage() {
     }
 
     if (!mapData || mapData.tracks.length === 0) {
-        return <CenteredNote title="No tracks with vibe analysis yet" detail="Run enrichment to analyse your library; tracks appear here as they finish." />;
+        return <CenteredNote title={t("No tracks with vibe analysis yet")} detail={t("Run enrichment to analyse your library; tracks appear here as they finish.")} />;
     }
 
     const selectedTrack = selectedTrackId ? trackMap.get(selectedTrackId) : undefined;
@@ -360,7 +369,7 @@ export default function VibePage() {
 
     return (
         <div className="vibe-sky relative h-full w-full overflow-hidden animate-rise">
-            <SceneErrorBoundary>
+            <SceneErrorBoundary locale={locale}>
                 <VibeMapScene
                     tracks={mapData.tracks}
                     trackMap={trackMap}
@@ -402,16 +411,16 @@ export default function VibePage() {
                     compact={compact}
                     onClick={toggleLabels}
                     aria-pressed={showLabels}
-                    title={showLabels ? "hide labels" : "show labels"}
-                    aria-label={showLabels ? "Hide labels" : "Show labels"}
+                    title={t(showLabels ? "Hide labels" : "Show labels")}
+                    aria-label={t(showLabels ? "Hide labels" : "Show labels")}
                     className={showLabels ? "text-white" : "text-white/45"}
                 />
                 <MapIconButton
                     icon={LocateFixed}
                     compact={compact}
                     onClick={() => setResetSignal((n) => n + 1)}
-                    title="show the whole library"
-                    aria-label="Show the whole library"
+                    title={t("Show the whole library")}
+                    aria-label={t("Show the whole library")}
                     className="text-white/70"
                 />
             </div>
@@ -419,9 +428,9 @@ export default function VibePage() {
             {driftSourceId && (
                 <div role="status" className={`vibe-glass absolute left-1/2 z-(--z-scene) flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-sm text-[var(--text-secondary)] ${compact ? "top-[max(7rem,calc(env(safe-area-inset-top)+7rem))] w-max max-w-[calc(100%-1.5rem)]" : "top-[max(4.25rem,calc(env(safe-area-inset-top)+4.25rem))]"}`}>
                     <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-brand)]" />
-                    {compact ? "Tap the track the path should end on" : "Click the track the song path should end on"}
+                    {t(compact ? "Tap the track the path should end on" : "Click the track the song path should end on")}
                     <button type="button" onClick={() => setDriftSourceId(null)} className="text-xs text-[var(--text-muted)] hover:text-white">
-                        Cancel
+                        {t("Cancel")}
                     </button>
                 </div>
             )}
@@ -446,12 +455,12 @@ export default function VibePage() {
                 <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-(--z-scene) w-[22rem] max-w-sm">
                     <div className="vibe-glass flex items-start gap-3 rounded-xl px-4 py-3">
                         <div className="min-w-0 flex-1">
-                            <p className="mb-0.5 text-xs font-semibold text-[var(--text-primary)]">This is your music, mapped by vibe.</p>
+                            <p className="mb-0.5 text-xs font-semibold text-[var(--text-primary)]">{t("This is your music, mapped by vibe.")}</p>
                             <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
-                                Click: details · Double-click: play · Right-click: more · Drag: rotate · Right-drag: pan · Scroll: zoom
+                                {t("Click: details · Double-click: play · Right-click: more · Drag: rotate · Right-drag: pan · Scroll: zoom")}
                             </p>
                         </div>
-                        <button onClick={dismissHint} aria-label="Dismiss" className="shrink-0 rounded text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+                        <button onClick={dismissHint} aria-label={t("Dismiss")} className="shrink-0 rounded text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
                             <X className="h-4 w-4" />
                         </button>
                     </div>
@@ -497,10 +506,10 @@ export default function VibePage() {
                     intro={showHint ? (
                         <div className="flex items-start gap-3">
                             <p className="min-w-0 flex-1 text-xs leading-relaxed text-[var(--text-secondary)] landscape-short:text-[11px]">
-                                <span className="font-semibold text-[var(--text-primary)]">This is your music, mapped by vibe. </span>
-                                Tap: details · Double-tap: play · Drag: rotate · Pinch: zoom · Two fingers: pan
+                                <span className="font-semibold text-[var(--text-primary)]">{t("This is your music, mapped by vibe.")}{" "}</span>
+                                {t("Tap: details · Double-tap: play · Drag: rotate · Pinch: zoom · Two fingers: pan")}
                             </p>
-                            <button onClick={dismissHint} aria-label="Dismiss" className="-mr-2 -mt-2 flex shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+                            <button onClick={dismissHint} aria-label={t("Dismiss")} className="-mr-2 -mt-2 flex shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
                                 <X className="h-4 w-4" />
                             </button>
                         </div>
