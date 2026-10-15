@@ -21,6 +21,9 @@ jest.mock('../../middleware/auth', () => ({
         req.user = { id: 'user-123' };
         next();
     },
+    // This suite tests artwork GETs, not authorization. The separate
+    // permissions integration suites exercise the real middleware over HTTP.
+    requireMusicPermission: () => (_req: any, _res: any, next: any) => next(),
 }));
 
 const mockGetCalendar = jest.fn();
