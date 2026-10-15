@@ -96,3 +96,45 @@ jobs:
           name: v111-implementation-language-errors
           path: frontend/test-results/
           retention-days: 7
+
+  music-permissions-http:
+    name: Real middleware and HTTP album permission regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_music_tests
+        ports:
+          - 5437:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_music_tests"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5437/v111_music_tests
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend and generate current Prisma Client
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Verify actual role checks and request handling with Jest / Supertest
+        working-directory: backend
+        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts

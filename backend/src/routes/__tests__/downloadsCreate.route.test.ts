@@ -7,8 +7,10 @@
 
 const mockJobCreate = jest.fn();
 const mockQueryRaw = jest.fn();
+const mockPermissionUser = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: {
+        user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) },
         $transaction: (fn: (tx: unknown) => unknown) =>
             fn({
                 $queryRaw: (...a: unknown[]) => mockQueryRaw(...a),
@@ -26,6 +28,8 @@ jest.mock("../../middleware/auth", () => ({
         next();
     },
     requireAdmin: (_req: any, _res: any, next: any) => next(),
+    // Use the REAL permission middleware; only the authentication fixture is stubbed.
+    requireMusicPermission: jest.requireActual("../../middleware/auth").requireMusicPermission,
 }));
 jest.mock("../../utils/systemSettings", () => ({
     getSystemSettings: jest.fn().mockResolvedValue({ musicPath: "/music" }),
@@ -71,6 +75,11 @@ const post = (mbid: string) =>
     });
 
 beforeEach(() => {
+    // Existing acquisition tests exercise the post-authorization handler.
+    // Route-level denial tests below override this persisted role/flag row.
+    mockPermissionUser.mockReset().mockResolvedValue({
+        role: "admin", canRequestAlbums: false, canDownloadTracks: false,
+    });
     mockJobCreate.mockReset().mockImplementation(async ({ data }) => ({
         id: "job-1",
         status: "pending",
@@ -162,5 +171,44 @@ describe("POST /downloads", () => {
             expect(res.body.error).toMatch(/has no default profiles/);
             expect(mockAddArtist).toHaveBeenCalledWith(RG, "Low", "/music");
         });
+    });
+});
+
+describe("POST /downloads — persisted fork authorization after v1.11 merge", () => {
+    it("rejects a normal user with album requests disabled before any lookup", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const response = await post(RG);
+        expect(response.status).toBe(403);
+        expect(response.body.permission).toBe("canRequestAlbums");
+        expect(mockJobCreate).not.toHaveBeenCalled();
+        expect(mockGetReleaseGroup).not.toHaveBeenCalled();
+    });
+
+    it("allows an explicitly enabled user to reach normal request validation", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        const response = await post("not-a-valid-mbid");
+        expect(response.status).toBe(400);
+        expect(mockPermissionUser).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: "user-1" },
+            select: { role: true, canRequestAlbums: true, canDownloadTracks: true },
+        }));
+    });
+
+    it("denies a deleted account and does not start downloads", async () => {
+        mockPermissionUser.mockResolvedValue(null);
+        const response = await post(RG);
+        expect(response.status).toBe(401);
+        expect(mockJobCreate).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when the current permission row cannot be loaded", async () => {
+        mockPermissionUser.mockRejectedValue(new Error("database unavailable"));
+        const response = await post(RG);
+        expect(response.status).toBe(500);
+        expect(mockJobCreate).not.toHaveBeenCalled();
     });
 });
