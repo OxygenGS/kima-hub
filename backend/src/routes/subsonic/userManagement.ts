@@ -16,6 +16,7 @@ userManagementRouter.all("/getUsers.view", wrap(async (req, res) => {
         select: {
             username: true,
             role: true,
+            canDownloadTracks: true,
         },
         orderBy: { username: "asc" },
     });
