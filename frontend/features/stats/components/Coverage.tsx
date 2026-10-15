@@ -6,6 +6,8 @@
  */
 
 import { percent } from "../format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useReveal } from "../useReveal";
 import { usePlaySlice } from "../usePlaySlice";
 import { Shuffle } from "lucide-react";
@@ -20,6 +22,8 @@ interface Row {
 }
 
 export function Coverage({ shelf }: { shelf: ShelfStats }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { ref, shown } = useReveal<HTMLDivElement>({ threshold: 0.3 });
     const { play, busy } = usePlaySlice();
     const rows: Row[] = [
@@ -57,9 +61,9 @@ export function Coverage({ shelf }: { shelf: ShelfStats }) {
                             </div>
 
                             <div className="flex flex-col gap-0.5">
-                                <dt className="t-label text-[var(--text-secondary)]">{row.label}</dt>
+                                <dt className="t-label text-[var(--text-secondary)]">{t(row.label)}</dt>
                                 <p className="t-meta">
-                                    {row.part.toLocaleString()} of {row.whole.toLocaleString()}
+                                    {row.part.toLocaleString()} {t("of")} {row.whole.toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -74,7 +78,7 @@ export function Coverage({ shelf }: { shelf: ShelfStats }) {
                         isLoading={busy === "never"}
                     >
                         {busy !== "never" && <Shuffle className="w-4 h-4" />}
-                        shuffle 40 unplayed
+                        {t("shuffle 40 unplayed")}
                     </Button>
                 </div>
             )}
