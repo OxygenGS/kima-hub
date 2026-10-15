@@ -321,3 +321,70 @@ describe('DELETE /share/:token -- revoke share link', () => {
         );
     });
 });
+
+
+describe('GET /share/:token -- public metadata projection', () => {
+    const app = makeApp();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (prisma.shareLink.findUnique as jest.Mock).mockResolvedValue(BASE_SHARE_LINK);
+    });
+
+    it('selects only public display fields for a shared track', async () => {
+        (prisma.track.findUnique as jest.Mock).mockResolvedValue({
+            id: 'track-id-1', title: 'Karma Police', duration: 261,
+            album: { title: 'OK Computer', coverUrl: 'native:albums/ok.jpg', artist: { name: 'Radiohead' } },
+        });
+        const res = await request(app).get('/share/valid-token-abc');
+        expect(res.status).toBe(200);
+        const args = (prisma.track.findUnique as jest.Mock).mock.calls[0][0];
+        expect(args).not.toHaveProperty('include');
+        expect(args.select).toEqual(expect.objectContaining({
+            id: true, title: true, duration: true,
+            album: { select: { title: true, coverUrl: true, artist: { select: { name: true } } } },
+        }));
+        expect(JSON.stringify(args.select)).not.toMatch(/filePath|userId|acoustidFingerprint|apiKey|tokenVersion/);
+    });
+
+    it('keeps playlist track art while excluding raw file and private playlist fields', async () => {
+        (prisma.shareLink.findUnique as jest.Mock).mockResolvedValue({
+            ...BASE_SHARE_LINK, entityType: 'playlist', entityId: 'playlist-1',
+        });
+        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
+            id: 'playlist-1', name: 'A mix', items: [], user: { username: 'sender' },
+        });
+        const res = await request(app).get('/share/valid-token-abc');
+        expect(res.status).toBe(200);
+        const select = (prisma.playlist.findUnique as jest.Mock).mock.calls[0][0].select;
+        expect(select).toEqual(expect.objectContaining({
+            id: true, name: true,
+            items: expect.objectContaining({
+                select: { track: { select: expect.objectContaining({ title: true, duration: true }) } },
+            }),
+        }));
+        expect(select.items.select.track.select.album.select.coverUrl).toBe(true);
+        expect(JSON.stringify(select)).not.toMatch(/filePath|userId|spotifyPlaylistUrl|acoustidFingerprint/);
+    });
+
+    it('restricts album metadata and its tracks to public display fields', async () => {
+        (prisma.shareLink.findUnique as jest.Mock).mockResolvedValue({
+            ...BASE_SHARE_LINK, entityType: 'album', entityId: 'album-1',
+        });
+        (prisma.album.findUnique as jest.Mock).mockResolvedValue({
+            id: 'album-1', title: 'OK Computer', coverUrl: 'native:albums/ok.jpg',
+            artist: { name: 'Radiohead' }, tracks: [],
+        });
+        const res = await request(app).get('/share/valid-token-abc');
+        expect(res.status).toBe(200);
+        const select = (prisma.album.findUnique as jest.Mock).mock.calls[0][0].select;
+        expect(select).toEqual(expect.objectContaining({
+            id: true, title: true, coverUrl: true,
+            artist: { select: { name: true } },
+            tracks: expect.objectContaining({
+                select: expect.objectContaining({ id: true, title: true, duration: true }),
+            }),
+        }));
+        expect(JSON.stringify(select)).not.toMatch(/filePath|userId|userCoverUrl|acoustidFingerprint/);
+    });
+});
