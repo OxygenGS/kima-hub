@@ -115,7 +115,7 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
                                 strokeWidth="0.7"
                                 role={dead ? undefined : "button"}
                                 tabIndex={dead ? undefined : 0}
-                                aria-label={dead ? undefined : `${tr("play (command)")} ${displayKey(label.toLowerCase())}, ${plays} ${tr(plays === 1 ? "play count" : "plays")}`}
+                                aria-label={dead ? undefined : `${tr("play (command)")} ${displayKey(label.toLowerCase())}, ${plays} ${tr(plays === 1 ? "play (count)" : "plays")}`}
                                 onPointerEnter={() => setHover({ name: label, plays })}
                                 onPointerLeave={() => setHover(null)}
                                 onFocus={() => setHover({ name: label, plays })}
@@ -202,9 +202,9 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
             <figcaption className="t-meta min-h-[2.5rem] max-w-[30ch]">
                 {hover
                     ? hover.plays > 0
-                        ? `${displayKey(hover.name.toLowerCase())}: ${hover.plays.toLocaleString()} ${tr(hover.plays === 1 ? "play count" : "plays")}`
+                        ? `${displayKey(hover.name.toLowerCase())}: ${hover.plays.toLocaleString()} ${tr(hover.plays === 1 ? "play (count)" : "plays")}`
                         : `${displayKey(hover.name.toLowerCase())}: ${tr("no plays")}`
-                    : `${tr("outer: major · inner: minor")} · ${total.toLocaleString()} ${tr(total === 1 ? "play count" : "plays")}`}
+                    : `${tr("outer: major · inner: minor")} · ${total.toLocaleString()} ${tr(total === 1 ? "play (count)" : "plays")}`}
             </figcaption>
         </figure>
     );

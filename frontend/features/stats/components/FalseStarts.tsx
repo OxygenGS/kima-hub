@@ -166,7 +166,7 @@ export function FalseStarts() {
                         </span>{" "}
                         {tr("for")}{" "}
                         <span className="text-[var(--text-primary)]">
-                            {audit.totalListens.toLocaleString()} {tr(audit.totalListens === 1 ? "play count" : "plays")}
+                            {audit.totalListens.toLocaleString()} {tr(audit.totalListens === 1 ? "play (count)" : "plays")}
                         </span>
                         {` · ${audit.duplicateRows.toLocaleString()} ${tr(audit.duplicateRows === 1 ? "is a duplicate" : "are duplicates")} ${tr("written mid-track · merging changes no play counts")}`}
                     </p>
@@ -219,7 +219,7 @@ export function FalseStarts() {
                                 </button>
                                 <span className="t-meta truncate">
                                     {picked.size > 0
-                                        ? `${picked.size} ${tr("selected")} · ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play count" : "plays")} ${tr("to remove")}`
+                                        ? `${picked.size} ${tr("selected")} · ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play (count)" : "plays")} ${tr("to remove")}`
                                         : `${all.length} ${tr(all.length === 1 ? "track" : "tracks")} ${tr("with skipped plays")}`}
                                 </span>
                             </>
@@ -248,7 +248,7 @@ export function FalseStarts() {
                                 ))
                                 : audit.tracks.slice(from, from + rows).map((t) => {
                                     const on = picked.has(t.trackId);
-                                    const plays = `${t.listens.toLocaleString()} ${tr(t.listens === 1 ? "play count" : "plays")}`;
+                                    const plays = `${t.listens.toLocaleString()} ${tr(t.listens === 1 ? "play (count)" : "plays")}`;
                                     const counts = `${t.skipped.toLocaleString()} ${tr("skipped")} · ${plays}${t.heard > 0 ? ` · ${t.heard} ${tr("confirmed")}` : ""}`;
                                     const rule = t.requiredSeconds == null
                                         ? `${clock(t.durationSeconds)} ${tr("long · too short to count")}`
@@ -344,7 +344,7 @@ export function FalseStarts() {
                             isLoading={busy}
                         >
                             {arming
-                                ? `${tr("delete")} ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play count" : "plays")}?`
+                                ? `${tr("delete")} ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play (count)" : "plays")}?`
                                 : `${tr("remove skipped plays")} (${picked.size} ${tr(picked.size === 1 ? "track" : "tracks")})`}
                         </Button>
 

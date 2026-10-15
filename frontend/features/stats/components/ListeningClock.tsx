@@ -162,7 +162,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                                         aria-label={
                                             n === 0
                                                 ? `${when(dow, hour)}: ${t("no plays")}`
-                                                : `${when(dow, hour)}: ${n} ${t(n === 1 ? "play count" : "plays")}`
+                                                : `${when(dow, hour)}: ${n} ${t(n === 1 ? "play (count)" : "plays")}`
                                         }
                                         aria-pressed={opened}
                                         onMouseEnter={() => { if (!open) setAt({ dow, hour }); }}
@@ -236,7 +236,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                             <span className="text-sm text-[var(--text-primary)]">
                                 {when(dow, hour)}
                             </span>
-                            <span className="t-meta shrink-0">{n} {t(n === 1 ? "play count" : "plays")}</span>
+                            <span className="t-meta shrink-0">{n} {t(n === 1 ? "play (count)" : "plays")}</span>
                         </button>
                     );
                 })}
@@ -254,7 +254,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                             <p className="t-meta">
                                 {shownCount === 0
                                     ? t("no plays")
-                                    : `${shownCount.toLocaleString()} ${t(shownCount === 1 ? "play count" : "plays")} · ${(
+                                    : `${shownCount.toLocaleString()} ${t(shownCount === 1 ? "play (count)" : "plays")} · ${(
                                           (shownCount / plays) * 100
                                       ).toFixed(1)}% ${t("of all plays")}`}
                                 {isPeak && !open && ` · ${t("busiest")}`}

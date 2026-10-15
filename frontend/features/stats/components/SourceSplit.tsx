@@ -85,7 +85,7 @@ export function SourceSplit({ listening }: { listening: ListeningStats }) {
 
             {keepRate !== null && (
                 <p className="t-meta max-w-[32ch]">
-                    {offered.toLocaleString()} {t("discover")} {offered === 1 ? t("play count") : t("plays")} ·{" "}
+                    {offered.toLocaleString()} {t("discover")} {offered === 1 ? t("play (count)") : t("plays")} ·{" "}
                     <span className="t-figure text-xs">{keepRate}%</span> {t("on albums you kept")}
                 </p>
             )}

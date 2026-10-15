@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("uses a natural singular play count in both interface languages", () => {
+        expect(translate("en", "play (count)")).toBe("play");
+        expect(translate("nl", "play (count)")).toBe("afspeelbeurt");
+        expect(translate("en", "plays")).toBe("plays");
+        expect(translate("nl", "plays")).toBe("afspeelbeurten");
+    });
+
     it("translates historical-play counts without touching music identifiers", () => {
         expect(translate("nl", "with skipped plays")).toBe("met overgeslagen afspeelbeurten");
         expect(translate("nl", "counts after")).toBe("telt mee na");

@@ -1268,6 +1268,7 @@ export const english = {
     "shortest": "shortest",
     "removed": "removed",
     "record": "record",
+    "play (count)": "play",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2539,6 +2540,7 @@ export const dutch: Record<TranslationKey, string> = {
     "shortest": "kortste",
     "removed": "verwijderd",
     "record": "registratie",
+    "play (count)": "afspeelbeurt",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
