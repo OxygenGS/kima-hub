@@ -133,7 +133,7 @@ const maxMbPerSecond: Record<"original" | "high" | "medium" | "low", number> = {
     low: 0.03,      // nominal 128 kbps
 };
 
-router.post("/tracks/:id/complete", async (req, res) => {
+router.post("/tracks/:id/complete", requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         const userId = req.user!.id;
         const trackId = req.params.id;
