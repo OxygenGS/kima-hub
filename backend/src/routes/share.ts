@@ -9,6 +9,7 @@ import fs from "fs";
 import { getLocalImagePath, getResizedImagePath } from "../services/imageStorage";
 import { getAudioStreamingService } from "../services/audioStreaming";
 import { config } from "../config";
+import { resolveWithinMusicRoot } from "./library/trackPath";
 
 const router = Router();
 
@@ -305,18 +306,26 @@ router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, r
             return res.status(404).json({ error: "Track file not found" });
         }
 
-        const musicPath = config.music.musicPath;
-        const resolvedMusicPath = path.resolve(musicPath);
-        const fullPath = path.resolve(resolvedMusicPath, track.filePath);
-
-        if (!fullPath.startsWith(resolvedMusicPath + path.sep)) {
+        // Stored file paths can contain traversal segments or point to a
+        // symlink escaping the music root. Compare canonical, existing paths
+        // before making this public stream available to an anonymous token.
+        const candidatePath = resolveWithinMusicRoot(track.filePath);
+        if (!candidatePath) {
             return res.status(403).json({ error: "Access denied" });
         }
-
+        let fullPath: string;
+        let realMusicRoot: string;
         try {
+            [fullPath, realMusicRoot] = await Promise.all([
+                fs.promises.realpath(candidatePath),
+                fs.promises.realpath(config.music.musicPath),
+            ]);
             await fs.promises.access(fullPath, fs.constants.R_OK);
         } catch {
             return res.status(404).json({ error: "Audio file not found" });
+        }
+        if (!fullPath.startsWith(realMusicRoot + path.sep)) {
+            return res.status(403).json({ error: "Access denied" });
         }
 
         // Deduplicate play count: only increment once per share+track within time window
