@@ -217,3 +217,7 @@ jobs:
         shell: bash
         timeout-minutes: 35
         run: bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Original v1.10 AIO image upgrade and independent rollback (disposable)
+        shell: bash
+        timeout-minutes: 35
+        run: bash .github/ci/aio-real-image-rehearsal.sh
