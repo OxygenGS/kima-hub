@@ -198,6 +198,92 @@ test.describe("Interface language", () => {
     });
 
 
+    test("reads official 1.11 and 1.10.1 release articles in Dutch without changing API decisions", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        const writes: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/whats-new/") && request.method() !== "GET") {
+                writes.push(request.url());
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "ci-release-viewer", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/whats-new/pending") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ releases: [
+                        {
+                            version: "1.10.1", title: "What counts as a play",
+                            summary: "Play counts now track what you've listened to, not what started loading. There's a one-off cleanup for the counts you've already got.",
+                            date: "2026-08-25",
+                            items: [{
+                                kind: "note", key: "plays.repair",
+                                title: "Clean up old play counts", summary: "Original English summary",
+                                body: "Original English cleanup explanation",
+                                links: [{ label: "Open the cleanup", href: "/stats#false-starts" }],
+                            }],
+                        },
+                        {
+                            version: "1.11.0", title: "Kima 1.11",
+                            summary: "Songs match on sound, feel and genre, there's a new vibe map, the enrichment engine is rebuilt, and Last.fm is gone.",
+                            date: "2026-10-12",
+                            note: { from: "Kevin", body: "Original English maintainer note" },
+                            items: [
+                                {
+                                    kind: "note", key: "vibe.engine",
+                                    title: "The new vibe engine", summary: "Original English engine summary",
+                                    body: "Original English engine explanation",
+                                    links: [{ label: "Open the vibe map", href: "/vibe" }],
+                                },
+                                {
+                                    kind: "choice", key: "gpu.accelerate",
+                                    title: "Use an NVIDIA graphics card", summary: "Original English GPU summary",
+                                    body: "Original English GPU explanation",
+                                    discloses: "Original English GPU disclosure",
+                                    defaultValue: false,
+                                },
+                            ],
+                        },
+                    ] }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+
+        await page.goto("/");
+        const modal = page.getByRole("dialog", { name: "Kima 1.11" });
+        await expect(modal).toBeVisible();
+        await expect(modal.getByText("Hé allemaal.")).toBeVisible();
+        await expect(modal.getByText("De nieuwe sfeer-engine", { exact: true })).toBeVisible();
+        await expect(modal.getByText("Oude afspeelbeurten opschonen", { exact: true })).toBeVisible();
+
+        await modal.locator('[data-item="vibe.engine"]').click();
+        await expect(modal.getByRole("heading", { name: "De nieuwe sfeer-engine" })).toBeVisible();
+        await expect(modal.getByText(/Voorheen matchte Kima nummers alleen op geluid/)).toBeVisible();
+        await expect(modal.getByRole("link", { name: "Open de sfeermap" })).toHaveAttribute("href", "/vibe");
+
+        await modal.getByRole("button", { name: "Wat is er nieuw" }).first().click();
+        await modal.locator('[data-item="gpu.accelerate"]').click();
+        await expect(modal.getByText(/Kima downloadt twaalf vastgepinde pakketten/)).toBeVisible();
+        await expect(modal.getByText(/geen gegevens uit jouw muziekbibliotheek/)).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Inschakelen" })).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Nee, bedankt" })).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(modal.getByRole("heading", { name: "Use an NVIDIA graphics card" })).toBeVisible();
+        await expect(modal.getByText("Original English GPU disclosure")).toBeVisible();
+        expect(writes).toEqual([]);
+    });
+
     test("localizes real release consent controls without answering or clearing anything", async ({ page }) => {
         await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         await page.route("**/api/**", async (route) => {
