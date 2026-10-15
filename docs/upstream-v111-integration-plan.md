@@ -21,6 +21,12 @@ The fresh AIO test verified fork database migrations/permissions/branding, loopb
 
 **This is not an upgrade or rollback certification.** Required before any release or production deployment: (1) original official v1.10 full-image to fork AIO upgrade with independent original-volume restore/rollback; (2) same for official v1.11 full image; (3) arm64 build/runtime validation; (4) full new-screen EN/NL, TV/mobile, security and accessibility review; (5) explicit separate human approvals for merge, publication and CT 101. Do not substitute a schema-only test for either full-image rehearsal. No workflow here should deploy or push a registry image.
 
+## Full-image upgrade verification (2026-10-15)
+
+GitHub Actions [38746212125](https://github.com/OxygenGS/kima-hub/actions/runs/38746212125) passed **7/7 jobs**, including the real amd64 AIO image build and the **complete original official v1.10.0 AND v1.11.0 image** migration rehearsals. Each starts the original pinned image, creates disposable credentials/music/playlist, snapshots the original full data volume cold, upgrades only an independent copy, verifies logins, playlist membership, music, encryption/session secrets and fork-specific permission defaults, then starts the original image against a separately restored pre-upgrade snapshot. Both independent rollback checks passed. No production host/data, registry pushes or releases were involved.
+
+**Boundaries:** synthetic fixture coverage is not a guarantee for unknown real data. ARM64 build/runtime, additional real-world datasets, manual accessibility/mobile/TV and complete v1.11 localization and download-route security inventory remain separate release gates.
+
 ## Material upstream changes to reconcile
 
 - **44 Prisma migrations** between 1.10 and 1.11; verify their ordering, existing fork permission/branding migrations, schema conflicts, dropped API fields, and data preservation with copied volumes.
