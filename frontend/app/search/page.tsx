@@ -112,11 +112,11 @@ export default function SearchPage() {
                     <div className="mb-12 text-center animate-rise">
                         <div className="inline-flex items-center gap-3 mb-4 text-brand">
                             <span className="text-sm font-semibold">
-                                Discovery Engine
+                                {t("Discovery Engine")}
                             </span>
                         </div>
                         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-white leading-tight">
-                            Find Your Sound
+                            {t("Find Your Sound")}
                         </h1>
                         <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
                             Search your library, discover new artists, or tap
