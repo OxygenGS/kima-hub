@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("localizes anonymous share player errors without translating music data", () => {
+        expect(translate("nl", "This link has expired")).toBe("Deze link is verlopen");
+        expect(translate("nl", "Share link not found")).toBe("Deellink niet gevonden");
+        expect(translate("nl", "Playback position")).toBe("Afspeelpositie");
+        expect(translate("nl", "Previous track")).toBe("Vorig nummer");
+        expect(translate("nl", "Powered by Kima")).toBe("Mogelijk gemaakt door Kima");
+        expect(translate("en", "This link has expired")).toBe("This link has expired");
+        expect(translate("nl", "CI Shared Track Title")).toBe("CI Shared Track Title");
+    });
+
     it("uses a natural singular play count in both interface languages", () => {
         expect(translate("en", "play (count)")).toBe("play");
         expect(translate("nl", "play (count)")).toBe("afspeelbeurt");

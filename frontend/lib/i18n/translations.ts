@@ -1269,6 +1269,18 @@ export const english = {
     "removed": "removed",
     "record": "record",
     "play (count)": "play",
+    "Loading": "Loading",
+    "This link has expired": "This link has expired",
+    "This link has reached its play limit": "This link has reached its play limit",
+    "Share link not found": "Share link not found",
+    "Ask whoever shared it for a new link.": "Ask whoever shared it for a new link.",
+    "Playback failed. The link may have expired or reached its play limit.": "Playback failed. The link may have expired or reached its play limit.",
+    "This audio format is not supported by your browser.": "This audio format is not supported by your browser.",
+    "Playback error occurred.": "Playback error occurred.",
+    "Unknown Track": "Unknown Track",
+    "Shared Content": "Shared Content",
+    "Powered by Kima": "Powered by Kima",
+    "Playback position": "Playback position",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2541,6 +2553,18 @@ export const dutch: Record<TranslationKey, string> = {
     "removed": "verwijderd",
     "record": "registratie",
     "play (count)": "afspeelbeurt",
+    "Loading": "Bezig met laden",
+    "This link has expired": "Deze link is verlopen",
+    "This link has reached its play limit": "Deze link heeft het maximumaantal afspeelbeurten bereikt",
+    "Share link not found": "Deellink niet gevonden",
+    "Ask whoever shared it for a new link.": "Vraag degene die de muziek deelde om een nieuwe link.",
+    "Playback failed. The link may have expired or reached its play limit.": "Afspelen mislukt. De link is mogelijk verlopen of heeft zijn afspeellimiet bereikt.",
+    "This audio format is not supported by your browser.": "Je browser ondersteunt dit audioformaat niet.",
+    "Playback error occurred.": "Er is een afspeelfout opgetreden.",
+    "Unknown Track": "Onbekend nummer",
+    "Shared Content": "Gedeelde muziek",
+    "Powered by Kima": "Mogelijk gemaakt door Kima",
+    "Playback position": "Afspeelpositie",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

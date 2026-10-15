@@ -15,6 +15,8 @@ import {
 import { formatTime, formatDuration } from "@/lib/format";
 import { cascadeStyle } from "@/lib/motion";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
 interface ShareTrack {
@@ -64,7 +66,7 @@ function getCoverUrl(shareData: ShareData): string | null {
     return null;
 }
 
-function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
+function getTracksFromEntity(shareData: ShareData, t: (label: string) => string): ShareTrack[] {
     const entity = shareData.entity;
     if (shareData.entityType === "playlist") {
         return entity.items?.map((item) => item.track).filter(Boolean) || [];
@@ -76,7 +78,7 @@ function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
         return [
             {
                 id: entity.id,
-                title: entity.title || entity.name || "Unknown Track",
+                title: entity.title || entity.name || t("Unknown Track"),
                 duration: entity.duration || 0,
                 album: entity.album,
             },
@@ -85,25 +87,27 @@ function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
     return [];
 }
 
-function getEntityTitle(shareData: ShareData): string {
-    return shareData.entity.name || shareData.entity.title || "Shared Content";
+function getEntityTitle(shareData: ShareData, t: (label: string) => string): string {
+    return shareData.entity.name || shareData.entity.title || t("Shared Content");
 }
 
-function getEntitySubtitle(shareData: ShareData): string {
+function getEntitySubtitle(shareData: ShareData, t: (label: string) => string): string {
     if (shareData.entityType === "playlist") {
         const count = shareData.entity.items?.length || 0;
-        return `${count} track${count !== 1 ? "s" : ""}`;
+        return `${count} ${t(count === 1 ? "track" : "tracks")}`;
     }
     if (shareData.entityType === "album") {
-        return shareData.entity.artist?.name || "Unknown Artist";
+        return shareData.entity.artist?.name || t("Unknown Artist");
     }
     if (shareData.entityType === "track") {
-        return shareData.entity.album?.artist?.name || "Unknown Artist";
+        return shareData.entity.album?.artist?.name || t("Unknown Artist");
     }
     return "";
 }
 
 export default function SharePageClient() {
+    const { locale } = useLanguage();
+    const t = useCallback((label: string) => translate(locale, label), [locale]);
     const params = useParams();
     const token = params.token as string;
 
@@ -146,7 +150,7 @@ export default function SharePageClient() {
         };
     }, []);
 
-    const tracks = useMemo(() => data ? getTracksFromEntity(data) : [], [data]);
+    const tracks = useMemo(() => data ? getTracksFromEntity(data, t) : [], [data, t]);
     const currentTrack = tracks[currentTrackIndex];
 
     const getStreamUrl = useCallback(
@@ -256,7 +260,7 @@ export default function SharePageClient() {
                 <div className="flex flex-col items-center gap-3">
                     <GradientSpinner size="md" />
                     <p className="text-xs text-[var(--text-muted)]">
-                        Loading
+                        {t("Loading")}
                     </p>
                 </div>
             </div>
@@ -272,13 +276,13 @@ export default function SharePageClient() {
                     </div>
                     <h1 className="text-xl font-bold tracking-tight text-white">
                         {error?.includes("expired")
-                            ? "This link has expired"
+                            ? t("This link has expired")
                             : error?.includes("limit")
-                              ? "This link has reached its play limit"
-                              : "Share link not found"}
+                              ? t("This link has reached its play limit")
+                              : t("Share link not found")}
                     </h1>
                     <p className="mt-2 text-sm text-[var(--text-muted)]">
-                        Ask whoever shared it for a new link.
+                        {t("Ask whoever shared it for a new link.")}
                     </p>
                 </div>
             </div>
@@ -320,10 +324,10 @@ export default function SharePageClient() {
 
                     <div className="animate-rise text-center mb-6" style={{ "--i": 1 } as CSSProperties}>
                         <h1 className="text-xl font-bold text-white tracking-tight mb-1 line-clamp-2">
-                            {getEntityTitle(data)}
+                            {getEntityTitle(data, t)}
                         </h1>
                         <p className="text-sm text-[var(--text-muted)]">
-                            {getEntitySubtitle(data)}
+                            {getEntitySubtitle(data, t)}
                             {tracks.length > 1 && totalDuration > 0 && (
                                 <span className="text-[var(--text-muted)]"> -- {formatDuration(totalDuration)}</span>
                             )}
@@ -334,7 +338,7 @@ export default function SharePageClient() {
                         <div className="mb-8">
                             {playbackError && (
                                 <p className="text-xs text-danger-light/70 text-center mb-3">
-                                    {playbackError}
+                                    {t(playbackError)}
                                 </p>
                             )}
 
@@ -342,6 +346,25 @@ export default function SharePageClient() {
                                 ref={progressBarRef}
                                 className="h-1 bg-white/[0.08] rounded-full cursor-pointer mb-2 group"
                                 onClick={handleProgressClick}
+                                role="slider"
+                                tabIndex={0}
+                                aria-label={t("Playback position")}
+                                aria-valuemin={0}
+                                aria-valuemax={Number.isFinite(duration) ? Math.max(0, Math.floor(duration)) : 0}
+                                aria-valuenow={Number.isFinite(progress) ? Math.max(0, Math.floor(progress)) : 0}
+                                onKeyDown={(event) => {
+                                    const audio = audioRef.current;
+                                    if (!audio || !Number.isFinite(audio.duration)) return;
+                                    const next = event.key === "ArrowRight" ? audio.currentTime + 5
+                                        : event.key === "ArrowLeft" ? audio.currentTime - 5
+                                        : event.key === "Home" ? 0
+                                        : event.key === "End" ? audio.duration
+                                        : null;
+                                    if (next === null) return;
+                                    event.preventDefault();
+                                    audio.currentTime = Math.max(0, Math.min(audio.duration, next));
+                                    setProgress(audio.currentTime);
+                                }}
                             >
                                 <div
                                     className="h-full bg-brand rounded-full transition-[width] duration-100"
@@ -359,6 +382,7 @@ export default function SharePageClient() {
                             <div className="flex items-center justify-center gap-6">
                                 {tracks.length > 1 && (
                                     <button
+                                        aria-label={t("Previous track")}
                                         onClick={prevTrack}
                                         className="text-[var(--text-muted)] hover:text-white/70 transition-colors"
                                     >
@@ -367,6 +391,7 @@ export default function SharePageClient() {
                                 )}
 
                                 <button
+                                    aria-label={t(isPlaying ? "Pause" : "Play")}
                                     onClick={togglePlay}
                                     className="w-12 h-12 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform"
                                 >
@@ -379,6 +404,7 @@ export default function SharePageClient() {
 
                                 {tracks.length > 1 && (
                                     <button
+                                        aria-label={t("Next track")}
                                         onClick={nextTrack}
                                         disabled={currentTrackIndex >= tracks.length - 1}
                                         className="text-[var(--text-muted)] hover:text-white/70 transition-colors disabled:opacity-20"
@@ -390,6 +416,7 @@ export default function SharePageClient() {
 
                             <div className="flex items-center justify-center gap-2 mt-4">
                                 <button
+                                    aria-label={t(isMuted || volume === 0 ? "Unmute" : "Mute")}
                                     onClick={toggleMute}
                                     className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                                 >
@@ -401,6 +428,7 @@ export default function SharePageClient() {
                                 </button>
                                 <input
                                     type="range"
+                                    aria-label={t("Volume")}
                                     min="0"
                                     max="1"
                                     step="0.01"
@@ -504,7 +532,7 @@ export default function SharePageClient() {
             <div className="px-4 py-6">
                 <div className="max-w-lg mx-auto flex items-center justify-center gap-3">
                     <span className="text-xs text-white/10">
-                        Powered by Kima
+                        {t("Powered by Kima")}
                     </span>
                     <span className="text-white/[0.06]">|</span>
                     <a

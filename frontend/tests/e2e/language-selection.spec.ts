@@ -198,6 +198,51 @@ test.describe("Interface language", () => {
     });
 
 
+    test("translates a public share player and expired-link error without a login", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.route("**/api/share/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            const expired = pathname === "/api/share/expired-ci-share";
+            await route.fulfill({
+                status: expired ? 410 : 200,
+                contentType: "application/json",
+                body: JSON.stringify(expired
+                    ? { error: "Share link has expired" }
+                    : {
+                        entityType: "playlist",
+                        entity: {
+                            id: "share-playlist-ci", name: "CI Shared Album Name",
+                            items: [
+                                { track: { id: "one", title: "CI Original Track Title", duration: 180,
+                                    album: { title: "CI Original Album", artist: { name: "CI Original Artist" } } } },
+                                { track: { id: "two", title: "Second Original Track", duration: 150,
+                                    album: { title: "CI Original Album", artist: { name: "CI Original Artist" } } } },
+                            ],
+                        },
+                        createdAt: "2025-01-01T00:00:00Z",
+                    }),
+            });
+        });
+
+        await page.goto("/share/public-ci-share");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByRole("heading", { name: "CI Shared Album Name" })).toBeVisible();
+        await expect(page.getByText("CI Original Track Title", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Afspelen" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Vorig nummer" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Volgend nummer" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Afspeelpositie" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Volume" })).toBeVisible();
+        await page.goto("/share/expired-ci-share");
+        await expect(page.getByRole("heading", { name: "Deze link is verlopen" })).toBeVisible();
+        await expect(page.getByText("Vraag degene die de muziek deelde om een nieuwe link.")).toBeVisible();
+
+        await page.evaluate(() => localStorage.setItem("kima-hub-language", "en"));
+        await page.reload();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
+    });
+
     test("localizes the new v1.11 Stats page without rewriting its period identifiers", async ({ page }) => {
         const requestedPeriods: string[] = [];
         await page.route("**/api/**", async (route) => {
