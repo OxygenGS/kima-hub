@@ -557,8 +557,9 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     gosu postgres $PG_BIN/initdb -D /data/postgres
 
     # Configure PostgreSQL
-    echo "host all all 0.0.0.0/0 md5" >> /data/postgres/pg_hba.conf
-    echo "listen_addresses='*'" >> /data/postgres/postgresql.conf
+    echo "host all all 127.0.0.1/32 scram-sha-256" >> /data/postgres/pg_hba.conf
+    echo "host all all ::1/128 scram-sha-256" >> /data/postgres/pg_hba.conf
+    echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
 
 # Start PostgreSQL temporarily to create database and user
