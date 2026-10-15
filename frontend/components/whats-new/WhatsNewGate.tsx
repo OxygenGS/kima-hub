@@ -17,6 +17,7 @@ import { MoodMixChoice } from "./MoodMixChoice";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
+import { localizeReleaseItem } from "@/lib/i18n/release-copy";
 
 // One pending fetch per app session, shared across remounts (the layout switching
 // between phone, desktop and TV), so a remount neither refetches nor replaces the
@@ -113,7 +114,9 @@ export function WhatsNewGate() {
     }, [deferKey, locale]);
 
     if (queue.length === 0 || deferred) return null;
-    const wipe = queue.flatMap((r) => r.items).find((i) => i.kind === "action" && i.run === "wipeEnrichment");
+    const rawWipe = queue.flatMap((r) => r.items).find((i) => i.kind === "action" && i.run === "wipeEnrichment");
+    const wipeVersion = rawWipe && queue.find((r) => r.items.some((i) => i.key === rawWipe.key))?.version;
+    const wipe = rawWipe && wipeVersion ? localizeReleaseItem(wipeVersion, rawWipe, locale) : rawWipe;
 
     const runWipe = async () => {
         if (!wipe) return;

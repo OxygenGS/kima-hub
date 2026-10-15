@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
+import { localizeRelease } from "@/lib/i18n/release-copy";
 
 interface ReleaseLink {
     label: string;
@@ -89,9 +90,12 @@ export function WhatsNewWindow({
     const bodyRef = useRef<HTMLDivElement>(null);
     const lastOpened = useRef<string | null>(null);
 
-    const release = releases[releases.length - 1];
-    const older = releases.slice(0, -1).reverse();
-    const items = releases.flatMap((r) => r.items);
+    // The server remains the authority for release versions, item keys and
+    // decisions. Localize a copy of the display fields only.
+    const localizedReleases = releases.map((r) => localizeRelease(r, locale));
+    const release = localizedReleases[localizedReleases.length - 1];
+    const older = localizedReleases.slice(0, -1).reverse();
+    const items = localizedReleases.flatMap((r) => r.items);
     const versionOf = (key: string) => releases.find((r) => r.items.some((i) => i.key === key))?.version ?? release.version;
     const shortVersion = (version: string) => version.split(".").slice(0, 2).join(".");
     const opened = items.find((i) => i.key === openKey) ?? null;
