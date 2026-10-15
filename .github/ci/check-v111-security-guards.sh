@@ -22,6 +22,8 @@ require_text backend/src/routes/share.ts 'streamFileWithRangeSupport(req, res, f
 require_text backend/src/routes/share.ts 'fs.promises.realpath(candidatePath)' "Public share stream resolves actual filesystem target"
 require_text backend/src/routes/share.ts 'fullPath.startsWith(realMusicRoot + path.sep)' "Public audio realpath stays within actual music root"
 require_text backend/src/routes/share.ts 'select: sharedTrackSelect' "Anonymous share track response uses a safe projection"
+require_text backend/src/routes/share.ts 'getCanonicalCoverFilePath(resizedPath)' "Tokened resized cover uses physical covers-root containment"
+require_text backend/src/services/imageStorage.ts 'fs.realpathSync(filePath)' "Native image access checks canonical filesystem targets"
 require_text backend/src/routes/share.ts 'await shareContainsCover(shareLink, coverArtId)' "Public share cover access bound to actual shared content"
 require_text backend/src/routes/share.ts 'res.setHeader("Cache-Control", "private, no-store")' "Tokened share covers must not cache past revocation"
 require_text backend/src/routes/subsonic/mappers.ts 'subsonicError(req, res, SubsonicError.GENERIC, "Internal server error")' "Subsonic internal errors do not expose diagnostics"
