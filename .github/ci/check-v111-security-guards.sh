@@ -19,6 +19,7 @@ require_text backend/src/routes/downloads.ts 'router.post("/", requireMusicPermi
 require_text backend/src/routes/discover.ts 'router.post("/generate", requireMusicPermission("canRequestAlbums")' "Discover generate guard"
 require_text backend/src/routes/discover.ts 'router.post("/retry-unavailable", requireMusicPermission("canRequestAlbums")' "Discover retry guard"
 require_text backend/src/routes/soulseek.ts 'requireMusicPermission("canDownloadTracks")' "Soulseek file download guard"
+require_text backend/src/routes/releases.ts 'router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums")' "Release Radar album download guard"
 require_text backend/src/index.ts 'app.use("/api/branding"' "Instance branding API mounted"
 require_text frontend/app/layout.tsx '<LanguageProvider>' "EN/NL browser language provider mounted"
 require_text frontend/app/layout.tsx '<BrandingProvider>' "Instance branding provider mounted"
