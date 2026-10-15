@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("translates historical-play counts without touching music identifiers", () => {
+        expect(translate("nl", "with skipped plays")).toBe("met overgeslagen afspeelbeurten");
+        expect(translate("nl", "counts after")).toBe("telt mee na");
+        expect(translate("nl", "records")).toBe("registraties");
+        expect(translate("nl", "merge")).toBe("samenvoegen");
+        expect(translate("en", "counts after")).toBe("counts after");
+    });
+
     it("keeps history cleanup warnings and key-wheel labels understandable in Dutch", () => {
         expect(translate("nl", "remove deletes the skipped plays and cannot be undone")).toContain("definitief");
         expect(translate("nl", "ignore keeps all plays and stops flagging the track · music files are never touched")).toContain("muziekbestanden");

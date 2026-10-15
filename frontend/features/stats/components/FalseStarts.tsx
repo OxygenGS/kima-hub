@@ -162,23 +162,23 @@ export function FalseStarts() {
                 <div className="flex flex-col gap-3 items-start">
                     <p className="t-body max-w-[58ch]">
                         <span className="text-[var(--text-primary)]">
-                            {audit.totalRows.toLocaleString()} records
+                            {audit.totalRows.toLocaleString()} {tr("records")}
                         </span>{" "}
-                        for{" "}
+                        {tr("for")}{" "}
                         <span className="text-[var(--text-primary)]">
-                            {audit.totalListens.toLocaleString()} {audit.totalListens === 1 ? "play" : "plays"}
+                            {audit.totalListens.toLocaleString()} {tr(audit.totalListens === 1 ? "play count" : "plays")}
                         </span>
-                        {` · ${audit.duplicateRows.toLocaleString()} ${audit.duplicateRows === 1 ? "is a duplicate" : "are duplicates"} written mid-track · merging changes no play counts`}
+                        {` · ${audit.duplicateRows.toLocaleString()} ${tr(audit.duplicateRows === 1 ? "is a duplicate" : "are duplicates")} ${tr("written mid-track · merging changes no play counts")}`}
                     </p>
                     <Button
                         onClick={() =>
                             act("collapse", [], (r) =>
-                                `merged ${(r.removed ?? 0).toLocaleString()} ${(r.removed ?? 0) === 1 ? "duplicate" : "duplicates"}`,
+                                `${tr("merged")} ${(r.removed ?? 0).toLocaleString()} ${tr((r.removed ?? 0) === 1 ? "duplicate" : "duplicates")}`,
                             )
                         }
                         isLoading={busy}
                     >
-                        merge {audit.collapsibleRows.toLocaleString()} {audit.collapsibleRows === 1 ? "duplicate" : "duplicates"}
+                        {tr("merge")} {audit.collapsibleRows.toLocaleString()} {tr(audit.collapsibleRows === 1 ? "duplicate" : "duplicates")}
                     </Button>
                 </div>
             )}
@@ -219,8 +219,8 @@ export function FalseStarts() {
                                 </button>
                                 <span className="t-meta truncate">
                                     {picked.size > 0
-                                        ? `${picked.size} selected · ${pickedStarts.toLocaleString()} ${pickedStarts === 1 ? "play" : "plays"} to remove`
-                                        : `${all.length} ${all.length === 1 ? "track" : "tracks"} with skipped plays`}
+                                        ? `${picked.size} ${tr("selected")} · ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play count" : "plays")} ${tr("to remove")}`
+                                        : `${all.length} ${tr(all.length === 1 ? "track" : "tracks")} ${tr("with skipped plays")}`}
                                 </span>
                             </>
                         )}
@@ -248,13 +248,13 @@ export function FalseStarts() {
                                 ))
                                 : audit.tracks.slice(from, from + rows).map((t) => {
                                     const on = picked.has(t.trackId);
-                                    const plays = `${t.listens.toLocaleString()} ${t.listens === 1 ? "play" : "plays"}`;
-                                    const counts = `${t.skipped.toLocaleString()} skipped · ${plays}${t.heard > 0 ? ` · ${t.heard} confirmed` : ""}`;
+                                    const plays = `${t.listens.toLocaleString()} ${tr(t.listens === 1 ? "play count" : "plays")}`;
+                                    const counts = `${t.skipped.toLocaleString()} ${tr("skipped")} · ${plays}${t.heard > 0 ? ` · ${t.heard} ${tr("confirmed")}` : ""}`;
                                     const rule = t.requiredSeconds == null
-                                        ? `${clock(t.durationSeconds)} long · too short to count`
+                                        ? `${clock(t.durationSeconds)} ${tr("long · too short to count")}`
                                         : t.shortestRunSeconds == null
-                                          ? `counts after ${clock(t.requiredSeconds)}`
-                                          : `shortest ${clock(t.shortestRunSeconds)} · counts after ${clock(t.requiredSeconds)}`;
+                                          ? `${tr("counts after")} ${clock(t.requiredSeconds)}`
+                                          : `${tr("shortest")} ${clock(t.shortestRunSeconds)} · ${tr("counts after")} ${clock(t.requiredSeconds)}`;
                                     return (
                                         <li key={t.trackId}>
                                             <label className="flex items-center gap-4 py-3 cursor-pointer">
@@ -279,9 +279,9 @@ export function FalseStarts() {
                                                 </span>
                                                 <span className="min-w-0 max-w-[55%] text-right" title={`${counts}. ${rule}`.toLowerCase()}>
                                                     <span className="block truncate t-meta text-[var(--text-muted)]">
-                                                        <span className="text-brand">{t.skipped.toLocaleString()} skipped</span>
+                                                        <span className="text-brand">{t.skipped.toLocaleString()} {tr("skipped")}</span>
                                                         {` · ${plays}`}
-                                                        {t.heard > 0 && ` · ${t.heard} confirmed`}
+                                                        {t.heard > 0 && ` · ${t.heard} ${tr("confirmed")}`}
                                                     </span>
                                                     <span className="block truncate t-meta">{rule}</span>
                                                 </span>
@@ -306,7 +306,7 @@ export function FalseStarts() {
                         {pages > 1 && (
                             <div className="flex items-center gap-1">
                                 <span className="t-meta mr-2">
-                                    {(from + 1).toLocaleString()}–{Math.min(from + rows, listing).toLocaleString()} of {listing.toLocaleString()}
+                                    {(from + 1).toLocaleString()}–{Math.min(from + rows, listing).toLocaleString()} {tr("of")} {listing.toLocaleString()}
                                 </span>
                                 <PageButton label={tr("previous page")} disabled={at === 0} onClick={() => setPage(at - 1)}>
                                     <ChevronLeft className="w-4 h-4" />
@@ -334,9 +334,9 @@ export function FalseStarts() {
                             onClick={() =>
                                 arming
                                     ? act("remove", [...picked], (r) =>
-                                          `removed ${(r.removed ?? 0).toLocaleString()} ${(r.removed ?? 0) === 1 ? "record" : "records"} from ${
+                                          `${tr("removed")} ${(r.removed ?? 0).toLocaleString()} ${tr((r.removed ?? 0) === 1 ? "record" : "records")} ${tr("from")} ${
                                               r.tracks ?? 0
-                                          } ${(r.tracks ?? 0) === 1 ? "track" : "tracks"}`,
+                                          } ${tr((r.tracks ?? 0) === 1 ? "track" : "tracks")}`,
                                       )
                                     : setArming(true)
                             }
@@ -352,7 +352,7 @@ export function FalseStarts() {
                             variant="ghost"
                             onClick={() =>
                                 act("ignore", [...picked], (r) =>
-                                    `ignored ${r.ignored ?? 0} ${(r.ignored ?? 0) === 1 ? "track" : "tracks"}`,
+                                    `${tr("ignored")} ${r.ignored ?? 0} ${tr((r.ignored ?? 0) === 1 ? "track" : "tracks")}`,
                                 )
                             }
                             disabled={busy}
