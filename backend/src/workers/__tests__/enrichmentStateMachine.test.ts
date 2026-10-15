@@ -1,13 +1,7 @@
 /**
- * Enrichment State Machine Tests
- *
- * Tests the enrichment cycle control flow: stop/pause/resume/re-run sequences,
- * stop persistence, crash recovery, and state sync edge cases.
- *
- * Mocks Prisma, Redis, BullMQ, and all external services. Exercises real
- * control flow logic in unifiedEnrichment.ts.
- *
- * Run with: npx jest enrichmentStateMachine.test.ts --no-coverage
+ * The enrichment cycle's controls (stop, pause, resume, re-run), stop
+ * persistence and state sync, plus the per-track stage queue. Prisma, Redis,
+ * BullMQ and services are mocked; the control flow in unifiedEnrichment.ts is real.
  */
 
 // ── Mocks (must be before imports) ──────────────────────────────────
@@ -18,6 +12,11 @@ const mockInitializeState = jest.fn().mockResolvedValue({});
 const mockClear = jest.fn().mockResolvedValue(undefined);
 const mockDetectHang = jest.fn().mockResolvedValue(false);
 const mockPublishToChannel = jest.fn().mockResolvedValue(undefined);
+const mockClearGate = jest.fn().mockResolvedValue(undefined);
+
+const mockMarkFailed = jest.fn().mockResolvedValue(undefined);
+const mockWaitForStatus = jest.fn().mockImplementation((statuses, _timeoutMs) =>
+    Promise.resolve(statuses?.[0] ?? "running"));
 
 jest.mock("../../services/enrichmentState", () => ({
     enrichmentStateService: {
@@ -26,8 +25,10 @@ jest.mock("../../services/enrichmentState", () => ({
         initializeState: mockInitializeState,
         clear: mockClear,
         detectHang: mockDetectHang,
-        clearGate: jest.fn().mockResolvedValue(undefined),
+        clearGate: mockClearGate,
         publishToChannel: mockPublishToChannel,
+        markFailed: mockMarkFailed,
+        waitForStatus: mockWaitForStatus,
     },
 }));
 
@@ -37,33 +38,19 @@ jest.mock("../../services/enrichmentFailureService", () => ({
         cleanupOldResolved: jest.fn().mockResolvedValue(0),
         recordFailure: jest.fn().mockResolvedValue({}),
         resolveByEntity: jest.fn().mockResolvedValue(true),
-        clearFailure: jest.fn().mockResolvedValue(true),
-        clearAllFailures: jest.fn().mockResolvedValue(0),
-    },
-}));
-
-jest.mock("../../services/audioAnalysisCleanup", () => ({
-    audioAnalysisCleanupService: {
-        cleanupStaleProcessing: jest.fn().mockResolvedValue({ reset: 0, permanentlyFailed: 0, recovered: 0 }),
-        resetCircuitBreaker: jest.fn(),
-        isCircuitOpen: jest.fn().mockReturnValue(false),
     },
 }));
 
 jest.mock("../../services/featureDetection", () => ({
     featureDetection: {
         getFeatures: jest.fn().mockResolvedValue({
-            vibeEmbeddings: false,
+            vibeEmbeddings: true,
             podcastSupport: false,
+            fpcalc: true,
         }),
     },
 }));
 
-jest.mock("../../services/lastfm", () => ({
-    lastFmService: {
-        getTrackTags: jest.fn().mockResolvedValue([]),
-    },
-}));
 
 const mockRedisPublish = jest.fn().mockResolvedValue(1);
 const mockRedisQuit = jest.fn().mockResolvedValue(undefined);
@@ -73,6 +60,7 @@ const mockRedisSet = jest.fn().mockResolvedValue("OK");
 const mockRedisRpush = jest.fn().mockResolvedValue(1);
 const mockRedisLlen = jest.fn().mockResolvedValue(0);
 const mockRedisDel = jest.fn().mockResolvedValue(1);
+const mockRedisGet = jest.fn().mockResolvedValue(null);
 
 jest.mock("ioredis", () => {
     return jest.fn().mockImplementation(() => ({
@@ -84,6 +72,8 @@ jest.mock("ioredis", () => {
         rpush: mockRedisRpush,
         llen: mockRedisLlen,
         del: mockRedisDel,
+        get: mockRedisGet,
+        disconnect: jest.fn(),
         status: "ready",
     }));
 });
@@ -96,13 +86,21 @@ const mockQueueAdd = jest.fn().mockResolvedValue({ id: "job-1" });
 const mockQueueClean = jest.fn().mockResolvedValue([]);
 const mockQueuePause = jest.fn().mockResolvedValue(undefined);
 const mockQueueResume = jest.fn().mockResolvedValue(undefined);
+const mockQueueGetJob = jest.fn().mockResolvedValue(null);
 const mockQueueGetJobCounts = jest.fn().mockResolvedValue({ active: 0, waiting: 0, completed: 0, failed: 0 });
 
 jest.mock("../enrichmentQueues", () => ({
-    artistQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
-    trackQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
-    vibeQueue: { add: mockQueueAdd, clean: mockQueueClean, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
-    podcastQueue: { add: mockQueueAdd, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
+    QUEUE_NAMES: {
+        ARTISTS: "enrichment-artists",
+        TRACKS: "enrichment-tracks",
+        VIBE: "enrichment-vibe",
+        PODCASTS: "enrichment-podcasts",
+    },
+    artistQueue: { add: mockQueueAdd, getJob: mockQueueGetJob, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
+    trackQueue: { add: mockQueueAdd, getJob: mockQueueGetJob, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
+    vibeQueue: { add: mockQueueAdd, clean: mockQueueClean, getJob: mockQueueGetJob, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
+    podcastQueue: { add: mockQueueAdd, getJob: mockQueueGetJob, pause: mockQueuePause, resume: mockQueueResume, getJobCounts: mockQueueGetJobCounts },
+    createWorkerConnection: () => ({ host: "localhost", port: 6379 }),
     closeEnrichmentQueues: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -128,7 +126,7 @@ const mockPrismaArtistUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
 const mockPrismaTrackFindMany = jest.fn().mockResolvedValue([]);
 const mockPrismaTrackUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
 const mockPrismaTrackCount = jest.fn().mockResolvedValue(0);
-const mockPrismaQueryRaw = jest.fn().mockResolvedValue([]);
+const mockQueryRaw = jest.fn();
 
 jest.mock("../../utils/db", () => ({
     prisma: {
@@ -144,6 +142,13 @@ jest.mock("../../utils/db", () => ({
             count: mockPrismaTrackCount,
             groupBy: jest.fn().mockResolvedValue([]),
         },
+        trackStage: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+            count: jest.fn().mockResolvedValue(0),
+        },
+        sourceAttempt: {
+            deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        },
         podcast: {
             findMany: jest.fn().mockResolvedValue([]),
             count: jest.fn().mockResolvedValue(0),
@@ -151,9 +156,18 @@ jest.mock("../../utils/db", () => ({
         enrichmentFailure: {
             findMany: jest.fn().mockResolvedValue([]),
         },
-        $queryRaw: mockPrismaQueryRaw,
+        notification: {
+            findMany: jest.fn().mockResolvedValue([]),
+        },
+        $queryRaw: mockQueryRaw,
+        $queryRawUnsafe: mockQueryRaw,
         $executeRaw: jest.fn().mockResolvedValue(0),
+        $executeRawUnsafe: jest.fn().mockResolvedValue(1),
     },
+}));
+
+jest.mock("../../utils/systemSettings", () => ({
+    getSystemSettings: jest.fn().mockResolvedValue({ audioAnalyzerWorkers: 2, clapWorkers: 2 }),
 }));
 
 // Silence logger during tests
@@ -170,23 +184,20 @@ jest.mock("../../utils/logger", () => ({
 
 import {
     triggerEnrichmentNow,
-    reRunArtistsOnly,
-    reRunMoodTagsOnly,
-    reRunAudioAnalysisOnly,
-    runFullEnrichment,
+    startEnrichmentNow,
     startUnifiedEnrichmentWorker,
+    executeAudioPhase,
+    executeVibePhase,
+    executeIdentificationPhase,
+    getEnrichmentProgress,
+    invalidateEnrichmentProgress,
 } from "../unifiedEnrichment";
 
 // ── Test helpers ────────────────────────────────────────────────────
 
 /**
- * Simulate a stop control message arriving.
- * In production this comes via Redis pub/sub, but the handler just sets
- * module-level flags. We can trigger the same effect by calling
- * triggerEnrichmentNow() after a stop to observe the isStopping path.
- *
- * Since we can't directly set isStopping, we use the state service mock
- * to simulate the "stopping" state that the sync block detects.
+ * Stop arrives over Redis pub/sub in production. The state service mock
+ * reports "stopping", which the sync block picks up the same way.
  */
 function simulateStopViaStateService() {
     mockGetState.mockResolvedValueOnce({ status: "stopping" });
@@ -196,12 +207,33 @@ function simulatePauseViaStateService() {
     mockGetState.mockResolvedValueOnce({ status: "paused" });
 }
 
-function simulateRunningState() {
-    mockGetState.mockResolvedValue({ status: "running" });
+/** One owed stage row, shaped like the TrackStage query result. */
+function stageRows(rows: Array<{ trackId: string; stage: string; attempt?: number }>) {
+    return rows.map((r) => ({
+        trackId: r.trackId,
+        stage: r.stage,
+        status: "pending",
+        attempt: r.attempt ?? 0,
+        source: "analyzer",
+        filePath: `/music/${r.trackId}.flac`,
+        duration: 200,
+        title: r.trackId,
+    }));
 }
 
-function simulateIdleState() {
-    mockGetState.mockResolvedValue({ status: "idle" });
+/** The claim succeeds; only `stage` is owed, by `trackIds`. */
+function claimOneStage(stage: string, trackIds: string[]) {
+    mockQueryRaw.mockImplementation(async (...args: unknown[]) => {
+        const sql = String(args[0]);
+        if (sql.includes("SET status = 'working'")) return [{ attempt: 1, redelivered: 0 }];
+        if (args[1] === stage) return stageRows(trackIds.map((trackId) => ({ trackId, stage })));
+        return [];
+    });
+}
+
+/** One stage's progress counts, as BigInt the way the SQL returns them. */
+function progressRow(completed: bigint, retryableFailed = 0n) {
+    return [{ total: 10n, completed, working: 0n, retryable_failed: retryableFailed, terminal_failed: 0n }];
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -212,59 +244,26 @@ describe("Enrichment State Machine", () => {
         jest.useFakeTimers();
         // Default: state service returns idle
         mockGetState.mockResolvedValue({ status: "idle" });
+        // Default: one track owes each stage, so a phase that consults the
+        // stage records finds work unless a test restapes this.
+        // getNextWork passes the stage as a bind parameter, so the stage under
+        // query arrives as the argument after the SQL, not inside the text.
+        mockQueryRaw.mockImplementation(async (...args: unknown[]) => {
+            const sql = String(args[0]);
+            const stage = args[1] as string | undefined;
+            if (sql.includes('"TrackStage"') && stage) {
+                return stageRows([{ trackId: "t1", stage }]);
+            }
+            return [];
+        });
     });
 
     afterEach(() => {
         jest.useRealTimers();
     });
 
-    describe("startup and crash recovery", () => {
-        it("should reset orphaned audio tracks on startup", async () => {
-            await startUnifiedEnrichmentWorker();
 
-            expect(mockPrismaTrackUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { analysisStatus: { in: ["processing", "queued"] } },
-                    data: expect.objectContaining({ analysisStatus: "pending", analysisStartedAt: null }),
-                }),
-            );
-        });
-
-        it("should reset orphaned vibe tracks on startup", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            expect(mockPrismaTrackUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { vibeAnalysisStatus: "processing" },
-                    data: { vibeAnalysisStatus: "pending", vibeAnalysisStartedAt: null },
-                }),
-            );
-        });
-
-        it("should reset artists stuck in enriching on startup", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            expect(mockPrismaArtistUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { enrichmentStatus: "enriching" },
-                    data: { enrichmentStatus: "pending" },
-                }),
-            );
-        });
-
-        it("should clear _queued sentinel from tracks on startup", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            expect(mockPrismaTrackUpdateMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: { lastfmTags: { has: "_queued" } },
-                    data: { lastfmTags: [] },
-                }),
-            );
-        });
-    });
-
-    describe("stop persistence (C1)", () => {
+    describe("stop persistence", () => {
         it("should not auto-restart enrichment after stop via state service", async () => {
             await startUnifiedEnrichmentWorker();
             mockUpdateState.mockClear();
@@ -273,7 +272,7 @@ describe("Enrichment State Machine", () => {
             simulateStopViaStateService();
 
             // First call: detects stopping, transitions to idle
-            const result1 = await triggerEnrichmentNow();
+            await triggerEnrichmentNow();
 
             // State was set to idle
             expect(mockUpdateState).toHaveBeenCalledWith(
@@ -284,91 +283,26 @@ describe("Enrichment State Machine", () => {
             mockUpdateState.mockClear();
             mockGetState.mockResolvedValue({ status: "idle" });
 
-            // triggerEnrichmentNow always clears userStopped, so use a direct
-            // cycle simulation: call triggerEnrichmentNow without the immediate flag
-            // Actually, we can't call runEnrichmentCycle directly since it's not exported.
-            // But we CAN test that triggerEnrichmentNow works after stop:
+            // After the stop landed, a trigger still runs exactly one cycle
+            // (the immediate flag); it does not re-arm the engine, so the timer
+            // never auto-restarts a stopped engine.
             const result2 = await triggerEnrichmentNow();
 
-            // triggerEnrichmentNow should clear userStopped and run
-            // (it calls clearPauseState which resets everything)
-            // The cycle should proceed (hit the isRunning or artists phase)
             expect(result2).toBeDefined();
-        });
-
-        it("should resume after stop when re-run is triggered", async () => {
-            await startUnifiedEnrichmentWorker();
-
-            // Simulate stop
-            simulateStopViaStateService();
-            await triggerEnrichmentNow();
-
-            mockUpdateState.mockClear();
-            mockGetState.mockResolvedValue({ status: "idle" });
-
-            // Now trigger re-run -- should clear userStopped and run
-            const result = await reRunArtistsOnly();
-            expect(result).toBeDefined();
-            expect(result.count).toBeDefined();
         });
     });
 
-    describe("Python analyzer bridge (C2)", () => {
-        it("should publish resume to audio:analysis:control when triggerEnrichmentNow is called", async () => {
+    describe("trigger semantics", () => {
+        it("a trigger runs one cycle; it does not publish resume or lift a stop", async () => {
             await startUnifiedEnrichmentWorker();
             mockPublishToChannel.mockClear();
 
             await triggerEnrichmentNow();
 
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunArtistsOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunArtistsOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when runFullEnrichment is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await runFullEnrichment();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunMoodTagsOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunMoodTagsOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
-                "audio:analysis:control",
-                "resume",
-            );
-        });
-
-        it("should publish resume to audio:analysis:control when reRunAudioAnalysisOnly is called", async () => {
-            await startUnifiedEnrichmentWorker();
-            mockPublishToChannel.mockClear();
-
-            await reRunAudioAnalysisOnly();
-
-            expect(mockPublishToChannel).toHaveBeenCalledWith(
+            // A trigger is "run one cycle", not "undo what the operator
+            // stopped": it never publishes the resume signal on its own.
+            // (It still runs the one cycle via the immediate flag.)
+            expect(mockPublishToChannel).not.toHaveBeenCalledWith(
                 "audio:analysis:control",
                 "resume",
             );
@@ -382,7 +316,7 @@ describe("Enrichment State Machine", () => {
 
             // State says "stopping" but no control message arrived (isStopping is false)
             simulateStopViaStateService();
-            const result = await triggerEnrichmentNow();
+            await triggerEnrichmentNow();
 
             // Should detect stopping via state sync and transition to idle
             expect(mockUpdateState).toHaveBeenCalledWith(
@@ -397,9 +331,9 @@ describe("Enrichment State Machine", () => {
             simulatePauseViaStateService();
             const result = await triggerEnrichmentNow();
 
-            // triggerEnrichmentNow calls clearPauseState first, which resets isPaused.
-            // So the state sync re-reads and finds "paused", sets isPaused=true.
-            // Result should be empty (paused).
+            // The trigger does not clear anything on its own; the cycle's
+            // state sync reads "paused", parks isPaused, and declines.
+            // Result is the empty one because the engine stays paused.
             expect(result).toEqual({ artists: 0, tracks: 0, audioQueued: 0 });
         });
 
@@ -420,44 +354,190 @@ describe("Enrichment State Machine", () => {
         });
     });
 
-    describe("re-run functions clear all flags", () => {
-        it("reRunArtistsOnly should clear isStopping via clearPauseState", async () => {
+    describe("an operator's start lifts a stop or a pause", () => {
+        it("after a stop, wakes the analyzer and runs a cycle", async () => {
             await startUnifiedEnrichmentWorker();
 
-            // Get into stopping state
             simulateStopViaStateService();
-            await triggerEnrichmentNow(); // sets userStopped
+            await triggerEnrichmentNow(); // the cycle observes the stop -> idle + userStopped
 
             mockGetState.mockResolvedValue({ status: "idle" });
             mockUpdateState.mockClear();
+            mockClearGate.mockClear();
+            mockPublishToChannel.mockClear();
 
-            // reRunArtistsOnly should clear userStopped and isStopping
-            const result = await reRunArtistsOnly();
-            expect(result.count).toBeDefined();
+            await startEnrichmentNow();
+            expect(mockClearGate).toHaveBeenCalled();
+            expect(mockPublishToChannel).toHaveBeenCalledWith("audio:analysis:control", "resume");
+            expect(mockUpdateState).toHaveBeenCalledWith(
+                expect.objectContaining({ status: "running" }),
+            );
         });
 
-        it("reRunMoodTagsOnly should work after stop", async () => {
+        it("while paused, clears the stored pause and runs the cycle a plain trigger declines", async () => {
             await startUnifiedEnrichmentWorker();
+            mockUpdateState.mockClear();
+            mockGetState.mockResolvedValueOnce({ status: "paused" }).mockResolvedValue({ status: "idle" });
 
-            simulateStopViaStateService();
-            await triggerEnrichmentNow();
+            await startEnrichmentNow();
+            expect(mockUpdateState).toHaveBeenCalledWith(expect.objectContaining({ status: "idle" }));
+            expect(mockUpdateState).toHaveBeenCalledWith(
+                expect.objectContaining({ status: "running" }),
+            );
+        });
+    });
 
-            mockGetState.mockResolvedValue({ status: "idle" });
-
-            const result = await reRunMoodTagsOnly();
-            expect(result.count).toBeDefined();
+    describe("startup resumes analyzer infrastructure", () => {
+        it("should clear the stale analyzer gate on worker start", async () => {
+            mockClearGate.mockClear();
+            await startUnifiedEnrichmentWorker();
+            expect(mockClearGate).toHaveBeenCalled();
         });
 
-        it("runFullEnrichment should work after stop", async () => {
+        it("should publish resume to the audio analyzer on worker start", async () => {
+            mockPublishToChannel.mockClear();
+            await startUnifiedEnrichmentWorker();
+            expect(mockPublishToChannel).toHaveBeenCalledWith(
+                "audio:analysis:control",
+                "resume",
+            );
+        });
+    });
+
+    describe("reverse-sync must resume infrastructure, not just flip the local flag", () => {
+        it("should call clearGate when reverse-syncing a stale pause to running", async () => {
+            // The wedge is a missed "resume" control message: state says
+            // "paused" (the pause landed), then state says "running" (the
+            // resume was lost), then the next timer tick must self-heal the
+            // infrastructure, not just the flag.
             await startUnifiedEnrichmentWorker();
 
-            simulateStopViaStateService();
-            await triggerEnrichmentNow();
+            // State says paused -> local isPaused becomes true via the sync block
+            simulatePauseViaStateService();
+            await jest.advanceTimersByTimeAsync(10_000);
 
-            mockGetState.mockResolvedValue({ status: "idle" });
+            // Now state says running -- the resume pub/sub was lost
+            mockGetState.mockResolvedValue({ status: "running" });
+            mockClearGate.mockClear();
+            mockPublishToChannel.mockClear();
 
-            const result = await runFullEnrichment();
-            expect(result).toBeDefined();
+            // Advance to the next scheduled cycle (timer path)
+            await jest.advanceTimersByTimeAsync(60_000);
+
+            // The reverse-sync must have resumed the real infrastructure,
+            // NOT merely flipped the local flag.
+            expect(mockClearGate).toHaveBeenCalled();
+            expect(mockPublishToChannel).toHaveBeenCalledWith(
+                "audio:analysis:control",
+                "resume",
+            );
+        });
+    });
+
+    describe("per-track stage queue", () => {
+        it("does not drain a past-cap track to permanently_failed", async () => {
+            // Selection comes from the stage record, so tracks are never
+            // selected by analysisRetryCount to have their status rewritten.
+            mockPrismaTrackFindMany.mockResolvedValue([
+                { id: "stuck", title: "Stuck", filePath: "/m/stuck.flac", analysisRetryCount: 5 },
+            ]);
+
+            await executeAudioPhase();
+
+            const purgatorySelects = mockPrismaTrackFindMany.mock.calls.filter(
+                (call) => JSON.stringify(call[0] ?? {}).includes("analysisRetryCount"),
+            );
+            expect(purgatorySelects).toHaveLength(0);
+
+            const condemned = mockPrismaTrackUpdateMany.mock.calls.filter(
+                (call) => JSON.stringify(call[0] ?? {}).includes("permanently_failed"),
+            );
+            expect(condemned).toHaveLength(0);
+        });
+
+        it("feeds the analysis queue from the stage record, not from analysisStatus", async () => {
+            // One track owes analysis; it must be pushed even though no
+            // `analysisStatus: "pending"` select drove the choice.
+            claimOneStage("analysis", ["t1"]);
+
+            const queued = await executeAudioPhase();
+
+            expect(queued).toBe(1);
+            expect(mockRedisRpush).toHaveBeenCalledWith(
+                "audio:analysis:queue",
+                expect.stringContaining('"trackId":"t1"'),
+            );
+        });
+
+        it("does not re-queue a track whose recording stage is already answered", async () => {
+            // Only the recording stage is owed, and only for one track.
+            claimOneStage("recording", ["t1"]);
+
+            const queued = await executeIdentificationPhase();
+
+            expect(queued).toBe(1);
+            expect(mockQueueAdd).toHaveBeenCalledWith(
+                "enrich",
+                expect.objectContaining({ trackId: "t1" }),
+                expect.objectContaining({ jobId: "track-t1-recording-1-r0" }),
+            );
+        });
+
+        it("embeds a ready track while another track's analysis is still owed", async () => {
+            // Only the ready track's embedding record is due; the other is
+            // gated by its own unfinished analysis, not by a global count.
+            claimOneStage("embedding", ["ready"]);
+            // A track still sits at analysisStatus 'pending'; that must not
+            // hold back the embedding phase.
+            mockPrismaTrackCount.mockResolvedValue(1);
+
+            await expect(executeVibePhase()).resolves.toBe(1);
+            expect(mockQueueAdd).toHaveBeenCalledWith(
+                "embed",
+                expect.objectContaining({ trackId: "ready" }),
+                expect.objectContaining({ jobId: "track-ready-embedding-1-r0" }),
+            );
+        });
+
+        it("does not select work by scanning Track status columns", async () => {
+            await executeVibePhase();
+            await executeIdentificationPhase();
+
+            // Gating reads TrackStage; no phase may decide work from
+            // analysisStatus across the whole library.
+            const statusScans = mockPrismaTrackFindMany.mock.calls.filter((call) => {
+                const where = JSON.stringify(call[0] ?? {});
+                return where.includes("analysisStatus");
+            });
+            expect(statusScans).toHaveLength(0);
+        });
+    });
+
+    describe("progress readout reflects the stage records", () => {
+        it("computes progress from the TrackStage records, not the columns", async () => {
+            // The record owns the answer: each stage's counts come from
+            // TrackStage, and no stage checks track_embeddings to decide
+            // whether an answer exists.
+            mockQueryRaw.mockImplementation(async (...args: unknown[]) => {
+                const sql = String(args[0]); const stage = args[1];
+                if (sql.includes("FROM \"Track\"") && sql.includes("count(*) FILTER")) {
+                    if (stage === "recording") return progressRow(5n);
+                    if (stage === "analysis") return progressRow(8n);
+                    return progressRow(6n, 2n);
+                }
+                return [{ count: 8n }];
+            });
+
+            // The progress readout is memoized for PROGRESS_MEMO_MS so the
+            // settings UI's polling does not re-scan Track every call; drop it
+            // so this test reads its own shaped rows rather than a cached value.
+            invalidateEnrichmentProgress();
+
+            const progress = await getEnrichmentProgress();
+
+            expect(progress.audioAnalysis.completed).toBe(8);
+            expect(progress.clapEmbeddings.completed).toBe(6);
+            expect(progress.coreComplete).toBe(false);
         });
     });
 });

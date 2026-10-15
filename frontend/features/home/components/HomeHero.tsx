@@ -1,7 +1,6 @@
 "use client";
 
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const getGreeting = () => {
     const hour = new Date().getHours();
@@ -11,32 +10,7 @@ const getGreeting = () => {
 };
 
 export function HomeHero() {
-    const { t } = useLanguage();
-    const greeting = t(getGreeting() as TranslationKey);
+    const greeting = getGreeting();
 
-    return (
-        <div className="relative bg-gradient-to-b from-[#0a0a0a] via-[#0f0f0f] to-transparent pt-6 pb-8 px-4 sm:px-6 md:px-8 border-b border-white/5">
-            <div className="max-w-[1800px] mx-auto">
-                {/* System status indicator */}
-                <div className="flex items-center gap-2 mb-6">
-                    <div className="w-1.5 h-1.5 bg-brand rounded-full" />
-                    <span className="t-eyebrow">
-                        {t("System Online")}
-                    </span>
-                </div>
-
-                {/* Title */}
-                <div className="flex items-baseline justify-between flex-wrap gap-4">
-                    <div>
-                        <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-3">
-                            {greeting}
-                        </h1>
-                        <p className="text-sm text-[var(--text-muted)]">
-                            {t("Personal streaming hub / Your library at a glance")}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    return <PageHeader eyebrow="Home" title={greeting} description="Your library at a glance" />;
 }

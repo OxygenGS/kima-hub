@@ -3,146 +3,15 @@ import { logger } from "../../utils/logger";
 import { MusicScannerService } from "../../services/musicScanner";
 import { config } from "../../config";
 import { eventBus } from "../../services/eventBus";
+import { notificationService } from "../../services/notificationService";
 import * as path from "path";
 
-/**
- * Reconcile pending/processing download jobs with newly scanned albums
- * This is called after every scan to catch downloads that completed but webhooks failed
- * Part of Phase 2 & 3 fix for #31
- *
- * Phase 3 enhancement: Uses fuzzy matching to catch more name variations
- * Phase 4 optimization: Batched queries instead of N+1 pattern
- */
-async function reconcileDownloadJobsWithScan(): Promise<number> {
-    const { prisma } = await import("../../utils/db");
-
-    // Get all pending/processing download jobs
-    const activeJobs = await prisma.downloadJob.findMany({
-        where: { status: { in: ["pending", "processing"] } },
-    });
-
-    if (activeJobs.length === 0) {
-        return 0;
-    }
-
-    // Extract job metadata for matching
-    const jobsWithMetadata = activeJobs
-        .map((job) => {
-            const metadata = (job.metadata as any) || {};
-            return {
-                job,
-                artistName: metadata?.artistName as string | undefined,
-                albumTitle: metadata?.albumTitle as string | undefined,
-            };
-        })
-        .filter((j) => j.artistName && j.albumTitle);
-
-    if (jobsWithMetadata.length === 0) {
-        return 0;
-    }
-
-    // Batch fetch: Get all albums that might match any of our jobs
-    // Use OR conditions for all artist name prefixes (for fuzzy matching)
-    const artistPrefixes = [...new Set(
-        jobsWithMetadata.map((j) => j.artistName!.substring(0, 5).toLowerCase())
-    )];
-
-    const candidateAlbums = await prisma.album.findMany({
-        where: {
-            OR: artistPrefixes.map((prefix) => ({
-                artist: {
-                    name: {
-                        contains: prefix,
-                        mode: "insensitive" as const,
-                    },
-                },
-            })),
-        },
-        include: {
-            tracks: {
-                select: { id: true },
-                take: 1,
-            },
-            artist: {
-                select: { name: true },
-            },
-        },
-    });
-
-    // Import fuzzy matcher once
-    const { matchAlbum } = await import("../../utils/fuzzyMatch");
-
-    // Match jobs to albums
-    const jobsToComplete: string[] = [];
-    const discoveryBatchIds: string[] = [];
-
-    for (const { job, artistName, albumTitle } of jobsWithMetadata) {
-        // Try exact/contains match first
-        let matchedAlbum = candidateAlbums.find(
-            (album) =>
-                album.tracks.length > 0 &&
-                album.artist.name.toLowerCase().includes(artistName!.toLowerCase()) &&
-                album.title.toLowerCase().includes(albumTitle!.toLowerCase())
-        );
-
-        // Fuzzy match if exact match failed
-        if (!matchedAlbum) {
-            matchedAlbum = candidateAlbums.find(
-                (album) =>
-                    album.tracks.length > 0 &&
-                    matchAlbum(
-                        artistName!,
-                        albumTitle!,
-                        album.artist.name,
-                        album.title,
-                        0.75
-                    )
-            );
-        }
-
-        if (matchedAlbum) {
-            jobsToComplete.push(job.id);
-            if (job.discoveryBatchId) {
-                discoveryBatchIds.push(job.discoveryBatchId);
-            }
-        }
-    }
-
-    if (jobsToComplete.length === 0) {
-        return 0;
-    }
-
-    // Batch update: Mark all matched jobs as completed
-    await prisma.downloadJob.updateMany({
-        where: { id: { in: jobsToComplete } },
-        data: {
-            status: "completed",
-            completedAt: new Date(),
-            error: null,
-        },
-    });
-
-    // Check batch completion for discovery jobs (deduplicated)
-    const uniqueBatchIds = [...new Set(discoveryBatchIds)];
-    if (uniqueBatchIds.length > 0) {
-        const { discoverWeeklyService } = await import(
-            "../../services/discoverWeekly"
-        );
-        for (const batchId of uniqueBatchIds) {
-            await discoverWeeklyService.checkBatchCompletion(batchId);
-        }
-    }
-
-    return jobsToComplete.length;
-}
-
 export interface ScanJobData {
-    userId: string;
+    userId?: string; // Optional: scans can be triggered without a user
     musicPath?: string; // Optional: use custom path or default from config
-    albumMbid?: string; // Optional: if scan triggered by download completion
-    artistMbid?: string; // Optional: if scan triggered by download completion
+    albumMbid?: string; // Optional: the album a download or retry brought in
+    artistMbid?: string; // Optional: the artist of a retried track
     source?: string; // Optional: source of scan (e.g., "lidarr-webhook", "discover-weekly-completion", "spotify-import")
-    downloadId?: string; // Optional: Lidarr download ID for precise job linking
     discoveryBatchId?: string; // Optional: Discovery Weekly batch ID
     spotifyImportJobId?: string; // Optional: Spotify Import job ID
 }
@@ -150,10 +19,22 @@ export interface ScanJobData {
 export interface ScanJobResult {
     tracksAdded: number;
     tracksUpdated: number;
-    tracksRemoved: number;
+    tracksMissing: number;
     tracksCorrupt: number;
     errors: Array<{ file: string; error: string }>;
     duration: number;
+}
+
+const SCAN_RESULT_KEY = "library-scan";
+
+function scanSummary(r: { tracksAdded: number; tracksUpdated: number; tracksMissing: number; tracksCorrupt: number }): string {
+    const parts = [
+        r.tracksAdded > 0 && `${r.tracksAdded} added`,
+        r.tracksUpdated > 0 && `${r.tracksUpdated} updated`,
+        r.tracksMissing > 0 && `${r.tracksMissing} missing`,
+        r.tracksCorrupt > 0 && `${r.tracksCorrupt} corrupt`,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(", ") : "No changes";
 }
 
 export async function processScan(
@@ -165,12 +46,11 @@ export async function processScan(
         albumMbid,
         artistMbid,
         source,
-        downloadId,
         discoveryBatchId,
         spotifyImportJobId,
     } = job.data;
+    const manual = source === "manual-scan";
 
-    logger.debug(`\n═══════════════════════════════════════════════`);
     logger.debug(`[ScanJob ${job.id}] Starting library scan for user ${userId}`);
     if (source) {
         logger.debug(`[ScanJob ${job.id}] Scan source: ${source}`);
@@ -181,7 +61,6 @@ export async function processScan(
     if (artistMbid) {
         logger.debug(`[ScanJob ${job.id}] Artist MBID: ${artistMbid}`);
     }
-    logger.debug(`═══════════════════════════════════════════════`);
 
     // Report progress
     await job.updateProgress(0);
@@ -228,195 +107,53 @@ export async function processScan(
                 userId,
                 payload: {
                     jobId: String(job.id),
-                    result: { tracksAdded: result.tracksAdded, tracksUpdated: result.tracksUpdated, tracksRemoved: result.tracksRemoved, tracksCorrupt: result.tracksCorrupt },
+                    result: { tracksAdded: result.tracksAdded, tracksUpdated: result.tracksUpdated, tracksMissing: result.tracksMissing, tracksCorrupt: result.tracksCorrupt },
                 },
             });
+            if (manual) {
+                await notificationService
+                    .create({
+                        userId,
+                        type: "system",
+                        title: "Library scan finished",
+                        message: scanSummary(result),
+                        groupKey: SCAN_RESULT_KEY,
+                        renotify: true,
+                    })
+                    .catch((e) => logger.error(`[ScanJob ${job.id}] Failed to record scan result:`, e));
+            }
         }
 
         logger.debug(
-            `[ScanJob ${job.id}] Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} corrupt:${result.tracksCorrupt}`
-        );
+              `[ScanJob ${job.id}] Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} missing:${result.tracksMissing} corrupt:${result.tracksCorrupt}`
+          );
 
-        // If this scan was triggered by a download completion, mark download jobs as completed
-        if (
-            source?.startsWith("lidarr-") &&
-            (albumMbid || artistMbid || downloadId)
-        ) {
-            logger.debug(
-                `[ScanJob ${job.id}] Marking download jobs as completed after successful scan`
-            );
-            const { prisma } = await import("../../utils/db");
-
-            if (artistMbid) {
-                // No type filter: nothing creates `type: "artist"` rows, so
-                // filtering on it made this sweep a no-op. An artist download
-                // is fanned out into album rows, and those are what a scan for
-                // that artist should settle.
-                await prisma.downloadJob.updateMany({
-                    where: {
-                        targetMbid: artistMbid,
-                        status: { in: ["pending", "processing"] },
-                    },
-                    data: {
-                        status: "completed",
-                        completedAt: new Date(),
-                    },
+        // A Lidarr import can bring a new artist: queue its enrichment now.
+        if (source === "lidarr-webhook" && albumMbid) {
+            try {
+                const { prisma } = await import("../../utils/db");
+                const album = await prisma.album.findFirst({
+                    where: { rgMbid: albumMbid },
+                    include: { artist: true },
                 });
-                logger.debug(
-                    `[ScanJob ${job.id}] Marked artist download as completed: ${artistMbid}`
-                );
-
-                // Trigger enrichment for the newly imported artist
-                try {
-                    const artist = await prisma.artist.findUnique({
-                        where: { mbid: artistMbid },
-                    });
-                    if (artist && artist.enrichmentStatus === "pending") {
-                        logger.debug(
-                            `[ScanJob ${job.id}] Queueing enrichment for artist: ${artist.name}`
+                if (album?.artist && album.artist.enrichmentStatus === "pending") {
+                    // The queue's jobId dedupes against the enrichment loop's own run.
+                    const { artistQueue } = await import("../enrichmentQueues");
+                    const jobId = `artist-${album.artist.id}`;
+                    if (!(await artistQueue.getJob(jobId))) {
+                        await artistQueue.add(
+                            "enrich",
+                            { artistId: album.artist.id, artistName: album.artist.name },
+                            { jobId }
                         );
-                        // Route through the enrichment queue (jobId-deduped) instead of firing
-                        // directly -- avoids racing executeArtistsPhase() over the same artist
-                        const { artistQueue } = await import(
-                            "../enrichmentQueues"
-                        );
-                        const jobId = `artist-${artist.id}`;
-                        if (!(await artistQueue.getJob(jobId))) {
-                            await artistQueue.add(
-                                "enrich",
-                                { artistId: artist.id, artistName: artist.name },
-                                { jobId }
-                            );
-                            await prisma.artist.update({
-                                where: { id: artist.id },
-                                data: { enrichmentStatus: "enriching" },
-                            });
-                        }
-                    }
-                } catch (error) {
-                    logger.error(
-                        `[ScanJob ${job.id}]   Failed to trigger enrichment:`,
-                        error
-                    );
-                }
-            }
-
-            if (albumMbid) {
-                const updatedByMbid = await prisma.downloadJob.updateMany({
-                    where: {
-                        targetMbid: albumMbid,
-                        type: "album",
-                        status: { in: ["pending", "processing"] },
-                    },
-                    data: {
-                        status: "completed",
-                        completedAt: new Date(),
-                    },
-                });
-
-                if (updatedByMbid.count > 0) {
-                    logger.debug(
-                        `[ScanJob ${job.id}] Marked ${updatedByMbid.count} album download(s) as completed by MBID: ${albumMbid}`
-                    );
-                } else {
-                    // Fallback: Try to find the album by artist+title and match download jobs
-                    logger.debug(
-                        `[ScanJob ${job.id}] No downloads matched by MBID, trying artist+title match...`
-                    );
-
-                    const album = await prisma.album.findFirst({
-                        where: { rgMbid: albumMbid },
-                        include: { artist: true },
-                    });
-
-                    if (album) {
-                        const updatedByName =
-                            await prisma.downloadJob.updateMany({
-                                where: {
-                                    type: "album",
-                                    status: { in: ["pending", "processing"] },
-                                    metadata: {
-                                        path: ["albumTitle"],
-                                        equals: album.title,
-                                    },
-                                },
-                                data: {
-                                    status: "completed",
-                                    completedAt: new Date(),
-                                },
-                            });
-
-                        if (updatedByName.count > 0) {
-                            logger.debug(
-                                `[ScanJob ${job.id}] Marked ${updatedByName.count} album download(s) as completed by title match: ${album.artist.name} - ${album.title}`
-                            );
-                        } else {
-                            logger.debug(
-                                `[ScanJob ${job.id}]   No pending downloads found for: ${album.artist.name} - ${album.title}`
-                            );
-                        }
+                        await prisma.artist.update({
+                            where: { id: album.artist.id },
+                            data: { enrichmentStatus: "enriching" },
+                        });
                     }
                 }
-
-                // Trigger enrichment for the artist of the newly imported album
-                try {
-                    const album = await prisma.album.findFirst({
-                        where: { rgMbid: albumMbid },
-                        include: { artist: true },
-                    });
-                    if (
-                        album?.artist &&
-                        album.artist.enrichmentStatus === "pending"
-                    ) {
-                        logger.debug(
-                            `[ScanJob ${job.id}] Queueing enrichment for artist: ${album.artist.name}`
-                        );
-                        // Route through the enrichment queue (jobId-deduped) instead of firing
-                        // directly -- avoids racing executeArtistsPhase() over the same artist
-                        const { artistQueue } = await import(
-                            "../enrichmentQueues"
-                        );
-                        const jobId = `artist-${album.artist.id}`;
-                        if (!(await artistQueue.getJob(jobId))) {
-                            await artistQueue.add(
-                                "enrich",
-                                { artistId: album.artist.id, artistName: album.artist.name },
-                                { jobId }
-                            );
-                            await prisma.artist.update({
-                                where: { id: album.artist.id },
-                                data: { enrichmentStatus: "enriching" },
-                            });
-                        }
-                    }
-                } catch (error) {
-                    logger.error(
-                        `[ScanJob ${job.id}]   Failed to trigger enrichment:`,
-                        error
-                    );
-                }
-            }
-
-            if (downloadId) {
-                const updated = await prisma.downloadJob.updateMany({
-                    where: {
-                        lidarrRef: downloadId,
-                        status: { in: ["pending", "processing"] },
-                    },
-                    data: {
-                        status: "completed",
-                        completedAt: new Date(),
-                    },
-                });
-                if (updated.count > 0) {
-                    logger.debug(
-                        `[ScanJob ${job.id}] Linked Lidarr download ${downloadId} to ${updated.count} job(s)`
-                    );
-                } else {
-                    logger.debug(
-                        `[ScanJob ${job.id}]   No download jobs found for Lidarr ID ${downloadId}`
-                    );
-                }
+            } catch (error) {
+                logger.error(`[ScanJob ${job.id}] Failed to queue artist enrichment:`, error);
             }
         }
 
@@ -466,54 +203,20 @@ export async function processScan(
             }
         }
 
-        // Phase 2 Fix for #31: Reconcile download jobs with newly scanned albums
-        // This runs after EVERY scan to catch albums that were downloaded but webhooks failed
-        if (result.tracksAdded > 0) {
-            logger.debug(
-                `[ScanJob ${job.id}] Reconciling download jobs with ${result.tracksAdded} newly scanned tracks...`
-            );
-            try {
-                const reconciledJobs = await reconcileDownloadJobsWithScan();
-                if (reconciledJobs > 0) {
-                    logger.debug(
-                        `[ScanJob ${job.id}] ✓ Reconciled ${reconciledJobs} download job(s) with scanned albums`
-                    );
-                }
-            } catch (error: any) {
-                logger.error(
-                    `[ScanJob ${job.id}] Failed to reconcile download jobs:`,
-                    error.message
-                );
-            }
+        // Complete download jobs whose albums are now in the library.
+        try {
+            const { queueCleaner } = await import("../../jobs/queueCleaner");
+            await queueCleaner.reconcileWithLocalLibrary();
+        } catch (error: any) {
+            logger.error(`[ScanJob ${job.id}] Failed to reconcile download jobs:`, error.message);
         }
 
-        // Send notification for manual scans (not background/webhook scans)
-        if (!source && userId && userId !== "system") {
-            try {
-                const { notificationService } = await import(
-                    "../../services/notificationService"
-                );
-                await notificationService.notifySystem(
-                    userId,
-                    "Library Scan Complete",
-                    `Added ${result.tracksAdded} tracks, updated ${result.tracksUpdated}, removed ${result.tracksRemoved}${result.tracksCorrupt > 0 ? `, ${result.tracksCorrupt} corrupt` : ""}`
-                );
-            } catch (error) {
-                logger.error(
-                    `[ScanJob ${job.id}] Failed to send notification:`,
-                    error
-                );
-            }
-        }
-
-        // Reconcile pending tracks from Spotify playlist imports
-        // This checks if any previously unmatched tracks now have matches
-        // Run on: new/updated tracks, manual sync, or retry downloads
+        // Reconcile Spotify-import pending tracks against new or updated tracks, manual syncs and retried downloads.
         const shouldReconcile =
             result.tracksAdded > 0 ||
             result.tracksUpdated > 0 ||
-            !source ||
-            source.startsWith("retry-");
+            manual ||
+            source?.startsWith("retry-");
         if (shouldReconcile) {
             try {
                 logger.debug(
@@ -528,25 +231,6 @@ export async function processScan(
                     logger.debug(
                         `[ScanJob ${job.id}] ✓ Reconciled ${reconcileResult.tracksAdded} pending tracks to ${reconcileResult.playlistsUpdated} playlists`
                     );
-
-                    // Send notification about reconciled tracks
-                    if (userId && userId !== "system") {
-                        try {
-                            const { notificationService } = await import(
-                                "../../services/notificationService"
-                            );
-                            await notificationService.notifySystem(
-                                userId,
-                                "Playlist Tracks Matched",
-                                `${reconcileResult.tracksAdded} previously unmatched tracks were added to your playlists`
-                            );
-                        } catch (notifyError) {
-                            logger.error(
-                                `[ScanJob ${job.id}] Failed to send reconcile notification:`,
-                                notifyError
-                            );
-                        }
-                    }
                 } else {
                     logger.debug(
                         `[ScanJob ${job.id}] No pending tracks to reconcile`
@@ -562,7 +246,7 @@ export async function processScan(
 
         // Reconcile Discovery Weekly tracks
         // This backfills Discovery Weekly playlists with albums that downloaded after initial playlist creation
-        // Run on: new tracks added OR manual sync (no source = manual scan button)
+        // Run on: new tracks added OR manual sync
         if (shouldReconcile) {
             try {
                 logger.debug(
@@ -582,59 +266,33 @@ export async function processScan(
             }
         }
 
-        // Trigger mood tag collection for new tracks whose artists are already enriched
-        // This ensures Last.fm mood tags are collected immediately after scan, not waiting 30s for background worker
+        // New files are owed every stage's answer; trigger the next cycle now rather
+        // than after the 30 s wait.
         if (result.tracksAdded > 0) {
             try {
                 logger.debug(
-                    `[ScanJob ${job.id}] Checking for tracks needing mood tag enrichment...`
+                    `[ScanJob ${job.id}] ${result.tracksAdded} new track(s) added — starting an enrichment cycle`
                 );
-                const { prisma } = await import("../../utils/db");
-
-                // Count new tracks that need mood tags
-                // Note: We don't filter by artist enrichmentStatus here because
-                // triggerEnrichmentNow() runs runEnrichmentCycle() which handles
-                // artist enrichment first (Step 1), then track tags (Step 2)
-                const tracksNeedingTags = await prisma.track.count({
-                    where: {
-                        OR: [
-                            { lastfmTags: { isEmpty: true } },
-                            { lastfmTags: { equals: null } },
-                        ],
-                    },
-                });
-
-                if (tracksNeedingTags > 0) {
-                    logger.debug(
-                        `[ScanJob ${job.id}] Found ${tracksNeedingTags} tracks needing mood tags, triggering enrichment...`
-                    );
-
-                    // Trigger immediate enrichment cycle (non-blocking)
-                    const { triggerEnrichmentNow } = await import(
-                        "../unifiedEnrichment"
-                    );
-                    triggerEnrichmentNow()
-                        .then((result) => {
-                            if (result.tracks > 0) {
-                                logger.debug(
-                                    `[ScanJob ${job.id}] Mood tag enrichment completed: ${result.tracks} tracks enriched`
-                                );
-                            }
-                        })
-                        .catch((err) => {
-                            logger.error(
-                                `[ScanJob ${job.id}] Mood tag enrichment failed:`,
-                                err
+                const { triggerEnrichmentNow } = await import(
+                    "../unifiedEnrichment"
+                );
+                triggerEnrichmentNow()
+                    .then((result) => {
+                        if (result.tracks > 0) {
+                            logger.debug(
+                                `[ScanJob ${job.id}] Enrichment after scan completed: ${result.tracks} tracks`
                             );
-                        });
-                } else {
-                    logger.debug(
-                        `[ScanJob ${job.id}] No tracks need immediate mood tag enrichment`
-                    );
-                }
+                        }
+                    })
+                    .catch((err) => {
+                        logger.error(
+                            `[ScanJob ${job.id}] Enrichment for new tracks failed:`,
+                            err
+                        );
+                    });
             } catch (error) {
                 logger.error(
-                    `[ScanJob ${job.id}] Failed to check for mood tag enrichment:`,
+                    `[ScanJob ${job.id}] Failed to trigger enrichment:`,
                     error
                 );
             }
@@ -649,6 +307,18 @@ export async function processScan(
                 userId,
                 payload: { jobId: String(job.id), error: error.message || "Scan failed" },
             });
+            if (manual) {
+                await notificationService
+                    .create({
+                        userId,
+                        type: "error",
+                        title: "Library scan failed",
+                        message: error.message || undefined,
+                        groupKey: SCAN_RESULT_KEY,
+                        renotify: true,
+                    })
+                    .catch((e) => logger.error(`[ScanJob ${job.id}] Failed to record scan failure:`, e));
+            }
         }
         throw error;
     }

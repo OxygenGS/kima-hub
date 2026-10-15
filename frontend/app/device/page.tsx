@@ -3,13 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
-import { useToast } from "@/lib/toast-context";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { notify } from "@/lib/notify";
 import { QRCodeSVG } from "qrcode.react";
 import { Card } from "@/components/ui/Card";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { formatTime } from "@/lib/format";
 import {
     Smartphone,
     RefreshCw,
@@ -19,7 +18,11 @@ import {
     Trash2,
     AlertCircle
 } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { copyText } from "@/lib/clipboard";
 
 interface DeviceLinkCode {
     code: string;
@@ -37,9 +40,6 @@ interface LinkedDevice {
 export default function DeviceLinkPage() {
     const router = useRouter();
     const { isAuthenticated, isLoading: authLoading } = useAuth();
-    const { branding } = useBranding();
-    const { toast } = useToast();
-    const { t, locale } = useLanguage();
     const [linkCode, setLinkCode] = useState<DeviceLinkCode | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(0);
@@ -48,46 +48,32 @@ export default function DeviceLinkPage() {
     const [isLoadingDevices, setIsLoadingDevices] = useState(true);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [pendingRevoke, setPendingRevoke] = useState<LinkedDevice | null>(null);
 
-    // Redirect if not authenticated
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
             router.push("/login");
         }
     }, [isAuthenticated, authLoading, router]);
 
-    // Load linked devices
     const loadDevices = useCallback(async () => {
         try {
             const response = await api.request<LinkedDevice[]>("/device-link/devices");
             setDevices(response);
         } catch (err) {
             console.error("Failed to load devices:", err);
-            toast.error(t("Failed to load linked devices"));
+            notify.error("Failed to load linked devices");
         } finally {
             setIsLoadingDevices(false);
         }
-    }, [toast, t]);
+    }, []);
 
     useEffect(() => {
-        if (!isAuthenticated) return;
-        let cancelled = false;
-        // Initial request resolves asynchronously; manual refresh uses loadDevices.
-        void api.request<LinkedDevice[]>("/device-link/devices")
-            .then((response) => {
-                if (!cancelled) setDevices(response);
-            })
-            .catch((err) => {
-                console.error("Failed to load devices:", err);
-                if (!cancelled) toast.error(t("Failed to load linked devices"));
-            })
-            .finally(() => {
-                if (!cancelled) setIsLoadingDevices(false);
-            });
-        return () => { cancelled = true; };
-    }, [isAuthenticated, toast, t]);
+        if (isAuthenticated) {
+            loadDevices();
+        }
+    }, [isAuthenticated, loadDevices]);
 
-    // Generate a new link code
     const generateCode = async () => {
         setIsGenerating(true);
         setError(null);
@@ -100,32 +86,26 @@ export default function DeviceLinkPage() {
             setLinkCode(response);
             setTimeRemaining(response.expiresIn);
         } catch (err) {
-            setError(err instanceof Error ? err.message : t("Failed to generate code"));
+            setError(err instanceof Error ? err.message : "Failed to generate code");
         } finally {
             setIsGenerating(false);
         }
     };
 
-    // Countdown timer
+    const expired = timeRemaining <= 0;
+
     useEffect(() => {
-        if (timeRemaining <= 0 || codeUsed) return;
+        if (!linkCode || expired || codeUsed) return;
 
         const timer = setInterval(() => {
-            setTimeRemaining((prev) => {
-                if (prev <= 1) {
-                    clearInterval(timer);
-                    return 0;
-                }
-                return prev - 1;
-            });
+            setTimeRemaining((prev) => Math.max(prev - 1, 0));
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [timeRemaining, codeUsed]);
+    }, [linkCode, expired, codeUsed]);
 
-    // Poll for code usage
     useEffect(() => {
-        if (!linkCode || timeRemaining <= 0 || codeUsed) return;
+        if (!linkCode || expired || codeUsed) return;
 
         const pollInterval = setInterval(async () => {
             try {
@@ -135,7 +115,7 @@ export default function DeviceLinkPage() {
 
                 if (status.status === "used") {
                     setCodeUsed(true);
-                    loadDevices(); // Refresh devices list
+                    loadDevices();
                 }
             } catch (err) {
                 console.error("Failed to check code status:", err);
@@ -143,34 +123,24 @@ export default function DeviceLinkPage() {
         }, 2000);
 
         return () => clearInterval(pollInterval);
-    }, [linkCode, timeRemaining, codeUsed, loadDevices]);
+    }, [linkCode, expired, codeUsed, loadDevices]);
 
-    // Copy code to clipboard
-    const copyCode = () => {
-        if (linkCode) {
-            navigator.clipboard.writeText(linkCode.code);
+    const copyCode = async () => {
+        if (linkCode && (await copyText(linkCode.code))) {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         }
     };
 
-    // Revoke a device
-    const revokeDevice = async (deviceId: string) => {
+    const revokeDevice = async (device: LinkedDevice) => {
         try {
-            await api.request(`/device-link/devices/${deviceId}`, {
+            await api.request(`/device-link/devices/${device.id}`, {
                 method: "DELETE",
             });
-            setDevices((prev) => prev.filter((d) => d.id !== deviceId));
-        } catch (err) {
-            console.error("Failed to revoke device:", err);
+            setDevices((prev) => prev.filter((d) => d.id !== device.id));
+        } catch {
+            notify.error("Couldn't unlink device", { message: `${device.name} is still linked. Try again.` });
         }
-    };
-
-    // Format time remaining
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
     };
 
     // Build QR code URL (contains code and server URL)
@@ -189,233 +159,230 @@ export default function DeviceLinkPage() {
     }
 
     return (
-        <div className="min-h-screen relative pb-24">
-            {/* Header gradient */}
-            <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-gradient-to-b from-purple-500/10 via-transparent to-transparent" style={{ height: "50vh" }} />
-            </div>
+        <div className="min-h-screen pb-24">
+            <PageHeader
+                eyebrow="Devices"
+                title="Link a device"
+                description="Scan the QR code, or type the code into the app on your phone"
+            />
 
-            <div className="relative max-w-4xl mx-auto px-6 md:px-8 py-8">
-                {/* Title */}
-                <div className="mb-8">
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-2">
-                        {t("Link Mobile Device")}
-                    </h1>
-                    <p className="text-[var(--text-secondary)]">
-                        {t("Scan the QR code or enter the code in the")} {branding.name}{t("app to link your device")}
-                    </p>
-                </div>
+            <div className="page-shell">
+                <div className="max-w-4xl">
 
-                <div className="grid md:grid-cols-2 gap-8">
-                    {/* QR Code Section */}
-                    <Card className="p-6 bg-white/[0.03] border border-white/5">
-                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                            <Smartphone className="w-5 h-5" />
-                            {t("Device Link Code")}
-                        </h2>
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <Card className="p-6 bg-white/[0.03] border border-white/5">
+                            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                <Smartphone className="w-5 h-5" />
+                                Device Link Code
+                            </h2>
 
-                        {error && (
-                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4" />
-                                {error}
-                            </div>
-                        )}
+                            {error && (
+                                <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-light text-sm flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4" />
+                                    {error}
+                                </div>
+                            )}
 
-                        {!linkCode && !isGenerating && (
-                            <div className="text-center py-8">
-                                <p className="text-[var(--text-secondary)] mb-4">
-                                    {t("Generate a one-time code to link your mobile device")}
-                                </p>
-                                <button
-                                    onClick={generateCode}
-                                    className="px-6 py-3 bg-brand hover:bg-[#d4a000] text-black font-medium rounded-full transition-all hover:scale-105"
-                                >
-                                    {t("Generate Code")}
-                                </button>
-                            </div>
-                        )}
-
-                        {isGenerating && (
-                            <div className="flex items-center justify-center py-16">
-                                <GradientSpinner size="md" />
-                            </div>
-                        )}
-
-                        {linkCode && !isGenerating && (
-                            <div className="text-center">
-                                {codeUsed ? (
-                                    <div className="py-8">
-                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                                            <Check className="w-8 h-8 text-green-400" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">
-                                            {t("Device Linked!")}
-                                        </h3>
-                                        <p className="text-[var(--text-secondary)] mb-4">
-                                            {t("Your device has been successfully connected")}
-                                        </p>
-                                        <button
-                                            onClick={generateCode}
-                                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all text-sm"
-                                        >
-                                            {t("Link Another Device")}
-                                        </button>
-                                    </div>
-                                ) : timeRemaining <= 0 ? (
-                                    <div className="py-8">
-                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
-                                            <Clock className="w-8 h-8 text-red-400" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">
-                                            {t("Code Expired")}
-                                        </h3>
-                                        <p className="text-[var(--text-secondary)] mb-4">
-                                            {t("Generate a new code to continue")}
-                                        </p>
-                                        <button
-                                            onClick={generateCode}
-                                            className="px-4 py-2 bg-brand hover:bg-[#d4a000] text-black font-medium rounded-full transition-all"
-                                        >
-                                            <RefreshCw className="w-4 h-4 inline mr-2" />
-                                            {t("Generate New Code")}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* QR Code */}
-                                        <div className="bg-white p-4 rounded-xl inline-block mb-4">
-                                            <QRCodeSVG
-                                                value={getQRValue()}
-                                                size={180}
-                                                level="M"
-                                                includeMargin={false}
-                                            />
-                                        </div>
-
-                                        {/* Code Display */}
-                                        <div className="mb-4" aria-live="polite">
-                                            <p className="text-[var(--text-secondary)] text-sm mb-2">
-                                                {t("Or enter this code manually:")}
-                                            </p>
-                                            <div className="flex items-center justify-center gap-2">
-                                                <code className="text-3xl font-mono font-bold text-white tracking-widest bg-white/10 px-4 py-2 rounded-lg">
-                                                    {linkCode.code}
-                                                </code>
-                                                <button
-                                                    onClick={copyCode}
-                                                    className={cn(
-                                                        "p-2 min-h-[44px] min-w-[44px] rounded-lg transition-all flex items-center justify-center",
-                                                        copied
-                                                            ? "bg-green-500/20 text-green-400"
-                                                            : "bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]"
-                                                    )}
-                                                    aria-label={copied ? t("Code copied") : t("Copy code")}
-                                                >
-                                                    {copied ? (
-                                                        <Check className="w-5 h-5" />
-                                                    ) : (
-                                                        <Copy className="w-5 h-5" />
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Timer */}
-                                        <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
-                                            <Clock className="w-4 h-4" />
-                                            <span>
-                                                {t("Expires in")} {formatTime(timeRemaining)}
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </Card>
-
-                    {/* Linked Devices Section */}
-                    <Card className="p-6 bg-white/[0.03] border border-white/5">
-                        <h2 className="text-xl font-bold text-white mb-4">
-                            {t("Linked Devices")}
-                        </h2>
-
-                        {isLoadingDevices ? (
-                            <div className="flex items-center justify-center py-8">
-                                <GradientSpinner size="sm" />
-                            </div>
-                        ) : devices.length === 0 ? (
-                            <div className="text-center py-8 text-[var(--text-secondary)]">
-                                <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>{t("No devices linked yet")}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {devices.map((device) => (
-                                    <div
-                                        key={device.id}
-                                        className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                            {!linkCode && !isGenerating && (
+                                <div className="text-center py-8">
+                                    <p className="text-[var(--text-secondary)] mb-4">
+                                        Generate a one-time code to link your mobile device
+                                    </p>
+                                    <Button
+                                        variant="primary"
+                                        onClick={generateCode}
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                                                <Smartphone className="w-5 h-5 text-purple-400" />
+                                        Generate Code
+                                    </Button>
+                                </div>
+                            )}
+
+                            {isGenerating && (
+                                <div className="flex items-center justify-center py-16">
+                                    <GradientSpinner size="md" />
+                                </div>
+                            )}
+
+                            {linkCode && !isGenerating && (
+                                <div className="text-center">
+                                    {codeUsed ? (
+                                        <div className="py-8">
+                                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/20 flex items-center justify-center">
+                                                <Check className="w-8 h-8 text-success" />
                                             </div>
-                                            <div>
-                                                <p className="text-white font-medium">
-                                                    {device.name}
-                                                </p>
-                                                <p className="text-[var(--text-muted)] text-sm">
-                                                    {t("Last used:")}{" "}
-                                                    {new Date(device.lastUsed).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US")}
-                                                </p>
-                                            </div>
+                                            <h3 className="text-xl font-bold text-white mb-2">
+                                                Device Linked!
+                                            </h3>
+                                            <p className="text-[var(--text-secondary)] mb-4">
+                                                Your device has been successfully connected
+                                            </p>
+                                            <button
+                                                onClick={generateCode}
+                                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all text-sm"
+                                            >
+                                                Link Another Device
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={() => revokeDevice(device.id)}
-                                            className="p-2 min-h-[44px] min-w-[44px] text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all flex items-center justify-center"
-                                            aria-label={`${t("Revoke")} ${device.name}`}
+                                    ) : expired ? (
+                                        <div className="py-8">
+                                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-danger/20 flex items-center justify-center">
+                                                <Clock className="w-8 h-8 text-danger-light" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-white mb-2">
+                                                Code Expired
+                                            </h3>
+                                            <p className="text-[var(--text-secondary)] mb-4">
+                                                Generate a new code to continue
+                                            </p>
+                                            <Button
+                                                variant="primary"
+                                                onClick={generateCode}
+                                            >
+                                                <RefreshCw className="w-4 h-4 inline mr-2" />
+                                                Generate New Code
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="bg-white p-4 rounded-xl inline-block mb-4">
+                                                <QRCodeSVG
+                                                    value={getQRValue()}
+                                                    size={180}
+                                                    level="M"
+                                                />
+                                            </div>
+
+                                            <div className="mb-4" aria-live="polite">
+                                                <p className="text-[var(--text-secondary)] text-sm mb-2">
+                                                    Or enter this code manually:
+                                                </p>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <code className="text-3xl font-mono font-bold text-white tracking-widest bg-white/10 px-4 py-2 rounded-lg">
+                                                        {linkCode.code}
+                                                    </code>
+                                                    <button
+                                                        onClick={copyCode}
+                                                        className={cn(
+                                                            "p-2 min-h-[44px] min-w-[44px] rounded-lg transition-all flex items-center justify-center",
+                                                            copied
+                                                                ? "bg-success/20 text-success"
+                                                                : "bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]"
+                                                        )}
+                                                        aria-label={copied ? "Code copied" : "Copy code"}
+                                                    >
+                                                        {copied ? (
+                                                            <Check className="w-5 h-5" />
+                                                        ) : (
+                                                            <Copy className="w-5 h-5" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
+                                                <Clock className="w-4 h-4" />
+                                                <span>
+                                                    Expires in {formatTime(timeRemaining)}
+                                                </span>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
+
+                        <Card className="p-6 bg-white/[0.03] border border-white/5">
+                            <h2 className="text-xl font-bold text-white mb-4">
+                                Linked Devices
+                            </h2>
+
+                            {isLoadingDevices ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <GradientSpinner size="sm" />
+                                </div>
+                            ) : devices.length === 0 ? (
+                                <div className="text-center py-8 text-[var(--text-secondary)]">
+                                    <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                    <p>No devices linked yet</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {devices.map((device) => (
+                                        <div
+                                            key={device.id}
+                                            className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
                                         >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-brand/20 flex items-center justify-center">
+                                                    <Smartphone className="w-5 h-5 text-brand" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-white font-medium">
+                                                        {device.name}
+                                                    </p>
+                                                    <p className="text-[var(--text-muted)] text-sm">
+                                                        Last used:{" "}
+                                                        {new Date(device.lastUsed).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setPendingRevoke(device)}
+                                                className="p-2 min-h-[44px] min-w-[44px] text-[var(--text-secondary)] hover:text-danger-light hover:bg-danger/10 rounded-lg transition-all flex items-center justify-center"
+                                                aria-label={`Unlink ${device.name}`}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+
+                    <Card className="mt-8 p-6 bg-white/[0.03] border border-white/5">
+                        <h2 className="text-xl font-bold text-white mb-4">
+                            How to Link Your Device
+                        </h2>
+                        <ol className="space-y-3 text-[var(--text-secondary)]">
+                            <li className="flex gap-3">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
+                                    1
+                                </span>
+                                <span>Open the Kima app on your mobile device</span>
+                            </li>
+                            <li className="flex gap-3">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
+                                    2
+                                </span>
+                                <span>Tap &quot;Scan QR Code&quot; or &quot;Enter Code&quot; on the login screen</span>
+                            </li>
+                            <li className="flex gap-3">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
+                                    3
+                                </span>
+                                <span>Scan the QR code above, or manually enter the 6-digit code</span>
+                            </li>
+                            <li className="flex gap-3">
+                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
+                                    4
+                                </span>
+                                <span>Your device will be automatically logged in and linked to your account</span>
+                            </li>
+                        </ol>
                     </Card>
                 </div>
-
-                {/* Instructions */}
-                <Card className="mt-8 p-6 bg-white/[0.03] border border-white/5">
-                    <h2 className="text-xl font-bold text-white mb-4">
-                        {t("How to Link Your Device")}
-                    </h2>
-                    <ol className="space-y-3 text-[var(--text-secondary)]">
-                        <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
-                                1
-                            </span>
-                            <span>{t("Open the")} {branding.name}{t("app on your mobile device")}</span>
-                        </li>
-                        <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
-                                2
-                            </span>
-                            <span>{t('Tap "Scan QR Code" or "Enter Code" on the login screen')}</span>
-                        </li>
-                        <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
-                                3
-                            </span>
-                            <span>{t("Scan the QR code above, or manually enter the 6-digit code")}</span>
-                        </li>
-                        <li className="flex gap-3">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
-                                4
-                            </span>
-                            <span>{t("Your device will be automatically logged in and linked to your account")}</span>
-                        </li>
-                    </ol>
-                </Card>
             </div>
+
+            <ConfirmDialog
+                isOpen={pendingRevoke !== null}
+                onClose={() => setPendingRevoke(null)}
+                onConfirm={() => pendingRevoke && revokeDevice(pendingRevoke)}
+                title="Unlink this device?"
+                message={`${pendingRevoke?.name ?? "This device"} will be signed out and need a new code to link again.`}
+                confirmText="Unlink"
+                variant="danger"
+            />
         </div>
     );
 }

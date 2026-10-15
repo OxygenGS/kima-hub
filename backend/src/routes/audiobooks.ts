@@ -1,6 +1,5 @@
 import { Router } from "express";
 import * as fs from "fs";
-import * as path from "path";
 import { logger } from "../utils/logger";
 import { safeError, UserFacingError } from "../utils/errors";
 import { audiobookCacheService } from "../services/audiobookCache";
@@ -9,21 +8,17 @@ import { prisma } from "../utils/db";
 import { requireAuthOrToken } from "../middleware/auth";
 import { apiLimiter } from "../middleware/rateLimiter";
 import { getSystemSettings } from "../utils/systemSettings";
-import { notificationService } from "../services/notificationService";
 import { config } from "../config";
 import { resolveWithinMusicRoot } from "./library/trackPath";
 import { artistSortName } from "../services/artistIdentity";
 import { upstreamHeader } from "../utils/upstreamHeaders";
+import type { Audiobook, AudiobookProgress } from "@prisma/client";
 
 /**
- * Resolve the Access-Control-Allow-Origin value for a cover/stream response,
- * honoring the same allowlist as the global CORS middleware (src/index.ts)
- * instead of blindly reflecting the request's Origin header. A credentialed
- * response (Access-Control-Allow-Credentials: true) must never be paired with
- * a reflected origin unless that origin is actually allowed.
- * Returns `fallback` when no Origin header is present (non-browser request),
- * or null when the request's origin is explicitly disallowed - callers should
- * omit the ACAO/ACAC headers in that case. Shared with routes/podcasts.ts.
+ * Access-Control-Allow-Origin for a cover or stream response, using the same
+ * allowlist as the global CORS middleware instead of reflecting Origin.
+ * Returns `fallback` with no Origin header, null for a disallowed origin (omit
+ * the CORS headers then). Shared with routes/podcasts.ts.
  */
 export function resolveCorsOrigin(
     reqOrigin: string | undefined,
@@ -44,6 +39,51 @@ export function resolveCorsOrigin(
 }
 
 const router = Router();
+
+/** The progress sub-object every audiobook response carries, in one shape. */
+function progressDto(progress: AudiobookProgress) {
+    return {
+        currentTime: progress.currentTime,
+        progress:
+            progress.duration > 0
+                ? (progress.currentTime / progress.duration) * 100
+                : 0,
+        isFinished: progress.isFinished,
+        lastPlayedAt: progress.lastPlayedAt,
+    };
+}
+
+/** One audiobook row as the clients read it; the series sub-object rides along. */
+function toAudiobookDto(book: Audiobook, progress: AudiobookProgress | null) {
+    return {
+        id: book.id,
+        title: book.title,
+        author: book.author || "Unknown Author",
+        narrator: book.narrator,
+        description: book.description,
+        // The /audiobooks/:id/cover endpoint finds the file on disk even when
+        // localCoverPath is not set.
+        coverUrl:
+            book.localCoverPath || book.coverUrl
+                ? `/audiobooks/${book.id}/cover`
+                : null,
+        duration: book.duration || 0,
+        libraryId: book.libraryId,
+        series: book.series
+            ? {
+                  name: book.series,
+                  // Article-stripped series name for client-side series sorting;
+                  // computed per response because nothing sorts by it in SQL.
+                  sortName: artistSortName(book.series),
+                  sequence: book.seriesSequence || "1",
+              }
+            : null,
+        genres: book.genres || [],
+        ...(book.tracksJson != null && { tracks: book.tracksJson }),
+        ...(book.numTracks != null && { trackCount: book.numTracks }),
+        progress: progress ? progressDto(progress) : null,
+    };
+}
 
 /**
  * GET /audiobooks/continue-listening
@@ -101,7 +141,7 @@ router.get(
  * Manually trigger audiobook sync from Audiobookshelf
  * Fetches all audiobooks and caches metadata + cover images locally
  */
-router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
+router.post("/sync", requireAuthOrToken, apiLimiter, async (_req, res) => {
     try {
         const settings = await getSystemSettings();
 
@@ -113,23 +153,6 @@ router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
 
         logger.debug("[Audiobooks] Starting manual audiobook sync...");
         const result = await audiobookCacheService.syncAll();
-
-        // Check how many have series after sync
-        const seriesCount = await prisma.audiobook.count({
-            where: { series: { not: null } },
-        });
-        logger.debug(
-            `[Audiobooks] Sync complete. Books with series: ${seriesCount}`
-        );
-
-        // Send notification to user
-        if (req.user?.id) {
-            await notificationService.notifySystem(
-                req.user.id,
-                "Audiobook Sync Complete",
-                `Synced ${result.synced || 0} audiobooks (${seriesCount} with series)${result.failed ? `, ${result.failed} failed` : ""}${result.skipped ? `, ${result.skipped} skipped` : ""}`
-            );
-        }
 
         res.json({
             success: true,
@@ -166,83 +189,14 @@ router.post("/sync", requireAuthOrToken, apiLimiter, async (req, res) => {
         if (upstreamStatus != null) {
             return res.status(502).json({
                 success: false,
-                error: `Audiobookshelf returned status ${upstreamStatus}: ${errMsg}`,
+                error: `Audiobookshelf returned status ${upstreamStatus}`,
             });
         }
-        // Genuine internal error — keep as 500.
+        // Internal details (file paths, SQL) stay in the server log.
         res.status(500).json({
             success: false,
-            error: errMsg || "Audiobook sync failed",
+            error: "Audiobook sync failed",
         });
-    }
-});
-
-/**
- * GET /audiobooks/debug-series
- * Debug endpoint to see raw series data from Audiobookshelf
- */
-// Debug endpoint for series data
-router.get("/debug-series", requireAuthOrToken, async (_req, res) => {
-    if (process.env.NODE_ENV === "production") {
-        return res.status(404).json({ error: "Not found" });
-    }
-    logger.debug("[Audiobooks] Debug series endpoint called");
-    try {
-        const settings = await getSystemSettings();
-
-        if (!settings?.audiobookshelfEnabled) {
-            return res
-                .status(400)
-                .json({ error: "Audiobookshelf not enabled" });
-        }
-
-        // Get raw data from Audiobookshelf
-        const rawBooks = await audiobookshelfService.getAllAudiobooks();
-        logger.debug(
-            `[Audiobooks] Got ${rawBooks.length} books from Audiobookshelf`
-        );
-
-        // Find books with series data
-        const booksWithSeries = rawBooks.filter((book: any) => {
-            const metadata = book.media?.metadata || book;
-            return metadata.series || metadata.seriesName;
-        });
-
-        logger.debug(
-            `[Audiobooks] Books with series data: ${booksWithSeries.length}`
-        );
-
-        // Extract series info from all books (first 20)
-        const allSeriesInfo = rawBooks.slice(0, 20).map((book: any) => {
-            const metadata = book.media?.metadata || book;
-            return {
-                title: metadata.title || book.title,
-                rawSeries: metadata.series,
-                seriesName: metadata.seriesName,
-                seriesSequence: metadata.seriesSequence,
-                // Also check if there's series in the top-level book object
-                bookSeries: book.series,
-            };
-        });
-
-        // Get a full sample of one book with series (if any)
-        let fullSample = null;
-        if (booksWithSeries.length > 0) {
-            const sampleBook = booksWithSeries[0];
-            fullSample = {
-                id: sampleBook.id,
-                media: sampleBook.media,
-            };
-        }
-
-        res.json({
-            totalBooks: rawBooks.length,
-            booksWithSeriesCount: booksWithSeries.length,
-            sampleSeriesData: allSeriesInfo,
-            fullSampleWithSeries: fullSample,
-        });
-    } catch (error) {
-        safeError(res, "Debug series fetch failed", error);
     }
 });
 
@@ -310,63 +264,13 @@ router.get("/", requireAuthOrToken, apiLimiter, async (req, res) => {
             progressEntries.map((entry) => [entry.audiobookshelfId, entry])
         );
 
-        // Get user's progress for each audiobook
-        const audiobooksWithProgress = audiobooks.map((book) => {
-            const progress = progressMap.get(book.id);
-
-            // Cover URL: if we have localCoverPath or coverUrl from Audiobookshelf, serve from our endpoint
-            // The /audiobooks/:id/cover endpoint will find the file on disk even if localCoverPath isn't set
-            const hasCover = book.localCoverPath || book.coverUrl;
-
-            return {
-                id: book.id,
-                title: book.title,
-                // The article-stripped title this list is already ordered by.
-                // Exposed because the client re-sorts in some modes -- the
-                // series view sorts by series, then sequence, then title --
-                // and it cannot derive this itself: the article rules live in
-                // Postgres (`kima_sort_name`) and in `artistSortName`, neither
-                // reachable from the browser. Without it a client-side title
-                // comparison silently puts "The Hobbit" back under T.
-                sortName: book.sortName,
-                author: book.author || "Unknown Author",
-                narrator: book.narrator,
-                description: book.description,
-                coverUrl: hasCover
-                    ? `/audiobooks/${book.id}/cover` // Serve from local disk
-                    : null,
-                duration: book.duration || 0,
-                libraryId: book.libraryId,
-                series: book.series
-                    ? {
-                          name: book.series,
-                          // Article-stripped, for the same reason `sortName`
-                          // exists above: the series view sorts by series NAME
-                          // client-side, and a raw comparison files "The Lord
-                          // of the Rings" under T. Computed per response rather
-                          // than stored, because nothing orders by it in SQL --
-                          // only the browser does.
-                          sortName: artistSortName(book.series),
-                          sequence: book.seriesSequence || "1",
-                      }
-                    : null,
-                genres: book.genres || [],
-                ...(book.tracksJson != null && { tracks: book.tracksJson }),
-                ...(book.numTracks != null && { trackCount: book.numTracks }),
-                progress: progress
-                    ? {
-                          currentTime: progress.currentTime,
-                          progress:
-                              progress.duration > 0
-                                  ? (progress.currentTime / progress.duration) *
-                                    100
-                                  : 0,
-                          isFinished: progress.isFinished,
-                          lastPlayedAt: progress.lastPlayedAt,
-                      }
-                    : null,
-            };
-        });
+        // Get user's progress for each audiobook. sortName is list-only: the
+        // client re-sorts some views and cannot derive it — the article rules
+        // live in Postgres and in artistSortName.
+        const audiobooksWithProgress = audiobooks.map((book) => ({
+            ...toAudiobookDto(book, progressMap.get(book.id) ?? null),
+            sortName: book.sortName,
+        }));
 
         res.json(audiobooksWithProgress);
     } catch (error) {
@@ -420,52 +324,9 @@ router.get(
                 ])
             );
 
-            const seriesBooks = audiobooks.map((book) => {
-                const progress = seriesProgressMap.get(book.id);
-
-                return {
-                    id: book.id,
-                    title: book.title,
-                    author: book.author || "Unknown Author",
-                    narrator: book.narrator,
-                    description: book.description,
-                    coverUrl:
-                        book.localCoverPath || book.coverUrl
-                            ? `/audiobooks/${book.id}/cover`
-                            : null,
-                    duration: book.duration || 0,
-                    libraryId: book.libraryId,
-                    series: book.series
-                        ? {
-                              name: book.series,
-                              // Same shape as the list endpoint above. Nothing
-                              // sorts this response today -- it arrives in
-                              // seriesSequence order and is rendered as-is --
-                              // but one logical object returning two different
-                              // shapes from two routes is how a client ends up
-                              // reading a field that is only sometimes there.
-                              sortName: artistSortName(book.series),
-                              sequence: book.seriesSequence || "1",
-                          }
-                        : null,
-                    genres: book.genres || [],
-                    ...(book.tracksJson != null && { tracks: book.tracksJson }),
-                    ...(book.numTracks != null && { trackCount: book.numTracks }),
-                    progress: progress
-                        ? {
-                              currentTime: progress.currentTime,
-                              progress:
-                                  progress.duration > 0
-                                      ? (progress.currentTime /
-                                            progress.duration) *
-                                        100
-                                      : 0,
-                              isFinished: progress.isFinished,
-                              lastPlayedAt: progress.lastPlayedAt,
-                          }
-                        : null,
-                };
-            });
+            const seriesBooks = audiobooks.map((book) =>
+                toAudiobookDto(book, seriesProgressMap.get(book.id) ?? null)
+            );
 
             res.json(seriesBooks);
         } catch (error) {
@@ -498,6 +359,10 @@ router.options("/:id/cover", (req, res) => {
 router.get("/:id/cover", async (req, res) => {
     try {
         const { id } = req.params;
+        // This route is unauthenticated and `id` names a file below, so it must be a plain id.
+        if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+            return res.status(404).json({ error: "Cover not found" });
+        }
 
         const audiobook = await prisma.audiobook.findUnique({
             where: { id },
@@ -508,14 +373,6 @@ router.get("/:id/cover", async (req, res) => {
 
         // Fallback: check if cover exists on disk even if DB path is empty
         if (!coverPath) {
-            // `id` arrives from the URL, and Express decodes %2F in a route
-            // param AFTER matching -- so an id of "..%2F..%2F..%2Fetc%2Fx"
-            // becomes real traversal by the time it reaches here. This route
-            // carries no auth: auth in this file is applied per-route and this
-            // is not one of them, and nothing authenticates ahead of the
-            // /api/audiobooks mount in index.ts. An unresolved join is
-            // therefore an UNAUTHENTICATED read of any .jpg the process can
-            // reach, on software people expose to the internet.
             const fallbackPath = resolveWithinMusicRoot(
                 "cover-cache",
                 "audiobooks",
@@ -533,11 +390,8 @@ router.get("/:id/cover", async (req, res) => {
             }
         }
 
-        // If local cover exists, serve it. The stored localCoverPath is
-        // resolved too rather than trusted: it is a database value, and a row
-        // written before this guard existed can still hold a path outside the
-        // music root. Absolute paths survive the resolve unchanged when they
-        // are already inside it.
+        // The stored localCoverPath is resolved too: it is a database value and could
+        // point outside the music root.
         const resolvedCover = coverPath
             ? resolveWithinMusicRoot(coverPath)
             : null;
@@ -656,17 +510,7 @@ router.get("/:id", requireAuthOrToken, apiLimiter, async (req, res) => {
             sections,
             libraryId: audiobook.libraryId,
             ...(audiobook.numTracks != null && { trackCount: audiobook.numTracks }),
-            progress: progress
-                ? {
-                      currentTime: progress.currentTime,
-                      progress:
-                          progress.duration > 0
-                              ? (progress.currentTime / progress.duration) * 100
-                              : 0,
-                      isFinished: progress.isFinished,
-                      lastPlayedAt: progress.lastPlayedAt,
-                  }
-                : null,
+            progress: progress ? progressDto(progress) : null,
         });
     } catch (error) {
         safeError(res, "Failed to fetch audiobook", error);
@@ -714,11 +558,8 @@ router.get("/:id/stream", requireAuthOrToken, async (req, res) => {
             `[Audiobook Stream] Got stream, status: ${status}, content-type: ${headers["content-type"]}`
         );
 
-        // Range past the end of the file (e.g. a seek using a stale/wrong size --
-        // see the bad-metadata audiobook records): upstream returns 416. Send a
-        // clean 416 to the player instead of piping the upstream error body
-        // through as if it were audio. Forward Content-Range so the client can
-        // correct its range; never the error body or its content-type.
+        // Upstream 416 (a seek past the end, e.g. a wrong stored size): send a clean
+        // 416 with Content-Range so the client can correct, never the error body as audio.
         if (status === 416) {
             stream.destroy();
             res.status(416);
@@ -828,30 +669,10 @@ router.post(
                     ? Math.max(rawDuration, 0)
                     : 0;
 
-            logger.debug(`\n [AUDIOBOOK PROGRESS] Received update:`);
-            logger.debug(`   User: ${req.user!.username}`);
-            logger.debug(`   Audiobook ID: ${id}`);
             logger.debug(
-                `   Current Time: ${currentTime}s (${Math.floor(
-                    currentTime / 60
-                )} mins)`
+                `[Audiobook Progress] update from ${req.user!.username} for ${id}: ` +
+                    `${currentTime}s of ${durationValue}s${isFinished ? ", finished" : ""}`
             );
-            logger.debug(
-                `   Duration: ${durationValue}s (${Math.floor(
-                    durationValue / 60
-                )} mins)`
-            );
-            if (durationValue > 0) {
-                logger.debug(
-                    `   Progress: ${(
-                        (currentTime / durationValue) *
-                        100
-                    ).toFixed(1)}%`
-                );
-            } else {
-                logger.debug("   Progress: duration unknown");
-            }
-            logger.debug(`   Finished: ${!!isFinished}`);
 
             // Pull cached metadata to avoid hitting Audiobookshelf for every update
             const [cachedAudiobook, existingProgress] = await Promise.all([
@@ -923,8 +744,6 @@ router.post(
                 },
             });
 
-            logger.debug(`   Progress saved to database`);
-
             // Also update progress in Audiobookshelf
             try {
                 await audiobookshelfService.updateProgress(
@@ -933,7 +752,7 @@ router.post(
                     fallbackDuration,
                     isFinished
                 );
-                logger.debug(`   Progress synced to Audiobookshelf`);
+                logger.debug(`[Audiobook Progress] synced to Audiobookshelf`);
             } catch (error) {
                 logger.error(
                     "Failed to sync progress to Audiobookshelf:",
@@ -980,9 +799,9 @@ router.delete(
 
             const { id } = req.params;
 
-            logger.debug(`\n[AUDIOBOOK PROGRESS] Removing progress:`);
-            logger.debug(`   User: ${req.user!.username}`);
-            logger.debug(`   Audiobook ID: ${id}`);
+            logger.debug(
+                `[Audiobook Progress] removing progress for ${id} (${req.user!.username})`
+            );
 
             // Delete progress from our database
             await prisma.audiobookProgress.deleteMany({

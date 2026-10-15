@@ -2,6 +2,7 @@ import { Router } from "express";
 import { invalidateUserCache } from "../../middleware/auth";
 import bcrypt from "bcrypt";
 import { prisma } from "../../utils/db";
+import { defaultUserSettingsFor } from "../../utils/userSettingsDefaults";
 import { subsonicError, subsonicOk, SubsonicError } from "../../utils/subsonicResponse";
 import { wrap } from "./mappers";
 import { decodeSubsonicPassword, mapSubsonicUser, requireSubsonicAdmin } from "./userHelpers";
@@ -40,19 +41,9 @@ userManagementRouter.all("/changePassword.view", wrap(async (req, res) => {
         return;
     }
 
-    // A SELF-change made with an API key is refused, even though the same
-    // credential is otherwise treated as a full, valid Subsonic session
-    // (streaming, browsing, everything above this route works identically
-    // either way). This is the same shape as the 2FA fix on the password
-    // path itself (see subsonicAuth.ts): an app credential that can change
-    // the account's LOGIN PASSWORD isn't a lesser door than the password
-    // itself, it's the same door, wide open for anyone holding a leaked key
-    // -- exactly the gap 2FA exists to close, reopened one route later. A
-    // legacy-password session changing its OWN password is unaffected
-    // (`subsonicAuthMethod === "password"` here); an admin changing SOMEONE
-    // ELSE's is unaffected regardless of the admin's own auth method, since
-    // this check only fires when `username === req.user!.username` --
-    // that's the branch above, already passed by the time this runs.
+    // A user changing their own password with an API key is refused: a leaked
+    // key must not be able to take over the login, which is what 2FA protects.
+    // Password sessions, and admins changing another user's password, are unaffected.
     if (username === req.user!.username && req.subsonicAuthMethod === "apiKey") {
         return subsonicError(
             req,
@@ -122,13 +113,7 @@ userManagementRouter.all("/createUser.view", wrap(async (req, res) => {
     await prisma.userSettings.upsert({
         where: { userId: user.id },
         update: {},
-        create: {
-            userId: user.id,
-            playbackQuality: "original",
-            wifiOnly: false,
-            offlineEnabled: false,
-            maxCacheSizeMb: 10240,
-        },
+        create: defaultUserSettingsFor(user.id),
     });
 
     return subsonicOk(req, res);

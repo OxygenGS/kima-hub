@@ -1,15 +1,8 @@
-/**
- * Android TV / D-pad Navigation Utilities
- * Provides keyboard navigation support for TV interfaces
- */
-
 import { useState } from "react";
 
-// Check if running on Android TV
-export function isAndroidTV(): boolean {
+function isAndroidTV(): boolean {
     if (typeof window === "undefined") return false;
     
-    // Check for leanback/TV user agent hints
     const ua = navigator.userAgent.toLowerCase();
     const isTV = ua.includes("android tv") || 
                  ua.includes("googletv") || 
@@ -30,13 +23,11 @@ export function isAndroidTV(): boolean {
     return isTV || tvParam || (isLargeScreen && noTouch && ua.includes("android"));
 }
 
-// React hook to detect Android TV (with SSR safety)
 export function useIsTV(): boolean {
     const [isTV] = useState(() => isAndroidTV());
     return isTV;
 }
 
-// D-pad key codes
 export const DPAD_KEYS = {
     UP: "ArrowUp",
     DOWN: "ArrowDown",

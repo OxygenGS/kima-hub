@@ -5,30 +5,25 @@ import { logger } from "../../utils/logger";
 import { deezerService } from "../../services/deezer";
 import { lidarrService } from "../../services/lidarr";
 import { safeError } from "../../utils/errors";
-import { config } from "../../config";
 import { resolveWithinMusicRoot } from "./trackPath";
-import path from "path";
+import { parseLimit } from "./paging";
 import fs from "fs";
 import pLimit from "p-limit";
 import { toAudioFeaturesDTO } from "../../utils/audioFeatures";
+import { LIBRARY_LOCATION } from "../../services/libraryFilters";
 
-// Alphabetical ordering reads `sortName`, not `title`: the article-stripped,
-// unaccented, lowercased value written wherever an album's title or
-// displayTitle is written (albumIdentity.ts, routes/enrichment.ts), mirroring
-// the same fix already applied to Artist. Unlike routes/library/artists.ts,
-// there is no raw-SQL branch here to bypass this map -- checked; sortBy=name
-// and name-desc both go straight through `orderBy` below.
+// Alphabetical sorts use `sortName` (article-stripped, unaccented,
+// lowercased), written wherever a title or displayTitle is written.
 const ALBUM_SORT_MAP: Record<string, any> = {
   name: { sortName: "asc" as const },
   "name-desc": { sortName: "desc" as const },
   recent: { year: "desc" as const },
 };
 
-const MAX_LIMIT = 10000;
-
 const router = Router();
 
 router.get("/albums", async (req, res) => {
+  const start = Date.now();
   try {
     const {
       artistId,
@@ -37,10 +32,7 @@ router.get("/albums", async (req, res) => {
       filter = "owned",
       sortBy = "name",
     } = req.query;
-    const limit = Math.min(
-      parseInt(limitParam as string, 10) || 500,
-      MAX_LIMIT,
-    );
+    const limit = parseLimit(limitParam, 500);
     const offset = parseInt(offsetParam as string, 10) || 0;
 
     const orderBy = ALBUM_SORT_MAP[sortBy as string] ?? {
@@ -52,13 +44,15 @@ router.get("/albums", async (req, res) => {
     };
 
     if (filter === "owned") {
+      // Bounded so the query cannot fetch every row.
       const ownedAlbumMbids = await prisma.ownedAlbum.findMany({
         select: { rgMbid: true },
+        take: 20000,
       });
       const ownedMbids = ownedAlbumMbids.map((oa) => oa.rgMbid);
 
       where.OR = [
-        { location: "LIBRARY", tracks: { some: {} } },
+        { location: LIBRARY_LOCATION, tracks: { some: {} } },
         { rgMbid: { in: ownedMbids }, tracks: { some: {} } },
       ];
     } else if (filter === "discovery") {
@@ -80,7 +74,7 @@ router.get("/albums", async (req, res) => {
         where,
         skip: offset,
         take: limit,
-        orderBy,
+        orderBy: [orderBy, { id: "asc" }],
         include: {
           artist: {
             select: {
@@ -107,6 +101,9 @@ router.get("/albums", async (req, res) => {
     });
   } catch (error) {
     safeError(res, "Get albums", error);
+  } finally {
+    const elapsed = Date.now() - start;
+    logger.info(`GET /albums completed in ${elapsed}ms`);
   }
 });
 

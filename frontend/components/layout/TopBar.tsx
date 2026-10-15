@@ -13,43 +13,37 @@ import {
     Bell,
 } from "lucide-react";
 import { ActivityPanelToggle } from "./ActivityPanel";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
-import { useToast } from "@/lib/toast-context";
+import { notify } from "@/lib/notify";
 import { useDownloadContext } from "@/lib/download-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { useActivityPanelOpen } from "@/hooks/useActivityPanel";
 import { useAuth } from "@/lib/auth-context";
-import { useQueryClient } from "@tanstack/react-query";
-import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { openWhatsNew } from "@/components/whats-new/WhatsNewGate";
+import { KimaMark } from "@/components/ui/KimaMark";
+
+const scanEnded = (status?: string) => status === "completed" || status === "failed";
 
 export function TopBar() {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuth();
-    const { branding } = useBranding();
-    const { t, locale } = useLanguage();
-    const downloadStatusText = (count: number, state: "in progress" | "starting..." | "failed") =>
-        `${count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(count === 1 ? "download" : "downloads")} ${t(state)}`;
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
     const [searchQuery, setSearchQuery] = useState("");
     const [scanJobId, setScanJobId] = useState<string | null>(null);
-    const [lastScanTime, setLastScanTime] = useState<number>(0);
-    const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
-        if (typeof window === "undefined") return false;
-        return localStorage.getItem("kima_activity_panel_open") === "true";
-    });
-    const { toast } = useToast();
+    const isActivityPanelOpen = useActivityPanelOpen();
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const queryClient = useQueryClient();
 
-    // SSE-populated scan status (populated by useEventSource via queryClient.setQueryData)
+    // The scan's state from the server. SSE events update it as they arrive; it
+    // is also read every 2 s until the scan ends, so a missed event cannot leave
+    // the button spinning.
     const { data: scanStatus } = useQuery<{
         status: string;
         progress: number;
@@ -57,16 +51,26 @@ export function TopBar() {
         error?: string;
     } | null>({
         queryKey: ["scan-status", scanJobId],
-        queryFn: () => queryClient.getQueryData(["scan-status", scanJobId]) ?? null,
+        queryFn: async () => {
+            try {
+                return { ...(await api.getScanStatus(scanJobId!)), jobId: scanJobId! };
+            } catch (error) {
+                if ((error as { status?: number }).status === 404) return { status: "completed", progress: 100, jobId: scanJobId! };
+                throw error;
+            }
+        },
         enabled: !!scanJobId,
-        staleTime: Infinity,
-        refetchOnWindowFocus: false,
+        refetchInterval: (query) => (scanEnded(query.state.data?.status) ? false : 2000),
     });
 
-    const isPolling = !!scanJobId && (!scanStatus || scanStatus.status === "active");
+    const isPolling = !!scanJobId && !scanEnded(scanStatus?.status);
 
-    // Terminal SSE status makes isPolling false; the next scan replaces the
-    // job ID. Clearing it in an effect caused an unnecessary render.
+    useEffect(() => {
+        if (!scanStatus || !scanJobId) return;
+        if (scanEnded(scanStatus.status)) {
+            setScanJobId(null);
+        }
+    }, [scanStatus, scanJobId]);
 
     // Track download status from context (single source of truth)
     const { pendingDownloads, downloadStatus } = useDownloadContext();
@@ -74,56 +78,28 @@ export function TopBar() {
     // pendingDownloads is optimistic local state that can become stale
     const hasActiveDownloads = downloadStatus.hasActiveDownloads;
 
-    // Freshness depends on wall-clock time, so sample it outside render and
-    // periodically update while optimistic downloads exist. No impure clock
-    // reads occur in React's render phase.
-    const [pendingClock, setPendingClock] = useState<number | null>(null);
-    useEffect(() => {
-        if (pendingDownloads.length === 0) return;
-        const updateClock = () => setPendingClock(Date.now());
-        const initial = window.setTimeout(updateClock, 0);
-        const interval = window.setInterval(updateClock, 5000);
-        return () => {
-            window.clearTimeout(initial);
-            window.clearInterval(interval);
-        };
-    }, [pendingDownloads.length]);
     const hasPendingUploads =
-        pendingClock !== null &&
-        pendingDownloads.some((p) => pendingClock - p.timestamp < 30000 && pendingClock >= p.timestamp);
-    const hasFailedDownloads = downloadStatus.failedDownloads.length > 0;
+        pendingDownloads.length > 0 &&
+        pendingDownloads.some((p) => Date.now() - p.timestamp < 30000); // Only count recent pending
 
     const handleSync = async () => {
         if (isPolling) return;
 
-        // Prevent spam clicking - cooldown of 5 seconds (silently ignore)
-        const now = Date.now();
-        const timeSinceLastScan = now - lastScanTime;
-        if (timeSinceLastScan < 5000) {
-            return;
-        }
-
         try {
-            setLastScanTime(now);
             const response = await api.scanLibrary();
+            // Every manual scan has the same job id; the last scan's "completed"
+            // must not stand in for this one.
+            queryClient.removeQueries({ queryKey: ["scan-status", response.jobId] });
             setScanJobId(response.jobId);
-            // Refresh notifications to show the scan started notification
-            queryClient.invalidateQueries({ queryKey: ["notifications"] });
         } catch (error) {
-            console.error("Failed to trigger library scan:", error);
-            // The old comment here claimed these surface in the activity panel
-            // via notifications. They do not: a scan that is refused never
-            // starts, so no notification is ever created, and the only trace
-            // was a console line nobody has open. Pressing the button did
-            // visibly nothing -- which is indistinguishable from a scan that
-            // ran and found no changes.
+            // A refused scan never starts, so nothing else reports it.
             const message =
                 error instanceof Error ? error.message : String(error);
             const refused = /403|forbidden|admin/i.test(message);
-            toast.error(
+            notify.error(
                 refused
-                    ? t("Only an admin can scan the library")
-                    : t("Could not start the library scan")
+                    ? "Only an admin can scan the library"
+                    : "Could not start the library scan"
             );
         }
     };
@@ -131,10 +107,8 @@ export function TopBar() {
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success(t("Logged out successfully"));
-        } catch (error) {
-            console.error("Logout error:", error);
-            toast.error(t("Failed to logout"));
+        } catch {
+            notify.error("Failed to logout");
         }
     };
 
@@ -154,12 +128,10 @@ export function TopBar() {
             return;
         }
 
-        // Clear any existing timeout
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
 
-        // Don't search if query is empty
         if (!searchQuery.trim()) {
             return;
         }
@@ -177,31 +149,22 @@ export function TopBar() {
         };
     }, [searchQuery, router, pathname]);
 
-    // Synchronize the search field only when changing routes, not when
-    // typing. Guarded same-component state updates avoid a cascading effect.
-    const [searchPathname, setSearchPathname] = useState(pathname);
-    if (searchPathname !== pathname) {
-        setSearchPathname(pathname);
-        const q = pathname === "/search" && typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("q")
-            : null;
-        setSearchQuery(q ?? "");
-    }
-
-    // Mirror activity panel open state for aria-expanded
+    // Sync search query with URL on page change
     useEffect(() => {
-        const handleToggle = () => setIsActivityPanelOpen((prev) => !prev);
-        const handleOpen = () => setIsActivityPanelOpen(true);
-        const handleClose = () => setIsActivityPanelOpen(false);
-        window.addEventListener("toggle-activity-panel", handleToggle);
-        window.addEventListener("open-activity-panel", handleOpen);
-        window.addEventListener("close-activity-panel", handleClose);
-        return () => {
-            window.removeEventListener("toggle-activity-panel", handleToggle);
-            window.removeEventListener("open-activity-panel", handleOpen);
-            window.removeEventListener("close-activity-panel", handleClose);
-        };
-    }, []);
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get("q");
+
+        if (pathname === "/search" && q) {
+            // Only update if different to avoid loops
+            if (q !== searchQuery) {
+                setSearchQuery(q);
+            }
+        } else if (pathname !== "/search" && searchQuery) {
+            // Clear search when leaving search page
+            setSearchQuery("");
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]); // Only re-run when pathname changes
 
     // Global "/" keyboard shortcut to focus search
     useEffect(() => {
@@ -221,10 +184,10 @@ export function TopBar() {
 
     return (
         <header
-            className="fixed top-0 left-0 right-0 bg-[var(--bg-primary)] flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
+            className="fixed top-0 left-0 right-0 bg-black flex items-center px-3 z-(--z-header) pwa-titlebar-drag"
             style={{
                 height: isMobileOrTablet
-                    ? "calc(58px + var(--standalone-safe-area-top, 0px))"
+                    ? "calc(var(--topbar-h) + var(--standalone-safe-area-top, 0px))"
                     : "calc(64px + var(--titlebar-height, 0px))",
                 paddingTop: isMobileOrTablet
                     ? "var(--standalone-safe-area-top, 0px)"
@@ -234,21 +197,18 @@ export function TopBar() {
             {/* Mobile/Tablet Layout: Hamburger + Home + Search + Bell */}
             {isMobileOrTablet ? (
                 <>
-                    {/* Hamburger menu button */}
                     <button
                         onClick={() => {
-                            // Dispatch custom event to toggle mobile menu
                             window.dispatchEvent(
                                 new CustomEvent("toggle-mobile-menu")
                             );
                         }}
                         className="w-11 h-11 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-interactive)] rounded-md text-white hover:bg-[var(--bg-tertiary)] transition-colors duration-200 mr-2 flex-shrink-0"
-                        aria-label={t("Open menu")}
+                        aria-label="Open menu"
                     >
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    {/* Home */}
                     <Link
                         href="/"
                         className={cn(
@@ -257,13 +217,12 @@ export function TopBar() {
                                 ? "bg-white text-black"
                                 : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white"
                         )}
-                        aria-label={t("Home")}
-                        title={t("Home")}
+                        aria-label="Home"
+                        title="home"
                     >
                         <Home className="w-5 h-5" />
                     </Link>
 
-                    {/* Search */}
                     <form onSubmit={handleSearch} className="flex-1 min-w-0">
                         <div
                             className="relative"
@@ -274,17 +233,16 @@ export function TopBar() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={t("Search...")}
-                                aria-label={t("Search")}
+                                placeholder="Search..."
+                                aria-label="Search"
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
-                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                className="w-full h-11 pl-10 pr-3 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                             />
                         </div>
                     </form>
 
-                    {/* Notification Bell */}
                     <button
                         onClick={() => {
                             window.dispatchEvent(
@@ -294,35 +252,30 @@ export function TopBar() {
                         aria-expanded={isActivityPanelOpen}
                         aria-controls="activity-panel-mobile"
                         className="w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-colors duration-200 ml-2 flex-shrink-0 relative"
-                        aria-label={t("Notifications")}
-                        title={t("Notifications")}
+                        aria-label="Notifications"
+                        title="notifications"
                     >
                         <Bell className="w-5 h-5" />
                     </button>
                 </>
             ) : (
                 <>
-                    {/* Desktop Layout */}
-                    {/* Logo - Far Left */}
                     <div className="w-72 flex items-center px-2">
                         <Link
                             href="/"
                             className="flex items-center gap-2 group"
                         >
-                            <Image
-                                src={branding.logoUrl}
-                                alt={branding.name}
-                                unoptimized
-                                width={32}
-                                height={32}
-                                priority
-                                className="group-hover:scale-105 transition-transform"
-                            />
+                            <KimaMark size={32} className="group-hover:scale-105 transition-transform" />
                         </Link>
-                        <span className="ml-2 text-sm font-semibold text-white max-w-40 truncate">{branding.name}</span>
-                        <span className="ml-2 px-1.5 py-0.5 text-micro font-medium text-[var(--text-muted)] bg-white/5 rounded border border-white/10">
+                        <button
+                            type="button"
+                            onClick={openWhatsNew}
+                            aria-label={`what's new in v${APP_VERSION}`}
+                            title={`what's new in v${APP_VERSION}`}
+                            className="ml-2 px-1.5 py-0.5 text-micro font-medium text-brand/80 bg-brand/[0.06] rounded border border-brand/25 transition-colors hover:text-brand hover:bg-brand/10 hover:border-brand/50 focus-visible:outline-2 focus-visible:outline-brand"
+                        >
                             v{APP_VERSION}
-                        </span>
+                        </button>
                     </div>
 
                     {/* Center - Home & Search */}
@@ -335,8 +288,8 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white hover:scale-105"
                             )}
-                            aria-label={t("Home")}
-                            title={t("Home")}
+                            aria-label="Home"
+                            title="home"
                         >
                             <Home className="w-6 h-6" />
                         </Link>
@@ -357,12 +310,12 @@ export function TopBar() {
                                     onChange={(e) =>
                                         setSearchQuery(e.target.value)
                                     }
-                                    placeholder={t("What do you want to play?")}
-                                    aria-label={t("Search")}
+                                    placeholder="What do you want to play?"
+                                    aria-label="Search"
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
-                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
+                                    className="w-full h-12 pl-12 pr-4 bg-[var(--bg-hover)] hover:bg-[#242424] border-2 border-transparent focus:border-white/20 rounded-full text-sm text-white placeholder-gray-400 transition-all duration-200 outline-none"
                                 />
                             </div>
                         </form>
@@ -375,35 +328,29 @@ export function TopBar() {
                             disabled={isPolling}
                             aria-label={
                                 isPolling
-                                    ? t("Library scan in progress")
+                                    ? "Library scan in progress"
                                     : hasActiveDownloads
-                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
+                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`
                                     : hasPendingUploads
-                                    ? downloadStatusText(pendingDownloads.length, "starting...")
-                                    : hasFailedDownloads
-                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
-                                    : t("Sync library")
+                                    ? `${pendingDownloads.length} download(s) starting`
+                                    : "Sync library"
                             }
                             className={cn(
                                 "flex items-center gap-2 px-3 h-11 rounded-full transition-all duration-200 text-sm font-medium",
                                 isPolling
                                     ? "bg-white/10 text-[var(--text-muted)] cursor-not-allowed"
                                     : hasActiveDownloads
-                                    ? " text-green-400 "
-                                    : hasFailedDownloads
-                                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                                    ? "text-brand"
                                     : "bg-[var(--bg-primary)] text-white hover:bg-white/20"
                             )}
                             title={
                                 isPolling
-                                    ? t("Library scan in progress...")
+                                    ? "library scan in progress..."
                                     : hasActiveDownloads
-                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
+                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`.toLowerCase()
                                     : hasPendingUploads
-                                    ? downloadStatusText(pendingDownloads.length, "starting...")
-                                    : hasFailedDownloads
-                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
-                                    : t("Sync Library")
+                                    ? `${pendingDownloads.length} download(s) starting...`.toLowerCase()
+                                    : "sync library"
                             }
                         >
                             <RefreshCw
@@ -423,16 +370,16 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "text-[var(--text-secondary)] hover:text-white"
                             )}
-                            aria-label={t("Settings")}
-                            title={t("Settings")}
+                            aria-label="Settings"
+                            title="settings"
                         >
                             <Settings className="w-5 h-5" />
                         </Link>
                         <button
                             onClick={handleLogout}
-                            className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 text-red-400 hover:text-red-300"
-                            aria-label={t("Logout")}
-                            title={t("Logout")}
+                            className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 text-danger-light hover:brightness-125"
+                            aria-label="Logout"
+                            title="logout"
                         >
                             <Power className="w-5 h-5" />
                         </button>

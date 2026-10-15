@@ -1,27 +1,24 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Search as SearchIcon } from "lucide-react";
 import { useIsTV } from "@/lib/tv-utils";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { cn } from "@/lib/cn";
 
 interface TVSearchInputProps {
     initialQuery?: string;
     onSearch: (query: string) => void;
 }
 
-// A new URL query should start a new controlled input without setting state
-// from an effect. Local typing keeps working within the same query.
-export function TVSearchInput(props: TVSearchInputProps) {
-    return <TVSearchInputContent key={props.initialQuery ?? ""} {...props} />;
-}
-
-function TVSearchInputContent({ initialQuery = "", onSearch }: TVSearchInputProps) {
+export function TVSearchInput({ initialQuery = "", onSearch }: TVSearchInputProps) {
     const isTV = useIsTV();
-    const { t } = useLanguage();
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState(initialQuery);
     const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        setQuery(initialQuery);
+    }, [initialQuery]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,17 +30,14 @@ function TVSearchInputContent({ initialQuery = "", onSearch }: TVSearchInputProp
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        // On Enter, submit the search
         if (e.key === "Enter") {
             handleSubmit(e);
         }
-        // On Escape, blur the input
         if (e.key === "Escape") {
             inputRef.current?.blur();
         }
     };
 
-    // Only render this component in TV mode
     if (!isTV) {
         return null;
     }
@@ -61,31 +55,23 @@ function TVSearchInputContent({ initialQuery = "", onSearch }: TVSearchInputProp
                         onKeyDown={handleKeyDown}
                         onFocus={() => setIsFocused(true)}
                         onBlur={() => setIsFocused(false)}
-                        placeholder={t("Press Enter to search...")}
+                        placeholder="Press Enter to search..."
                         autoCapitalize="none"
                         autoCorrect="off"
                         autoComplete="off"
                         data-tv-card
                         data-tv-card-index={0}
                         tabIndex={0}
-                        className={`
-                            w-full h-16 pl-14 pr-6
-                            bg-[var(--bg-hover)]
-                            rounded-lg
-                            text-xl text-white
-                            placeholder-gray-500
-                            transition-all
-                            outline-none
-                            border-2
-                            ${isFocused
+                        className={cn(
+                            "w-full h-16 pl-14 pr-6 bg-[var(--bg-hover)] rounded-lg text-xl text-white placeholder-gray-500 transition-all outline-none border-2",
+                            isFocused
                                 ? "border-[var(--color-brand)] bg-[#242424]"
-                                : "border-transparent hover:bg-[#242424]"
-                            }
-                        `}
+                                : "border-transparent hover:bg-[#242424]",
+                        )}
                     />
                     {query && (
                         <div className="absolute right-5 top-1/2 -translate-y-1/2 text-sm text-[var(--text-muted)]">
-                            {t("Press Enter to search")}
+                            Press Enter to search
                         </div>
                     )}
                 </div>

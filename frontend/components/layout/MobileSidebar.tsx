@@ -3,15 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Settings, RefreshCw, LogOut, Compass, X, Radio } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/utils/cn";
+import { Settings, RefreshCw, LogOut, Compass, X, Radio, ChartNoAxesColumn } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast-context";
-import Image from "next/image";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { notify } from "@/lib/notify";
+import { KimaMark } from "@/components/ui/KimaMark";
+import { APP_VERSION } from "@/lib/version";
+import { openWhatsNew } from "@/components/whats-new/WhatsNewGate";
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -20,11 +19,7 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const pathname = usePathname();
-    const queryClient = useQueryClient();
     const { logout } = useAuth();
-    const { branding } = useBranding();
-    const { t } = useLanguage();
-    const { toast } = useToast();
     const [isSyncing, setIsSyncing] = useState(false);
     const isFirstRender = useRef(true);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -44,32 +39,26 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
         };
     }, []);
 
-    // Handle library sync
     const handleSync = async () => {
         if (isSyncing) return;
 
         try {
             setIsSyncing(true);
             await api.scanLibrary();
-            queryClient.invalidateQueries({ queryKey: ["notifications"] });
             onClose();
-        } catch (error) {
-            console.error("Failed to sync library:", error);
-            toast.error("Failed to start scan. Please try again.");
+        } catch {
+            notify.error("Could not start the library scan");
         } finally {
             syncTimeoutRef.current = setTimeout(() => setIsSyncing(false), 2000);
         }
     };
 
-    // Handle logout
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success("Logged out successfully");
             onClose();
-        } catch (error) {
-            console.error("Logout error:", error);
-            toast.error("Failed to logout");
+        } catch {
+            notify.error("Failed to logout");
         }
     };
 
@@ -77,38 +66,27 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
     return (
         <>
-            {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-black/60 z-(--z-drawer-backdrop) transition-opacity duration-200"
                 onClick={onClose}
                 aria-hidden="true"
             />
 
-            {/* Sidebar Drawer */}
             <div
                 className="fixed inset-y-0 left-0 w-[280px] bg-[var(--bg-primary)] z-(--z-drawer) flex flex-col overflow-hidden transform transition-transform duration-300 border-r border-white/[0.06]"
                 style={{
                     paddingTop: "var(--standalone-safe-area-top, 0px)",
                 }}
             >
-                {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
                     <Link
                         href="/"
                         className="flex items-center gap-3"
                         onClick={onClose}
                     >
-                        <Image
-                            src={branding.logoUrl}
-                            alt={branding.name}
-                            unoptimized
-                            width={32}
-                            height={32}
-                            priority
-                            className="flex-shrink-0"
-                        />
+                        <KimaMark size={32} />
                         <span className="text-lg font-bold text-white tracking-tight">
-                            {branding.name}
+                            Kima
                         </span>
                     </Link>
                     <button
@@ -120,16 +98,14 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </button>
                 </div>
 
-                {/* Menu Content */}
                 <nav
                     className="flex-1 overflow-y-auto py-4"
                     role="navigation"
-                    aria-label={t("Mobile menu")}
+                    aria-label="Mobile menu"
                 >
-                    {/* Quick Links Section */}
                     <div className="px-3 mb-6">
                         <div className="text-xs font-semibold text-[var(--text-muted)] px-3 mb-2">
-                            {t("Quick Links")}
+                            Quick Links
                         </div>
 
                         <Link
@@ -147,7 +123,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         >
                             <Compass className="w-5 h-5" />
                             <span className="text-sm font-medium">
-                                {t("Discover")}
+                                Discover
                             </span>
                         </Link>
 
@@ -169,12 +145,30 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 Radio
                             </span>
                         </Link>
+
+                        <Link
+                            href="/stats"
+                            aria-current={
+                                pathname === "/stats" ? "page" : undefined
+                            }
+                            aria-label="Stats"
+                            className={cn(
+                                "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors duration-200",
+                                pathname === "/stats" ?
+                                    "bg-white/10 text-white"
+                                :   "text-[var(--text-secondary)] hover:text-white hover:bg-white/5",
+                            )}
+                        >
+                            <ChartNoAxesColumn className="w-5 h-5" />
+                            <span className="text-sm font-medium">
+                                Stats
+                            </span>
+                        </Link>
                     </div>
 
-                    {/* Actions Section */}
                     <div className="px-3">
                         <div className="text-xs font-semibold text-[var(--text-muted)] px-3 mb-2">
-                            {t("Actions")}
+                            Actions
                         </div>
 
                         <button
@@ -182,7 +176,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                             disabled={isSyncing}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-colors duration-200 text-left",
-                                isSyncing ? "text-green-400" : (
+                                isSyncing ? "text-brand" : (
                                     "text-[var(--text-secondary)] hover:text-white hover:bg-white/5"
                                 ),
                             )}
@@ -194,7 +188,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 )}
                             />
                             <span className="text-sm font-medium">
-                                {isSyncing ? t("Syncing...") : t("Sync Library")}
+                                {isSyncing ? "Syncing..." : "Sync Library"}
                             </span>
                         </button>
 
@@ -212,20 +206,31 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         >
                             <Settings className="w-5 h-5" />
                             <span className="text-sm font-medium">
-                                {t("Settings")}
+                                Settings
                             </span>
                         </Link>
                     </div>
                 </nav>
 
-                {/* Footer - Logout */}
                 <div className="border-t border-white/[0.06] p-3">
                     <button
+                        type="button"
+                        onClick={() => {
+                            onClose();
+                            openWhatsNew();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 transition-colors duration-200"
+                    >
+                        <span className="text-sm">
+                            What&apos;s new in <span className="text-brand/80">v{APP_VERSION}</span>
+                        </span>
+                    </button>
+                    <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors duration-200"
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-danger-light hover:brightness-125 hover:bg-danger/10 transition-colors duration-200"
                     >
                         <LogOut className="w-5 h-5" />
-                        <span className="text-sm font-medium">{t("Logout")}</span>
+                        <span className="text-sm font-medium">Logout</span>
                     </button>
                 </div>
             </div>

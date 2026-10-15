@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 
 interface SeekSliderProps {
     /** Current progress percentage (0-100) */
@@ -71,7 +71,6 @@ export function SeekSlider({
         (e: React.TouchEvent<HTMLDivElement>) => {
             if (!isDragging || !canSeek) return;
 
-            // Find the touch that we're tracking
             const touch = Array.from(e.touches).find(
                 (t) => t.identifier === touchIdentifierRef.current
             );
@@ -92,7 +91,6 @@ export function SeekSlider({
         (e: React.TouchEvent<HTMLDivElement>) => {
             if (!isDragging || !canSeek) return;
 
-            // Check if the touch we're tracking ended
             const touchEnded = !Array.from(e.touches).some(
                 (t) => t.identifier === touchIdentifierRef.current
             );
@@ -160,7 +158,6 @@ export function SeekSlider({
         [isDragging, canSeek, calculateProgress, duration, onSeek]
     );
 
-    // Add global mouse event listeners when dragging
     useEffect(() => {
         if (isDragging) {
             window.addEventListener("mousemove", handleMouseMove);
@@ -177,18 +174,16 @@ export function SeekSlider({
         previewProgress !== null ? previewProgress : progress;
     const isActive = canSeek && hasMedia;
 
-    // Determine tooltip text
     const getTooltipText = () => {
         if (!hasMedia) return undefined;
         if (!canSeek) {
             return downloadProgress !== null
-                ? `Downloading ${downloadProgress}%... Seek will be available when cached`
-                : "Downloading... Seeking will be available when cached";
+                ? `downloading ${downloadProgress}%... seek will be available when cached`
+                : "downloading... seeking will be available when cached";
         }
-        return isDragging ? "Release to seek" : "Click or drag to seek";
+        return isDragging ? "release to seek" : "click or drag to seek";
     };
 
-    // Variant-specific styles
     const getVariantStyles = () => {
         switch (variant) {
             case "minimal":
@@ -196,9 +191,9 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/[0.15]",
                     progress: isActive
-                        ? "bg-[#eab308]"
+                        ? "bg-brand"
                         : hasMedia
-                        ? "bg-[#eab308]/50"
+                        ? "bg-brand/50"
                         : "bg-gray-600",
                 };
             case "overlay":
@@ -206,7 +201,7 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/20",
                     progress: isActive
-                        ? "bg-gradient-to-r from-[#eab308] to-[#f97316]"
+                        ? "bg-gradient-to-r from-brand to-brand-dark"
                         : "bg-white/40",
                 };
             default:
@@ -214,7 +209,7 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/[0.15]",
                     progress: isActive
-                        ? "bg-[#eab308] group-hover:bg-[#eab308]"
+                        ? "bg-brand group-hover:bg-brand"
                         : hasMedia
                         ? "bg-white/50"
                         : "bg-gray-600",
@@ -253,7 +248,7 @@ export function SeekSlider({
                 {showHandle && isActive && (
                     <div
                         className={cn(
-                            "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#eab308] rounded-full transition-opacity ",
+                            "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-brand rounded-full transition-opacity ",
                             isDragging
                                 ? "opacity-100 scale-125"
                                 : "opacity-0 group-hover:opacity-100"
@@ -262,7 +257,6 @@ export function SeekSlider({
                 )}
             </div>
 
-            {/* Visual feedback when dragging */}
             {isDragging && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap">
                     {Math.floor((displayProgress / 100) * duration)}s

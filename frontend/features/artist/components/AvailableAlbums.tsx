@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { Album, ArtistSource } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
-import { PlayableCard } from "@/components/ui/PlayableCard";
-import { Disc3 } from "lucide-react";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { Disc3, Download } from "lucide-react";
 import { api } from "@/lib/api";
-import { useMusicPermissions } from "@/lib/auth-context";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { isMbid } from "@/lib/mbid";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 interface AvailableAlbumsProps {
     albums: Album[];
-    artistName: string;
     source: ArtistSource | null;
-    colors: ColorPalette | null;
-    onDownloadAlbum: (album: Album, e: React.MouseEvent) => void;
+    onDownloadAlbum: (album: Album) => void;
     isPendingDownload: (mbid: string) => boolean;
 }
 
@@ -23,21 +19,17 @@ interface AvailableAlbumsProps {
 function LazyAlbumCard({
     album,
     source,
-    colors,
     onDownloadAlbum,
     isPendingDownload,
     index,
 }: {
     album: Album;
     source: ArtistSource | null;
-    colors: ColorPalette | null;
-    onDownloadAlbum: (album: Album, e: React.MouseEvent) => void;
+    onDownloadAlbum: (album: Album) => void;
     isPendingDownload: (mbid: string) => boolean;
     index: number;
 }) {
-    const { canRequestAlbums } = useMusicPermissions();
     const [coverArt, setCoverArt] = useState<string | null>(() => {
-        // Initial cover art from props
         if (source === "library" && album.coverArt) {
             return api.getCoverArtUrl(album.coverArt, 300);
         }
@@ -48,12 +40,11 @@ function LazyAlbumCard({
     });
     const [fetchAttempted, setFetchAttempted] = useState(false);
 
-    // Lazy-load cover art if not available
     useEffect(() => {
         if (coverArt || fetchAttempted) return;
 
-        const mbid = album.rgMbid || album.mbid;
-        if (!mbid || mbid.startsWith("temp-")) return;
+        const mbid = [album.rgMbid, album.mbid].find(isMbid);
+        if (!mbid) return;
 
         // Fetch cover art from our backend (which caches it)
         const fetchCover = async () => {
@@ -76,32 +67,28 @@ function LazyAlbumCard({
         return () => clearTimeout(timeoutId);
     }, [album, coverArt, fetchAttempted, index]);
 
-    // Get MBID for download tracking
     const albumMbid = album.rgMbid || album.mbid || "";
 
-    // Build subtitle with year and type
     const subtitleParts: string[] = [];
     if (album.year) subtitleParts.push(String(album.year));
     if (album.type) subtitleParts.push(album.type);
     const subtitle = subtitleParts.join(" • ");
 
     return (
-        <PlayableCard
-            key={album.id}
+        <MediaCard
             href={`/album/${album.id}`}
-            coverArt={coverArt}
+            imageUrl={coverArt}
             title={album.title}
             subtitle={subtitle}
-            placeholderIcon={
-                <Disc3 className="w-12 h-12 text-[var(--text-muted)]" />
-            }
-            circular={false}
-            badge={canRequestAlbums ? "download" : null}
-            showPlayButton={false}
-            colors={colors}
-            isDownloading={isPendingDownload(albumMbid)}
-            onDownload={canRequestAlbums ? (e) => onDownloadAlbum(album, e) : undefined}
-            tvCardIndex={index}
+            fallbackIcon={Disc3}
+            type="album"
+            index={index}
+            action={{
+                icon: Download,
+                label: "Download",
+                onClick: () => onDownloadAlbum(album),
+                busy: isPendingDownload(albumMbid),
+            }}
         />
     );
 }
@@ -109,7 +96,6 @@ function LazyAlbumCard({
 function AlbumGrid({
     albums,
     source,
-    colors,
     onDownloadAlbum,
     isPendingDownload,
 }: Omit<AvailableAlbumsProps, "artistName">) {
@@ -120,7 +106,6 @@ function AlbumGrid({
                     key={album.id}
                     album={album}
                     source={source}
-                    colors={colors}
                     onDownloadAlbum={onDownloadAlbum}
                     isPendingDownload={isPendingDownload}
                     index={index}
@@ -132,18 +117,14 @@ function AlbumGrid({
 
 export function AvailableAlbums({
     albums,
-    artistName: _artistName,
     source,
-    colors,
     onDownloadAlbum,
     isPendingDownload,
 }: AvailableAlbumsProps) {
-    const { t } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
 
-    // Separate studio albums from EPs/Singles/Demos
     const studioAlbums = albums.filter(
         (album) => album.type?.toLowerCase() === "album"
     );
@@ -153,32 +134,28 @@ export function AvailableAlbums({
 
     return (
         <>
-            {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <SectionHeader color="albums" title={t("Albums Available")} />
+                    <SectionHeader type="album" title="Albums Available" />
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
                             source={source}
-                            colors={colors}
-                            onDownloadAlbum={onDownloadAlbum}
+                                    onDownloadAlbum={onDownloadAlbum}
                             isPendingDownload={isPendingDownload}
                         />
                     </div>
                 </section>
             )}
 
-            {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <SectionHeader color="albums" title={t("Singles and EPs")} />
+                    <SectionHeader type="album" title="Singles and EPs" />
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}
                             source={source}
-                            colors={colors}
-                            onDownloadAlbum={onDownloadAlbum}
+                                    onDownloadAlbum={onDownloadAlbum}
                             isPendingDownload={isPendingDownload}
                         />
                     </div>

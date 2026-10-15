@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
     useAudioState,
     useAudioPlayback,
@@ -10,17 +9,14 @@ import { useDownloadContext } from "@/lib/download-context";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
-import { useToast } from "@/lib/toast-context";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { notify } from "@/lib/notify";
 
-// Hooks
 import { useArtistData } from "@/features/artist/hooks/useArtistData";
 import { useArtistActions } from "@/features/artist/hooks/useArtistActions";
 import { useDownloadActions } from "@/features/artist/hooks/useDownloadActions";
 import type { Track, Album } from "@/features/artist/types";
-import { useTrackPreview } from "@/hooks/useTrackPreview";
+import { usePreview } from "@/hooks/usePreview";
 
-// Components
 import { ArtistHero } from "@/features/artist/components/ArtistHero";
 import { ArtistActionBar } from "@/features/artist/components/ArtistActionBar";
 import { ArtistBio } from "@/features/artist/components/ArtistBio";
@@ -28,18 +24,15 @@ import { PopularTracks } from "@/features/artist/components/PopularTracks";
 import { Discography } from "@/features/artist/components/Discography";
 import { AvailableAlbums } from "@/features/artist/components/AvailableAlbums";
 import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
+import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function ArtistPage() {
-    const { toast } = useToast();
-    const { t, locale } = useLanguage();
-    const router = useRouter();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { playTracks, pause } = useAudioControls();
     const { isPendingByMbid } = useDownloadContext();
 
-    // Data hook
     const {
         artist,
         albums,
@@ -51,12 +44,10 @@ export default function ArtistPage() {
         reloadArtist,
     } = useArtistData();
 
-    // Action hooks
     const { playAll, shufflePlay } = useArtistActions();
     const { downloadArtist, downloadAlbum } = useDownloadActions();
-    const { previewTrack, previewPlaying, handlePreview } = useTrackPreview();
+    const preview = usePreview();
 
-    // Separate owned and available albums
     const ownedAlbums = albums.filter((a) => a.owned);
     const availableAlbums = albums.filter((a) => !a.owned);
 
@@ -77,8 +68,7 @@ export default function ArtistPage() {
 
     const { colors } = useImageColor(lowResImage || rawImageUrl);
 
-    // Play album handler
-    async function handlePlayAlbum(albumId: string, albumTitle: string) {
+    async function handlePlayAlbum(albumId: string) {
         try {
             const albumData = await api.getAlbum(albumId);
             if (albumData.tracks && albumData.tracks.length > 0) {
@@ -92,14 +82,12 @@ export default function ArtistPage() {
                     artist: albumData.artist,
                 }));
                 playTracks(tracksWithAlbum, 0);
-                toast.success(`${t("Playing album:")} ${albumTitle}`);
             }
         } catch {
-            toast.error(t("Failed to play album"));
+            notify.error("Failed to play album");
         }
     }
 
-    // Play track handler (for popular tracks)
     function handlePlayTrack(track: Track) {
         if (!artist?.topTracks) return;
 
@@ -122,60 +110,49 @@ export default function ArtistPage() {
         playTracks(formattedTracks, Math.max(0, startIndex));
     }
 
-    // Download album handler
-    function handleDownloadAlbum(album: Album, e: React.MouseEvent) {
-        downloadAlbum(album, artist?.name || "", e);
+    function handleDownloadAlbum(album: Album) {
+        downloadAlbum(album, artist?.name || "");
     }
 
-    // Start artist radio handler
     async function handleStartRadio() {
         if (!artist) return;
 
         try {
-            toast.success(`${t("Starting artist radio:")} ${artist.name}...`);
             const response = await api.getRadioTracks("artist", artist.id);
 
             if (response.tracks && response.tracks.length > 0) {
                 // Backend already returns properly formatted tracks - just pass them through
                 playTracks(response.tracks, 0);
-                toast.success(
-                    `${t("Playing artist radio:")} ${artist.name} (${response.tracks.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${response.tracks.length === 1 ? t("track") : t("tracks")})`,
-                );
             } else {
-                toast.error(
-                    t("Not enough similar music in your library for artist radio"),
+                notify.error(
+                    "Not enough similar music in your library for artist radio",
                 );
             }
         } catch {
-            toast.error(t("Failed to start artist radio"));
+            notify.error("Failed to start artist radio");
         }
     }
 
-    // Loading state
     if (loading) {
-        return <LoadingScreen message={t("Loading artist...")} />;
+        return <LoadingScreen message="Loading artist..." />;
     }
 
-    // Error or not found state
-    if (error || !artist) {
+    if (error) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center space-y-4">
-                    <div className="text-6xl text-[var(--text-muted)]">♪</div>
-                    <h1 className="text-2xl font-semibold text-white">
-                        {t("Artist Not Found")}
-                    </h1>
-                    <p className="text-neutral-400">
-                        {t("This artist isn't in your library yet.")}
-                    </p>
-                    <button
-                        onClick={() => router.back()}
-                        className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-colors"
-                    >
-                        {t("Go Back")}
-                    </button>
-                </div>
-            </div>
+            <PageMessage
+                title="Couldn't load this artist"
+                action={{ label: "Try again", onClick: () => reloadArtist() }}
+            />
+        );
+    }
+
+    if (!artist) {
+        return (
+            <PageMessage
+                title="Artist not found"
+                description="This artist isn't in your library or on MusicBrainz."
+                action={{ label: "Artists", href: "/collection?tab=artists" }}
+            />
         );
     }
 
@@ -190,12 +167,9 @@ export default function ArtistPage() {
                 colors={colors}
                 onReload={reloadArtist}
             >
-                {/* Action bar inside hero for visual continuity */}
                 <ArtistActionBar
-                    artist={artist}
                     albums={albums}
                     source={source}
-                    colors={colors}
                     onPlayAll={() => playAll(artist, albums)}
                     onShuffle={() => shufflePlay(artist, albums)}
                     onDownloadAll={() => downloadArtist(artist)}
@@ -210,9 +184,7 @@ export default function ArtistPage() {
                 />
             </ArtistHero>
 
-            {/* Main Content - fills remaining viewport height */}
             <div className="relative min-h-[50vh] flex-1 animate-rise">
-                {/* Dynamic color gradient background */}
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
@@ -224,55 +196,43 @@ export default function ArtistPage() {
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,rgba(16,16,16,0.4)_100%)] pointer-events-none" />
 
-                <div className="relative px-4 md:px-8 py-6 space-y-8">
-                    {/* Bio / About */}
+                <div className="relative page-shell py-6 space-y-8">
                     {(artist.bio || artist.summary) && (
                         <ArtistBio bio={artist.bio || artist.summary || ""} />
                     )}
 
-                    {/* Popular Tracks */}
                     {artist.topTracks && artist.topTracks.length > 0 && (
                         <PopularTracks
                             tracks={artist.topTracks}
                             artist={artist}
                             currentTrackId={currentTrack?.id}
-                            colors={colors}
                             onPlayTrack={handlePlayTrack}
-                            previewTrack={previewTrack}
-                            previewPlaying={previewPlaying}
-                            onPreview={(track: Track, e: React.MouseEvent) =>
-                                handlePreview(track, artist.name, e)
+                            previewTrack={preview.previewId}
+                            previewPlaying={preview.playing}
+                            onPreview={(track: Track) =>
+                                preview.toggle(track.id, api.getTrackPreviewStreamUrl(artist.name, track.title))
                             }
                         />
                     )}
 
-                    {/* Discography (Owned Albums) */}
                     <Discography
                         albums={ownedAlbums}
-                        colors={colors}
                         onPlayAlbum={handlePlayAlbum}
                         sortBy={sortBy}
                         onSortChange={setSortBy}
                     />
 
-                    {/* Available Albums to Download */}
                     <AvailableAlbums
                         albums={availableAlbums}
-                        artistName={artist.name}
                         source={source}
-                        colors={colors}
                         onDownloadAlbum={handleDownloadAlbum}
                         isPendingDownload={isPendingByMbid}
                     />
 
-                    {/* Similar Artists */}
                     {artist.similarArtists &&
                         artist.similarArtists.length > 0 && (
                             <SimilarArtists
                                 similarArtists={artist.similarArtists}
-                                onNavigate={(id) =>
-                                    router.push(`/artist/${id}`)
-                                }
                             />
                         )}
                 </div>

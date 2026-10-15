@@ -1,16 +1,6 @@
 /**
- * SSE event bus.
- *
- * Replaces an EventEmitter that broadcast every event to every listener, each
- * of which compared event.userId to its own and discarded the mismatches. That
- * is O(total connections) per event for a payload almost always destined for
- * one of them, and it carried setMaxListeners(100) so a hundred concurrent or
- * leaked connections started warning.
- *
- * The properties asserted here are the ones the delivery path depends on:
- * events reach only their recipient, a subscriber that refuses data is dropped
- * rather than retried forever, and a throwing subscriber cannot take the emit
- * loop down with it.
+ * The SSE bus delivers each event only to its recipient, drops a subscriber
+ * that refuses data, and survives a subscriber that throws.
  */
 
 import { eventBus, SSEEvent, SSESubscriber } from "../eventBus";
@@ -147,10 +137,8 @@ describe("eventBus reaping", () => {
     });
 
     it("scales fan-out with recipients, not with total connections", () => {
-        // 200 connected users, one event addressed to one of them. Under the
-        // old broadcast every listener ran and filtered; here only the target
-        // is touched -- and 200 connections used to exceed the emitter's
-        // setMaxListeners(100) warning threshold.
+        // 200 connected users, one event for one of them: only the target's
+        // listener runs, and no emitter listener limit is hit.
         const others = Array.from({ length: 200 }, (_, i) => {
             const r = recorder();
             cleanups.push(eventBus.subscribe(`user-${i}`, r.sub));

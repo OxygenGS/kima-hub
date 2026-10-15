@@ -3,8 +3,7 @@ import { createShareLink, ShareError } from "../services/shareService";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
-import { randomBytes } from "crypto";
-import rateLimit from "express-rate-limit";
+import { createRateLimiter } from "../middleware/rateLimiter";
 import path from "path";
 import fs from "fs";
 import { getLocalImagePath, getResizedImagePath } from "../services/imageStorage";
@@ -23,21 +22,9 @@ setInterval(() => {
     }
 }, 60_000).unref();
 
-const shareResolveLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 60,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
-});
+const shareResolveLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 60 });
 
-const shareStreamLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
-});
+const shareStreamLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 300 });
 
 function getMimeType(filePath: string): string {
     const ext = path.extname(filePath).toLowerCase();
@@ -52,6 +39,28 @@ function getMimeType(filePath: string): string {
         ".wma": "audio/x-ms-wma",
     };
     return mimeTypes[ext] || "application/octet-stream";
+}
+
+/** The share link for `token`, or null once the response has gone out: 404 unknown, 410 expired or out of plays. */
+async function loadUsableShareLink(token: string, res: Response) {
+    const shareLink = await prisma.shareLink.findUnique({ where: { token } });
+
+    if (!shareLink) {
+        res.status(404).json({ error: "Share link not found" });
+        return null;
+    }
+
+    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
+        res.status(410).json({ error: "Share link has expired" });
+        return null;
+    }
+
+    if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
+        res.status(410).json({ error: "Share link play limit reached" });
+        return null;
+    }
+
+    return shareLink;
 }
 
 /**
@@ -89,21 +98,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
  */
 router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
-
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
         let entity: any = null;
 
@@ -184,21 +180,8 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
  */
 router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
-
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
         const coverArtId = decodeURIComponent(req.params.coverArtId);
         const size = req.query.size as string | undefined;
@@ -221,7 +204,9 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
                     res.setHeader("Content-Type", "image/jpeg");
                     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
                     return res.sendFile(resizedPath);
-                } catch {}
+                } catch {
+                    // No resized copy yet: serve the original below.
+                }
             }
         }
 
@@ -239,21 +224,8 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
  */
 router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
-
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
         const trackId = req.params.trackId;
         let authorized = false;

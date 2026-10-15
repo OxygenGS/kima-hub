@@ -3,13 +3,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { useToast } from "@/lib/toast-context";
-import { cn } from "@/utils/cn";
+import { notify } from "@/lib/notify";
+import { cn } from "@/lib/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAudioState, useAudioPlayback } from "@/lib/audio-context";
 import { useDiscoverData } from "@/features/discover/hooks/useDiscoverData";
 import { useDiscoverActions } from "@/features/discover/hooks/useDiscoverActions";
-import { usePreviewPlayer } from "@/features/discover/hooks/usePreviewPlayer";
+import { usePreview } from "@/hooks/usePreview";
 import { DiscoverHero } from "@/features/discover/components/DiscoverHero";
 import { DiscoverActionBar } from "@/features/discover/components/DiscoverActionBar";
 import { TrackList } from "@/features/discover/components/TrackList";
@@ -18,17 +18,15 @@ import { HowItWorks } from "@/features/discover/components/HowItWorks";
 import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context";
 import { DiscoverSettingsTab } from "@/components/activity/DiscoverSettingsTab";
 import { api } from "@/lib/api";
-import { useMusicPermissions } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Button } from "@/components/ui/Button";
+import { plural } from "@/lib/format";
+import { openActivityPanel, setActivityPanelTab } from "@/hooks/useActivityPanel";
 
 export default function DiscoverWeeklyPage() {
-    const { t, locale } = useLanguage();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
-    const { canRequestAlbums } = useMusicPermissions();
-    const { branding } = useBranding();
     const { setSettingsContent, settingsOwner } = useActivityPanelSettings();
     const queryClient = useQueryClient();
 
@@ -41,40 +39,32 @@ export default function DiscoverWeeklyPage() {
         handlePlayTrack,
         handleTogglePlay,
     } = useDiscoverActions(playlist, reloadData, isGenerating, refreshBatchStatus, setPendingGeneration, markGenerationStart, updateTrackLiked);
-    const { currentPreview, handleTogglePreview } = usePreviewPlayer();
+    const preview = usePreview();
     const [retryingUnavailable, setRetryingUnavailable] = useState(false);
-    const { toast } = useToast();
 
     const handleRetryUnavailable = async () => {
         setRetryingUnavailable(true);
         try {
             const result = await api.retryUnavailableAlbums();
             if (result.success && result.queued > 0) {
-                window.dispatchEvent(
-                    new CustomEvent("set-activity-panel-tab", {
-                        detail: { tab: "active" },
-                    })
-                );
-                window.dispatchEvent(new CustomEvent("open-activity-panel"));
-                toast.success(`${t("Retrying")} ${result.queued.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(result.queued === 1 ? "album" : "albums")}`);
+                openActivityPanel("active");
                 refreshBatchStatus();
                 setTimeout(() => reloadData(), 15000);
             } else {
-                toast.info(result.message || t("No albums to retry"));
+                notify.info("No albums to retry", { message: result.message });
             }
         } catch (error) {
             console.error("Failed to retry unavailable albums:", error);
             if ((error as { status?: number })?.status === 409) {
-                toast.error(t("A discovery batch is already in progress"));
+                notify.error("A discovery batch is already in progress");
             } else {
-                toast.error(t("Failed to retry unavailable albums"));
+                notify.error("Failed to retry unavailable albums");
             }
         } finally {
             setRetryingUnavailable(false);
         }
     };
 
-    // Check if we're playing from this playlist
     const isPlaylistPlaying = playlist?.tracks.some(
         (t) => t.id === currentTrack?.id
     );
@@ -82,18 +72,11 @@ export default function DiscoverWeeklyPage() {
     // Build discover settings element (stable across renders via the effect dep array)
     const discoverSettingsRef = useRef<React.ReactNode>(null);
     const settingsOwnerRef = useRef(settingsOwner);
-    // Refs are synchronized after render, before the settings publishing effect.
-    useEffect(() => {
-        settingsOwnerRef.current = settingsOwner;
-    }, [settingsOwner]);
+    settingsOwnerRef.current = settingsOwner;
 
     useEffect(() => {
         const handleBackToActivity = () => {
-            window.dispatchEvent(
-                new CustomEvent("set-activity-panel-tab", {
-                    detail: { tab: "active" },
-                })
-            );
+            setActivityPanelTab("active");
         };
 
         const handlePlaylistCleared = async () => {
@@ -128,12 +111,7 @@ export default function DiscoverWeeklyPage() {
         if (discoverSettingsRef.current) {
             setSettingsContent(discoverSettingsRef.current, "discover");
         }
-        window.dispatchEvent(new CustomEvent("open-activity-panel"));
-        window.dispatchEvent(
-            new CustomEvent("set-activity-panel-tab", {
-                detail: { tab: "settings" },
-            })
-        );
+        openActivityPanel("settings");
     };
 
     // Handle cancel generation - cancels stuck backend batch and clears frontend state
@@ -148,7 +126,7 @@ export default function DiscoverWeeklyPage() {
         try {
             await api.cancelDiscoverBatch();
         } catch (error) {
-            console.error('[DiscoverWeekly] Backend cancel failed:', error);
+            console.error('Backend cancel failed:', error);
         }
     };
 
@@ -179,25 +157,20 @@ export default function DiscoverWeeklyPage() {
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-                <p className="text-sm text-[var(--text-muted)]">{t("Could not load discovery data.")}</p>
-                <button
+                <p className="text-sm text-[var(--text-muted)]">Could not load discovery data.</p>
+                <Button
+                    variant="secondary"
                     onClick={reloadData}
-                    className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-lg text-sm font-bold text-[var(--text-secondary)] hover:border-[var(--color-brand)] hover:text-white transition-all duration-300 min-h-[44px] focus-visible:outline-2 focus-visible:outline-[var(--color-brand)] focus-visible:outline-offset-2"
                 >
                     <RefreshCw className="w-4 h-4" />
-                    {t("Retry")}
-                </button>
+                    Retry
+                </Button>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen relative">
-            {/* Static gradient overlay - no animation */}
-            <div className="fixed inset-0 pointer-events-none opacity-50">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent" />
-            </div>
-
+        <div className="min-h-screen">
             <div className="relative">
                 <DiscoverHero
                     playlist={playlist}
@@ -214,20 +187,11 @@ export default function DiscoverWeeklyPage() {
                     onCancelGeneration={handleCancelGeneration}
                 />
 
-                {/* Track Listing */}
-                <div className="px-4 md:px-8 pb-32 max-w-[1800px] mx-auto">
+                <div className="page-shell pb-32">
                     {playlist && playlist.tracks.length > 0 ? (
                             <div className="section-stack">
-                                {/* Section header */}
                                 <section>
-                                    <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-4">
-                                        <span className="w-1 h-8 bg-gradient-to-b from-brand to-brand-light rounded-full" />
-                                        <span className="tracking-tight">{t("Playlist")}</span>
-                                        <span className="flex-1 border-t border-white/10" />
-                                        <span className="text-xs tabular-nums text-brand">
-                                            {(playlist?.totalCount || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t((playlist?.totalCount || 0) === 1 ? "track" : "tracks")}
-                                        </span>
-                                    </h2>
+                                    <SectionHeader type="track" title="Playlist" count={plural(playlist?.totalCount || 0, "track")} className="mb-4" />
                                     <TrackList
                                         tracks={playlist.tracks}
                                         currentTrack={currentTrack}
@@ -241,9 +205,11 @@ export default function DiscoverWeeklyPage() {
                                 <section>
                                     <UnavailableAlbums
                                         unavailable={playlist.unavailable}
-                                        currentPreview={currentPreview}
-                                        onTogglePreview={handleTogglePreview}
-                                        onRetryAll={canRequestAlbums ? handleRetryUnavailable : undefined}
+                                        currentPreview={preview.previewId}
+                                        onTogglePreview={(albumId, artistName, title) =>
+                                            preview.toggle(albumId, api.getTrackPreviewStreamUrl(artistName, title))
+                                        }
+                                        onRetryAll={handleRetryUnavailable}
                                         isRetrying={retryingUnavailable}
                                     />
                                 </section>
@@ -255,62 +221,60 @@ export default function DiscoverWeeklyPage() {
                         ) : (
                             <div className="max-w-3xl mx-auto py-16">
                                 <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-12">
-                                    {/* Accent line */}
-                                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[var(--color-brand)] to-[var(--color-brand-hover)]" />
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-brand" />
 
-                                    {/* Status badge */}
                                     <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                                         <div className="w-2 h-2 bg-[var(--color-brand)]" />
                                         <span className="text-xs tabular-nums text-[var(--text-secondary)]">
-                                            {isGenerating ? t("Generating") : t("Ready")}
+                                            {isGenerating ? "Generating" : "Ready"}
                                         </span>
                                     </div>
 
                                     <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4 leading-none">
-                                        {t("This week's")}<br/>
-                                        <span className="text-[var(--color-brand)]">{t("playlist")}</span>
+                                        This week&apos;s<br/>
+                                        <span className="text-[var(--color-brand)]">playlist</span>
                                     </h3>
 
                                     <p className="text-sm text-[var(--text-muted)] mb-6 leading-relaxed">
-                                        {branding.name} {t("finds artists similar to ones you already love, picks a representative track from each, then builds your weekly playlist.")}
+                                        Kima finds artists similar to ones you already love, picks a representative track
+                                        from each, then builds your weekly playlist.
                                     </p>
 
                                     {/* What this does -- disk disclosure, visible before generating */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-brand mb-1">{t("Finds")}</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Similar artists via Last.fm, grouped by similarity tier")}</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">Finds</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Similar artists via ListenBrainz + local similarity, grouped by similarity tier</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-brand mb-1">{t("Downloads (action)")}</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Full albums to")} <span className="text-[var(--text-muted)]">/music/discovery</span> {t("on your server")}</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">Downloads</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Full albums to <span className="text-[var(--text-muted)]">/music/discovery</span> on your server</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-brand mb-1">{t("Cleans up")}</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Unliked albums are removed at week's end -- liked ones stay forever")}</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">Cleans up</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Unliked albums are removed at week&apos;s end -- liked ones stay forever</div>
                                         </div>
                                     </div>
 
-                                    {/* Placeholder stats */}
                                     <div className="grid grid-cols-3 gap-4 mb-8">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">{t("Tracks")}</div>
+                                            <div className="text-2xl font-bold text-white mb-1">--</div>
+                                            <div className="text-xs text-[var(--text-muted)]">Tracks</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">{t("Duration")}</div>
+                                            <div className="text-2xl font-bold text-white mb-1">--</div>
+                                            <div className="text-xs text-[var(--text-muted)]">Duration</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                                            <div className="text-2xl font-bold text-brand mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">{t("Artists")}</div>
+                                            <div className="text-2xl font-bold text-white mb-1">--</div>
+                                            <div className="text-xs text-[var(--text-muted)]">Artists</div>
                                         </div>
                                     </div>
 
-                                    {canRequestAlbums ? <button
+                                    <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating}
-                                        aria-label={isGenerating ? t("Playlist generation in progress") : t("Build this week's playlist")}
+                                        aria-label={isGenerating ? "Playlist generation in progress" : "Build this week's playlist"}
                                         className={cn(
                                             "w-full py-4 px-6 border-2 rounded-lg font-bold text-sm transition-all duration-300 min-h-[52px] focus-visible:outline-2 focus-visible:outline-[var(--color-brand)] focus-visible:outline-offset-2",
                                             isGenerating
@@ -326,14 +290,10 @@ export default function DiscoverWeeklyPage() {
                                         ) : (
                                             <span className="flex items-center justify-center gap-3">
                                                 <RefreshCw className="w-4 h-4" />
-                                                {t("Build This Week's Playlist")}
+                                                Build This Week&apos;s Playlist
                                             </span>
                                         )}
-                                    </button> : (
-                                        <p className="text-center text-sm text-[var(--text-muted)]">
-                                            {t("An administrator can enable album requests to build a new Discover Weekly playlist.")}
-                                        </p>
-                                    )}
+                                    </button>
                                 </div>
                             </div>
                         )}

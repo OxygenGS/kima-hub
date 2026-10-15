@@ -1,11 +1,9 @@
 import { useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
-import { queryKeys } from "@/hooks/useQueries";
+import { useAddToPlaylistMutation } from "@/hooks/useQueries";
 import { Track } from "../types";
 
-// Helper to convert library Track to audio context Track format
 const formatTrackForAudio = (track: Track) => ({
     id: track.id,
     title: track.title,
@@ -23,7 +21,7 @@ const formatTrackForAudio = (track: Track) => ({
 
 export function useLibraryActions() {
     const { playTracks, addToQueue } = useAudioControls();
-    const queryClient = useQueryClient();
+    const { mutateAsync: addToPlaylist } = useAddToPlaylistMutation();
 
     const playArtist = useCallback(async (artistId: string) => {
         try {
@@ -87,65 +85,28 @@ export function useLibraryActions() {
     }, [playTracks]);
 
     const addTrackToQueue = useCallback((track: Track) => {
-        try {
-            addToQueue(formatTrackForAudio(track));
-        } catch (error) {
-            console.error("Error adding track to queue:", error);
-        }
+        addToQueue(formatTrackForAudio(track));
     }, [addToQueue]);
 
-    const addTrackToPlaylist = useCallback(async (playlistId: string, trackId: string) => {
-        try {
-            await api.addTrackToPlaylist(playlistId, trackId);
-            queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
-            queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
-        } catch (error) {
-            // The selector dialog stays open and reports the failure; a
-            // swallowed error here made a rejected add look like success.
-            console.error("Error adding track to playlist:", error);
-            throw error;
-        }
-    }, [queryClient]);
-
-    const deleteTrack = useCallback(async (id: string): Promise<void> => {
-        try {
-            await api.deleteTrack(id);
-        } catch (error) {
-            throw error;
-        }
-    }, []);
-
-    const deleteAlbum = useCallback(async (id: string): Promise<void> => {
-        try {
-            await api.deleteAlbum(id);
-        } catch (error) {
-            throw error;
-        }
-    }, []);
-
-    const deleteArtist = useCallback(async (id: string): Promise<void> => {
-        try {
-            await api.deleteArtist(id);
-        } catch (error) {
-            throw error;
-        }
-    }, []);
+    const addTrackToPlaylist = useCallback(
+        async (playlistId: string, trackId: string) => {
+            // The shared mutation owns the request and the cache refresh;
+            // it rejects on failure so the selector dialog stays open and
+            // reports the error.
+            await addToPlaylist({ playlistId, trackId });
+        },
+        [addToPlaylist],
+    );
 
     return useMemo(() => ({
         playArtist,
         playAlbum,
         addTrackToQueue,
         addTrackToPlaylist,
-        deleteTrack,
-        deleteAlbum,
-        deleteArtist,
     }), [
         playArtist,
         playAlbum,
         addTrackToQueue,
         addTrackToPlaylist,
-        deleteTrack,
-        deleteAlbum,
-        deleteArtist,
     ]);
 }

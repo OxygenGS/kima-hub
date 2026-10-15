@@ -1,19 +1,14 @@
 /**
- * `resolveWithinMusicRoot` -- the guard between a database string and rm -rf.
- *
- * The read paths (streaming, waveform, subsonic playback) went through this
- * from the start. The DELETE paths did not: they joined the music root to a
- * stored value and handed the result to unlinkSync or
- * rmSync(recursive, force). The cases below are the ones that made that a real
- * hole rather than a theoretical one -- `Artist.name` and `Album.title` are ID3
- * tag values, so a file added to the watched folder chooses them.
+ * `resolveWithinMusicRoot` guards every path built from a stored value before a
+ * read or delete. Artist names and album titles are ID3 tags, so a file in the
+ * watched folder chooses them.
  */
 
 jest.mock("../../../config", () => ({
   config: { music: { musicPath: "/music" } },
 }));
 
-import { resolveTrackFilePath, resolveWithinMusicRoot } from "../trackPath";
+import { resolveWithinMusicRoot } from "../trackPath";
 
 describe("paths inside the root resolve", () => {
   it("resolves a plain relative path", () => {
@@ -80,14 +75,3 @@ describe("paths that escape the root are refused", () => {
   });
 });
 
-describe("resolveTrackFilePath keeps its old contract", () => {
-  it("resolves a track path", () => {
-    expect(resolveTrackFilePath("Artist/Album/t.mp3")).toBe(
-      "/music/Artist/Album/t.mp3",
-    );
-  });
-
-  it("refuses a traversing track path", () => {
-    expect(resolveTrackFilePath("../../etc/passwd")).toBeNull();
-  });
-});

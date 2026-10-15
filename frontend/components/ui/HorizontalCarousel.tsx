@@ -1,24 +1,24 @@
 "use client";
 
-import { useRef, useState, useEffect, ReactNode } from "react";
+import { useRef, useState, useEffect, type CSSProperties, ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 interface HorizontalCarouselProps {
     children: ReactNode;
     className?: string;
-    itemClassName?: string;
     showArrows?: boolean;
     gap?: "sm" | "md" | "lg";
+    style?: CSSProperties;
 }
 
 export function HorizontalCarousel({
     children,
     className,
-    itemClassName: _itemClassName,
     showArrows = true,
     gap = "md",
+    style,
 }: HorizontalCarouselProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -78,7 +78,7 @@ export function HorizontalCarousel({
                         "absolute left-0 top-1/2 -translate-y-1/2 z-(--z-raised)",
                         "w-10 h-10 rounded-full bg-black/80 ",
                         "flex items-center justify-center",
-                        "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
+                        "opacity-0 group-hover/carousel:opacity-100 focus-visible:opacity-100 transition-opacity",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10",
                         "-translate-x-1/2"
@@ -92,11 +92,11 @@ export function HorizontalCarousel({
             {/* Scrollable container */}
             <div
                 ref={scrollRef}
+                style={style}
                 className={cn(
                     "flex overflow-x-auto scrollbar-hide scroll-smooth",
                     "snap-x snap-mandatory",
                     gapClass,
-                    // Padding for edge items
                     "px-1"
                 )}
             >
@@ -111,7 +111,7 @@ export function HorizontalCarousel({
                         "absolute right-0 top-1/2 -translate-y-1/2 z-(--z-raised)",
                         "w-10 h-10 rounded-full bg-black/80 ",
                         "flex items-center justify-center",
-                        "opacity-0 group-hover/carousel:opacity-100 transition-opacity",
+                        "opacity-0 group-hover/carousel:opacity-100 focus-visible:opacity-100 transition-opacity",
                         "hover:bg-black hover:scale-105 transition-all",
                         "border border-white/10",
                         "translate-x-1/2"
@@ -133,7 +133,6 @@ export function HorizontalCarousel({
     );
 }
 
-// Wrapper for carousel items with consistent sizing
 interface CarouselItemProps {
     children: ReactNode;
     className?: string;

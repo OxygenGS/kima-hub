@@ -3,7 +3,7 @@ import { logger } from "../utils/logger";
 import { requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import crypto from "crypto";
-import { createApiKey } from "../services/users/apiKeyStore";
+import { createApiKey, listApiKeys, revokeApiKey } from "../services/users/apiKeyStore";
 
 const router = Router();
 
@@ -17,8 +17,6 @@ function generateLinkCode(): string {
     return code;
 }
 
-// Generate API key
-// POST /device-link/generate - Generate a new device link code (requires auth)
 router.post("/generate", requireAuthOrToken, async (req, res) => {
     try {
         const userId = req.user!.id;
@@ -94,6 +92,19 @@ router.post("/verify", async (req, res) => {
             return res.status(400).json({ error: "Code expired" });
         }
 
+        // Claim the code atomically so two concurrent /verify requests cannot both
+        // mint a key. Codes are single-use: consumed even if minting then fails.
+        const claimed = await prisma.deviceLinkCode.updateMany({
+            where: { id: linkCode.id, usedAt: null },
+            data: {
+                usedAt: new Date(),
+                deviceName: deviceName || "Mobile Device",
+            },
+        });
+        if (claimed.count !== 1) {
+            return res.status(400).json({ error: "Code already used" });
+        }
+
         // Generate an API key for this device. The plaintext value goes back to
         // the device in the response below and is never stored -- the row keeps
         // only a SHA-256 digest.
@@ -103,14 +114,9 @@ router.post("/verify", async (req, res) => {
         );
         const apiKey = createdApiKey.key;
 
-        // Mark the link code as used
         await prisma.deviceLinkCode.update({
             where: { id: linkCode.id },
-            data: {
-                usedAt: new Date(),
-                deviceName: deviceName || "Mobile Device",
-                apiKeyId: createdApiKey.id,
-            },
+            data: { apiKeyId: createdApiKey.id },
         });
 
         res.json({
@@ -168,18 +174,7 @@ router.get("/devices", requireAuthOrToken, async (req, res) => {
     try {
         const userId = req.user!.id;
 
-        const apiKeys = await prisma.apiKey.findMany({
-            where: { userId },
-            orderBy: { lastUsed: "desc" },
-            select: {
-                id: true,
-                name: true,
-                lastUsed: true,
-                createdAt: true,
-            },
-        });
-
-        res.json(apiKeys);
+        res.json(await listApiKeys(userId, "lastUsed"));
     } catch (error) {
         logger.error("Get devices error:", error);
         res.status(500).json({ error: "Failed to get devices" });
@@ -192,17 +187,9 @@ router.delete("/devices/:id", requireAuthOrToken, async (req, res) => {
         const userId = req.user!.id;
         const { id } = req.params;
 
-        const apiKey = await prisma.apiKey.findFirst({
-            where: { id, userId },
-        });
-
-        if (!apiKey) {
+        if (!(await revokeApiKey(userId, id))) {
             return res.status(404).json({ error: "Device not found" });
         }
-
-        await prisma.apiKey.delete({
-            where: { id },
-        });
 
         res.json({ success: true });
     } catch (error) {
@@ -212,18 +199,3 @@ router.delete("/devices/:id", requireAuthOrToken, async (req, res) => {
 });
 
 export default router;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

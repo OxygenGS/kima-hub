@@ -4,8 +4,34 @@ import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioController } from "@/lib/audio-controller-context";
 import { api } from "@/lib/api";
-import { iosAudioLog } from "@/lib/iosAudioLog";
+import type { AudioController } from "@/lib/audio-controller";
 import type { EngineSnapshot } from "@/lib/audio-engine-policy";
+
+const ARTWORK_SIZES = [96, 128, 192, 256, 384, 512];
+
+function artworkFrom(coverUrl: string | undefined, fallback: MediaImage[]): MediaImage[] {
+    return coverUrl
+        ? ARTWORK_SIZES.map((s) => ({ src: coverUrl, sizes: `${s}x${s}`, type: "image/jpeg" }))
+        : fallback;
+}
+
+/** Pushes the controller's position to the lock screen; false when nothing was set. */
+function pushControllerPosition(controller: AudioController): boolean {
+    if (!("setPositionState" in navigator.mediaSession)) return false;
+    const duration = controller.getDuration();
+    if (duration <= 0) return false;
+    try {
+        navigator.mediaSession.setPositionState({
+            duration,
+            playbackRate: 1,
+            position: Math.min(controller.getCurrentTime(), duration),
+        });
+        return true;
+    } catch {
+        // Position state not supported
+        return false;
+    }
+}
 
 export function useMediaSession() {
     const controller = useAudioController();
@@ -64,21 +90,7 @@ export function useMediaSession() {
         const onEnded = () => { navigator.mediaSession.playbackState = "paused"; };
         const onError = () => { navigator.mediaSession.playbackState = "paused"; };
         const onSeeked = () => {
-            if (!("setPositionState" in navigator.mediaSession)) return;
-            const duration = controller.getDuration();
-            const position = controller.getCurrentTime();
-            if (duration > 0) {
-                try {
-                    navigator.mediaSession.setPositionState({
-                        duration,
-                        playbackRate: 1,
-                        position: Math.min(position, duration),
-                    });
-                    lastPositionUpdateRef.current = Date.now();
-                } catch {
-                    // Position state not supported
-                }
-            }
+            if (pushControllerPosition(controller)) lastPositionUpdateRef.current = Date.now();
         };
         controller.on("ended", onEnded);
         controller.on("error", onError);
@@ -92,43 +104,24 @@ export function useMediaSession() {
         };
     }, [controller]);
 
-    // Register action handlers
     useEffect(() => {
         if (!("mediaSession" in navigator)) return;
         if (!controller) return;
 
         navigator.mediaSession.setActionHandler("play", () => {
-            iosAudioLog("ms:play", "useMediaSession", null, { hasController: !!controller });
             // Eagerly push position state before iOS defers JS execution
-            if ("setPositionState" in navigator.mediaSession) {
-                const duration = controller.getDuration();
-                const position = controller.getCurrentTime();
-                if (duration > 0) {
-                    try {
-                        navigator.mediaSession.setPositionState({
-                            duration,
-                            playbackRate: 1,
-                            position: Math.min(position, duration),
-                        });
-                    } catch {
-                        // Position state not supported
-                    }
-                }
-            }
+            pushControllerPosition(controller);
 
             // play() handles retry-from-error/blocked internally; no catch needed.
             controller.play();
         });
 
         navigator.mediaSession.setActionHandler("pause", () => {
-            iosAudioLog("ms:pause", "useMediaSession");
-            // Route through context pause so lock-screen pauses are USER pauses,
-            // matching the FE5 intent-correct routing (spec 4.1).
+            // Route through context pause so lock-screen pauses count as user pauses.
             pauseRef.current();
         });
 
         navigator.mediaSession.setActionHandler("previoustrack", () => {
-            iosAudioLog("ms:prev", "useMediaSession");
             if (playbackTypeRef.current === "track") {
                 previousRef.current();
             } else {
@@ -137,7 +130,6 @@ export function useMediaSession() {
         });
 
         navigator.mediaSession.setActionHandler("nexttrack", () => {
-            iosAudioLog("ms:next", "useMediaSession");
             if (playbackTypeRef.current === "track") {
                 nextRef.current();
             } else {
@@ -147,19 +139,16 @@ export function useMediaSession() {
 
         try {
             navigator.mediaSession.setActionHandler("seekbackward", (details) => {
-                iosAudioLog("ms:seekback", "useMediaSession");
                 const skip = details.seekOffset || 10;
                 seekRef.current(Math.max(currentTimeRef.current - skip, 0));
             });
 
             navigator.mediaSession.setActionHandler("seekforward", (details) => {
-                iosAudioLog("ms:seekfwd", "useMediaSession");
                 const skip = details.seekOffset || 10;
                 seekRef.current(currentTimeRef.current + skip);
             });
 
             navigator.mediaSession.setActionHandler("seekto", (details) => {
-                iosAudioLog("ms:seekto", "useMediaSession");
                 if (details.seekTime !== undefined) {
                     seekRef.current(details.seekTime);
                 }
@@ -179,7 +168,6 @@ export function useMediaSession() {
         };
     }, [controller]);
 
-    // Metadata
     const getAbsoluteUrl = useCallback((url: string): string => {
         if (!url) return "";
         if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -208,11 +196,7 @@ export function useMediaSession() {
                 title: currentTrack.title,
                 artist: currentTrack.artist?.name || "Unknown Artist",
                 album: currentTrack.album?.title || "Unknown Album",
-                artwork: coverUrl
-                    ? [96, 128, 192, 256, 384, 512].map((s) => ({
-                          src: coverUrl, sizes: `${s}x${s}`, type: "image/jpeg",
-                      }))
-                    : fallbackArtwork,
+                artwork: artworkFrom(coverUrl, fallbackArtwork),
             });
         } else if (playbackType === "audiobook" && currentAudiobook) {
             const coverUrl = currentAudiobook.coverUrl
@@ -222,11 +206,7 @@ export function useMediaSession() {
                 title: currentAudiobook.title,
                 artist: currentAudiobook.author,
                 album: currentAudiobook.narrator ? `Narrated by ${currentAudiobook.narrator}` : "Audiobook",
-                artwork: coverUrl
-                    ? [96, 128, 192, 256, 384, 512].map((s) => ({
-                          src: coverUrl, sizes: `${s}x${s}`, type: "image/jpeg",
-                      }))
-                    : fallbackArtwork,
+                artwork: artworkFrom(coverUrl, fallbackArtwork),
             });
         } else if (playbackType === "podcast" && currentPodcast) {
             const coverUrl = currentPodcast.coverUrl
@@ -236,11 +216,7 @@ export function useMediaSession() {
                 title: currentPodcast.title,
                 artist: currentPodcast.podcastTitle,
                 album: "Podcast",
-                artwork: coverUrl
-                    ? [96, 128, 192, 256, 384, 512].map((s) => ({
-                          src: coverUrl, sizes: `${s}x${s}`, type: "image/jpeg",
-                      }))
-                    : fallbackArtwork,
+                artwork: artworkFrom(coverUrl, fallbackArtwork),
             });
         } else {
             navigator.mediaSession.metadata = null;
@@ -264,8 +240,8 @@ export function useMediaSession() {
                     position: Math.min(currentTime, duration),
                 });
                 lastPositionUpdateRef.current = now;
-            } catch (error) {
-                console.warn("[MediaSession] Failed to set position state:", error);
+            } catch {
+                // the lock screen keeps the last position it was given
             }
         }
     }, [currentTime, currentTrack, currentAudiobook, currentPodcast]);

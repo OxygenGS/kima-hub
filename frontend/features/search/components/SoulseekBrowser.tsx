@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { CASCADE_WINDOW_MS } from "@/lib/motion";
 import { Download, CheckCircle, Music, ChevronDown, ChevronRight, List, Users } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
+import { cn } from "@/lib/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { formatFileSize, getQualityBadge, parseFilename } from "./soulseekHelpers";
 import type {
@@ -13,12 +12,12 @@ import type {
     SoulseekViewMode,
     SoulseekFormatFilter,
 } from "../types";
+import { Button } from "@/components/ui/Button";
 
 interface SoulseekBrowserProps {
     results: SoulseekResult[];
     isSearching: boolean;
     isPolling: boolean;
-    isComplete: boolean;
     uniqueUserCount: number;
     downloadingFiles: Set<string>;
     onDownload: (result: SoulseekResult) => void;
@@ -41,6 +40,9 @@ const SORT_OPTIONS: { label: string; value: SoulseekSortField }[] = [
     { label: "Filename", value: "filename" },
 ];
 
+const RESULT_GRID =
+    "grid grid-cols-[32px_1fr_minmax(80px,120px)_80px_80px_80px_44px] gap-2 px-3 py-2";
+
 function getResultKey(r: SoulseekResult): string {
     return `${r.username}:${r.path}`;
 }
@@ -53,14 +55,11 @@ export function SoulseekBrowser({
     results,
     isSearching,
     isPolling,
-    isComplete: _isComplete,
     uniqueUserCount,
     downloadingFiles,
     onDownload,
     onBulkDownload,
 }: SoulseekBrowserProps) {
-    const { t, locale } = useLanguage();
-    const fmt = (value: number) => value.toLocaleString(locale === "nl" ? "nl-NL" : "en-US");
     const [formatFilters, setFormatFilters] = useState<Set<SoulseekFormatFilter>>(new Set(["all"]));
     const [sortField, setSortField] = useState<SoulseekSortField>("quality");
     const [viewMode, setViewMode] = useState<SoulseekViewMode>("flat");
@@ -138,7 +137,6 @@ export function SoulseekBrowser({
         return () => observer.disconnect();
     }, [hasMore]);
 
-    // Group results by username
     const grouped = useMemo(() => {
         const map = new Map<string, SoulseekResult[]>();
         for (const r of sorted) {
@@ -204,39 +202,34 @@ export function SoulseekBrowser({
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Music className="w-12 h-12 text-[var(--text-muted)] mb-3" />
-                <p className="text-[var(--text-secondary)]">{t("No Soulseek results found")}</p>
+                <p className="text-[var(--text-secondary)]">No Soulseek results found</p>
             </div>
         );
     }
 
     return (
         <div className="space-y-4">
-            {/* Status bar */}
             <div className="flex items-center gap-3 px-4 py-3 bg-[#181818] rounded-lg">
                 {isActive ? (
                     <>
                         <GradientSpinner size="sm" />
                         <span className="text-sm text-[var(--text-primary)]">
-                            {t("Searching...")} {fmt(results.length)} {t(results.length === 1 ? "result" : "results")} {t("from")} {fmt(uniqueUserCount)} {t(uniqueUserCount === 1 ? "user" : "users")}
+                            Searching... {results.length} results from {uniqueUserCount} users
                         </span>
                     </>
                 ) : (
                     <span className="text-sm text-[var(--text-secondary)]">
-                        {t("Search complete")} &mdash; {fmt(results.length)} {t(results.length === 1 ? "result" : "results")} {t("from")} {fmt(uniqueUserCount)} {t(uniqueUserCount === 1 ? "user" : "users")}
+                        Search complete &mdash; {results.length} results from {uniqueUserCount} users
                     </span>
                 )}
             </div>
 
-            {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-3">
-                {/* Format pills */}
                 <div className="flex gap-1.5">
                     {FORMAT_PILLS.map((pill) => (
                         <button
                             key={pill.value}
                             onClick={() => handleFormatToggle(pill.value)}
-                            aria-label={`${t("File format:")} ${translate(locale, pill.label)}`}
-                            aria-pressed={formatFilters.has(pill.value)}
                             className={cn(
                                 "px-3 py-1.5 text-xs font-semibold rounded-full transition-colors",
                                 formatFilters.has(pill.value)
@@ -244,26 +237,23 @@ export function SoulseekBrowser({
                                     : "bg-[#282828] text-[var(--text-secondary)] hover:text-white hover:bg-[#333]",
                             )}
                         >
-                            {translate(locale, pill.label)}
+                            {pill.label}
                         </button>
                     ))}
                 </div>
 
-                {/* Sort selector */}
                 <select
                     value={sortField}
-                    aria-label={t("Sort results by")}
                     onChange={(e) => setSortField(e.target.value as SoulseekSortField)}
                     className="bg-[#282828] text-sm text-[var(--text-primary)] rounded-md px-3 py-1.5 border border-white/10 focus:outline-none focus:border-[var(--color-brand)]/50"
                 >
                     {SORT_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
-                            {translate(locale, opt.label)}
+                            {opt.label.toLowerCase()}
                         </option>
                     ))}
                 </select>
 
-                {/* View toggle */}
                 <div className="flex gap-1 bg-[#282828] rounded-md p-0.5">
                     <button
                         onClick={() => setViewMode("flat")}
@@ -271,9 +261,7 @@ export function SoulseekBrowser({
                             "p-1.5 rounded transition-colors",
                             viewMode === "flat" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
-                        title={t("Flat list")}
-                        aria-label={t("Flat list")}
-                        aria-pressed={viewMode === "flat"}
+                        title="flat list"
                     >
                         <List className="w-4 h-4" />
                     </button>
@@ -283,27 +271,24 @@ export function SoulseekBrowser({
                             "p-1.5 rounded transition-colors",
                             viewMode === "grouped" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
-                        title={t("Group by user")}
-                        aria-label={t("Group by user")}
-                        aria-pressed={viewMode === "grouped"}
+                        title="group by user"
                     >
                         <Users className="w-4 h-4" />
                     </button>
                 </div>
 
-                {/* Bulk download */}
                 {selectedKeys.size > 0 && (
-                    <button
+                    <Button
+                        variant="primary"
                         onClick={handleBulkDownloadClick}
-                        className="ml-auto px-4 py-1.5 text-sm font-bold rounded-full bg-brand text-black hover:bg-[#d4a000] transition-colors flex items-center gap-2"
+                        className="ml-auto"
                     >
                         <Download className="w-4 h-4" />
-                        {t("Download")} {fmt(selectedKeys.size)} {t("selected")}
-                    </button>
+                        Download {selectedKeys.size} selected
+                    </Button>
                 )}
             </div>
 
-            {/* Results */}
             {viewMode === "flat" ? (
                 <FlatView
                     results={displayResults}
@@ -325,11 +310,10 @@ export function SoulseekBrowser({
                 />
             )}
 
-            {/* Infinite scroll sentinel */}
             {viewMode === "flat" && hasMore && (
                 <div ref={sentinelRef} className="flex items-center justify-center py-4">
                     <span className="text-xs text-[var(--text-muted)]">
-                        {t("Showing")} {fmt(displayResults.length)} {t("of")} {fmt(sorted.length)} {t("results")}
+                        Showing {displayResults.length} of {sorted.length} results
                     </span>
                 </div>
             )}
@@ -356,31 +340,27 @@ function FlatView({
     onToggleSelectAll,
     onDownload,
 }: FlatViewProps) {
-    const { t } = useLanguage();
     const allSelected = results.length > 0 && results.every((r) => selectedKeys.has(getResultKey(r)));
 
     return (
         <div>
-            {/* Header row */}
-            <div className="grid grid-cols-[32px_1fr_minmax(80px,120px)_80px_80px_80px_44px] md:grid-cols-[32px_1fr_minmax(80px,120px)_80px_80px_80px_44px] gap-2 px-3 py-2 text-xs text-[var(--text-muted)] border-b border-white/5">
+            <div className={cn(RESULT_GRID, "text-xs text-[var(--text-muted)] border-b border-white/5")}>
                 <div className="flex items-center justify-center">
                     <input
                         type="checkbox"
-                        aria-label={t("Select all visible files")}
                         checked={allSelected}
                         onChange={onToggleSelectAll}
                         className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
                     />
                 </div>
-                <div>{t("Title")}</div>
-                <div>{t("User")}</div>
-                <div className="hidden md:block">{t("Format")}</div>
-                <div className="hidden md:block text-right">{t("Bitrate")}</div>
-                <div className="hidden md:block text-right">{t("Size")}</div>
+                <div>Title</div>
+                <div>User</div>
+                <div className="hidden md:block">Format</div>
+                <div className="hidden md:block text-right">Bitrate</div>
+                <div className="hidden md:block text-right">Size</div>
                 <div />
             </div>
 
-            {/* Result rows */}
             {results.map((result, index) => (
                 <ResultRow
                     key={`${result.username}-${result.path}-${index}`}
@@ -389,7 +369,7 @@ function FlatView({
                     isDownloading={downloadingFiles.has(getResultKey(result))}
                     onToggleSelect={onToggleSelect}
                     onDownload={onDownload}
-                    animationDelay={index < 20 ? index * 15 : 0}
+                    animationDelay={index * Math.round(CASCADE_WINDOW_MS / Math.max(results.length, 1))}
                 />
             ))}
         </div>
@@ -415,7 +395,6 @@ function ResultRow({
     onDownload,
     animationDelay,
 }: ResultRowProps) {
-    const { t } = useLanguage();
     const key = getResultKey(result);
     const parsed = result.parsedTitle
         ? { artist: result.parsedArtist || "Unknown", title: result.parsedTitle }
@@ -423,7 +402,7 @@ function ResultRow({
 
     return (
         <div
-            className="grid grid-cols-[32px_1fr_minmax(80px,120px)_80px_80px_80px_44px] md:grid-cols-[32px_1fr_minmax(80px,120px)_80px_80px_80px_44px] gap-2 px-3 py-2 items-center hover:bg-white/5 transition-colors rounded"
+            className={cn(RESULT_GRID, "items-center hover:bg-white/5 transition-colors rounded")}
             style={
                 animationDelay > 0
                     ? {
@@ -435,7 +414,6 @@ function ResultRow({
             <div className="flex items-center justify-center">
                 <input
                     type="checkbox"
-                    aria-label={`${t("Select file:")} ${result.filename}`}
                     checked={isSelected}
                     onChange={() => onToggleSelect(key)}
                     className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
@@ -462,13 +440,11 @@ function ResultRow({
             <div className="flex items-center justify-center">
                 <button
                     onClick={() => onDownload(result)}
-                    aria-label={`${isDownloading ? t("Downloading...") : t("Download file:")} ${result.filename}`}
-                    title={isDownloading ? t("Downloading...") : t("Download")}
                     disabled={isDownloading}
                     className={cn(
                         "p-1.5 rounded-full transition-colors",
                         isDownloading
-                            ? "text-green-400 cursor-not-allowed"
+                            ? "text-success cursor-not-allowed"
                             : "text-brand hover:bg-brand/10",
                     )}
                 >
@@ -504,7 +480,6 @@ function GroupedView({
     onToggleSelect,
     onDownload,
 }: GroupedViewProps) {
-    const { t, locale } = useLanguage();
     return (
         <div className="space-y-1">
             {Array.from(grouped.entries()).map(([username, userResults]) => {
@@ -523,7 +498,7 @@ function GroupedView({
                             )}
                             <span className="text-sm font-medium text-white">{username}</span>
                             <span className="text-xs text-[var(--text-muted)]">
-                                ({userResults.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(userResults.length === 1 ? "file" : "files")})
+                                ({userResults.length} {userResults.length === 1 ? "file" : "files"})
                             </span>
                         </button>
 

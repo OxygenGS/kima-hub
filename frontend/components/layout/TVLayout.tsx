@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
-import { useBranding } from "@/lib/branding-context";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { useAudio } from "@/lib/audio-context";
 import { api } from "@/lib/api";
 import { DPAD_KEYS } from "@/lib/tv-utils";
 import { useTVNavigation } from "@/hooks/useTVNavigation";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
-import { formatTime, clampTime, formatTimeRemaining } from "@/utils/formatTime";
+import { formatTime, clampTime, formatMediaDuration } from "@/lib/format";
 import { RefreshCw, SkipBack, SkipForward, Shuffle, Repeat } from "lucide-react";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { KimaMark } from "@/components/ui/KimaMark";
 
 const tvNavigation = [
     { name: "Home", href: "/" },
@@ -27,8 +25,6 @@ const tvNavigation = [
 
 export function TVLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
-    const { branding } = useBranding();
-    const { t } = useLanguage();
     const router = useRouter();
     // Start with nav focused and first tab selected for immediate D-pad usability
     const [focusedTabIndex, setFocusedTabIndex] = useState(0);
@@ -36,7 +32,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
     const [isSyncing, setIsSyncing] = useState(false);
     const navRef = useRef<HTMLDivElement>(null);
 
-    // TV content navigation hook
     const {
         containerRef: contentRef,
         focusFirstCard,
@@ -68,7 +63,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         seek,
     } = useAudio();
 
-    // Add tv-mode class to body on mount
     useEffect(() => {
         document.documentElement.classList.add('tv-mode');
         document.body.classList.add('tv-mode');
@@ -115,10 +109,8 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             : null;
     }
 
-    // CRITICAL: Clamp currentTime to prevent display of invalid times
     const clampedCurrentTime = clampTime(currentTime, duration);
 
-    // Sync library
     const handleSync = async () => {
         setIsSyncing(true);
         try {
@@ -185,7 +177,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                 router.push(tvNavigation[focusedTabIndex].href);
             }
         } else {
-            // Delegate to content navigation hook
             handleContentKeyDown(e);
         }
     }, [isNavFocused, focusedTabIndex, router, hasMedia, isPlaying, pause, resumeWithGesture, next, previous, seek, focusFirstCard, handleContentKeyDown]);
@@ -203,24 +194,22 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         }
     }, [focusedTabIndex, isNavFocused]);
 
-    // Synchronize D-pad focus when navigation changes, without a cascading
-    // effect. The guarded update only runs when the pathname actually differs.
-    const [focusPathname, setFocusPathname] = useState(pathname);
-    if (focusPathname !== pathname) {
-        setFocusPathname(pathname);
+    // On initial mount and pathname change, set the correct focused tab
+    useEffect(() => {
         const currentIndex = tvNavigation.findIndex(n =>
             n.href === pathname || (n.href !== "/" && pathname.startsWith(n.href))
         );
-        if (currentIndex >= 0) setFocusedTabIndex(currentIndex);
-    }
+        if (currentIndex >= 0) {
+            setFocusedTabIndex(currentIndex);
+        }
+    }, [pathname]);
 
     return (
         <>
-            {/* Nav */}
             <header className="tv-nav">
                 <Link href="/" className="tv-logo">
-                    <Image src={branding.logoUrl} alt={branding.name} width={24} height={24} unoptimized priority />
-                    <span>{branding.name}</span>
+                    <KimaMark size={24} />
+                    <span>Kima</span>
                 </Link>
 
                 <nav ref={navRef} className="tv-nav-links">
@@ -240,21 +229,19 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                                     setFocusedTabIndex(index);
                                 }}
                             >
-                                {t(item.name as TranslationKey)}
+                                {item.name}
                             </Link>
                         );
                     })}
                 </nav>
 
-                {/* Spacer */}
                 <div className="flex-1" />
 
-                {/* Sync button */}
                 <button
                     onClick={handleSync}
                     disabled={isSyncing}
                     className="tv-sync-btn"
-                    title={t("Sync Library")}
+                    title="sync library"
                 >
                     <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
                 </button>
@@ -264,37 +251,29 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
             {hasMedia && (
                 <div className="tv-now-playing-bar">
                     {coverUrl && (
-                        <Image src={coverUrl} alt={title} width={48} height={48} className="tv-np-cover" unoptimized />
+                        <CachedImage src={coverUrl} alt={title} width={48} height={48} className="tv-np-cover" />
                     )}
                     <div className="tv-np-info">
                         <div className="tv-np-title">{title}</div>
                         <div className="tv-np-artist">{artist}</div>
                     </div>
 
-                    {/* Time counter */}
                     <div className="tv-np-time">
-                        {formatTime(clampedCurrentTime)} / {
-                            playbackType === "podcast" || playbackType === "audiobook"
-                                ? formatTimeRemaining(Math.max(0, duration - clampedCurrentTime))
-                                : formatTime(duration)
-                        }
+                        {formatTime(clampedCurrentTime)} / {formatMediaDuration(playbackType, duration, clampedCurrentTime)}
                     </div>
 
-                    {/* Shuffle */}
                     <button
                         onClick={toggleShuffle}
                         className={cn("tv-np-ctrl", isShuffle && "active")}
-                        title={t("Shuffle")}
+                        title="shuffle"
                     >
                         <Shuffle className="w-4 h-4" />
                     </button>
 
-                    {/* Previous */}
-                    <button onClick={previous} className="tv-np-ctrl" title={t("Previous")}>
+                    <button onClick={previous} className="tv-np-ctrl" title="previous">
                         <SkipBack className="w-4 h-4" />
                     </button>
 
-                    {/* Play/Pause */}
                     <button onClick={() => isPlaying ? pause() : resumeWithGesture()} className="tv-np-btn">
                         {isPlaying ? (
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -308,16 +287,14 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                         )}
                     </button>
 
-                    {/* Next */}
-                    <button onClick={next} className="tv-np-ctrl" title={t("Next")}>
+                    <button onClick={next} className="tv-np-ctrl" title="next">
                         <SkipForward className="w-4 h-4" />
                     </button>
 
-                    {/* Repeat */}
                     <button
                         onClick={toggleRepeat}
                         className={cn("tv-np-ctrl", repeatMode !== "off" && "active")}
-                        title={repeatMode === "one" ? t("Repeat One") : repeatMode === "all" ? t("Repeat All") : t("Repeat Off")}
+                        title={repeatMode === "one" ? "repeat one" : repeatMode === "all" ? "repeat all" : "repeat off"}
                     >
                         <Repeat className="w-4 h-4" />
                         {repeatMode === "one" && <span className="tv-np-repeat-one">1</span>}
@@ -325,7 +302,6 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                 </div>
             )}
 
-            {/* Content */}
             <main id="main-content" tabIndex={-1} ref={contentRef} className="tv-content">
                 {children}
             </main>

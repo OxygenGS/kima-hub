@@ -1,6 +1,7 @@
 import { Worker, Job } from "bullmq";
 import { createWorkerConnection, QUEUE_NAMES } from "./enrichmentQueues";
-import { enrichSimilarArtist } from "./artistEnrichment";
+import { entityGoneError, isEntityGone } from "./entityGone";
+import { enrichSimilarArtist, failedArtistStatus } from "./artistEnrichment";
 import { enrichmentFailureService } from "../services/enrichmentFailureService";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
@@ -23,13 +24,11 @@ export async function startArtistEnrichmentWorker(): Promise<Worker> {
 
             const artist = await prisma.artist.findUnique({ where: { id: artistId } });
             if (!artist) {
-                const err = new Error(`ENTITY_NOT_FOUND: Artist ${artistId} deleted`);
-                (err as any).entityNotFound = true;
-                throw err;
+                throw entityGoneError("Artist", artistId);
             }
 
-            // enrichSimilarArtist handles its own final status update
-            // (sets "completed", "unresolvable", or "failed" internally)
+            // enrichSimilarArtist records the artist's status: completed, or failed and
+            // counted toward unresolvable.
             await enrichSimilarArtist(artist);
         },
         {
@@ -44,30 +43,35 @@ export async function startArtistEnrichmentWorker(): Promise<Worker> {
     worker.on("failed", async (job, err) => {
         if (!job) return;
         const { artistId } = job.data;
-        const isEntityGone = (err as any).entityNotFound === true;
 
-        if (isEntityGone) {
+        if (isEntityGone(err)) {
             logger.info(`[ArtistWorker] Artist ${artistId} no longer exists, resolving silently`);
             return;
         }
 
-        logger.error(`[ArtistWorker] Artist ${artistId} failed (attempt ${job.attemptsMade}): ${err.message}`);
+        logger.error(`[ArtistWorker] Artist ${artistId} failed: ${err.message}`);
 
-        const isFinalAttempt = job.attemptsMade >= (job.opts.attempts ?? 3);
-        if (isFinalAttempt) {
-            await prisma.artist
-                .update({
+        // enrichSimilarArtist records its own failures; one that threw before it could
+        // (still pending or enriching) is recorded here the same way.
+        try {
+            const artist = await prisma.artist.findUnique({
+                where: { id: artistId },
+                select: { enrichmentStatus: true, enrichmentFailures: true },
+            });
+            if (artist && (artist.enrichmentStatus === "pending" || artist.enrichmentStatus === "enriching")) {
+                await prisma.artist.update({
                     where: { id: artistId },
-                    data: { enrichmentStatus: "failed" },
-                })
-                .catch(() => {});
-
+                    data: failedArtistStatus(artist.enrichmentFailures),
+                });
+            }
             await enrichmentFailureService.recordFailure({
                 entityType: "artist",
                 entityId: artistId,
                 entityName: job.data.artistName,
                 errorMessage: err.message,
             });
+        } catch (reportErr) {
+            logger.warn(`[ArtistWorker] Could not record artist ${artistId}'s failure: ${(reportErr as Error).message}`);
         }
     });
 

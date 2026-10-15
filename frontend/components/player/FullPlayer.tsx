@@ -1,11 +1,8 @@
 "use client";
 
-import { useAudioState } from "@/lib/audio-state-context";
-import { useAudioPlayback } from "@/lib/audio-playback-context";
-import { useAudioControls } from "@/lib/audio-controls-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
-import { usePlaybackProgress } from "@/hooks/usePlaybackProgress";
-import Image from "next/image";
+import { usePlayerControls } from "@/hooks/usePlayerControls";
+import { PlayCountLine } from "@/features/stats/PlayCountLine";
 import Link from "next/link";
 import {
     Play,
@@ -15,7 +12,6 @@ import {
     Volume2,
     VolumeX,
     Maximize2,
-    Music as MusicIcon,
     Shuffle,
     Repeat,
     Repeat1,
@@ -25,30 +21,18 @@ import {
     AudioWaveform,
     RefreshCw,
     MicVocal,
-    ListMusic,
-    ListPlus,
 } from "lucide-react";
-import { useRouter, usePathname } from "next/navigation";
-import { useState, useMemo } from "react";
-import { useToast } from "@/lib/toast-context";
-import { useVibeToggle } from "@/hooks/useVibeToggle";
-import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
-import { useAddToPlaylistMutation } from "@/hooks/useQueries";
 import { KeyboardShortcutsTooltip } from "./KeyboardShortcutsTooltip";
-import { cn } from "@/utils/cn";
-import { computeVibeMatchScore } from "@/utils/vibeMatchScore";
-import { useFeatures } from "@/lib/features-context";
-import { formatTime, formatTimeRemaining } from "@/utils/formatTime";
+import { shuffleState } from "@/lib/shuffle";
+import { cn } from "@/lib/cn";
+import { formatTime, formatMediaDuration } from "@/lib/format";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
-import { useLanguage } from "@/lib/i18n/language-context";
-
+import { VibeToggleButton } from "./VibeToggleButton";
+import { PlayerCover } from "@/components/player/PlayerCover";
 
 export function FullPlayer() {
-    const { toast } = useToast();
-    const { t, locale } = useLanguage();
-    // Use split contexts to avoid re-rendering on every currentTime update
     const {
         currentTrack,
         playbackType,
@@ -59,19 +43,14 @@ export function FullPlayer() {
         activeOperation,
         queue,
         currentIndex,
-    } = useAudioState();
-
-    const {
         isPlaying,
         isBuffering,
         canSeek,
         downloadProgress,
         audioError,
-    } = useAudioPlayback();
-
-    const { duration, displayTime, progress } = usePlaybackProgress();
-
-    const {
+        duration,
+        displayTime,
+        progress,
         pause,
         resumeWithGesture,
         next,
@@ -84,25 +63,16 @@ export function FullPlayer() {
         toggleMute,
         toggleShuffle,
         toggleRepeat,
-    } = useAudioControls();
+    } = usePlayerControls();
 
-    const router = useRouter();
-    const pathname = usePathname();
-    const { handleVibeToggle, isVibeLoading } = useVibeToggle();
-    const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
-    const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ isMobile: false });
-    const { mutateAsync: addToPlaylist } = useAddToPlaylistMutation();
+    const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ inline: false });
 
-    const currentTrackFeatures = queue[currentIndex]?.audioFeatures || null;
-
-    const vibeMatchScore = useMemo(() => {
-        if (activeOperation.type === 'idle' || !('sourceFeatures' in activeOperation)) return null;
-        return computeVibeMatchScore(activeOperation.sourceFeatures, currentTrackFeatures);
-    }, [activeOperation, currentTrackFeatures]);
-
+    const currentId = queue[currentIndex]?.id;
+    const match = activeOperation.type === 'vibe' && currentId ? activeOperation.matches[currentId] : undefined;
+    const vibeMatchScore = match === undefined ? null : Math.round(match * 100);
 
     const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } = useMediaInfo(100);
+    const shuffle = shuffleState(hasMedia, playbackType, activeOperation.type);
 
     const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newVolume = parseInt(e.target.value) / 100;
@@ -113,40 +83,16 @@ export function FullPlayer() {
         <>
         <div className="relative flex-shrink-0">
             <div className="bg-black border-t border-white/[0.08] h-24">
-                {/* Brand accent line */}
                 <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent" />
                 <div className="flex items-center h-full px-6 gap-6">
-                    {/* Artwork & Info */}
                     <div className="flex items-center gap-4 w-80">
-                        {mediaLink ? (
-                            <Link
-                                href={mediaLink}
-                                className="relative w-14 h-14 flex-shrink-0"
-                            >
-                                <div className={cn("relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a] rounded-lg overflow-hidden flex items-center justify-center", "transition-transform duration-300", isPlaying && "scale-[1.03]")}>
-                                    {coverUrl ? (
-                                        <Image
-                                            key={coverUrl}
-                                            src={coverUrl}
-                                            alt={title}
-                                            fill
-                                            sizes="56px"
-                                            className="object-cover"
-                                            priority
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <MusicIcon className="w-6 h-6 text-[var(--text-muted)]" />
-                                    )}
-                                </div>
-                            </Link>
-                        ) : (
-                            <div className="relative w-14 h-14 flex-shrink-0">
-                                <div className={cn("relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a] rounded-lg overflow-hidden flex items-center justify-center", "transition-transform duration-300", isPlaying && "scale-[1.03]")}>
-                                    <MusicIcon className="w-6 h-6 text-[var(--text-muted)]" />
-                                </div>
-                            </div>
-                        )}
+                        <PlayerCover
+                            href={mediaLink}
+                            coverUrl={coverUrl}
+                            title={title}
+                            isPlaying={isPlaying}
+                            className="w-14 h-14"
+                        />
                         <div className="flex-1 min-w-0">
                             {mediaLink ? (
                                 <Link
@@ -185,18 +131,15 @@ export function FullPlayer() {
                                     {subtitle}
                                 </p>
                             )}
-                            {/* Vibe match score when in vibe mode */}
-                            {activeOperation.type !== 'idle' && vibeMatchScore !== null && (
-                                <span
-                                    className={cn(
-                                        "inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded mt-1",
-                                        vibeMatchScore >= 80
-                                            ? "bg-green-500/20 text-green-400"
-                                            : vibeMatchScore >= 60
-                                            ? "bg-brand/20 text-brand"
-                                            : "bg-orange-500/20 text-orange-400"
-                                    )}
-                                >
+                            {/* Beneath the subtitle rather than inside it: the
+                                subtitle is itself a link to the artist, and a
+                                link cannot contain another one. */}
+                            <PlayCountLine
+                                trackId={playbackType === "track" ? currentTrack?.id : null}
+                                className="mt-0.5"
+                            />
+                            {vibeMatchScore !== null && (
+                                <span className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded mt-1 bg-white/[0.06] text-muted">
                                     <AudioWaveform className="w-2.5 h-2.5" />
                                     {vibeMatchScore}% match
                                 </span>
@@ -205,28 +148,24 @@ export function FullPlayer() {
                         <SleepTimer />
                     </div>
 
-                    {/* Controls */}
                     <div className="flex-1 flex flex-col items-center gap-2">
-                        {/* Buttons */}
-                        <div className="flex items-center gap-5" role="group" aria-label={t("Playback controls")}>
-                            {/* Shuffle */}
+                        <div className="flex items-center gap-5" role="group" aria-label="Playback controls">
                             <button
                                 onClick={toggleShuffle}
                                 className={cn(
                                     "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     isShuffle
-                                        ? "text-[#a855f7] hover:text-[#c084fc]"
+                                        ? "text-brand hover:text-brand-light"
                                         : "text-[var(--text-secondary)] hover:text-white"
                                 )}
-                                disabled={!hasMedia || playbackType !== "track"}
-                                aria-label={t("Shuffle")}
+                                disabled={!shuffle.enabled}
+                                aria-label="Shuffle"
                                 aria-pressed={isShuffle}
-                                title={t("Shuffle")}
+                                title={shuffle.title}
                             >
                                 <Shuffle className="w-4 h-4" />
                             </button>
 
-                            {/* Skip Backward 30s */}
                             <button
                                 onClick={() => skipBackward(30)}
                                 className={cn(
@@ -236,8 +175,8 @@ export function FullPlayer() {
                                         : "text-[var(--text-muted)]"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label={t("Rewind 30 seconds")}
-                                title={t("Rewind 30 seconds")}
+                                aria-label="Rewind 30 seconds"
+                                title="rewind 30 seconds"
                             >
                                 <RotateCcw className="w-4 h-4" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -249,8 +188,8 @@ export function FullPlayer() {
                                 onClick={previous}
                                 className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 disabled={!hasMedia || playbackType !== "track"}
-                                aria-label={t("Previous track")}
-                                title={t("Previous track")}
+                                aria-label="Previous track"
+                                title="previous track"
                             >
                                 <SkipBack className="w-5 h-5" />
                             </button>
@@ -260,7 +199,7 @@ export function FullPlayer() {
                                 className={cn(
                                     "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 relative group",
                                     audioError
-                                        ? "bg-red-500 text-white hover:scale-110 hover:bg-red-400"
+                                        ? "bg-danger text-white hover:scale-110 hover:bg-danger-light"
                                         : hasMedia && !isBuffering
                                         ? "bg-brand text-black hover:scale-110"
                                         : isBuffering
@@ -270,21 +209,21 @@ export function FullPlayer() {
                                 disabled={!hasMedia}
                                 aria-label={
                                     audioError
-                                        ? t("Retry playback")
+                                        ? "Retry playback"
                                         : isBuffering
-                                        ? t("Buffering...")
+                                        ? "Buffering..."
                                         : isPlaying
-                                        ? t("Pause")
-                                        : t("Play")
+                                        ? "Pause"
+                                        : "Play"
                                 }
                                 title={
                                     audioError
-                                        ? t("Retry playback")
+                                        ? "retry playback"
                                         : isBuffering
-                                        ? t("Buffering...")
+                                        ? "buffering..."
                                         : isPlaying
-                                        ? t("Pause")
-                                        : t("Play")
+                                        ? "pause"
+                                        : "play"
                                 }
                             >
                                 {hasMedia && !isBuffering && !audioError && (
@@ -305,13 +244,12 @@ export function FullPlayer() {
                                 onClick={next}
                                 className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 disabled={!hasMedia || playbackType !== "track"}
-                                aria-label={t("Next track")}
-                                title={t("Next track")}
+                                aria-label="Next track"
+                                title="next track"
                             >
                                 <SkipForward className="w-5 h-5" />
                             </button>
 
-                            {/* Skip Forward 30s */}
                             <button
                                 onClick={() => skipForward(30)}
                                 className={cn(
@@ -321,8 +259,8 @@ export function FullPlayer() {
                                         : "text-[var(--text-muted)]"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label={t("Forward 30 seconds")}
-                                title={t("Forward 30 seconds")}
+                                aria-label="Forward 30 seconds"
+                                title="forward 30 seconds"
                             >
                                 <RotateCw className="w-4 h-4" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -330,30 +268,29 @@ export function FullPlayer() {
                                 </span>
                             </button>
 
-                            {/* Repeat */}
                             <button
                                 onClick={toggleRepeat}
                                 className={cn(
                                     "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
                                     repeatMode !== "off"
-                                        ? "text-[#a855f7] hover:text-[#c084fc]"
+                                        ? "text-brand hover:text-brand-light"
                                         : "text-[var(--text-secondary)] hover:text-white"
                                 )}
                                 disabled={!hasMedia || playbackType !== "track"}
                                 aria-label={
                                     repeatMode === "off"
-                                        ? t("Repeat off")
+                                        ? "Repeat off"
                                         : repeatMode === "all"
-                                        ? t("Repeat all")
-                                        : t("Repeat one")
+                                        ? "Repeat all"
+                                        : "Repeat one"
                                 }
                                 aria-pressed={repeatMode !== "off"}
                                 title={
                                     repeatMode === "off"
-                                        ? t("Repeat: Off")
+                                        ? "repeat: off"
                                         : repeatMode === "all"
-                                        ? t("Repeat: All (loop queue)")
-                                        : t("Repeat: One (play current track twice)")
+                                        ? "repeat: all (loop queue)"
+                                        : "repeat: one (loop this track)"
                                 }
                             >
                                 {repeatMode === "one" ? (
@@ -363,44 +300,14 @@ export function FullPlayer() {
                                 )}
                             </button>
 
-                            {/* Vibe Mode Toggle - only when embeddings available */}
-                            {!featuresLoading && vibeEmbeddings && (
-                                <button
-                                    onClick={handleVibeToggle}
-                                    className={cn(
-                                        "transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100",
-                                        !hasMedia || playbackType !== "track"
-                                            ? "text-[var(--text-muted)]"
-                                            : activeOperation.type !== 'idle'
-                                            ? "text-brand hover:text-brand-hover"
-                                            : "text-[var(--text-secondary)] hover:text-brand"
-                                    )}
-                                    disabled={
-                                        !hasMedia ||
-                                        playbackType !== "track" ||
-                                        isVibeLoading
-                                    }
-                                    aria-label={
-                                        activeOperation.type !== 'idle'
-                                            ? t("Turn off vibe mode")
-                                            : t("Match this vibe")
-                                    }
-                                    aria-pressed={activeOperation.type !== 'idle'}
-                                    title={
-                                        activeOperation.type !== 'idle'
-                                            ? t("Turn off vibe mode")
-                                            : t("Match this vibe - find similar sounding tracks")
-                                    }
-                                >
-                                    {isVibeLoading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <AudioWaveform className="w-4 h-4" />
-                                    )}
-                                </button>
-                            )}
+                            <VibeToggleButton
+                                unavailable={!hasMedia || playbackType !== "track"}
+                                className="transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                iconClassName="w-4 h-4"
+                                idleClassName="text-[var(--text-secondary)] hover:text-brand"
+                                activeClassName="text-brand hover:text-brand-hover"
+                            />
 
-                            {/* Lyrics Toggle */}
                             {playbackType === "track" && (
                                 <button
                                     onClick={handleLyricsToggle}
@@ -413,41 +320,14 @@ export function FullPlayer() {
                                             : "text-[var(--text-secondary)] hover:text-brand"
                                     )}
                                     disabled={!hasMedia}
-                                    aria-label={t("Toggle lyrics")}
-                                    title={t("Show lyrics")}
+                                    aria-label="Toggle lyrics"
+                                    title="show lyrics"
                                 >
                                     <MicVocal className="w-4 h-4" />
                                 </button>
                             )}
-
-                            {/* Queue Toggle */}
-                            <button
-                                onClick={() => router.push("/queue")}
-                                className={`p-1.5 rounded-md transition-colors ${
-                                    pathname === "/queue"
-                                        ? "text-brand"
-                                        : "text-[var(--text-muted)] hover:text-white/70"
-                                }`}
-                                aria-label={t("View play queue")}
-                                title={t("Play queue")}
-                            >
-                                <ListMusic className="w-4 h-4" />
-                            </button>
-
-                            {/* Add to Playlist */}
-                            {playbackType === "track" && currentTrack && (
-                                <button
-                                    onClick={() => setShowPlaylistSelector(true)}
-                                    className="p-1.5 rounded-md transition-colors text-[var(--text-muted)] hover:text-white/70"
-                                    aria-label={t("Add to playlist")}
-                                    title={t("Add to playlist")}
-                                >
-                                    <ListPlus className="w-4 h-4" />
-                                </button>
-                            )}
                         </div>
 
-                        {/* Progress Bar */}
                         <div className="w-full flex items-center gap-3">
                             <span
                                 className={cn(
@@ -479,22 +359,16 @@ export function FullPlayer() {
                                     duration >= 3600 ? "w-14" : "w-10"
                                 )}
                             >
-                                {playbackType === "podcast" ||
-                                playbackType === "audiobook"
-                                    ? formatTimeRemaining(
-                                          Math.max(0, duration - displayTime)
-                                      )
-                                    : formatTime(duration)}
+                                {formatMediaDuration(playbackType, duration, displayTime)}
                             </span>
                         </div>
                     </div>
 
-                    {/* Volume & Expand */}
                     <div className="flex items-center gap-3 w-52 justify-end">
                         <button
                             onClick={toggleMute}
                             className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110"
-                            aria-label={volume === 0 ? t("Unmute") : t("Mute")}
+                            aria-label={volume === 0 ? "Unmute" : "Mute"}
                         >
                             {isMuted || volume === 0 ? (
                                 <VolumeX className="w-5 h-5" />
@@ -510,21 +384,20 @@ export function FullPlayer() {
                                 max="100"
                                 value={volume * 100}
                                 onChange={handleVolumeChange}
-                                aria-label={t("Volume")}
+                                aria-label="Volume"
                                 aria-valuemin={0}
                                 aria-valuemax={100}
                                 aria-valuenow={Math.round(volume * 100)}
-                                aria-valuetext={`${Math.round(volume * 100)} ${t("percent")}`}
+                                aria-valuetext={`${Math.round(volume * 100)} percent`}
                                 style={{
                                     background: isMuted
                                         ? "rgba(255,255,255,0.15)"
                                         : `linear-gradient(to right, #fca200 ${volume * 100}%, rgba(255,255,255,0.15) ${volume * 100}%)`
                                 }}
-                                className="w-full h-1 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-[#eab308] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110"
+                                className="w-full h-1 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-brand [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:hover:scale-110"
                             />
                         </div>
 
-                        {/* Keyboard Shortcuts Info */}
                         <KeyboardShortcutsTooltip />
 
                         <button
@@ -536,8 +409,8 @@ export function FullPlayer() {
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
                             disabled={!hasMedia}
-                            aria-label={t("Expand player")}
-                            title={t("Expand to full screen")}
+                            aria-label="Expand player"
+                            title="expand to full screen"
                         >
                             <Maximize2 className="w-4 h-4" />
                         </button>
@@ -545,30 +418,6 @@ export function FullPlayer() {
                 </div>
             </div>
         </div>
-        {showPlaylistSelector && currentTrack && (
-            <PlaylistSelector
-                isOpen={showPlaylistSelector}
-                mode="multi"
-                onSelectPlaylists={async (playlistIds) => {
-                    try {
-                        let added = 0;
-                        for (const playlistId of playlistIds) {
-                            const result = await addToPlaylist({ playlistId, trackId: currentTrack.id });
-                            if (!result.duplicated) added++;
-                        }
-                        toast.success(
-                            added > 0
-                                ? `${t("Added to")} ${added.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(added === 1 ? "playlist" : "playlists")}`
-                                : t("Already in selected playlists")
-                        );
-                        setShowPlaylistSelector(false);
-                    } catch {
-                        toast.error(t("Failed to add to playlists"));
-                    }
-                }}
-                onClose={() => setShowPlaylistSelector(false)}
-            />
-        )}
         </>
     );
 }

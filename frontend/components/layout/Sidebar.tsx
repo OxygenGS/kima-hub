@@ -3,30 +3,28 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Plus, Settings, RefreshCw } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { Plus } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
-import { useAudioState } from "@/lib/audio-state-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import { useToast } from "@/lib/toast-context";
+import { notify } from "@/lib/notify";
 import { useFeatures } from "@/lib/features-context";
-import Image from "next/image";
 import { MobileSidebar } from "./MobileSidebar";
+import { Button } from "@/components/ui/Button";
 
 const allNavigation = [
     { name: "Collection", href: "/collection", feature: null },
+    { name: "Queue", href: "/queue", feature: null },
     { name: "Radio", href: "/radio", feature: null },
     { name: "Discovery", href: "/discover", feature: null },
     { name: "Vibe", href: "/vibe", feature: null },
     { name: "Audiobooks", href: "/audiobooks", feature: "audiobookshelfEnabled" as const },
     { name: "Podcasts", href: "/podcasts", feature: null },
     { name: "Browse", href: "/browse/playlists", feature: null },
+    { name: "Stats", href: "/stats", feature: null },
 ];
 
 interface Playlist {
@@ -43,18 +41,11 @@ export function Sidebar() {
     const router = useRouter();
     const queryClient = useQueryClient();
     const { isAuthenticated } = useAuth();
-    const { branding } = useBranding();
-    const { t } = useLanguage();
-    const { toast } = useToast();
-    const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
-        useAudioState();
     const { audiobookshelfEnabled } = useFeatures();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [showCreatePlaylist, setShowCreatePlaylist] = useState(false);
     const [newPlaylistName, setNewPlaylistName] = useState("");
     const [isCreating, setIsCreating] = useState(false);
@@ -68,39 +59,10 @@ export function Sidebar() {
         enabled: isAuthenticated,
     });
 
-    // Handle library sync - no toast, notification bar handles feedback
-    const handleSync = async () => {
-        if (isSyncing) return;
-
-        try {
-            setIsSyncing(true);
-            await api.scanLibrary();
-        } catch (error) {
-            console.error("Failed to trigger library scan:", error);
-            toast.error(t("Failed to start scan. Please try again."));
-        } finally {
-            syncTimeoutRef.current = setTimeout(
-                () => setIsSyncing(false),
-                2000,
-            );
-        }
-    };
-
     useEffect(() => {
-        return () => {
-            if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        };
-    }, []);
-
-    // Keep mobile navigation closed after a route change. React allows this
-    // guarded same-component state adjustment during render (no effect loop).
-    const [menuPathname, setMenuPathname] = useState(pathname);
-    if (menuPathname !== pathname) {
-        setMenuPathname(pathname);
         setIsMobileMenuOpen(false);
-    }
+    }, [pathname]);
 
-    // Close mobile menu on escape key
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === "Escape") setIsMobileMenuOpen(false);
@@ -117,7 +79,6 @@ export function Sidebar() {
         };
     }, [isMobileMenuOpen]);
 
-    // Listen for toggle event from TopBar
     useEffect(() => {
         const handleToggle = () => setIsMobileMenuOpen(true);
         window.addEventListener("toggle-mobile-menu", handleToggle);
@@ -125,7 +86,6 @@ export function Sidebar() {
             window.removeEventListener("toggle-mobile-menu", handleToggle);
     }, []);
 
-    // Close create popover on click outside
     useEffect(() => {
         if (!showCreatePlaylist) return;
         const handleClickOutside = (e: MouseEvent) => {
@@ -154,127 +114,30 @@ export function Sidebar() {
             setShowCreatePlaylist(false);
             setNewPlaylistName("");
             router.push(`/playlist/${result.id}`);
-        } catch (error) {
-            console.error("Failed to create playlist:", error);
-            toast.error(t("Failed to create playlist"));
+        } catch {
+            notify.error("Failed to create playlist");
         } finally {
             setIsCreating(false);
         }
     };
 
-    // Don't show sidebar on login/register pages
-    // (Check after all hooks to comply with Rules of Hooks)
-    if (pathname === "/login" || pathname === "/register") {
+    if (pathname === "/login") {
         return null;
     }
 
     // Render sidebar content inline to prevent component recreation
     const sidebarContent = (
         <>
-            {/* Mobile Only - Logo and App Info */}
-            {isMobileOrTablet && (
-                <div className="px-6 pt-8 pb-6 border-b border-white/[0.08]">
-                    {/* Logo and Title */}
-                    <div className="flex items-center gap-4 mb-5">
-                        <Image
-                            src={branding.logoUrl}
-                            alt={branding.name + " logo"}
-                            unoptimized
-                            width={48}
-                            height={48}
-                            priority
-                            className="flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                            <h2 className="text-2xl font-bold text-white tracking-tight">
-                                {branding.name}
-                            </h2>
-                            {(
-                                !currentTrack &&
-                                !currentAudiobook &&
-                                !currentPodcast
-                            ) ?
-                                <p className="text-sm text-[var(--text-secondary)] font-medium">
-                                    {branding.tagline}
-                                </p>
-                            :   <div className="text-xs text-[var(--text-secondary)] truncate">
-                                    <span className="text-[var(--text-muted)]">
-                                        Listening to:{" "}
-                                    </span>
-                                    <span className="text-white font-medium">
-                                        {(
-                                            playbackType === "track" &&
-                                            currentTrack
-                                        ) ?
-                                            `${currentTrack.artist?.name} - ${currentTrack.album?.title}`
-                                        : (
-                                            playbackType === "audiobook" &&
-                                            currentAudiobook
-                                        ) ?
-                                            currentAudiobook.title
-                                        : (
-                                            playbackType === "podcast" &&
-                                            currentPodcast
-                                        ) ?
-                                            currentPodcast.podcastTitle
-                                        :   ""}
-                                    </span>
-                                </div>
-                            }
-                        </div>
-                    </div>
 
-                    {/* Quick Actions - Settings and Sync */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            className={cn(
-                                "w-11 h-11 flex items-center justify-center rounded-full transition-all duration-300",
-                                isSyncing ?
-                                    "bg-[#1DB954] text-black"
-                                :   "bg-white/10 text-white hover:bg-white/15 active:scale-95",
-                            )}
-                            aria-label={
-                                isSyncing ? t("Syncing library") : t("Sync library")
-                            }
-                            title={isSyncing ? t("Syncing...") : t("Sync Library")}
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    "w-4 h-4 transition-transform",
-                                    isSyncing && "animate-spin",
-                                )}
-                            />
-                        </button>
-
-                        <Link
-                            href="/settings"
-                            className={cn(
-                                "w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200",
-                                pathname === "/settings" ?
-                                    "bg-white text-black"
-                                :   "bg-white/10 text-[var(--text-secondary)] hover:text-white hover:bg-white/15 active:scale-95",
-                            )}
-                            aria-label={t("Settings")}
-                            title={t("Settings")}
-                        >
-                            <Settings className="w-4 h-4" />
-                        </Link>
-                    </div>
-                </div>
-            )}
-
-            {/* Navigation - Command Index */}
             <nav
-                className={cn("pt-6", isMobileOrTablet ? "px-4" : "px-3")}
+                className="pt-6 px-3"
                 role="navigation"
-                aria-label={t("Main navigation")}
+                aria-label="Main navigation"
             >
                 <div className="mb-3 flex items-center gap-2 px-2 animate-rise">
                     <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                     <span className="t-eyebrow">
-                        {t("Navigation Index")}
+                        Navigation Index
                     </span>
                 </div>
                 <div className="space-y-0.5">
@@ -285,7 +148,7 @@ export function Sidebar() {
 
                         return (
                             <Link
-                                key={t(item.name as TranslationKey)}
+                                key={item.name}
                                 href={item.href}
                                 prefetch={false}
                                 aria-current={isActive ? "page" : undefined}
@@ -296,7 +159,6 @@ export function Sidebar() {
                                     :   "border-transparent text-[var(--text-muted)] hover:text-white hover:bg-white/5 hover:border-white/20",
                                 )}
                             >
-                                {/* Command index number */}
                                 <span
                                     className={cn(
                                         "w-6 text-xs tabular-nums font-semibold text-center shrink-0 transition-colors duration-200",
@@ -308,7 +170,6 @@ export function Sidebar() {
                                     {String(index + 1).padStart(2, "0")}
                                 </span>
 
-                                {/* Vertical separator */}
                                 <div
                                     className={cn(
                                         "w-px h-4 shrink-0",
@@ -318,7 +179,6 @@ export function Sidebar() {
                                     )}
                                 />
 
-                                {/* Label */}
                                 <span
                                     className={cn(
                                         "font-bold text-sm tracking-tight",
@@ -334,27 +194,23 @@ export function Sidebar() {
                     })}
                 </div>
 
-                {/* Horizontal rule separator */}
                 <div className="mt-4 mb-4 border-t-2 border-white/10" />
             </nav>
 
             {/* Playlists Section - Data Stack */}
             <div className="flex-1 overflow-hidden flex flex-col">
                 <div
-                    className={cn(
-                        "mb-3 flex items-center justify-between",
-                        isMobileOrTablet ? "px-4" : "px-3",
-                    )}
+                    className="mb-3 flex items-center justify-between px-3"
                 >
                     <div className="flex items-center gap-2 px-2 animate-rise">
-                        <div className="w-1.5 h-1.5 bg-brand rounded-full" />
+                        <div className="w-1.5 h-1.5 bg-type-track rounded-full" />
                         <Link
                             href="/playlists"
                             prefetch={false}
                             className="group/link"
                         >
                             <span className="text-xs font-medium text-[var(--text-muted)] group-hover/link:text-brand transition-colors">
-                                {t("Playlist Stack")}
+                                Playlist Stack
                             </span>
                         </Link>
                     </div>
@@ -365,8 +221,8 @@ export function Sidebar() {
                                 setNewPlaylistName("");
                             }}
                             className="w-6 h-6 flex items-center justify-center bg-[var(--bg-primary)] border-2 border-white/10 text-[var(--text-muted)] hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-all duration-200"
-                            aria-label={t("Create Playlist")}
-                            title={t("Create Playlist")}
+                            aria-label="Create playlist"
+                            title="create playlist"
                         >
                             <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -386,28 +242,27 @@ export function Sidebar() {
                                             setNewPlaylistName("");
                                         }
                                     }}
-                                    placeholder={t("Playlist name")}
+                                    placeholder="Playlist name"
                                     autoFocus
                                     className="w-full bg-[var(--bg-primary)] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors"
                                 />
-                                <button
+                                <Button
+                                    variant="primary"
+                                    size="sm"
                                     onClick={handleCreatePlaylist}
                                     disabled={
                                         !newPlaylistName.trim() || isCreating
                                     }
-                                    className="mt-2 w-full py-1.5 bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed text-brand-contrast text-xs font-semibold rounded transition-colors"
+                                    className="mt-2 w-full"
                                 >
-                                    {isCreating ? t("Creating...") : t("Create")}
-                                </button>
+                                    {isCreating ? "Creating..." : "Create"}
+                                </Button>
                             </div>
                         )}
                     </div>
                 </div>
                 <div
-                    className={cn(
-                        "flex-1 overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-[#1c1c1c] scrollbar-track-transparent",
-                        isMobileOrTablet ? "px-4" : "px-3",
-                    )}
+                    className="flex-1 overflow-y-auto space-y-0.5 scrollbar-thin scrollbar-thumb-[#1c1c1c] scrollbar-track-transparent px-3"
                 >
                     {isLoadingPlaylists ?
                         <>
@@ -440,7 +295,6 @@ export function Sidebar() {
                                             :   "border-transparent text-[var(--text-muted)] hover:text-white hover:bg-white/5 hover:border-white/20",
                                         )}
                                     >
-                                        {/* Stack index */}
                                         <span
                                             className={cn(
                                                 "w-5 t-meta font-semibold text-center shrink-0 transition-colors duration-200",
@@ -452,7 +306,6 @@ export function Sidebar() {
                                             {String(index + 1).padStart(2, "0")}
                                         </span>
 
-                                        {/* Content */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5">
                                                 <div
@@ -467,11 +320,11 @@ export function Sidebar() {
                                                 {isShared && (
                                                     <span
                                                         className="shrink-0 w-1 h-1 rounded-full bg-brand"
-                                                        title={`${t("Shared by")} ${
+                                                        title={`Shared by ${
                                                             playlist.user
                                                                 ?.username ||
                                                             "someone"
-                                                        }`}
+                                                        }`.toLowerCase()}
                                                     />
                                                 )}
                                             </div>
@@ -507,7 +360,6 @@ export function Sidebar() {
 
     return (
         <>
-            {/* Mobile Sidebar */}
             {isMobileOrTablet && (
                 <MobileSidebar
                     isOpen={isMobileMenuOpen}
@@ -515,7 +367,6 @@ export function Sidebar() {
                 />
             )}
 
-            {/* Desktop Sidebar */}
             {!isMobileOrTablet && (
                 <aside className="w-64 bg-[var(--bg-primary)] flex flex-col overflow-hidden relative z-(--z-raised) rounded-lg">
                     {sidebarContent}

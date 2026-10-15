@@ -1,21 +1,11 @@
 import { NextRequest } from "next/server";
+import { backendUrl } from "@/lib/backend-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Proxy for SSE ticket issuance.
- *
- * The Next.js rewrite pattern excludes /api/events/* from proxying
- * (to allow the SSE streaming route handler). This route forwards
- * ticket requests to the backend manually.
- */
+/** Forwards ticket requests, since the rewrites skip /api/events/* to leave room for the stream route. */
 export async function POST(request: NextRequest) {
-    const backendUrl =
-        process.env.BACKEND_URL ||
-        process.env.NEXT_PUBLIC_BACKEND_URL ||
-        "http://127.0.0.1:3006";
-
     const authHeader = request.headers.get("Authorization");
     if (!authHeader) {
         return new Response("Unauthorized", { status: 401 });

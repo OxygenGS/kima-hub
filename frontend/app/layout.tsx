@@ -2,15 +2,9 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
-import { LanguageProvider } from "@/lib/i18n/language-context";
-import { BrandingProvider } from "@/lib/branding-context";
-import { getServerBranding } from "@/lib/branding-server";
 import { FeaturesProvider } from "@/lib/features-context";
-import { ToastProvider } from "@/lib/toast-context";
 import { DownloadProvider } from "@/lib/download-context";
-import { DownloadProgressProvider } from "@/lib/download-progress-context";
 import { ConditionalAudioProvider } from "@/components/providers/ConditionalAudioProvider";
-import { GpuTeardownSuppressor } from "@/components/providers/GpuTeardownSuppressor";
 import { AuthenticatedLayout } from "@/components/layout/AuthenticatedLayout";
 import { QueryProvider } from "@/lib/query-client";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
@@ -24,7 +18,6 @@ const montserrat = localFont({
     weight: "300 800",
 });
 
-// Viewport configuration - separate export for Next.js 14+
 export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
@@ -34,38 +27,31 @@ export const viewport: Viewport = {
     themeColor: "#000000",
 };
 
-export async function generateMetadata(): Promise<Metadata> {
-    const branding = await getServerBranding();
-    return {
-        title: branding.name + " - Your Music",
-        description: branding.tagline,
-        manifest: "/manifest.webmanifest",
-        icons: {
-            icon: [{
-                url: branding.faviconUrl,
-                type: branding.hasCustomFavicon ? "image/png" : "image/x-icon",
-            }],
-            apple: [{
-                url: branding.hasCustomFavicon
-                    ? branding.faviconUrl
-                    : "/assets/images/apple-touch-icon.png",
-                sizes: branding.hasCustomFavicon ? "192x192" : "180x180",
-                type: "image/png",
-            }],
-        },
-        appleWebApp: {
-            capable: true,
-            statusBarStyle: "black-translucent",
-            title: branding.name,
-        },
-        openGraph: {
-            title: branding.name,
-            description: branding.tagline,
-            siteName: branding.name,
-            type: "website",
-        },
-    };
-}
+export const metadata: Metadata = {
+    title: "kima",
+    description: "self-hosted music streaming. https://github.com/Chevron7Locked/kima-hub",
+    manifest: "/manifest.webmanifest",
+    icons: {
+        apple: [
+            { url: "/assets/images/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+        ],
+    },
+    appleWebApp: {
+        // Standalone PWA on iOS so "Add to Home Screen" opens fullscreen and
+        // safe-area-inset values activate, freeing the top nav and bottom
+        // player from Safari chrome overlap.
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "kima",
+    },
+    openGraph: {
+        title: "kima",
+        description: "self-hosted music streaming",
+        siteName: "kima",
+        url: "https://github.com/Chevron7Locked/kima-hub",
+        type: "website",
+    },
+};
 
 export default function RootLayout({
     children,
@@ -74,37 +60,25 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body
-                className={`${montserrat.variable} antialiased`}
-                style={{ fontFamily: "var(--font-montserrat)" }}
-            >
-                <LanguageProvider>
+            <body className={`${montserrat.variable} antialiased`}>
                 <GlobalErrorBoundary>
-                    <BrandingProvider>
                     <ServiceWorkerRegistration />
-                    <GpuTeardownSuppressor />
                     <AuthProvider>
                         <FeaturesProvider>
                             <QueryProvider>
-                                <DownloadProgressProvider>
-                                    <DownloadProvider>
-                                        <ToastProvider>
-                                            <ConditionalAudioProvider>
-                                                <ActivityPanelSettingsProvider>
-                                                    <AuthenticatedLayout>
-                                                        {children}
-                                                    </AuthenticatedLayout>
-                                                </ActivityPanelSettingsProvider>
-                                            </ConditionalAudioProvider>
-                                        </ToastProvider>
-                                    </DownloadProvider>
-                                </DownloadProgressProvider>
+                                <DownloadProvider>
+                                    <ConditionalAudioProvider>
+                                        <ActivityPanelSettingsProvider>
+                                            <AuthenticatedLayout>
+                                                {children}
+                                            </AuthenticatedLayout>
+                                        </ActivityPanelSettingsProvider>
+                                    </ConditionalAudioProvider>
+                                </DownloadProvider>
                             </QueryProvider>
                         </FeaturesProvider>
                     </AuthProvider>
-                    </BrandingProvider>
                 </GlobalErrorBoundary>
-                </LanguageProvider>
             </body>
         </html>
     );

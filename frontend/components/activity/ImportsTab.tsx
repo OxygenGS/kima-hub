@@ -12,9 +12,11 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
+import { EmptyState } from "../ui/EmptyState";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
+import { timeAgo } from "@/lib/relative-time";
 
 interface ImportJob {
     id: string;
@@ -68,19 +70,11 @@ function statusLabel(status: string): string {
 }
 
 function statusColor(status: string): string {
-    if (ACTIVE_STATUSES.includes(status)) return "text-blue-400";
-    if (status === "completed") return "text-[#22c55e]";
-    if (status === "failed") return "text-red-400";
-    if (status === "cancelled") return "text-[#eab308]";
+    if (ACTIVE_STATUSES.includes(status)) return "text-brand";
+    if (status === "completed") return "text-success";
+    if (status === "failed") return "text-danger-light";
+    if (status === "cancelled") return "text-warning";
     return "text-[var(--text-muted)]";
-}
-
-function formatAge(dateStr: string): string {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    if (diff < 60000) return "Just now";
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return new Date(dateStr).toLocaleDateString();
 }
 
 export function ImportsTab() {
@@ -115,20 +109,18 @@ export function ImportsTab() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+                <GradientSpinner size="sm" />
             </div>
         );
     }
 
     if (imports.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-                <ListMusic className="w-8 h-8 text-[var(--text-muted)] mb-3" />
-                <p className="text-sm text-[var(--text-muted)]">No imports yet</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1">
-                    Playlist imports will appear here
-                </p>
-            </div>
+            <EmptyState
+                icon={<ListMusic className="w-8 h-8" />}
+                title="No imports yet"
+                description="Playlist imports will appear here"
+            />
         );
     }
 
@@ -141,11 +133,10 @@ export function ImportsTab() {
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header */}
             {activeImports.length > 0 && (
                 <div className="flex items-center justify-between px-3 py-2 border-b-2 border-white/10">
                     <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
                         <span className="t-eyebrow">
                             {String(activeImports.length).padStart(2, "0")}{" "}
                             ACTIVE
@@ -154,7 +145,6 @@ export function ImportsTab() {
                 </div>
             )}
 
-            {/* Import list */}
             <div className="flex-1 overflow-y-auto">
                 {activeImports.map((job, index) => (
                     <ImportJobCard
@@ -202,11 +192,11 @@ function ImportJobCard({
 }) {
     const isActive = ACTIVE_STATUSES.includes(job.status);
     const borderColor = isActive
-        ? "border-blue-400"
+        ? "border-brand"
         : job.status === "completed"
-          ? "border-[#22c55e]"
+          ? "border-success"
           : job.status === "failed"
-            ? "border-red-400"
+            ? "border-danger-light"
             : "border-white/5";
 
     return (
@@ -217,14 +207,12 @@ function ImportJobCard({
             )}
         >
             <div className="flex items-start gap-3">
-                {/* Index */}
                 <div className="flex-shrink-0 w-6 mt-0.5">
                     <span className="text-micro tabular-nums font-semibold text-[var(--text-muted)]">
                         {String(index + 1).padStart(2, "0")}
                     </span>
                 </div>
 
-                {/* Status icon */}
                 <div className="mt-0.5 shrink-0">
                     {isActive ? (
                         cancelling ? (
@@ -233,19 +221,17 @@ function ImportJobCard({
                             <GradientSpinner size="sm" />
                         )
                     ) : job.status === "completed" ? (
-                        <CheckCircle2 className="w-4 h-4 text-[#22c55e]" />
+                        <CheckCircle2 className="w-4 h-4 text-success" />
                     ) : (
-                        <AlertCircle className="w-4 h-4 text-red-400" />
+                        <AlertCircle className="w-4 h-4 text-danger-light" />
                     )}
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold tracking-tight text-white truncate mb-1">
                         {job.playlistName}
                     </p>
 
-                    {/* Status line */}
                     <div className="flex items-center gap-2 flex-wrap">
                         <span
                             className={cn(
@@ -283,7 +269,7 @@ function ImportJobCard({
                             --
                         </span>
                         <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                            {formatAge(job.createdAt)}
+                            {timeAgo(job.createdAt)}
                         </span>
                     </div>
 
@@ -291,7 +277,7 @@ function ImportJobCard({
                     {isActive && job.albumsTotal > 0 && (
                         <div className="mt-2 h-1 bg-white/5 rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                                className="h-full bg-brand rounded-full transition-all duration-300"
                                 style={{
                                     width: `${Math.round((job.albumsCompleted / job.albumsTotal) * 100)}%`,
                                 }}
@@ -299,9 +285,8 @@ function ImportJobCard({
                         </div>
                     )}
 
-                    {/* Error message */}
                     {job.status === "failed" && job.error && (
-                        <p className="text-micro tabular-nums text-red-400/70 mt-1 truncate">
+                        <p className="text-micro tabular-nums text-danger-light/70 mt-1 truncate">
                             {job.error}
                         </p>
                     )}
@@ -310,7 +295,7 @@ function ImportJobCard({
                     {job.status === "completed" && job.createdPlaylistId && (
                         <Link
                             href={`/playlist/${job.createdPlaylistId}`}
-                            className="inline-flex items-center gap-1 mt-1.5 text-micro tabular-nums font-semibold text-[#22c55e] hover:text-[#4ade80] transition-colors"
+                            className="inline-flex items-center gap-1 mt-1.5 text-micro tabular-nums font-semibold text-success hover:text-success/80 transition-colors"
                         >
                             <ExternalLink className="w-3 h-3" />
                             View Playlist
@@ -324,9 +309,9 @@ function ImportJobCard({
                         onClick={() => onCancel(job.id)}
                         disabled={cancelling}
                         className="p-1 hover:bg-white/10 transition-colors shrink-0"
-                        title="Cancel import"
+                        title="cancel import"
                     >
-                        <X className="w-3 h-3 text-[var(--text-muted)] hover:text-red-400" />
+                        <X className="w-3 h-3 text-[var(--text-muted)] hover:text-danger-light" />
                     </button>
                 )}
             </div>

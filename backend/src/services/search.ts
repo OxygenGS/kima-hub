@@ -1,6 +1,7 @@
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
+import { NOT_MISSING } from "../utils/libraryEligibility";
 
 export function normalizeCacheQuery(query: string): string {
     return query.trim().toLowerCase().replace(/\s+/g, " ");
@@ -306,6 +307,7 @@ export class SearchService {
                     contains: query,
                     mode: "insensitive",
                 },
+                ...NOT_MISSING,
             },
             select: {
                 id: true,
@@ -372,6 +374,7 @@ export class SearchService {
         LEFT JOIN "Album" a ON t."albumId" = a.id
         LEFT JOIN "Artist" ar ON a."artistId" = ar.id
         WHERE t."searchVector" @@ to_tsquery('english', ${tsquery})
+        AND t."missingSince" IS NULL
         ORDER BY rank DESC, t.title ASC
         LIMIT ${limit}
         OFFSET ${offset}
@@ -525,7 +528,7 @@ export class SearchService {
 
     /**
      * Search audiobooks using PostgreSQL full-text search
-     * Falls back to external API if local cache is empty
+     * Falls back to a LIKE query on the local table when the search finds nothing
      */
     async searchAudiobooksFTS({
         query,
@@ -633,7 +636,7 @@ export class SearchService {
     }
 
     /**
-     * Legacy LIKE-based podcast search (kept as fallback)
+     * LIKE-based podcast search, the fallback when full-text search finds nothing
      */
     async searchPodcasts({
         query,
@@ -644,7 +647,6 @@ export class SearchService {
             return [];
         }
 
-        // Simple LIKE search for podcasts (fallback)
         try {
             const results = await prisma.podcast.findMany({
                 where: {
@@ -819,7 +821,7 @@ export class SearchService {
         }
 
         // Check cache
-        const cacheKey = `search:${type}:${normalizeCacheQuery(query)}:${limit}:${genre || ""}`;
+        const cacheKey = `search:${type}:${normalizeCacheQuery(query)}:${limit}:${offset}:${genre || ""}`;
         try {
             const cached = await redisClient.get(cacheKey);
             if (cached) {

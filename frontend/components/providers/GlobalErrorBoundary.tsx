@@ -1,83 +1,46 @@
 "use client";
 
-import React, { Component, ReactNode } from "react";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { ReactNode } from "react";
+import { ErrorBoundary } from "@/components/providers/ErrorBoundary";
+import { Button } from "@/components/ui/Button";
 
-interface Props {
-    children: ReactNode;
-}
-
-interface State {
-    hasError: boolean;
-    error: Error | null;
-}
-
-function LocalizedErrorFallback({ error, reload }: { error: Error | null; reload: () => void }) {
-    const { t } = useLanguage();
-
+/** Fallback page for errors that reach the top of the app. */
+export function GlobalErrorBoundary({ children }: { children: ReactNode }) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-4">
-            <div className="max-w-md w-full text-center space-y-6">
-                <div className="space-y-2">
-                    <h1 className="text-2xl font-bold">{t("Something went wrong")}</h1>
-                    <p className="text-[var(--text-secondary)]">
-                        {t("An unexpected error occurred. Please try reloading the page.")}
-                    </p>
-                </div>
-                {error && (
-                    <div className="bg-gray-900 p-4 rounded-lg text-left">
-                        <p className="text-sm tabular-nums text-red-400 break-words">
-                            {error.message}
-                        </p>
+        <ErrorBoundary
+            label="GlobalErrorBoundary"
+            renderFallback={(error) => (
+                <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white p-4">
+                    <div className="max-w-md w-full text-center space-y-6">
+                        <div className="space-y-2">
+                            <h1 className="text-2xl font-bold">
+                                Something went wrong
+                            </h1>
+                            <p className="text-[var(--text-secondary)]">
+                                An unexpected error occurred. Please try
+                                reloading the page.
+                            </p>
+                        </div>
+                        {error && (
+                            <div className="bg-gray-900 p-4 rounded-lg text-left">
+                                <p className="text-sm tabular-nums text-danger-light break-words">
+                                    {error.message}
+                                </p>
+                            </div>
+                        )}
+                        <Button
+                            variant="primary"
+                            size="lg"
+                            onClick={() => window.location.reload()}
+                            className="w-full"
+                        >
+                            Reload Page
+                        </Button>
                     </div>
-                )}
-                <button
-                    onClick={reload}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-                >
-                    {t("Reload Page")}
-                </button>
-            </div>
-        </div>
+                </div>
+            )}
+        >
+            {children}
+        </ErrorBoundary>
     );
-}
-
-/**
- * Global error boundary for catching application-level errors.
- * Provides a fallback UI when critical errors occur in production.
- */
-export class GlobalErrorBoundary extends Component<Props, State> {
-    constructor(props: Props) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
-
-    static getDerivedStateFromError(error: Error): State {
-        return { hasError: true, error };
-    }
-
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-        console.error("[GlobalErrorBoundary] Application error:", error);
-        console.error(
-            "[GlobalErrorBoundary] Component stack:",
-            errorInfo.componentStack
-        );
-    }
-
-    private handleReload = () => {
-        window.location.reload();
-    };
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <LocalizedErrorFallback
-                    error={this.state.error}
-                    reload={this.handleReload}
-                />
-            );
-        }
-
-        return this.props.children;
-    }
 }

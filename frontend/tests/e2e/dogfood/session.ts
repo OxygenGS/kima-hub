@@ -1,27 +1,13 @@
 /**
- * Session instrumentation for the dogfood walkthrough.
- *
- * The rest of the E2E suite checks features one at a time: log in, jump straight to a
- * page, assert something, throw the browser away. That finds broken features. It cannot
- * find anything that only goes wrong after a person has been using the app for a while --
- * state that leaks between screens, a listener that gets attached twice, a cache that goes
- * stale, an event stream that quietly reconnects in a loop. Those are the faults that
- * survive a green test suite and greet the user twenty minutes into a real session.
- *
- * So this file runs ONE browser session from login to logout and watches it the whole way
- * through. Two things fall out of that:
- *
- *   1. Faults are attributed. Every error is stamped with the step that was running when it
- *      happened, so a report says "the artwork 404'd while opening the playlist" rather
- *      than "something 404'd".
- *   2. Faults are cumulative. A leak that adds one listener per navigation is invisible in
- *      a test that navigates once, and obvious after thirty client-side navigations.
+ * One browser session from login to logout, watched the whole way. Every fault is
+ * stamped with the step that was running, and faults that build up over many
+ * navigations (leaked listeners, reconnect loops) become visible.
  */
 import { expect, Page, Response } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 
-export interface Violation {
+interface Violation {
     /** Which step was executing when this happened. */
     step: string;
     kind: "console" | "pageerror" | "http" | "overflow" | "sse" | "assertion";
@@ -30,9 +16,9 @@ export interface Violation {
 }
 
 /** What a step reports back: the evidence that it did something real. */
-export type Observed = Record<string, string | number | boolean | undefined>;
+type Observed = Record<string, string | number | boolean | undefined>;
 
-export interface StepRecord {
+interface StepRecord {
     name: string;
     journey: string;
     ms: number;
@@ -41,11 +27,9 @@ export interface StepRecord {
 }
 
 /**
- * Console noise that is not worth failing a deployment over.
- *
- * Keep this list short and specific. Every pattern here is a fault the walkthrough will no
- * longer report, so a loose regex silently buys back the exact coverage this test exists to
- * provide. Anything added here needs a reason next to it.
+ * Console noise that is not worth failing a deployment over. Keep it short and
+ * specific: a loose pattern stops the walkthrough reporting real faults, so each
+ * one carries its reason.
  */
 const IGNORED_CONSOLE = [
     /favicon/i,
@@ -54,29 +38,20 @@ const IGNORED_CONSOLE = [
     /Download the React DevTools/i,
     // Next.js prints this for any <img> it would rather have been next/image.
     /Image with src .* has either width or height modified/i,
-    // The player saves playback position in the background. Navigating away cancels any
-    // save that happens to be in flight, and the browser reports a cancelled fetch as
-    // "TypeError: Failed to fetch", which the app's catch block logs. It is the same
-    // cancelled-on-navigation case already ignored at the network layer, and it is
-    // harmless -- the next save writes the position again a moment later.
-    //
-    // Narrow on purpose. If the server were genuinely unreachable every other request in
-    // the session would fail too, and those are still reported.
+    // Navigating away cancels an in-flight position save, logged as "Failed to
+    // fetch"; the next save writes it again. A real outage fails other requests too.
     /\[AudioState\] Failed to save to server: TypeError: Failed to fetch/,
-    // Same cause, same reasoning, two more background jobs the player runs while you read
-    // a page: saving episode position, and fetching related podcasts. Navigating away
-    // cancels whichever is in flight.
+    // Same cause: navigating away cancels the position saves and the related-podcasts fetch.
     /\[AudioControls\] Failed to save (podcast|audiobook) progress: TypeError: Failed to fetch/,
     /Failed to load similar podcasts: TypeError: Failed to fetch/,
-    // Headless Chromium + SwiftShader cannot importScripts inside blob: workers.
-    // Real browsers load them fine now that CSP has worker-src; deck.gl falls back
-    // to main-thread and the map renders.
+    // Headless Chromium + SwiftShader cannot importScripts inside blob: workers;
+    // deck.gl falls back to the main thread and the map still renders.
     /Failed to execute 'importScripts' on 'WorkerGlobalScope'/,
     /worker module init function failed to rehydrate/,
 ];
 
 /** API calls that are allowed to fail, because a step deliberately provokes them. */
-export interface ExpectedFailure {
+interface ExpectedFailure {
     urlPattern: RegExp;
     status: number;
     reason: string;
@@ -101,11 +76,8 @@ export class DogfoodSession {
     }
 
     /**
-     * Point the per-step checks at a different page.
-     *
-     * The phone journey opens its own context, because touch emulation can only be set when
-     * a context is created and a narrow desktop window is not a phone. Layout and heap
-     * readings have to follow the page the steps are actually driving.
+     * Points the per-step layout and heap checks at another page. The phone journey
+     * opens its own context, because touch emulation is set only when a context is created.
      */
     setActivePage(target: Page): void {
         this.activePage = target;
@@ -133,8 +105,7 @@ export class DogfoodSession {
         // An uncaught exception in page code. React's error boundary may hide the visual
         // result, so the page can look fine while this fires.
         page.on("pageerror", (err) => {
-            // Headless Chromium + SwiftShader: deck.gl blob workers crash with this
-            // error when importScripts fails. The map still renders (main-thread fallback).
+            // The blob-worker failure from IGNORED_CONSOLE, surfaced as an uncaught error.
             if (/Worker module function was called but .init. did not return a callable function/.test(err.message)) return;
             this.record("pageerror", `${err.name}: ${err.message}`.slice(0, 300));
         });
@@ -161,11 +132,8 @@ export class DogfoodSession {
 
             const reason = req.failure()?.errorText ?? "unknown";
 
-            // ERR_ABORTED means the app cancelled the request itself -- a search-as-you-type
-            // box dropping a stale query, or a component unmounting mid-fetch. That is the
-            // app being well behaved, and flagging it would fail the run every time someone
-            // types. A request that genuinely could not be served fails differently
-            // (connection refused, name not resolved, timed out).
+            // ERR_ABORTED is the app cancelling its own request (a stale search, an
+            // unmount). A request that could not be served fails differently.
             if (reason.includes("ERR_ABORTED")) return;
 
             this.record("http", `FAILED ${req.method()} ${url.replace(this.baseUrl, "")} -- ${reason}`);
@@ -177,14 +145,7 @@ export class DogfoodSession {
         this.expectedFailures.push(f);
     }
 
-    /**
-     * Has this failure been declared as expected?
-     *
-     * `haystack` is the URL for a response, or the console text for a log line -- the app's
-     * own logger prints the path without the origin, so both are matched against the
-     * pattern. The status has to appear too, so declaring "404 on this route is fine" does
-     * not quietly excuse a 500 on the same route.
-     */
+    /** Whether a failure was declared expected. The status must match too, so an allowed 404 never excuses a 500. */
     private isExpected(url: string, textOrStatus: string): boolean {
         return this.expectedFailures.some(
             (e) =>
@@ -211,12 +172,8 @@ export class DogfoodSession {
     }
 
     /**
-     * Record something this run could NOT check, and why.
-     *
-     * The preflight knows some gaps before the run starts. Others only surface once the
-     * run is under way -- a podcast directory that is down, an Audiobookshelf with nothing
-     * in it. Both kinds belong in the same list, because the danger is identical: an
-     * unexercised journey silently reading as a passing one.
+     * Records something this run could not check, and why, so an unexercised
+     * journey never reads as a passing one.
      */
     noteNotCovered(reason: string): void {
         this.notCovered.push(reason);
@@ -228,11 +185,9 @@ export class DogfoodSession {
     }
 
     /**
-     * Run one interaction and record what it saw.
-     *
-     * The callback returns whatever the step observed -- a track count, a stream URL, a
-     * playlist id. Those values become the evidence in the report: they are how a reader
-     * tells "the page rendered" from "the page rendered the user's actual music".
+     * Runs one interaction. The callback returns what the step observed (a track count,
+     * a stream URL, a playlist id); the report shows it, so a reader can tell "the page
+     * rendered" from "the page rendered the user's actual music".
      */
     async step(name: string, fn: () => Promise<Observed | void>): Promise<void> {
         this.currentStep = name;
@@ -259,7 +214,6 @@ export class DogfoodSession {
             throw err;
         }
 
-
         await this.checkLayout();
         await this.sampleHeap(name);
 
@@ -278,15 +232,28 @@ export class DogfoodSession {
      * a broken one. One pixel of tolerance covers sub-pixel rounding in the layout engine.
      */
     private async checkLayout(): Promise<void> {
+        // The app shell scrolls inside #main-content, so the document alone never overflows.
         const overflow = await this.activePage.evaluate(() => {
-            const doc = document.documentElement;
-            return { scroll: doc.scrollWidth, client: doc.clientWidth };
+            const els = [document.documentElement, document.querySelector("#main-content")].filter(
+                (el): el is HTMLElement => !!el,
+            );
+            const worst = els.reduce((a, b) => (b.scrollWidth - b.clientWidth > a.scrollWidth - a.clientWidth ? b : a));
+            return { scroll: worst.scrollWidth, client: worst.clientWidth };
         });
         if (overflow.scroll > overflow.client + 1) {
             this.record(
                 "overflow",
                 `page scrolls sideways: content ${overflow.scroll}px in a ${overflow.client}px viewport`,
             );
+        }
+        // The page area must end inside the window: one that grows to its content's
+        // height never overflows itself, so nothing on the page can scroll.
+        const runsPast = await this.activePage.evaluate(() => {
+            const main = document.querySelector("#main-content");
+            return main ? Math.round(main.getBoundingClientRect().bottom - window.innerHeight) : 0;
+        });
+        if (runsPast > 1) {
+            this.record("overflow", `the page area runs ${runsPast}px past the bottom of the window, so it cannot scroll`);
         }
     }
 
@@ -308,7 +275,7 @@ export class DogfoodSession {
         // Earlier journeys that threw before their assertClean may have
         // left unreported violations that should not penalize the current journey.
         const currentJourneySteps = this.steps
-            .filter((s) => s.name.startsWith(this.currentJourney))
+            .filter((s) => s.journey === this.currentJourney)
             .map((s) => s.name);
         const fresh = this.violations.filter(
             (v) =>
@@ -335,11 +302,7 @@ export class DogfoodSession {
         return this.heapSamples[this.heapSamples.length - 1].mb - this.heapSamples[0].mb;
     }
 
-    /**
-     * Write the evidence trail. This is what makes the walkthrough a deployment gate rather
-     * than just a test: a reader who was not watching it run can see which journeys ran,
-     * what data each step actually saw, and what went wrong where.
-     */
+    /** Writes the evidence trail: which journeys ran, what each step saw, and what went wrong where. */
     writeReport(outDir: string): string {
         fs.mkdirSync(outDir, { recursive: true });
 
@@ -417,13 +380,8 @@ export class DogfoodSession {
 }
 
 /**
- * Navigate by clicking, the way a person does.
- *
- * page.goto() does a full browser reload, which throws away every piece of React state --
- * the queue, the current track, open panels. Half the value of a continuous walkthrough is
- * that state carries across screens, so the walkthrough clicks links instead. If the link
- * is not on screen this throws rather than silently falling back to a reload, because a
- * fallback would quietly convert this test back into the isolated kind.
+ * Navigates by clicking a link so React state carries across screens. Throws
+ * when the link is not on screen rather than falling back to a reload.
  */
 export async function navigateByClick(page: Page, href: string, timeoutMs = 10_000): Promise<void> {
     const link = page.locator(`a[href="${href}"]`).first();
@@ -436,26 +394,16 @@ export async function navigateByClick(page: Page, href: string, timeoutMs = 10_0
 }
 
 /**
- * The first album card in the main content area.
- *
- * Scoped to <main> deliberately. A bare `a[href^="/album/"]` also matches the 56px artwork
- * thumbnails in the sidebar's recently-played strip, which sit in the bottom-left corner --
- * underneath the Next.js dev-tools overlay, which swallows the click. Beyond dodging that,
- * the album grid is what a person actually clicks, so scoping here makes the walkthrough
- * more faithful rather than less.
+ * The first album card in <main>. The sidebar's recently-played thumbnails also
+ * link to albums and sit under the Next.js dev overlay.
  */
 export function firstAlbumCard(page: Page) {
     return page.locator('main a[href^="/album/"]').first();
 }
 
 /**
- * Open the Collection screen on its Albums tab.
- *
- * Collection opens on Artists, so anything looking for album cards has to switch tabs
- * first. The switch goes through the tab button rather than a URL, both because that is
- * what a person does and because the page keeps tab state in the URL via a client-side
- * push -- navigating directly would reload and throw away the session state the
- * walkthrough exists to carry forward.
+ * Opens Collection on its Albums tab through the tab button; a URL navigation
+ * would reload and lose the session state.
  */
 export async function openAlbumsTab(page: Page, timeoutMs = 15_000): Promise<void> {
     if (!page.url().includes("/collection")) {
@@ -466,16 +414,4 @@ export async function openAlbumsTab(page: Page, timeoutMs = 15_000): Promise<voi
     await albumsTab.click();
     await page.waitForURL(/tab=albums/, { timeout: timeoutMs });
     await firstAlbumCard(page).waitFor({ state: "visible", timeout: timeoutMs });
-}
-
-/**
- * Wait for the app to settle.
- *
- * networkidle is unusable here: the app holds a server-sent-events stream open for live
- * updates, so the network is never idle and the wait times out. Settle on the DOM instead,
- * then give React a moment to paint the data it fetched.
- */
-export async function settle(page: Page, ms = 800): Promise<void> {
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(ms);
 }

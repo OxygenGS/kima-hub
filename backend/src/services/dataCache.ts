@@ -1,22 +1,10 @@
-/**
- * DataCacheService - Unified data access with consistent caching pattern
- * 
- * Pattern: DB first -> Redis fallback -> API fetch -> save to both
- * 
- * This ensures:
- * - DB is the source of truth
- * - Redis provides fast reads
- * - API calls only happen when data doesn't exist
- * - All fetched data is persisted for future use
- */
+/** Cached data access: database first, then Redis, then the API, saving to both. */
 
 import { logger } from "../utils/logger";
 import { prisma } from "../utils/db";
 import { redisClient } from "../utils/redis";
-import { fanartService } from "./fanart";
-import { deezerService } from "./deezer";
-import { lastFmService } from "./lastfm";
-import { coverArtService } from "./coverArt";
+import { findAlbumArtwork, findArtistArtwork } from "./artwork";
+import { isMbid } from "./artistIdentity";
 import { downloadAndStoreImage } from "./imageStorage";
 
 // Cache TTLs
@@ -27,7 +15,7 @@ const NEGATIVE_CACHE_TTL = 24 * 60 * 60; // 1 day for "not found" results
 class DataCacheService {
     /**
      * Get artist hero image with unified caching
-     * Order: DB -> Redis -> Fanart.tv -> Deezer -> Last.fm -> save to both
+     * Order: DB -> Redis -> Fanart.tv -> Deezer -> save to both
      */
     async getArtistImage(
         artistId: string,
@@ -82,29 +70,32 @@ class DataCacheService {
 
     /**
      * Get album cover with unified caching
-     * Order: DB -> Redis -> Cover Art Archive -> save to both
+     * Order: DB -> Redis -> the artwork door (Deezer -> Cover Art Archive -> Fanart) -> save to both
      */
     async getAlbumCover(
         albumId: string,
         rgMbid: string
     ): Promise<string | null> {
-        // Skip temp MBIDs - no cover art available for unscanned albums
-        if (!rgMbid || rgMbid.startsWith("temp-")) {
-            return null;
-        }
-
         const cacheKey = `album-cover:${albumId}`;
 
-        // 1. Check DB first
+        // 1. Database first. Title and artist come back too, for sources that search by name.
+        let artistName = "";
+        let albumTitle = "";
         try {
             const album = await prisma.album.findUnique({
                 where: { id: albumId },
-                select: { coverUrl: true },
+                select: {
+                    coverUrl: true,
+                    title: true,
+                    artist: { select: { name: true } },
+                },
             });
             if (album?.coverUrl) {
                 this.setRedisCache(cacheKey, album.coverUrl, ALBUM_COVER_TTL);
                 return album.coverUrl;
             }
+            artistName = album?.artist?.name ?? "";
+            albumTitle = album?.title ?? "";
         } catch (err) {
             logger.warn("[DataCache] DB lookup failed for album:", albumId);
         }
@@ -121,8 +112,14 @@ class DataCacheService {
             // Redis errors are non-critical
         }
 
-        // 3. Fetch from Cover Art Archive
-        const coverUrl = await coverArtService.getCoverArt(rgMbid);
+        // 3. Ask every artwork source, not just the Cover Art Archive.
+        if (!artistName && !isMbid(rgMbid)) {
+            // Nothing to search on at all: no title, no artist, no real id.
+            return null;
+        }
+
+        const coverUrl =
+            (await findAlbumArtwork({ rgMbid, artistName, albumTitle }))?.url ?? null;
 
         // 4. Save to both DB and Redis
         if (coverUrl) {
@@ -139,7 +136,7 @@ class DataCacheService {
      * Get track cover (uses album cover)
      */
     async getTrackCover(
-        trackId: string,
+        _trackId: string,
         albumId: string,
         rgMbid?: string | null
     ): Promise<string | null> {
@@ -200,45 +197,8 @@ class DataCacheService {
     }
 
     /**
-     * Batch get album covers - for list views
-     */
-    async getAlbumCoversBatch(
-        albums: Array<{ id: string; coverUrl?: string | null }>
-    ): Promise<Map<string, string | null>> {
-        const results = new Map<string, string | null>();
-
-        for (const album of albums) {
-            if (album.coverUrl) {
-                results.set(album.id, album.coverUrl);
-            }
-        }
-
-        const missingIds = albums
-            .filter((a) => !results.has(a.id))
-            .map((a) => a.id);
-
-        if (missingIds.length > 0) {
-            try {
-                const cacheKeys = missingIds.map((id) => `album-cover:${id}`);
-                const cached = await redisClient.mget(cacheKeys);
-
-                missingIds.forEach((id, index) => {
-                    const value = cached[index];
-                    if (value && value !== "NOT_FOUND") {
-                        results.set(id, value);
-                    }
-                });
-            } catch (err) {
-                // Redis errors are non-critical
-            }
-        }
-
-        return results;
-    }
-
-    /**
      * Fetch artist image from external APIs and store locally
-     * Order: Fanart.tv (if MBID) -> Deezer -> Last.fm
+     * Order: the artwork.ts single door (Fanart -> Deezer -> MusicBrainz)
      * Returns native path (e.g., "native:artists/{id}.jpg") or null
      */
     private async fetchArtistImage(
@@ -246,57 +206,10 @@ class DataCacheService {
         artistName: string,
         mbid?: string | null
     ): Promise<string | null> {
-        let externalUrl: string | null = null;
-        let source = "";
-
-        // Try Fanart.tv first if we have a valid MBID
-        if (mbid && !mbid.startsWith("temp-")) {
-            try {
-                externalUrl = await fanartService.getArtistImage(mbid);
-                if (externalUrl) {
-                    source = "Fanart.tv";
-                }
-            } catch (err) {
-                // Fanart.tv failed, continue
-            }
-        }
-
-        // Try Deezer
-        if (!externalUrl) {
-            try {
-                externalUrl = await deezerService.getArtistImage(artistName);
-                if (externalUrl) {
-                    source = "Deezer";
-                }
-            } catch (err) {
-                // Deezer failed, continue
-            }
-        }
-
-        // Try Last.fm
-        if (!externalUrl) {
-            try {
-                const validMbid = mbid && !mbid.startsWith("temp-") ? mbid : undefined;
-                const lastfmInfo = await lastFmService.getArtistInfo(artistName, validMbid);
-
-                if (lastfmInfo?.image && Array.isArray(lastfmInfo.image)) {
-                    const largestImage =
-                        lastfmInfo.image.find((img: any) => img.size === "extralarge" || img.size === "mega") ||
-                        lastfmInfo.image[lastfmInfo.image.length - 1];
-
-                    if (largestImage && largestImage["#text"]) {
-                        const imageUrl = largestImage["#text"];
-                        // Filter out Last.fm placeholder images
-                        if (!imageUrl.includes("2a96cbd8b46e442fc41c2b86b821562f")) {
-                            externalUrl = imageUrl;
-                            source = "Last.fm";
-                        }
-                    }
-                }
-            } catch (err) {
-                // Last.fm failed
-            }
-        }
+        const validMbid = isMbid(mbid) ? mbid : undefined;
+        const found = await findArtistArtwork({ name: artistName, mbid: validMbid });
+        const externalUrl = found?.url ?? null;
+        const source = found?.source ?? "";
 
         if (!externalUrl) {
             logger.debug(`[DataCache] No image found for ${artistName}`);
@@ -426,18 +339,3 @@ class DataCacheService {
 }
 
 export const dataCacheService = new DataCacheService();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

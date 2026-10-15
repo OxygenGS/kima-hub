@@ -1,21 +1,22 @@
 "use client";
 
 import DOMPurify from "dompurify";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
-import { formatTime } from "@/utils/formatTime";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { formatTime } from "@/lib/format";
 
 import { useAudiobookData } from "@/features/audiobook/hooks/useAudiobookData";
 import { useAudiobookActions } from "@/features/audiobook/hooks/useAudiobookActions";
 
 import { AudiobookHero } from "@/features/audiobook/components/AudiobookHero";
+import { ColorWash } from "@/features/spoken/ColorWash";
 import { AudiobookActionBar } from "@/features/audiobook/components/AudiobookActionBar";
 import { SectionList } from "@/features/audiobook/components/SectionList";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function AudiobookDetailPage() {
-    const { t } = useLanguage();
-    const { audiobookId, audiobook, isLoading, refetch, heroImage, colorExtractionImage, metadata } =
+    const { audiobookId, audiobook, isLoading, refetch, heroImage, colorExtractionImage } =
         useAudiobookData();
 
     const { colors } = useImageColor(colorExtractionImage);
@@ -31,20 +32,16 @@ export default function AudiobookDetailPage() {
     } = useAudiobookActions(audiobookId, audiobook, refetch);
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (!audiobook) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">
-                    {t("Audiobook not found")}
-                </p>
-            </div>
+            <PageMessage
+                title="Audiobook not found"
+                description="It may have been removed from Audiobookshelf."
+                action={{ label: "Audiobooks", href: "/audiobooks" }}
+            />
         );
     }
 
@@ -59,7 +56,6 @@ export default function AudiobookDetailPage() {
                 audiobook={audiobook}
                 heroImage={heroImage}
                 colors={colors}
-                metadata={metadata}
                 formatTime={formatTime}
             >
                 <AudiobookActionBar
@@ -74,21 +70,10 @@ export default function AudiobookDetailPage() {
                 />
             </AudiobookHero>
 
-            {/* Main Content */}
             <div className="relative flex-1">
-                {/* Color gradient continuation */}
-                <div
-                    className="absolute inset-x-0 top-0 pointer-events-none"
-                    style={{
-                        height: "25vh",
-                        background: colors
-                            ? `linear-gradient(to bottom, ${colors.vibrant}10 0%, ${colors.vibrant}05 40%, transparent 100%)`
-                            : "transparent",
-                    }}
-                />
+                <ColorWash colors={colors} />
 
-                <div className="relative max-w-[1800px] mx-auto px-4 md:px-8 py-8 section-stack">
-                    {/* Sections */}
+                <div className="relative page-shell py-8 section-stack">
                     {audiobook.sections && audiobook.sections.length > 0 && (
                         <div>
                             <SectionList
@@ -99,18 +84,13 @@ export default function AudiobookDetailPage() {
                         </div>
                     )}
 
-                    {/* About */}
                     {showDescription && (
                         <div>
                             <section>
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="w-1 h-6 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">{t("About")}</h2>
-                                    <span className="flex-1 border-t border-white/10" />
-                                </div>
+                                <SectionHeader type="audiobook" title="About" size="sm" />
                                 <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
                                     <div
-                                        className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] [&_a]:text-[#f59e0b] [&_a]:no-underline [&_a:hover]:underline text-sm leading-relaxed"
+                                        className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline text-sm leading-relaxed"
                                         dangerouslySetInnerHTML={{
                                             __html: DOMPurify.sanitize(audiobook.description || ""),
                                         }}
@@ -120,17 +100,12 @@ export default function AudiobookDetailPage() {
                         </div>
                     )}
 
-                    {/* Series info */}
                     {audiobook.series && (
                         <div>
                             <section>
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="w-1 h-6 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">{t("Series")}</h2>
-                                    <span className="flex-1 border-t border-white/10" />
-                                </div>
+                                <SectionHeader type="audiobook" title="Series" size="sm" />
                                 <div className="flex items-center gap-3 text-sm">
-                                    <span className="text-[#f59e0b] font-bold tracking-tight">
+                                    <span className="text-brand font-bold tracking-tight">
                                         {audiobook.series.name}
                                     </span>
                                     <span className="text-[var(--text-muted)]">|</span>
@@ -142,10 +117,9 @@ export default function AudiobookDetailPage() {
                         </div>
                     )}
 
-                    {/* Playback hint */}
                     <div>
                         <p className="text-xs text-[var(--text-muted)] pt-4">
-                            {t("Use the player controls in the bottom bar for playback speed, seeking, and volume.")}
+                            Use the player controls in the bottom bar for playback speed, seeking, and volume.
                         </p>
                     </div>
                 </div>

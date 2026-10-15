@@ -8,8 +8,10 @@ import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicRe
 import { getAudioStreamingService } from "../../services/audioStreaming";
 import { config } from "../../config";
 import { bitrateToQuality, firstArtistGenre, mapSong, wrap } from "./mappers";
-import { normalizeArtistName } from "../../utils/artistNormalization";
-import { resolveTrackFilePath } from "../library/trackPath";
+import { normalizeArtistName } from "../../services/artistIdentity";
+import { resolveWithinMusicRoot } from "../library/trackPath";
+import { recordPlay } from "../../services/playRecording";
+import { getLiveState, publicUserId, reportLive } from "../../services/liveListening";
 
 export const playbackRouter = Router();
 
@@ -24,7 +26,7 @@ async function streamTrackById(
         return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
     }
 
-    const absolutePath = resolveTrackFilePath(track.filePath);
+    const absolutePath = resolveWithinMusicRoot(track.filePath);
     if (!absolutePath) {
         return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
     }
@@ -197,26 +199,7 @@ playbackRouter.all("/download.view", wrap(async (req, res) => {
     const id = req.query.id as string;
     if (!id) return subsonicError(req, res, SubsonicError.MISSING_PARAM, "Required parameter is missing: id");
 
-    const track = await prisma.track.findUnique({ where: { id } });
-    if (!track || !track.filePath) return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
-
-    const absolutePath = resolveTrackFilePath(track.filePath);
-    if (!absolutePath) {
-        return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
-    }
-
-    const streamingService = getAudioStreamingService(
-        config.music.transcodeCachePath,
-        config.music.transcodeCacheMaxGb,
-    );
-
-    const { filePath, mimeType } = await streamingService.getStreamFilePath(
-        track.id,
-        "original",
-        track.fileModified,
-        absolutePath,
-    );
-    await streamingService.streamFileWithRangeSupport(req, res, filePath, mimeType);
+    return streamTrackById(req, res, id, "original");
 }));
 
 // ===================== COVER ART =====================
@@ -230,8 +213,8 @@ playbackRouter.all("/getCoverArt.view", wrap(async (req, res) => {
 
     let coverUrl: string | null = null;
 
-    // Try album first (most common); ar- prefix skips album lookup since that ID is an artist ID.
-    // Falls through to artist/track as a cascade — clients may use any prefix for any entity.
+    // Clients send any prefix for any entity, so try album, artist and track in
+    // turn; `ar-` skips the album lookup.
     if (!rawId.startsWith("ar-")) {
         const album = await prisma.album.findUnique({
             where: { id },
@@ -311,33 +294,34 @@ playbackRouter.all("/scrobble.view", wrap(async (req, res) => {
     if (!id) return subsonicError(req, res, SubsonicError.MISSING_PARAM, "Required parameter is missing: id");
 
     const userId = req.user!.id;
-    // submission=false means "now playing" notification — skip, we only record completed plays
+    // submission=false is "now playing": it starts the public live trip, never a play.
     const submission = req.query.submission !== "false";
 
+    if (!submission && config.publicVibe && userId === (await publicUserId())) {
+        const track = await prisma.track.findUnique({ where: { id }, select: { duration: true } });
+        // A repeat "now playing" for the current track is a resume, not a restart.
+        const live = getLiveState();
+        const position = live.trackId === id && live.status !== "stopped" ? live.position : 0;
+        if (track) reportLive({ status: "playing", trackId: id, position, duration: track.duration * 1000, queue: [] });
+    }
+
     if (submission) {
-        const track = await prisma.track.findUnique({ where: { id }, select: { id: true } });
-        if (track) {
-            const timeMs = req.query.time ? parseInt(req.query.time as string, 10) : Date.now();
-            const playedAt = isNaN(timeMs) ? new Date() : new Date(timeMs);
-            await prisma.play
-                .create({ data: { userId, trackId: id, playedAt, source: ListenSource.SUBSONIC } })
-                .catch((err) => logger.warn("[Subsonic] scrobble play-log failed:", err));
-        }
+        // A client's scrobble counts as played (client-attested); the 30-second
+        // floor and the duplicate window in playRecording.ts still apply.
+        const timeMs = req.query.time ? parseInt(req.query.time as string, 10) : Date.now();
+        const playedAt = isNaN(timeMs) ? new Date() : new Date(timeMs);
+        await recordPlay({
+            userId,
+            trackId: id,
+            clientAttestedComplete: true,
+            source: ListenSource.SUBSONIC,
+            playedAt,
+        }).catch((err: unknown) => logger.warn("[Subsonic] scrobble play-log failed:", err));
     }
 
     return subsonicOk(req, res);
 }));
 // savePlayQueue.view / getPlayQueue.view live in queue.ts.
-//
-// They were registered here too and playbackRouter mounts first, so these won
-// -- and they used a DIFFERENT store: the SubsonicPlayQueue table, while
-// queue.ts's by-index variants (getPlayQueueByIndex / savePlayQueueByIndex,
-// unique paths, so always live) use PlaybackState.queue. getOpenSubsonicExtensions
-// advertises indexBasedQueue, so a client uses both: it saved by index into one
-// table and read by id out of the other, getting back a different queue.
-//
-// One store now: PlaybackState.queue, which the web player and getNowPlaying
-// already read. The SubsonicPlayQueue model is left unreferenced by this change.
 
 
 // ===================== BOOKMARKS =====================

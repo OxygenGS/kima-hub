@@ -2,26 +2,26 @@
 
 import { NowPlayingTab } from "./tabs/NowPlayingTab";
 import { QueueTab } from "./tabs/QueueTab";
-import { LyricsTab } from "./tabs/LyricsTab";
+import { LyricsView } from "@/components/lyrics/LyricsView";
 import { NotificationsTab } from "@/components/activity/NotificationsTab";
 import { ActiveDownloadsTab } from "@/components/activity/ActiveDownloadsTab";
 import { ImportsTab } from "@/components/activity/ImportsTab";
 import { HistoryTab } from "@/components/activity/HistoryTab";
 import type { ActivityType } from "./ActivityIconBar";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { X } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
 
 export type VibeTab = "now-playing" | "queue" | "lyrics";
 
-export const TABS: { key: VibeTab; label: string }[] = [
+const TABS: { key: VibeTab; label: string }[] = [
     { key: "now-playing", label: "Now Playing" },
     { key: "queue", label: "Queue" },
     { key: "lyrics", label: "Lyrics" },
 ];
 
-export const ACTIVITY_LABELS: Record<ActivityType, string> = {
+const ACTIVITY_LABELS: Record<ActivityType, string> = {
     notifications: "Notifications",
     downloads: "Downloads",
     imports: "Imports",
@@ -93,7 +93,7 @@ export function TabContent({ activeTab }: { activeTab: VibeTab }) {
         <div className="flex-1 flex flex-col overflow-hidden">
             {activeTab === "now-playing" && <NowPlayingTab />}
             {activeTab === "queue" && <QueueTab />}
-            {activeTab === "lyrics" && <LyricsTab />}
+            {activeTab === "lyrics" && <LyricsView variant="panel" />}
         </div>
     );
 }

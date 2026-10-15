@@ -1,15 +1,14 @@
 /**
- * Share Routes Integration Tests
- *
- * Tests the public (unauthenticated) GET /share/:token resolve endpoint
- * and the authenticated POST /share create endpoint using supertest.
- * Streaming and cover-art routes require real files on disk and are
- * excluded -- their path-traversal guard is tested directly.
+ * GET /share/:token (public) and POST /share (authenticated). Streaming and cover
+ * routes need real files and are left out; their path guard is tested directly.
  */
 
 // All mocks must be before imports
 jest.mock('../../utils/db', () => ({
     prisma: {
+        user: {
+            findUnique: jest.fn(),
+        },
         shareLink: {
             findUnique: jest.fn(),
             findFirst: jest.fn(),
@@ -63,7 +62,6 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 function makeApp() {
     const app = express();
     app.use(express.json());
-    // Share routes mount at /share; also mock requireAuth by injecting user
     app.use('/share', shareRoutes);
     return app;
 }
@@ -71,29 +69,6 @@ function makeApp() {
 function userToken(userId = 'user-1', role = 'user') {
     return jwt.sign({ userId, username: 'testuser', role, tokenVersion: 1 }, JWT_SECRET, { expiresIn: '24h' });
 }
-
-// Seed prisma.user.findUnique for requireAuth middleware used in POST / DELETE
-jest.mock('../../utils/db', () => ({
-    prisma: {
-        user: {
-            findUnique: jest.fn(),
-        },
-        shareLink: {
-            findUnique: jest.fn(),
-            findFirst: jest.fn(),
-            create: jest.fn(),
-            update: jest.fn(),
-            delete: jest.fn(),
-            count: jest.fn(),
-        },
-        playlist: { findUnique: jest.fn() },
-        track: { findUnique: jest.fn(), findFirst: jest.fn() },
-        album: { findUnique: jest.fn() },
-        playlistItem: { findFirst: jest.fn() },
-        $transaction: jest.fn(),
-        $executeRaw: jest.fn(),
-    },
-}));
 
 const BASE_USER = {
     id: 'user-1',

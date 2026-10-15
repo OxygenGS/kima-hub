@@ -1,51 +1,54 @@
-import React, { useRef } from "react";
+import React from "react";
 import { Play, Pause, Volume2, Music } from "lucide-react";
-import { cn } from "@/utils/cn";
-import Image from "next/image";
+import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import type { Track, Artist } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
-import { formatTime } from "@/utils/formatTime";
-import { formatNumber } from "@/utils/formatNumber";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { formatNumber, formatTime } from "@/lib/format";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { cascadeStyle } from "@/lib/motion";
+import { useDoubleTapList } from "@/hooks/useDoubleTap";
+import { CachedImage } from "@/components/ui/CachedImage";
+
+// A top track without a library album is not owned, so it can only be previewed.
+const isUnownedTrack = (track: Track) =>
+    !track.album?.id || !track.album?.title || track.album.title === "Unknown Album";
 
 interface PopularTracksProps {
     tracks: Track[];
     artist: Artist;
     currentTrackId: string | undefined;
-    colors: ColorPalette | null;
     onPlayTrack: (track: Track) => void;
     previewTrack: string | null;
     previewPlaying: boolean;
-    onPreview: (track: Track, e: React.MouseEvent) => void;
+    onPreview: (track: Track) => void;
 }
 
 export const PopularTracks: React.FC<PopularTracksProps> = ({
     tracks,
     artist,
     currentTrackId,
-    colors: _colors,
     onPlayTrack,
     previewTrack,
     previewPlaying,
     onPreview,
 }) => {
-    const { t } = useLanguage();
-    const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
+    const activate = (track: Track) => {
+        if (isUnownedTrack(track)) onPreview(track);
+        else onPlayTrack(track);
+    };
+    const onTouchEnd = useDoubleTapList((index) => {
+        if (tracks[index]) activate(tracks[index]);
+    });
 
     return (
         <section>
-            <SectionHeader color="tracks" title={t("Popular")} />
-            <div data-tv-section="tracks">
+            <SectionHeader type="track" title="Popular" />
+            <div data-tv-section="tracks" style={cascadeStyle(Math.min(tracks.length, 10))}>
                 {tracks.slice(0, 10).map((track, index) => {
                     const isPlaying = currentTrackId === track.id;
                     const isPreviewPlaying =
                         previewTrack === track.id && previewPlaying;
-                    const isUnowned =
-                        !track.album?.id ||
-                        !track.album?.title ||
-                        track.album.title === "Unknown Album";
+                    const isUnowned = isUnownedTrack(track);
                     const coverUrl = track.album?.coverArt
                         ? api.getCoverArtUrl(track.album.coverArt, 80)
                         : null;
@@ -61,55 +64,24 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             className={cn(
                                 "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_80px] gap-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
                                 isPlaying && "bg-white/10",
-                                index < 8 && "animate-rise",
+                                "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]",
                             )}
-                            style={
-                                index < 8
-                                    ? { animationDelay: `${index * 45}ms` }
-                                    : undefined
-                            }
-                            onDoubleClick={(e) => {
-                                if (isUnowned) {
-                                    onPreview(track, e);
-                                } else {
-                                    onPlayTrack(track);
-                                }
-                            }}
-                            onTouchEnd={(e) => {
-                                const idx = Number(e.currentTarget.dataset.trackIndex);
-                                if (isNaN(idx)) return;
-                                const now = Date.now();
-                                if (now - lastTapRef.current.time < 300 && lastTapRef.current.index === idx) {
-                                    const t = tracks[idx];
-                                    const unowned = !t?.album?.id || !t?.album?.title || t.album.title === "Unknown Album";
-                                    if (unowned) {
-                                        onPreview(t, e as unknown as React.MouseEvent);
-                                    } else {
-                                        onPlayTrack(t);
-                                    }
-                                    lastTapRef.current = { time: 0, index: -1 };
-                                } else {
-                                    lastTapRef.current = { time: now, index: idx };
-                                }
-                            }}
+                            style={{ "--i": index } as unknown as React.CSSProperties}
+                            onDoubleClick={() => activate(track)}
+                            onTouchEnd={onTouchEnd}
                         >
-                            {/* Track Number / Play Button */}
                             <div className="flex items-center justify-center">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (isUnowned) {
-                                            onPreview(track, e);
-                                        } else {
-                                            onPlayTrack(track);
-                                        }
+                                        activate(track);
                                     }}
-                                    className="w-8 h-8 flex items-center justify-center"
-                                    aria-label={isPlaying ? t("Pause") : t("Play")}
+                                    className="group/play w-8 h-8 flex items-center justify-center"
+                                    aria-label={isPlaying ? "Pause" : "Play"}
                                 >
                                     <span
                                         className={cn(
-                                            "text-sm group-hover:hidden",
+                                            "text-sm group-hover:hidden group-focus-visible/play:hidden",
                                             isPlaying
                                                 ? "text-brand"
                                                 : "text-[var(--text-secondary)]"
@@ -121,21 +93,19 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                             index + 1
                                         )}
                                     </span>
-                                    <Play className="w-4 h-4 text-white hidden group-hover:block" />
+                                    <Play className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
                                 </button>
                             </div>
 
-                            {/* Title + Album Art */}
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-10 h-10 bg-[#282828] rounded shrink-0 overflow-hidden">
                                     {coverUrl ? (
-                                        <Image
+                                        <CachedImage
                                             src={coverUrl}
                                             alt={track.title}
                                             width={40}
                                             height={40}
                                             className="object-cover"
-                                            unoptimized
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
@@ -156,7 +126,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                             {track.displayTitle ?? track.title}
                                         </span>
                                         {isUnowned && (
-                                            <span className="shrink-0 text-micro bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-medium">
+                                            <span className="shrink-0 text-micro bg-white/10 text-[var(--text-secondary)] px-1.5 py-0.5 rounded font-medium">
                                                 Preview
                                             </span>
                                         )}
@@ -167,7 +137,6 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                 </div>
                             </div>
 
-                            {/* Play Count (hidden on mobile) */}
                             <div className="hidden md:flex items-center text-sm text-[var(--text-secondary)]">
                                 {track.playCount !== undefined &&
                                     track.playCount > 0 && (
@@ -178,15 +147,15 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                     )}
                             </div>
 
-                            {/* Duration + Preview */}
                             <div className="flex items-center justify-end gap-2">
                                 {isUnowned && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onPreview(track, e);
+                                            onPreview(track);
                                         }}
-                                        className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 transition-[opacity,transform] duration-150 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white"
+                                        aria-label={isPreviewPlaying ? `stop the preview of ${track.title}` : `play a preview of ${track.title}`}
+                                        className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-hover:translate-y-0 focus-visible:translate-y-0 translate-y-1 transition-[opacity,transform] duration-150 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white"
                                     >
                                         {isPreviewPlaying ? (
                                             <Pause className="w-4 h-4" />
@@ -196,7 +165,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                     </button>
                                 )}
                                 {track.duration && (
-                                    <span className="text-sm text-[var(--text-secondary)] w-10 text-right tabular-nums tabular-nums">
+                                    <span className="text-sm text-[var(--text-secondary)] w-10 text-right tabular-nums">
                                         {formatTime(track.duration)}
                                     </span>
                                 )}

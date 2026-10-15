@@ -1,15 +1,11 @@
-"use client";
-
-import { useRef } from "react";
 import { Play, Heart, Music } from "lucide-react";
-import Image from "next/image";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { DiscoverTrack } from "../types";
 import { api } from "@/lib/api";
-import { formatTime } from "@/utils/formatTime";
+import { formatTime } from "@/lib/format";
 import { tierColors, tierLabels } from "../constants";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { useDoubleTapList } from "@/hooks/useDoubleTap";
 
 interface TrackListProps {
     tracks: DiscoverTrack[];
@@ -28,21 +24,25 @@ export function TrackList({
     onTogglePlay,
     onLike,
 }: TrackListProps) {
-    const { t } = useLanguage();
-    const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
+    const activate = (index: number) => {
+        if (isPlaying && currentTrack?.id === tracks[index]?.id) {
+            onTogglePlay();
+        } else {
+            onPlayTrack(index);
+        }
+    };
+    const onTouchEnd = useDoubleTapList(activate);
 
     return (
         <div className="w-full">
-            {/* Table Header */}
             <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 text-xs text-[var(--text-secondary)] border-b border-white/10 mb-2">
                 <span className="text-center">#</span>
-                <span>{t("Title")}</span>
-                <span>{t("Album")}</span>
-                <span className="text-center">{t("Match")}</span>
-                <span className="text-right">{t("Duration")}</span>
+                <span>Title</span>
+                <span>Album</span>
+                <span className="text-center">Match</span>
+                <span className="text-right">Duration</span>
             </div>
 
-            {/* Track Rows */}
             <div>
                 {tracks.map((track, index) => {
                     const isTrackPlaying = currentTrack?.id === track.id;
@@ -50,50 +50,25 @@ export function TrackList({
                         <div
                             key={track.id}
                             data-track-index={index}
-                            onDoubleClick={() => {
-                                if (isTrackPlaying && isPlaying) {
-                                    onTogglePlay();
-                                } else {
-                                    onPlayTrack(index);
-                                }
-                            }}
-                            onTouchEnd={(e) => {
-                                const idx = Number(e.currentTarget.dataset.trackIndex);
-                                if (isNaN(idx)) return;
-                                const now = Date.now();
-                                if (now - lastTapRef.current.time < 300 && lastTapRef.current.index === idx) {
-                                    if (isTrackPlaying && isPlaying) {
-                                        onTogglePlay();
-                                    } else {
-                                        onPlayTrack(idx);
-                                    }
-                                    lastTapRef.current = { time: 0, index: -1 };
-                                } else {
-                                    lastTapRef.current = { time: now, index: idx };
-                                }
-                            }}
+                            onDoubleClick={() => activate(index)}
+                            onTouchEnd={onTouchEnd}
                             className={cn(
                                 "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
                                 isTrackPlaying && "bg-white/10"
                             )}
                         >
-                            {/* Track Number / Play Button */}
                             <div className="flex items-center justify-center">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        if (isTrackPlaying && isPlaying) {
-                                            onTogglePlay();
-                                        } else {
-                                            onPlayTrack(index);
-                                        }
+                                        activate(index);
                                     }}
-                                    className="w-8 h-8 flex items-center justify-center"
-                                    aria-label={isTrackPlaying && isPlaying ? t("Pause") : t("Play")}
+                                    className="group/play w-8 h-8 flex items-center justify-center"
+                                    aria-label={isTrackPlaying && isPlaying ? "Pause" : "Play"}
                                 >
                                     <span
                                         className={cn(
-                                            "group-hover:hidden text-sm",
+                                            "group-hover:hidden group-focus-visible/play:hidden text-sm",
                                             isTrackPlaying
                                                 ? "text-brand"
                                                 : "text-[var(--text-secondary)]"
@@ -105,15 +80,14 @@ export function TrackList({
                                             index + 1
                                         )}
                                     </span>
-                                    <Play className="w-4 h-4 text-white hidden group-hover:block" />
+                                    <Play className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
                                 </button>
                             </div>
 
-                            {/* Title + Artist */}
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-10 h-10 bg-[#282828] rounded shrink-0 overflow-hidden">
                                     {track.coverUrl ? (
-                                        <Image
+                                        <CachedImage
                                             src={api.getCoverArtUrl(
                                                 track.coverUrl,
                                                 80
@@ -122,7 +96,6 @@ export function TrackList({
                                             width={40}
                                             height={40}
                                             className="object-cover"
-                                            unoptimized
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
@@ -147,12 +120,10 @@ export function TrackList({
                                 </div>
                             </div>
 
-                            {/* Album (hidden on mobile) */}
                             <p className="hidden md:flex items-center text-sm text-[var(--text-secondary)] truncate">
                                 {track.album}
                             </p>
 
-                            {/* Tier Badge (hidden on mobile) */}
                             <div className="hidden md:flex items-center justify-center">
                                 <span
                                     className={cn(
@@ -160,27 +131,28 @@ export function TrackList({
                                         tierColors[track.tier]
                                     )}
                                 >
-                                    {tierLabels[track.tier] ? t(tierLabels[track.tier] as TranslationKey).split(" ")[0] : track.tier}
+                                    {tierLabels[track.tier]?.split(" ")[0]}
                                 </span>
                             </div>
 
-                            {/* Duration + Like */}
                             <div className="flex items-center justify-end gap-2">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onLike(track);
                                     }}
+                                    aria-label={track.isLiked ? `unlike ${track.title}` : `like ${track.title}`}
+                                    aria-pressed={track.isLiked}
                                     className={cn(
-                                        "p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all",
+                                        "p-1.5 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all",
                                         track.isLiked
-                                            ? "text-[#a855f7] hover:text-[#9333ea]"
+                                            ? "text-brand hover:text-brand-light"
                                             : "text-[var(--text-secondary)] hover:text-white"
                                     )}
                                     title={
                                         track.isLiked
-                                            ? t("Unlike")
-                                            : t("Keep in library")
+                                            ? "unlike"
+                                            : "keep in library"
                                     }
                                 >
                                     <Heart

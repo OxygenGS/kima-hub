@@ -1,86 +1,72 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { Music } from "lucide-react";
 import { api } from "@/lib/api";
-import { memo, type CSSProperties } from "react";
+import { memo } from "react";
 import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
-import { cn } from "@/utils/cn";
-import { Artist } from "../types";
+import { cascadeStyle } from "@/lib/motion";
+import { MediaCard } from "@/components/cards/MediaCard";
+import type { Artist, PopularArtist } from "../types";
 
-interface ArtistsGridProps {
-    artists: Artist[];
+interface ArtistTile {
+    key: string;
+    name: string;
+    href: string;
+    coverArt?: string;
+    subtitle: string;
 }
 
-interface ArtistCardProps {
-    artist: Artist;
-    index: number;
-}
-
-const ArtistCard = memo(
-    function ArtistCard({ artist, index }: ArtistCardProps) {
-        const imageSrc = artist.coverArt ? api.getCoverArtUrl(artist.coverArt, 300) : null;
-        const staggered = index < 8;
-
-        return (
-            <CarouselItem>
-                <Link
-                    href={`/artist/${artist.id}`}
-                    data-tv-card
-                    data-tv-card-index={index}
-                    tabIndex={0}
-                    className={cn(
-                        "group block",
-                        staggered && "animate-rise [animation-delay:calc(var(--i)*45ms)]",
-                    )}
-                    style={staggered ? { "--i": index } as CSSProperties : undefined}
-                >
-                    <div className="relative bg-[var(--bg-primary)] border border-white/10 rounded-lg overflow-hidden hover:border-[#fca200]/40 transition-[border-color] duration-150 mx-1">
-                        <div className="relative aspect-square">
-                            <div className="w-full h-full bg-[#181818] flex items-center justify-center overflow-hidden">
-                                {imageSrc ? (
-                                    <Image
-                                        src={imageSrc}
-                                        alt={artist.name}
-                                        fill
-                                        className="object-cover group-hover:scale-110 transition-transform duration-150"
-                                        sizes="180px"
-                                        priority={false}
-                                        unoptimized
-                                    />
-                                ) : (
-                                    <Music className="w-10 h-10 text-[var(--text-muted)]" />
-                                )}
-                            </div>
-                        </div>
-                        <div className="h-0.5 bg-gradient-to-r from-[#fca200] to-[#d48c00] scale-x-0 group-hover:scale-x-100 transition-transform duration-150" />
-                        <div className="relative z-10 p-3 bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
-                            <h3 className="text-sm font-bold text-white truncate tracking-tight">
-                                {artist.name}
-                            </h3>
-                            <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                Artist
-                            </p>
-                        </div>
-                    </div>
-                </Link>
-            </CarouselItem>
-        );
-    },
-    (prevProps, nextProps) => {
-        return prevProps.artist.id === nextProps.artist.id && prevProps.index === nextProps.index;
-    }
-);
-
-const ArtistsGrid = memo(function ArtistsGrid({ artists }: ArtistsGridProps) {
+function ArtistTileGrid({ tiles }: { tiles: ArtistTile[] }) {
     return (
-        <HorizontalCarousel>
-            {artists.map((artist, index) => (
-                <ArtistCard key={artist.id} artist={artist} index={index} />
+        <HorizontalCarousel style={cascadeStyle(tiles.length)}>
+            {tiles.map((tile, index) => (
+                <CarouselItem key={tile.key}>
+                    <MediaCard
+                        href={tile.href}
+                        title={tile.name}
+                        subtitle={tile.subtitle}
+                        imageUrl={tile.coverArt ? api.getCoverArtUrl(tile.coverArt, 300) : null}
+                        fallbackIcon={Music}
+                        type="artist"
+                        index={index}
+                        sizes="180px"
+                        className="mx-1"
+                    />
+                </CarouselItem>
             ))}
         </HorizontalCarousel>
     );
+}
+
+export const ArtistsGrid = memo(function ArtistsGrid({ artists }: { artists: Artist[] }) {
+    return (
+        <ArtistTileGrid
+            tiles={artists.map((a) => ({
+                key: a.id,
+                name: a.name,
+                href: `/artist/${a.id}`,
+                coverArt: a.coverArt,
+                subtitle: "Artist",
+            }))}
+        />
+    );
 });
 
-export { ArtistsGrid };
+// Popular artists come from outside the library, so they open a search rather than an artist page.
+export const PopularArtistsGrid = memo(function PopularArtistsGrid({
+    artists,
+}: {
+    artists: PopularArtist[];
+}) {
+    return (
+        <ArtistTileGrid
+            tiles={artists.map((a) => ({
+                key: a.id || a.name,
+                name: a.name,
+                href: `/search?q=${encodeURIComponent(a.name)}`,
+                coverArt: a.image,
+                subtitle: `${a.listeners?.toLocaleString()} listeners`,
+            }))}
+        />
+    );
+});

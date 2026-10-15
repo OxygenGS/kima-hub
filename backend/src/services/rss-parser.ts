@@ -80,7 +80,7 @@ class RSSParserService {
      */
     async parseFeed(feedUrl: string, options?: FeedFetchOptions): Promise<ParseFeedResult> {
         try {
-            logger.debug(`\n [RSS PARSER] Fetching feed: ${feedUrl}`);
+            logger.debug(`[RSS PARSER] Fetching feed: ${feedUrl}`);
 
             const headers: Record<string, string> = {
                 "User-Agent": `Kima/${APP_VERSION} (+https://github.com/Chevron7Locked/kima-hub; podcast aggregator)`,
@@ -234,28 +234,17 @@ class RSSParserService {
     private findAudioEnclosure(
         item: any
     ): { url: string; type?: string; length?: string } | null {
-        // Check enclosure field
-        if (item.enclosure) {
-            const enc = item.enclosure;
+        const candidates = [
+            item.enclosure,
+            ...(Array.isArray(item.enclosures) ? item.enclosures : []),
+        ].filter(Boolean);
+        for (const enc of candidates) {
             if (enc.url && this.isAudioMimeType(enc.type)) {
                 return {
                     url: enc.url,
                     type: enc.type,
                     length: enc.length,
                 };
-            }
-        }
-
-        // Check enclosures array
-        if (Array.isArray(item.enclosures)) {
-            for (const enc of item.enclosures) {
-                if (enc.url && this.isAudioMimeType(enc.type)) {
-                    return {
-                        url: enc.url,
-                        type: enc.type,
-                        length: enc.length,
-                    };
-                }
             }
         }
 

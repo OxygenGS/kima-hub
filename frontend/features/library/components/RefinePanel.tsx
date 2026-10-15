@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
+import { cn } from "@/lib/cn";
 import { LibraryFilter, SortOption } from "@/hooks/useQueries";
 import { Tab } from "../types";
 
@@ -25,6 +23,15 @@ const SORT_OPTIONS: { label: string; value: SortOption }[] = [
     { label: "Most Tracks", value: "tracks" },
 ];
 
+/** The sorts a tab offers: year for albums, track count for artists. */
+export function sortOptionsFor(tab: Tab) {
+    return SORT_OPTIONS.filter((opt) => {
+        if (opt.value === "recent") return tab === "albums";
+        if (opt.value === "tracks") return tab === "artists";
+        return true;
+    });
+}
+
 // Human-readable labels -- backend filter values ("owned"/"discovery") unchanged
 const FILTER_OPTIONS: { label: string; description: string; value: LibraryFilter }[] = [
     {
@@ -44,10 +51,15 @@ const FILTER_OPTIONS: { label: string; description: string; value: LibraryFilter
     },
 ];
 
-const PER_PAGE_OPTIONS = [24, 40, 80, 200];
+export const PER_PAGE_OPTIONS = [24, 40, 80, 200];
+
+/** What the collection shows when the address names nothing else. */
+export const DEFAULT_REFINE = { filter: "owned" as LibraryFilter, sortBy: "name" as SortOption, itemsPerPage: 40 };
 
 function isNonDefault(filter: LibraryFilter, sortBy: SortOption, itemsPerPage: number): boolean {
-    return filter !== "owned" || sortBy !== "name" || itemsPerPage !== 40;
+    return (
+        filter !== DEFAULT_REFINE.filter || sortBy !== DEFAULT_REFINE.sortBy || itemsPerPage !== DEFAULT_REFINE.itemsPerPage
+    );
 }
 
 export function RefinePanel({
@@ -59,7 +71,6 @@ export function RefinePanel({
     onSortChange,
     onItemsPerPageChange,
 }: RefinePanelProps) {
-    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -67,7 +78,6 @@ export function RefinePanel({
     const showFilterSection = activeTab === "artists" || activeTab === "albums";
     const hasRefinements = isNonDefault(filter, sortBy, itemsPerPage);
 
-    // Dismiss on click-outside
     useEffect(() => {
         if (!open) return;
 
@@ -86,7 +96,6 @@ export function RefinePanel({
         return () => document.removeEventListener("pointerdown", handlePointerDown);
     }, [open]);
 
-    // Dismiss on Escape
     useEffect(() => {
         if (!open) return;
 
@@ -101,28 +110,20 @@ export function RefinePanel({
         return () => document.removeEventListener("keydown", handleKeyDown);
     }, [open]);
 
-    // Visible sort options depend on active tab
-    const sortOptions = SORT_OPTIONS.filter((opt) => {
-        if (opt.value === "recent") return activeTab === "albums";
-        if (opt.value === "tracks") return activeTab === "artists";
-        return true;
-    });
+    const sortOptions = sortOptionsFor(activeTab);
 
     return (
         <div className="relative">
-            {/* Refine trigger button */}
             <button
                 ref={buttonRef}
                 type="button"
                 aria-expanded={open}
                 aria-controls="refine-panel"
-                aria-label={t("Refine: filter, sort, and per-page options")}
+                aria-label="Refine: filter, sort, and per-page options"
                 onClick={() => setOpen((prev) => !prev)}
                 className={cn(
                     // Matches the segmented control beside it: sentence case,
-                    // medium weight, a hairline border. It was set in the
-                    // 12px bold-caps-tracked micro-label style, which is for
-                    // metadata, not for a control you press.
+                    // medium weight, a hairline border.
                     "relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors min-h-[44px] select-none",
                     open
                         ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand)]"
@@ -132,35 +133,30 @@ export function RefinePanel({
                 )}
             >
                 <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>{t("Refine")}</span>
-                {/* Active-state dot */}
+                <span>Refine</span>
                 {hasRefinements && !open && (
                     <span
-                        aria-label={t("Refinements active")}
+                        aria-label="Refinements active"
                         className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand)] flex-shrink-0"
                     />
                 )}
             </button>
 
-            {/* Disclosure panel */}
             {open && (
                 <div
                     id="refine-panel"
                     ref={panelRef}
                     role="dialog"
-                    aria-label={t("Refine options")}
-                    // Anchored to the button's LEFT edge, not its right. The
-                    // trigger is the first thing in the toolbar at every
-                    // width, so right-0 hung the panel off the start of the
-                    // page: at 388px, 162px of its 288px was unreachable.
+                    aria-label="Refine options"
+                    // Anchored to the button's left edge: the trigger starts the
+                    // toolbar at every width, so right-0 would push the panel off the page.
                     className="absolute left-0 top-full mt-2 z-(--z-dropdown) w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-5 animate-panel-up"
                 >
-                    {/* Panel header */}
                     <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-white">{t("Refine")}</span>
+                        <span className="text-sm font-medium text-white">Refine</span>
                         <button
                             type="button"
-                            aria-label={t("Close refine panel")}
+                            aria-label="Close refine panel"
                             onClick={() => {
                                 setOpen(false);
                                 buttonRef.current?.focus();
@@ -171,7 +167,6 @@ export function RefinePanel({
                         </button>
                     </div>
 
-                    {/* Filter section -- hidden for Tracks tab */}
                     {showFilterSection && (
                         <fieldset className="flex flex-col gap-1.5">
                             <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
@@ -198,10 +193,10 @@ export function RefinePanel({
                                                 isActive ? "text-[var(--color-brand)]" : "text-white",
                                             )}
                                         >
-                                            {t(opt.label as TranslationKey)}
+                                            {opt.label}
                                         </span>
                                         <span className="text-xs text-[var(--text-muted)] mt-0.5">
-                                            {t(opt.description as TranslationKey)}
+                                            {opt.description}
                                         </span>
                                     </button>
                                 );
@@ -209,7 +204,6 @@ export function RefinePanel({
                         </fieldset>
                     )}
 
-                    {/* Sort section */}
                     <fieldset className="flex flex-col gap-1">
                         <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
                             Sort by
@@ -228,13 +222,12 @@ export function RefinePanel({
                                             : "border-white/5 bg-white/3 text-[var(--text-secondary)] hover:bg-white/8 hover:border-white/15 hover:text-white",
                                     )}
                                 >
-                                    {t(opt.label as TranslationKey)}
+                                    {opt.label}
                                 </button>
                             ))}
                         </div>
                     </fieldset>
 
-                    {/* Per-page section */}
                     <fieldset className="flex flex-col gap-1">
                         <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
                             Items per page

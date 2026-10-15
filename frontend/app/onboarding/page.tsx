@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { BookOpen, Music, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import Image from "next/image";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
-import { translate, type Locale } from "@/lib/i18n/translations";
+import { Button } from "@/components/ui/Button";
+import { KimaMark } from "@/components/ui/KimaMark";
 
 type IntegrationKey = "lidarr" | "audiobookshelf" | "soulseek";
 type IntegrationResult = { ok: boolean; message: string };
@@ -16,8 +15,6 @@ type IntegrationResult = { ok: boolean; message: string };
 export default function OnboardingPage() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuth();
-    const { branding } = useBranding();
-    const { t, locale, setLocale } = useLanguage();
     const [step, setStep] = useState(1);
     // Separate submitting state: account creation + complete/skip
     const [submitting, setSubmitting] = useState(false);
@@ -28,9 +25,9 @@ export default function OnboardingPage() {
     const [integrationResults, setIntegrationResults] = useState<
         Partial<Record<IntegrationKey, IntegrationResult>>
     >({});
-    const [hasFinishedInitialAuth, setHasFinishedInitialAuth] = useState(false);
-    const initialLoading = !hasFinishedInitialAuth;
+    const [initialLoading, setInitialLoading] = useState(true);
     const [error, setError] = useState("");
+    const hasCheckedSession = useRef(false);
     const showPasswordMismatch = error === "Passwords don't match";
     const showPasswordTooShort =
         error === "Password must be at least 6 characters";
@@ -40,13 +37,19 @@ export default function OnboardingPage() {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
 
-    // Adjust this component's own state once the initial auth check finishes.
-    // React permits a guarded render-time adjustment, avoiding the extra
-    // effect render while still skipping account creation for existing users.
-    if (!authLoading && !hasFinishedInitialAuth) {
-        setHasFinishedInitialAuth(true);
-        if (user && !user.onboardingComplete) setStep(2);
-    }
+    useEffect(() => {
+        if (authLoading) return;
+
+        // Only check once to prevent re-renders
+        if (hasCheckedSession.current) return;
+        hasCheckedSession.current = true;
+
+        // If user exists and hasn't completed onboarding, skip to step 2
+        if (user && !user.onboardingComplete) {
+            setStep(2);
+        }
+        setInitialLoading(false);
+    }, [authLoading, user]);
 
     // Step 2: Integrations
     const [lidarr, setLidarr] = useState({
@@ -85,7 +88,7 @@ export default function OnboardingPage() {
                 const healthRes = await fetch("/api/health", { method: "GET" });
                 if (!healthRes.ok) throw new Error("not ready");
             } catch {
-                setError("Cannot reach the server. Check that the server is fully started and try again.");
+                setError("Cannot reach the server. Check that Kima is fully started and try again.");
                 return;
             }
             const response = await api.post<{
@@ -99,7 +102,6 @@ export default function OnboardingPage() {
             setStep(2);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            // Check if user already exists
             if (message?.includes("already taken")) {
                 // Usually a refresh/retry race: the account was created but the
                 // token never persisted client-side. Rather than dead-end on a
@@ -167,13 +169,13 @@ export default function OnboardingPage() {
             }
             setIntegrationResults((prev) => ({
                 ...prev,
-                [type]: { ok: true, message: "Connected successfully!" },
+                [type]: { ok: true, message: `${type} connected successfully!` },
             }));
         } catch (err: unknown) {
             const errorMessage =
                 err instanceof Error ?
                     err.message
-                :   "Connection failed";
+                :   `Failed to connect to ${type}`;
             setIntegrationResults((prev) => ({
                 ...prev,
                 [type]: { ok: false, message: errorMessage },
@@ -212,55 +214,39 @@ export default function OnboardingPage() {
 
     return (
         <div className="min-h-screen relative overflow-hidden">
-            {/* Dark background (matches login) */}
             <div className="absolute inset-0 bg-[#000]">
                 <div className="absolute inset-0 bg-gradient-to-br from-brand/5 via-transparent to-transparent" />
             </div>
 
-            {/* Show loading spinner while checking session */}
             {initialLoading ?
                 <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center">
                     <div className="text-center">
                         <GradientSpinner size="lg" />
-                        <p className="text-[var(--text-secondary)] mt-4">{t("Loading...")}</p>
+                        <p className="text-[var(--text-secondary)] mt-4">Loading...</p>
                     </div>
                 </div>
             :   <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center p-6">
                     <div className="w-full max-w-4xl">
-                        {/* Logo/Brand */}
                         <div className="text-center mb-8">
                             <div className="inline-flex items-center gap-4 mb-4">
                                 <div className="relative">
                                     <div className="absolute inset-0 bg-white/10 blur-xl rounded-full" />
-                                    <Image
-                                        src={branding.logoUrl}
-                                        alt={`${branding.name} logo`}
-                                        unoptimized
-                                        width={48}
-                                        height={48}
-                                        className="relative z-(--z-raised)"
-                                    />
+                                    <KimaMark size={48} className="relative z-(--z-raised)" />
                                 </div>
                                 <h1 className="text-4xl font-bold text-white">
-                                    {branding.name}
+                                    Kima Hub
                                 </h1>
                             </div>
-                            <div className="flex items-center justify-center gap-2 mb-5">
-                                <label htmlFor="onboarding-language" className="text-sm text-[var(--text-secondary)]">{t("Display language")}</label>
-                                <select id="onboarding-language" value={locale} onChange={(e) => setLocale(e.target.value as Locale)}
-                                    className="bg-white/10 border border-white/20 rounded-lg text-white text-sm px-3 py-2">
-                                    <option value="en" className="bg-[#111]">{t("English")}</option>
-                                    <option value="nl" className="bg-[#111]">{t("Nederlands")}</option>
-                                </select>
-                            </div>
-                            <p className="text-[var(--text-secondary)] text-lg">{t("Welcome to your personal music streaming platform")}</p>
+                            <p className="text-[var(--text-secondary)] text-lg">
+                                Welcome to your personal music streaming
+                                platform
+                            </p>
                         </div>
 
-                        {/* Progress Steps */}
                         <div className="flex items-center justify-center gap-3 mb-8">
                             {[
-                                { num: 1, label: t("Account") },
-                                { num: 2, label: t("Integrations") },
+                                { num: 1, label: "Account" },
+                                { num: 2, label: "Integrations" },
                             ].map((s, idx) => (
                                 <div key={s.num} className="flex items-center">
                                     <div className="flex flex-col items-center">
@@ -298,17 +284,16 @@ export default function OnboardingPage() {
                             ))}
                         </div>
 
-                        {/* Main Content Card */}
                         <div className="bg-[#111]/90 rounded-lg border border-white/10 overflow-hidden">
                             <div className="p-6 md:p-8">
                                 {step === 1 && (
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                {t("Create Your Admin Account")}
+                                                Create Your Admin Account
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                {t("This is the owner account for your")} {branding.name} {t("server. You'll manage users, integrations, and settings from here.")}
+                                                This is the owner account for your Kima server. You&apos;ll manage users, integrations, and settings from here.
                                             </p>
                                         </div>
 
@@ -321,7 +306,7 @@ export default function OnboardingPage() {
                                                     htmlFor="username"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    {t("Username")}
+                                                    Username
                                                 </label>
                                                 <input
                                                     id="username"
@@ -333,7 +318,7 @@ export default function OnboardingPage() {
                                                         )
                                                     }
                                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                                                    placeholder={t("Choose a username")}
+                                                    placeholder="Choose a username"
                                                     required
                                                     minLength={3}
                                                 />
@@ -344,7 +329,7 @@ export default function OnboardingPage() {
                                                     htmlFor="password"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    {t("Password")}
+                                                    Password
                                                 </label>
                                                 <input
                                                     id="password"
@@ -357,10 +342,10 @@ export default function OnboardingPage() {
                                                     }
                                                     className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all ${
                                                         showPasswordTooShort ?
-                                                        "border-red-500/50"
+                                                        "border-danger/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder={t("At least 6 characters")}
+                                                    placeholder="At least 6 characters"
                                                     required
                                                     minLength={6}
                                                 />
@@ -371,7 +356,7 @@ export default function OnboardingPage() {
                                                     htmlFor="confirmPassword"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    {t("Confirm Password")}
+                                                    Confirm Password
                                                 </label>
                                                 <input
                                                     id="confirmPassword"
@@ -384,34 +369,29 @@ export default function OnboardingPage() {
                                                     }
                                                     className={`w-full px-4 py-3 bg-white/5 border rounded-lg text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all ${
                                                         showPasswordMismatch ?
-                                                        "border-red-500/50"
+                                                        "border-danger/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder={t("Confirm your password")}
+                                                    placeholder="Confirm your password"
                                                     required
                                                 />
                                             </div>
 
                                             {error && (
-                                                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-sm text-red-400">
-                                                    {translate(locale, error)}
+                                                <div className="bg-danger/10 border border-danger/30 rounded-lg p-4 text-sm text-danger-light">
+                                                    {error}
                                                 </div>
                                             )}
 
-                                            <button
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
                                                 type="submit"
-                                                disabled={submitting}
-                                                className="w-full py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-[#e69200] transition-all disabled:opacity-50 disabled:cursor-not-allowed relative group overflow-hidden mt-8 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                                                isLoading={submitting}
+                                                className="w-full mt-8"
                                             >
-                                                <span className="relative z-(--z-raised) flex items-center justify-center gap-2">
-                                                    {submitting ?
-                                                        <>
-                                                            <GradientSpinner size="sm" />
-                                                            {t("Creating Account...")}
-                                                        </>
-                                                    : t("Continue")}
-                                                </span>
-                                            </button>
+                                                {submitting ? "Creating Account..." : "Continue"}
+                                            </Button>
                                         </form>
                                     </div>
                                 )}
@@ -420,34 +400,19 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                {t("Connect Your Services")}
+                                                Connect Your Services
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                {t("All integrations are optional -- you can enable or change them later in Settings.")}
+                                                All integrations are optional -- you can enable or change them later in Settings.
                                             </p>
                                         </div>
 
                                         <div className="space-y-4 mt-8">
-                                            {/* Lidarr */}
                                             <IntegrationCard
                                                 title="Lidarr"
-                                                description={t("Automatically find and download albums missing from your library.")}
+                                                description="Automatically find and download albums missing from your library."
                                                 localPort="localhost:8686"
-                                                icon={
-                                                    <svg
-                                                        className="w-6 h-6"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
-                                                        />
-                                                    </svg>
-                                                }
+                                                icon={<Music className="w-6 h-6" />}
                                                 enabled={lidarr.enabled}
                                                 onToggle={() =>
                                                     setLidarr({
@@ -477,26 +442,11 @@ export default function OnboardingPage() {
                                                 result={integrationResults["lidarr"]}
                                             />
 
-                                            {/* Audiobookshelf */}
                                             <IntegrationCard
                                                 title="Audiobookshelf"
-                                                description={t("Browse and stream your audiobook collection alongside your music.")}
+                                                description="Browse and stream your audiobook collection alongside your music."
                                                 localPort="localhost:13378"
-                                                icon={
-                                                    <svg
-                                                        className="w-6 h-6"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                                                        />
-                                                    </svg>
-                                                }
+                                                icon={<BookOpen className="w-6 h-6" />}
                                                 enabled={audiobookshelf.enabled}
                                                 onToggle={() =>
                                                     setAudiobookshelf({
@@ -528,7 +478,6 @@ export default function OnboardingPage() {
                                                 result={integrationResults["audiobookshelf"]}
                                             />
 
-                                            {/* Soulseek */}
                                             <SoulseekCard
                                                 enabled={soulseek.enabled}
                                                 onToggle={() =>
@@ -561,20 +510,21 @@ export default function OnboardingPage() {
                                         </div>
 
                                         {error && (
-                                            <div className="flex items-center gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-                                                <p className="text-sm text-red-500">
-                                                    {translate(locale, error)}
+                                            <div className="flex items-center gap-2 p-4 rounded-lg bg-danger/10 border border-danger/20">
+                                                <p className="text-sm text-danger">
+                                                    {error}
                                                 </p>
                                             </div>
                                         )}
 
-                                        {/* What happens next */}
                                         <p className="text-sm text-[var(--text-muted)] border-t border-white/10 pt-4">
-                                            {t("After finishing,")} {branding.name} {t("will scan your music library and start enrichment in the background. This may take a few minutes for large collections.")}
+                                            After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.
                                         </p>
 
                                         <div className="flex gap-3">
-                                            <button
+                                            <Button
+                                                variant="secondary"
+                                                size="lg"
                                                 onClick={async () => {
                                                     setSubmitting(true);
                                                     try {
@@ -585,46 +535,28 @@ export default function OnboardingPage() {
                                                         setSubmitting(false);
                                                     }
                                                 }}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter") {
-                                                        e.currentTarget.click();
-                                                    }
-                                                }}
                                                 disabled={submitting}
-                                                tabIndex={0}
-                                                className="flex-1 bg-white/5 border border-white/10 text-[var(--text-secondary)] font-medium py-3.5 rounded-lg hover:bg-white/10 transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                                                className="flex-1"
                                             >
-                                                {t("Finish without integrations")}
-                                            </button>
-                                            <button
+                                                Finish without integrations
+                                            </Button>
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
                                                 onClick={handleNextStep}
-                                                onKeyDown={(e) =>
-                                                    e.key === "Enter" &&
-                                                    !submitting &&
-                                                    handleNextStep()
-                                                }
-                                                disabled={submitting}
-                                                tabIndex={0}
-                                                className="flex-1 py-3.5 bg-brand text-black font-bold rounded-lg hover:bg-[#e69200] transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                                                isLoading={submitting}
+                                                className="flex-1"
                                             >
-                                                {submitting ?
-                                                    <>
-                                                        <span className="flex items-center justify-center gap-2">
-                                                            <GradientSpinner size="sm" />
-                                                            {t("Saving...")}
-                                                        </span>
-                                                    </>
-                                                : t("Save & Finish")}
-                                            </button>
+                                                {submitting ? "Saving..." : "Save & Finish"}
+                                            </Button>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <p className="text-center text-[var(--text-muted)] text-sm mt-6" suppressHydrationWarning>
-                            &copy; {new Date().getFullYear()} {branding.name}. {branding.tagline}
+                            &copy; {new Date().getFullYear()} Kima. Your music, your way.
                         </p>
                     </div>
                 </div>
@@ -633,48 +565,34 @@ export default function OnboardingPage() {
     );
 }
 
-interface IntegrationCardProps {
+const INPUT_CLASS =
+    "w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all";
+
+interface IntegrationShellProps {
     title: string;
     description: string;
-    localPort?: string;
     icon: React.ReactNode;
     enabled: boolean;
     onToggle: () => void;
-    url: string;
-    apiKey?: string;
-    username?: string;
-    password?: string;
-    onUrlChange: (url: string) => void;
-    onApiKeyChange?: (apiKey: string) => void;
-    onUsernameChange?: (username: string) => void;
-    onPasswordChange?: (password: string) => void;
+    canTest: boolean;
     onTest: () => void;
     testing: boolean;
     result?: IntegrationResult;
-    useSoulseekCreds?: boolean;
+    children: React.ReactNode;
 }
 
-function IntegrationCard({
+function IntegrationShell({
     title,
     description,
-    localPort,
     icon,
     enabled,
     onToggle,
-    url,
-    apiKey,
-    username,
-    password,
-    onUrlChange,
-    onApiKeyChange,
-    onUsernameChange,
-    onPasswordChange,
+    canTest,
     onTest,
     testing,
     result,
-    useSoulseekCreds = false,
-}: IntegrationCardProps) {
-    const { t, locale } = useLanguage();
+    children,
+}: IntegrationShellProps) {
     return (
         <div
             className={`border rounded-lg transition-all ${
@@ -704,9 +622,7 @@ function IntegrationCard({
                     </div>
                     <button
                         onClick={onToggle}
-                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
-                        tabIndex={0}
-                        aria-label={`${enabled ? t("Disable") : t("Enable")} ${title}`}
+                        aria-label={`${enabled ? "Disable" : "Enable"} ${title}`}
                         aria-pressed={enabled}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
@@ -722,89 +638,75 @@ function IntegrationCard({
 
                 {enabled && (
                     <div className="space-y-3 mt-4 pt-4 border-t border-white/10">
-                        <input
-                            type="url"
-                            value={url}
-                            onChange={(e) => onUrlChange(e.target.value)}
-                            placeholder={`${t("Server URL")} (${t("e.g.")} http://${
-                                localPort || "localhost:PORT"
-                            })`}
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                        />
-                        {useSoulseekCreds ?
-                            <>
-                                <input
-                                    type="text"
-                                    value={username || ""}
-                                    onChange={(e) =>
-                                        onUsernameChange?.(e.target.value)
-                                    }
-                                    placeholder={t("Soulseek Username")}
-                                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                                />
-                                <input
-                                    type="password"
-                                    value={password || ""}
-                                    onChange={(e) =>
-                                        onPasswordChange?.(e.target.value)
-                                    }
-                                    placeholder={t("Soulseek Password")}
-                                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                                />
-                                <p className="text-xs text-[var(--text-secondary)] mt-2">
-                                    {t("These are your Soulseek network credentials, not your Slskd login")}
-                                </p>
-                            </>
-                        :   <input
-                                type="password"
-                                value={apiKey || ""}
-                                onChange={(e) =>
-                                    onApiKeyChange?.(e.target.value)
-                                }
-                                placeholder={t("API Key")}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                            />
-                        }
+                        {children}
                         {result && (
                             <p
                                 className={`text-xs ${
                                     result.ok ?
-                                    "text-green-400"
-                                    : "text-red-400"
+                                    "text-success"
+                                    : "text-danger-light"
                                 }`}
                             >
-                                {translate(locale, result.message)}
+                                {result.message}
                             </p>
                         )}
-                        <button
+                        <Button
+                            variant="secondary"
                             onClick={onTest}
-                            onKeyDown={(e) =>
-                                e.key === "Enter" &&
-                                !testing &&
-                                !e.defaultPrevented &&
-                                onTest()
-                            }
-                            disabled={
-                                testing ||
-                                !url ||
-                                (!useSoulseekCreds ? !apiKey : (
-                                    !username || !password
-                                ))
-                            }
-                            tabIndex={0}
-                            className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
+                            disabled={!canTest}
+                            isLoading={testing}
+                            className="w-full"
                         >
-                            {testing ?
-                                <span className="flex items-center justify-center gap-2">
-                                    <GradientSpinner size="sm" />
-                                    {t("Testing...")}
-                                </span>
-                            : t("Test Connection")}
-                        </button>
+                            {testing ? "Testing..." : "Test Connection"}
+                        </Button>
                     </div>
                 )}
             </div>
         </div>
+    );
+}
+
+interface IntegrationCardProps {
+    title: string;
+    description: string;
+    localPort?: string;
+    icon: React.ReactNode;
+    enabled: boolean;
+    onToggle: () => void;
+    url: string;
+    apiKey: string;
+    onUrlChange: (url: string) => void;
+    onApiKeyChange: (apiKey: string) => void;
+    onTest: () => void;
+    testing: boolean;
+    result?: IntegrationResult;
+}
+
+function IntegrationCard({
+    localPort,
+    url,
+    apiKey,
+    onUrlChange,
+    onApiKeyChange,
+    ...shell
+}: IntegrationCardProps) {
+    return (
+        <IntegrationShell {...shell} canTest={!shell.testing && !!url && !!apiKey}>
+            <input
+                type="url"
+                value={url}
+                onChange={(e) => onUrlChange(e.target.value)}
+                placeholder={`Server URL (e.g., http://${localPort || "localhost:PORT"})`}
+                className={INPUT_CLASS}
+            />
+            <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => onApiKeyChange(e.target.value)}
+                placeholder="API Key"
+                className={INPUT_CLASS}
+            />
+        </IntegrationShell>
     );
 }
 
@@ -821,135 +723,45 @@ interface SoulseekCardProps {
 }
 
 function SoulseekCard({
-    enabled,
-    onToggle,
     username,
     password,
     onUsernameChange,
     onPasswordChange,
-    onTest,
-    testing,
-    result,
+    ...shell
 }: SoulseekCardProps) {
-    const { t, locale } = useLanguage();
     return (
-        <div
-            className={`border rounded-lg transition-all ${
-                enabled ?
-                "bg-[var(--bg-secondary)] border-brand/25"
-                : "bg-white/5 border-white/10"
-            }`}
+        <IntegrationShell
+            {...shell}
+            title="Soulseek"
+            description="Peer-to-peer search to fill in tracks you don't own."
+            icon={<Search className="w-6 h-6" />}
+            canTest={!shell.testing && !!username && !!password}
         >
-            <div className="p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                                enabled ?
-                                "bg-brand/10 border border-brand/20 text-brand"
-                                : "bg-white/5 border border-white/10 text-[var(--text-muted)]"
-                            }`}
-                        >
-                            <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                />
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 className="text-white font-bold">Soulseek</h3>
-                            <p className="text-sm text-[var(--text-secondary)]">
-                                {t("Peer-to-peer search to fill in tracks you don't own.")}
-                            </p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onToggle}
-                        onKeyDown={(e) => e.key === "Enter" && onToggle()}
-                        tabIndex={0}
-                        aria-label={`${enabled ? t("Disable") : t("Enable")} Soulseek`}
-                        aria-pressed={enabled}
-                        className={`relative w-11 h-6 rounded-lg transition-all ${
-                            enabled ? "bg-brand" : "bg-white/20"
-                        } focus:outline-none focus:ring-2 focus:ring-brand/30`}
-                    >
-                        <div
-                            className={`absolute top-0.5 left-0.5 w-5 h-5 bg-brand rounded-lg transition-all ${
-                                enabled ? "translate-x-5" : ""
-                            }`}
-                        />
-                    </button>
-                </div>
-
-                {enabled && (
-                    <div className="space-y-3 mt-4 pt-4 border-t border-white/10">
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => onUsernameChange(e.target.value)}
-                            placeholder={t("Soulseek Username")}
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                        />
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => onPasswordChange(e.target.value)}
-                            placeholder={t("Soulseek Password")}
-                            className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                        />
-                        <p className="text-xs text-[var(--text-secondary)]">
-                            {t("Create an account at")}{" "}
-                            <a
-                                href="https://www.slsknet.org/news/node/1"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-brand hover:underline"
-                            >
-                                slsknet.org
-                            </a>
-                        </p>
-                        {result && (
-                            <p
-                                className={`text-xs ${
-                                    result.ok ?
-                                    "text-green-400"
-                                    : "text-red-400"
-                                }`}
-                            >
-                                {translate(locale, result.message)}
-                            </p>
-                        )}
-                        <button
-                            onClick={onTest}
-                            onKeyDown={(e) =>
-                                e.key === "Enter" &&
-                                !testing &&
-                                username &&
-                                password &&
-                                onTest()
-                            }
-                            disabled={testing || !username || !password}
-                            tabIndex={0}
-                            className="w-full bg-white/10 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-brand/30"
-                        >
-                            {testing ?
-                                <span className="flex items-center justify-center gap-2">
-                                    <GradientSpinner size="sm" />
-                                    {t("Testing...")}
-                                </span>
-                            : t("Test Connection")}
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
+            <input
+                type="text"
+                value={username}
+                onChange={(e) => onUsernameChange(e.target.value)}
+                placeholder="Soulseek Username"
+                className={INPUT_CLASS}
+            />
+            <input
+                type="password"
+                value={password}
+                onChange={(e) => onPasswordChange(e.target.value)}
+                placeholder="Soulseek Password"
+                className={INPUT_CLASS}
+            />
+            <p className="text-xs text-[var(--text-secondary)]">
+                Create an account at{" "}
+                <a
+                    href="https://www.slsknet.org/news/node/1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand hover:underline"
+                >
+                    slsknet.org
+                </a>
+            </p>
+        </IntegrationShell>
     );
 }

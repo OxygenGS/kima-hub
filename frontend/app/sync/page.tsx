@@ -4,10 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import Image from "next/image";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
+import { KimaMark } from "@/components/ui/KimaMark";
 
 function deriveProgress(p: number): number {
     return Math.min(p, 90);
@@ -31,10 +28,8 @@ function deriveMessage(p: number): string {
 }
 
 export default function SyncPage() {
-    const { branding } = useBranding();
-    const { locale, t } = useLanguage();
-    const router = useRouter();
     const queryClient = useQueryClient();
+    const router = useRouter();
     const [initError, setInitError] = useState("");
     const [initFailed, setInitFailed] = useState(false);
     const [postScanDone, setPostScanDone] = useState(false);
@@ -43,12 +38,12 @@ export default function SyncPage() {
 
     // Scan status: SSE updates populate cache, with API polling as fallback.
     // The scan can complete before SSE delivers the event (race condition),
-    // so we poll the status endpoint every 2s until completed/failed.
+    // so we poll the status endpoint every 500ms until completed/failed.
     const { data: scanStatus } = useQuery<{
         status: string;
         progress: number;
         jobId: string;
-        result?: { tracksAdded: number; tracksUpdated: number; tracksRemoved: number };
+        result?: { tracksAdded: number; tracksUpdated: number; tracksMissing: number };
         error?: string;
     } | null>({
         queryKey: ["scan-status", scanJobId],
@@ -131,7 +126,6 @@ export default function SyncPage() {
         };
     }, [scanStatus, postScanDone, initFailed, initError]);
 
-    // Start scan on mount
     useEffect(() => {
         let mounted = true;
 
@@ -139,6 +133,9 @@ export default function SyncPage() {
             try {
                 const scanResult = await api.scanLibrary();
                 if (!mounted) return;
+                // Every manual scan has the same job id; the last scan's status
+                // must not stand in for this one.
+                queryClient.removeQueries({ queryKey: ["scan-status", scanResult.jobId] });
                 setScanJobId(scanResult.jobId);
             } catch (err: unknown) {
                 console.error("Sync error:", err);
@@ -150,7 +147,7 @@ export default function SyncPage() {
 
         startSync();
         return () => { mounted = false; };
-    }, []);
+    }, [queryClient]);
 
     // Handle post-scan side effects (audiobook sync, redirect)
     useEffect(() => {
@@ -168,30 +165,29 @@ export default function SyncPage() {
 
             setPostScanDone(true);
             setTimeout(() => {
+                void queryClient.invalidateQueries();
                 router.push("/");
             }, 1500);
         })();
-    }, [scanStatus, router]);
+    }, [scanStatus, queryClient, router]);
 
     const handleSkip = () => {
         router.push("/");
     };
 
     const steps = [
-        { id: "tracks", label: t("Scanning tracks") },
-        { id: "library", label: t("Building library") },
-        { id: "albums", label: t("Organizing albums") },
-        { id: "indexes", label: t("Creating indexes") },
+        { id: "tracks", label: "Scanning tracks" },
+        { id: "library", label: "Building library" },
+        { id: "albums", label: "Organizing albums" },
+        { id: "indexes", label: "Creating indexes" },
     ];
 
     return (
         <div className="min-h-screen w-full relative overflow-hidden">
-            {/* Dark background (matches onboarding) */}
             <div className="absolute inset-0 bg-[#000]">
                 <div className="absolute inset-0 bg-gradient-to-br from-brand/5 via-transparent to-transparent" />
             </div>
 
-            {/* Main content */}
             <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center p-6">
                 <div className="w-full max-w-lg">
                     {/* Logo/Brand -- matches onboarding header */}
@@ -199,17 +195,10 @@ export default function SyncPage() {
                         <div className="inline-flex items-center gap-4 mb-4">
                             <div className="relative">
                                 <div className="absolute inset-0 bg-white/10 blur-xl rounded-full" />
-                                <Image
-                                    src={branding.logoUrl}
-                                     unoptimized
-                                    alt={`${branding.name} logo`}
-                                    width={48}
-                                    height={48}
-                                    className="relative z-(--z-raised)"
-                                />
+                                <KimaMark size={48} className="relative z-(--z-raised)" />
                             </div>
                             <h1 className="text-4xl font-bold text-white">
-                                {branding.name}
+                                Kima Hub
                             </h1>
                         </div>
                     </div>
@@ -217,17 +206,15 @@ export default function SyncPage() {
                     {/* Sync card -- same aesthetic as onboarding card */}
                     <div className="bg-[#111]/90 rounded-lg border border-white/10 overflow-hidden">
                         <div className="p-6 md:p-8 space-y-6">
-                            {/* Title + status message */}
                             <div>
                                 <h2 className="text-2xl font-bold text-white mb-1">
-                                    {syncing ? t("Setting Things Up") : t("Ready to Go!")}
+                                    {syncing ? "Setting Things Up" : "Ready to Go!"}
                                 </h2>
                                 <p className="text-[var(--text-secondary)]">
-                                    {translate(locale, error || message)}
+                                    {error || message}
                                 </p>
                             </div>
 
-                            {/* Progress bar */}
                             {syncing && !error && (
                                 <div className="space-y-2">
                                     <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
@@ -237,21 +224,19 @@ export default function SyncPage() {
                                         />
                                     </div>
                                     <p className="text-xs text-[var(--text-muted)] text-center">
-                                        {progress}% {t("complete")}
+                                        {progress}% complete
                                     </p>
                                 </div>
                             )}
 
-                            {/* Error state */}
                             {error && (
-                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                    <p className="text-red-400 text-sm">
+                                <div className="p-4 bg-danger/10 border border-danger/20 rounded-lg">
+                                    <p className="text-danger-light text-sm">
                                         {error}
                                     </p>
                                 </div>
                             )}
 
-                            {/* Steps list */}
                             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10">
                                 {steps.map((step) => {
                                     const isComplete = completedSteps.includes(step.id);
@@ -299,19 +284,17 @@ export default function SyncPage() {
                         </div>
                     </div>
 
-                    {/* Skip button */}
                     <div className="flex justify-end mt-4">
                         <button
                             onClick={handleSkip}
                             className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white/70 transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 rounded"
                         >
-                            {t("Skip for now")}
+                            Skip for now
                         </button>
                     </div>
 
-                    {/* Footer note */}
                     <p className="text-center text-[var(--text-muted)] text-xs mt-6">
-                        {t("Enrichment and metadata analysis will continue in the background once you're in.")}
+                        Enrichment and metadata analysis will continue in the background once you&apos;re in.
                     </p>
                 </div>
             </div>

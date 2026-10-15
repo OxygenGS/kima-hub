@@ -1,13 +1,7 @@
 /**
- * Playwright global setup -- runs once before all tests.
- *
- * Verifies the E2E test user exists and can authenticate.
- * If login fails with the configured credentials, prints setup instructions and aborts.
- *
- * Required env vars (set in .env.test or export before running):
- *   KIMA_TEST_USERNAME  -- username of the dedicated E2E test user
- *   KIMA_TEST_PASSWORD  -- password of the dedicated E2E test user
- *   KIMA_UI_BASE_URL    -- base URL of the running app (default: http://127.0.0.1:3030)
+ * Runs once before all tests: checks KIMA_TEST_USERNAME / KIMA_TEST_PASSWORD
+ * can log in at KIMA_UI_BASE_URL (default http://127.0.0.1:3030), and aborts
+ * with setup instructions if not.
  */
 import { chromium } from "@playwright/test";
 
@@ -44,6 +38,39 @@ async function globalSetup(): Promise<void> {
                 `Login failed for E2E test user '${username}'. Still on: ${url}\n` +
                 "Create the user by running: bash scripts/create-e2e-user.sh"
             );
+        }
+
+        // Dismiss pending What's New releases server-side so the modal never
+        // blocks tests; best effort. /api takes bearer tokens only, so the JWT
+        // is read from the app's storage.
+        try {
+            // lib/api.ts persists the JWT under AUTH_TOKEN_KEY ("auth_token").
+            const token = await page.evaluate(() => window.localStorage.getItem("auth_token"));
+            if (!token) throw new Error("auth_token missing from localStorage");
+            const api = (path: string) => `${baseUrl}${path}`;
+            const readPending = async () => {
+                const res = await page.request.get(api("/api/whats-new/pending"), {
+                    headers: { Authorization: `Bearer ${token}` },
+                    maxRetries: 1,
+                });
+                return res.ok() ? ((await res.json()) as { releases: Array<{ version: string }> }) : { releases: [] };
+            };
+            let { releases } = await readPending();
+            // Dismissing the first release advances the pending queue to the
+            // next unseen one, so loop until the queue is actually empty.
+            for (let i = 0; i < 10 && (releases?.length ?? 0) > 0; i++) {
+                const v = releases[0].version;
+                const dr = await page.request.post(api(`/api/whats-new/${v}/dismiss`), {
+                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                    data: {},
+                });
+                if (!dr.ok()) throw new Error(`dismiss ${v} -> ${dr.status()}`);
+                releases = (await readPending()).releases ?? [];
+                console.log(`[setup] Dismissed What's New ${v} (queue now ${releases.length}).`);
+            }
+            if (!(releases?.length)) console.log("[setup] What's New queue clear.");
+        } catch (e) {
+            console.log(`[setup] What's New pre-dismiss skipped: ${e instanceof Error ? e.message : String(e)}`);
         }
 
         await page.context().storageState({ path: "tests/e2e/.auth/user.json" });

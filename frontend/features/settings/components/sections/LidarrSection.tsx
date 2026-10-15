@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, SettingsSelect } from "../ui";
-import { SystemSettings } from "../../types";
-import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, SettingsSelect, ConnectionTestButton } from "../ui";
+import { ConnectionTestResult, SystemSettings } from "../../types";
+import { useConnectionTest } from "../../hooks/useConnectionTest";
 import { api } from "@/lib/api";
 
 interface LidarrProfile {
@@ -15,14 +14,11 @@ interface LidarrProfile {
 interface LidarrSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (service: string) => Promise<ConnectionTestResult>;
     isTesting: boolean;
 }
 
 export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrSectionProps) {
-    const { t } = useLanguage();
-    const [testStatus, setTestStatus] = useState<StatusType>("idle");
-    const [testMessage, setTestMessage] = useState("");
     const [qualityProfiles, setQualityProfiles] = useState<LidarrProfile[]>([]);
     const [metadataProfiles, setMetadataProfiles] = useState<LidarrProfile[]>([]);
     const [profilesLoaded, setProfilesLoaded] = useState(false);
@@ -42,31 +38,19 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
         }
     };
 
-    const handleTest = async () => {
-        setTestStatus("loading");
-        setTestMessage(t("Testing..."));
-        const result = await onTest("lidarr");
-        if (result.success) {
-            setTestStatus("success");
-            setTestMessage(result.version ? `v${result.version}` : t("Connected"));
-            fetchProfiles();
-        } else {
-            setTestStatus("error");
-            setTestMessage(result.error || "Failed");
-        }
-    };
+    const connection = useConnectionTest(() => onTest("lidarr"), { onConnected: fetchProfiles });
 
     const hasProfiles = profilesLoaded && (qualityProfiles.length > 0 || metadataProfiles.length > 0);
 
     return (
         <SettingsSection
             id="lidarr"
-            title={t("Download Services")}
-            description={t("Automate music downloads and library management")}
+            title="Download Services"
+            description="Automate music downloads and library management"
         >
             <SettingsRow
-                label={t("Enable Lidarr")}
-                description={t("Connect to Lidarr for music automation")}
+                label="Enable Lidarr"
+                description="Connect to Lidarr for music automation"
                 htmlFor="lidarr-enabled"
             >
                 <SettingsToggle
@@ -78,7 +62,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
 
             {settings.lidarrEnabled && (
                 <>
-                    <SettingsRow label={t("Lidarr URL")}>
+                    <SettingsRow label="Lidarr URL">
                         <SettingsInput
                             value={settings.lidarrUrl}
                             onChange={(v) => onUpdate({ lidarrUrl: v })}
@@ -87,59 +71,60 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                         />
                     </SettingsRow>
 
-                    <SettingsRow label={t("API Key")}>
+                    <SettingsRow label="API Key">
                         <SettingsInput
                             type="password"
                             value={settings.lidarrApiKey}
                             onChange={(v) => onUpdate({ lidarrApiKey: v })}
-                            placeholder={t("Enter API key")}
+                            placeholder="Enter API key"
                             className="w-64"
                         />
                     </SettingsRow>
 
                     <div className="pt-2">
-                        <div className="inline-flex items-center gap-3">
-                            <button
-                                onClick={handleTest}
-                                disabled={isTesting || !settings.lidarrUrl || !settings.lidarrApiKey}
-                                className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
-                                    hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                            >
-                                {testStatus === "loading" ? "Testing..." : t("Test Connection")}
-                            </button>
-                            <InlineStatus
-                                status={testStatus}
-                                message={testMessage}
-                                onClear={() => setTestStatus("idle")}
-                            />
-                        </div>
+                        <ConnectionTestButton
+                            connection={connection}
+                            disabled={isTesting || !settings.lidarrUrl || !settings.lidarrApiKey}
+                        />
                     </div>
+
+                    <SettingsRow
+                        label="Remove junk downloads"
+                        description="When a download has no usable music or is the wrong album, remove it so Lidarr tries the next release. Turn off if your own Lidarr setup already handles this"
+                        htmlFor="lidarr-remove-junk"
+                    >
+                        <SettingsToggle
+                            id="lidarr-remove-junk"
+                            checked={settings.lidarrRemoveJunk}
+                            onChange={(checked) => onUpdate({ lidarrRemoveJunk: checked })}
+                        />
+                    </SettingsRow>
 
                     {hasProfiles && (
                         <>
                             <SettingsRow
-                                label={t("Quality Profile")}
-                                description={t("Audio quality profile used when adding artists")}
+                                label="Quality Profile"
+                                description="Quality profile for new artists. Default: the music folder's profile"
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrQualityProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrQualityProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: t("Default") },
+                                        { value: "", label: "Lidarr's default" },
                                         ...qualityProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />
                             </SettingsRow>
 
                             <SettingsRow
-                                label={t("Metadata Profile")}
-                                description={t("Metadata profile used when adding artists")}
+                                label="Metadata Profile"
+                                description="Metadata profile for new artists. Default: the music folder's profile"
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrMetadataProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrMetadataProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: t("Default") },
+                                        { value: "", label: "Lidarr's default" },
                                         ...metadataProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />

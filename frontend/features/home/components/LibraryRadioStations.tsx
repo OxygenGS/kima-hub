@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, useMemo, useCallback, useEffect, type CSSProperties } from "react";
-import { Radio, Play, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useLanguage } from "@/lib/i18n/language-context";
-import { localizedRadioName, localizedRadioDescription } from "@/lib/i18n/radio-labels";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { Radio } from "lucide-react";
+import { TileCard } from "@/components/cards/TileCard";
+import { HorizontalCarousel } from "@/components/ui/HorizontalCarousel";
+import { cn } from "@/lib/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { cascadeStyle } from "@/lib/motion";
 import { useLibraryGenresQuery, useLibraryDecadesQuery } from "@/hooks/useQueries";
 import {
     RadioStation,
@@ -17,7 +18,6 @@ import {
 
 export function LibraryRadioStations() {
     const { loadingStation, startRadio } = useRadioPlayer();
-    const { t, locale } = useLanguage();
     const { data: genresData, isLoading: genresLoading } = useLibraryGenresQuery();
     const { data: decadesData, isLoading: decadesLoading } = useLibraryDecadesQuery();
 
@@ -40,8 +40,6 @@ export function LibraryRadioStations() {
     }, [genres, decades]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
-    const [canScrollLeft, setCanScrollLeft] = useState(false);
-    const [canScrollRight, setCanScrollRight] = useState(false);
     const [currentPage, setCurrentPage] = useState(0);
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
@@ -55,147 +53,55 @@ export function LibraryRadioStations() {
         return pages;
     }, [allStations]);
 
-    const checkScroll = useCallback(() => {
+    const updatePage = useCallback(() => {
         const el = scrollRef.current;
-        if (!el) return;
-        setCanScrollLeft(el.scrollLeft > 0);
-        setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 1);
-        if (isMobileOrTablet) {
-            const pageWidth = el.clientWidth;
-            setCurrentPage(Math.round(el.scrollLeft / pageWidth));
-        }
-    }, [isMobileOrTablet]);
+        if (el) setCurrentPage(Math.round(el.scrollLeft / el.clientWidth));
+    }, []);
 
     useEffect(() => {
-        checkScroll();
-        const el = scrollRef.current;
-        if (el) {
-            el.addEventListener("scroll", checkScroll);
-            window.addEventListener("resize", checkScroll);
-        }
-        return () => {
-            if (el) el.removeEventListener("scroll", checkScroll);
-            window.removeEventListener("resize", checkScroll);
-        };
-    }, [stationPages, isMobileOrTablet, checkScroll]);
-
-    const scroll = (direction: "left" | "right") => {
         const el = scrollRef.current;
         if (!el) return;
-        el.scrollBy({
-            left: direction === "left" ? -(el.clientWidth * 0.8) : el.clientWidth * 0.8,
-            behavior: "smooth",
-        });
-    };
+        updatePage();
+        el.addEventListener("scroll", updatePage);
+        window.addEventListener("resize", updatePage);
+        return () => {
+            el.removeEventListener("scroll", updatePage);
+            window.removeEventListener("resize", updatePage);
+        };
+    }, [stationPages, isMobileOrTablet, updatePage]);
 
-    const renderCard = (station: RadioStation, compact: boolean, globalIdx: number) => {
-        const staggered = globalIdx < 8;
-        return (
-            <button
-                key={station.id}
-                data-tv-card
-                data-tv-card-index={globalIdx}
-                tabIndex={0}
-                onClick={() => startRadio(station)}
-                aria-label={`${t("Play")} ${localizedRadioName(station, t)}`}
-                disabled={loadingStation !== null}
-                className={cn(
-                    "relative group overflow-hidden",
-                    "bg-[var(--bg-primary)] border border-white/10 rounded-lg",
-                    station.hoverBorder,
-                    "transition-[border-color] duration-150",
-                    "",
-                    "",
-                    "disabled:opacity-50 disabled:cursor-not-allowed",
-                    staggered && "animate-rise [animation-delay:calc(var(--i)*45ms)]",
-                    compact
-                        ? "flex-shrink-0 snap-start w-[180px] h-[80px]"
-                        : "w-full aspect-[5/3]"
-                )}
-                style={staggered ? { "--i": globalIdx } as CSSProperties : undefined}
->
-            {/* Subtle gradient tint */}
-            <div className={cn("absolute inset-0 bg-gradient-to-br", station.color)} />
-
-            {/* Content */}
-            <div className="absolute inset-0 p-3 flex flex-col justify-between">
-                <div className="flex items-center gap-1.5">
-                    <Radio className="w-3 h-3 text-[var(--text-secondary)]" />
-                    <span className="text-xs text-[var(--text-secondary)]">
-                        Radio
-                    </span>
-                </div>
-                <div>
-                    <h3 className="text-sm font-bold text-white truncate tracking-tight leading-tight">
-                        {localizedRadioName(station, t)}
-                    </h3>
-                    <p className="text-xs text-[var(--text-muted)] truncate">
-                        {localizedRadioDescription(station, t, locale)}
-                    </p>
-                </div>
-            </div>
-
-            {/* Bottom accent bar on hover */}
-            <div className={cn(
-                "absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r",
-                station.accentGradient,
-                "transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150"
-            )} />
-
-            {/* Loading overlay */}
-            {loadingStation === station.id && (
-                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-(--z-raised)">
-                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                </div>
-            )}
-
-            {/* Play overlay on hover */}
-            {loadingStation !== station.id && (
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center">
-                        <Play className="w-4 h-4 text-black ml-0.5" fill="currentColor" />
-                    </div>
-                </div>
-            )}
-        </button>
+    const renderCard = (station: RadioStation, compact: boolean, globalIdx: number, delayIdx = globalIdx) => (
+        <TileCard
+            key={station.id}
+            title={station.name}
+            subtitle={station.description}
+            eyebrow={
+                <span className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                    <Radio className="w-3 h-3" />
+                    Radio
+                </span>
+            }
+            tint={station.color}
+            hoverBorder={station.hoverBorder}
+            accent={station.accentGradient}
+            onClick={() => startRadio(station)}
+            playable
+            busy={loadingStation === station.id}
+            disabled={loadingStation !== null}
+            index={delayIdx}
+            className={compact ? "flex-shrink-0 snap-start w-[180px] h-[80px]" : "w-full aspect-[5/3]"}
+        />
     );
-    };
 
-    // Desktop: horizontal scroll
     if (!isMobileOrTablet) {
         return (
-            <div className="relative group/carousel">
-                {canScrollLeft && (
-                    <button
-                        onClick={() => scroll("left")}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 z-(--z-raised) w-9 h-9 rounded-lg bg-black/80 flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black border border-white/10 -translate-x-1/2"
-                        aria-label={t("Scroll left")}
-                    >
-                        <ChevronLeft className="w-5 h-5 text-white" />
-                    </button>
-                )}
-
-                <div
-                    ref={scrollRef}
-                    className="flex overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory gap-3 px-1"
-                >
-                    {allStations.map((station, i) => renderCard(station, true, i))}
-                    {isLoading &&
-                        Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="flex-shrink-0 w-[180px] h-[80px] rounded-lg bg-[var(--bg-primary)] border border-white/10 animate-pulse" />
-                        ))}
-                </div>
-
-                {canScrollRight && (
-                    <button
-                        onClick={() => scroll("right")}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 z-(--z-raised) w-9 h-9 rounded-lg bg-black/80 flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-black border border-white/10 translate-x-1/2"
-                        aria-label={t("Scroll right")}
-                    >
-                        <ChevronRight className="w-5 h-5 text-white" />
-                    </button>
-                )}
-            </div>
+            <HorizontalCarousel style={cascadeStyle(allStations.length)}>
+                {allStations.map((station, i) => renderCard(station, true, i))}
+                {isLoading &&
+                    Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex-shrink-0 w-[180px] h-[80px] rounded-lg bg-[var(--bg-primary)] border border-white/10 animate-pulse" />
+                    ))}
+            </HorizontalCarousel>
         );
     }
 
@@ -210,8 +116,9 @@ export function LibraryRadioStations() {
                     <div
                         key={pageIndex}
                         className="flex-shrink-0 snap-start w-full grid grid-cols-2 grid-rows-3 sm:grid-cols-3 sm:grid-rows-2 gap-2"
+                        style={cascadeStyle(page.length)}
                     >
-                        {page.map((station, i) => renderCard(station, false, pageIndex * 6 + i))}
+                        {page.map((station, i) => renderCard(station, false, pageIndex * 6 + i, i))}
                         {page.length < 6 &&
                             Array.from({ length: 6 - page.length }).map((_, i) => (
                                 <div key={`empty-${i}`} className="aspect-[5/3]" />
@@ -228,7 +135,7 @@ export function LibraryRadioStations() {
             </div>
 
             {stationPages.length > 1 && (
-                <div className="flex justify-center gap-1.5 mt-3">
+                <div className="flex justify-center mt-1">
                     {stationPages.map((_, index) => (
                         <button
                             key={index}
@@ -236,12 +143,17 @@ export function LibraryRadioStations() {
                                 const el = scrollRef.current;
                                 if (el) el.scrollTo({ left: index * el.clientWidth, behavior: "smooth" });
                             }}
-                            className={cn(
-                                "w-1.5 h-1.5 rounded-full transition-colors",
-                                index === currentPage ? "bg-white" : "bg-white/30 hover:bg-white/50"
-                            )}
-                            aria-label={`${t("Go to page")} ${index + 1}`}
-                        />
+                            className="group/dot flex items-center justify-center"
+                            aria-label={`Go to page ${index + 1}`}
+                            aria-current={index === currentPage ? "true" : undefined}
+                        >
+                            <span
+                                className={cn(
+                                    "w-1.5 h-1.5 rounded-full transition-colors",
+                                    index === currentPage ? "bg-white" : "bg-white/30 group-hover/dot:bg-white/50",
+                                )}
+                            />
+                        </button>
                     ))}
                 </div>
             )}

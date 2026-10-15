@@ -1,15 +1,14 @@
-import { test, expect, Page } from "@playwright/test";
-import { skipIfEmptyLibrary } from "./fixtures/test-helpers";
+import { test, expect, Page, Response, ConsoleMessage } from "@playwright/test";
+import { skipIfEmptyLibrary, username, password } from "./fixtures/test-helpers";
+import { settle } from "./fixtures/shared";
 
-const username = process.env.KIMA_TEST_USERNAME || "playwright";
-const password = process.env.KIMA_TEST_PASSWORD || "playwright-test-pw";
+/** The app shell scrolls inside #main-content, so the document alone never overflows. */
+const OVERFLOWS = () =>
+    [document.documentElement, document.querySelector("#main-content")].some(
+        (el) => !!el && el.scrollWidth > el.clientWidth + 1,
+    );
+
 const baseUrl = process.env.KIMA_UI_BASE_URL || "http://127.0.0.1:3030";
-
-// networkidle hangs because of SSE (/api/events). Use domcontentloaded + settle.
-async function settle(page: Page, ms = 2000): Promise<void> {
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(ms);
-}
 
 async function login(page: Page): Promise<void> {
     await page.goto("/login");
@@ -19,26 +18,30 @@ async function login(page: Page): Promise<void> {
     await page.waitForURL(/\/($|\?|home)/, { timeout: 15000 });
 }
 
+function isBrowserNoise(text: string): boolean {
+    return text.includes("favicon") || text.includes("serviceWorker");
+}
+
 function collectConsoleErrors(page: Page): string[] {
     const errors: string[] = [];
     page.on("console", (msg) => {
-        if (msg.type() === "error") {
-            const text = msg.text();
-            if (text.includes("favicon") || text.includes("serviceWorker")) return;
-            errors.push(text);
-        }
+        if (msg.type() === "error" && !isBrowserNoise(msg.text())) errors.push(msg.text());
     });
     return errors;
+}
+
+/** "status METHOD path" for a failed API response, or null for anything else. */
+function apiFailure(resp: Response): string | null {
+    const url = resp.url();
+    if (!url.includes("/api/") || resp.status() < 400) return null;
+    return `${resp.status()} ${resp.request().method()} ${url.replace("http://127.0.0.1:3006", "").replace(baseUrl, "")}`;
 }
 
 function collectNetworkErrors(page: Page): string[] {
     const errors: string[] = [];
     page.on("response", (resp) => {
-        const url = resp.url();
-        const status = resp.status();
-        if (!url.includes("/api/")) return;
-        if (status < 400) return;
-        errors.push(`${status} ${resp.request().method()} ${url.replace("http://127.0.0.1:3006", "").replace(baseUrl, "")}`);
+        const failure = apiFailure(resp);
+        if (failure) errors.push(failure);
     });
     return errors;
 }
@@ -113,11 +116,9 @@ test.describe("Route Health", () => {
 
         for (const route of routes) {
             const networkErrors: string[] = [];
-            const handler = (resp: import("@playwright/test").Response) => {
-                const url = resp.url();
-                if (url.includes("/api/") && resp.status() >= 400) {
-                    networkErrors.push(`${resp.status()} ${resp.request().method()} ${url.replace("http://127.0.0.1:3006", "").replace(baseUrl, "")}`);
-                }
+            const handler = (resp: Response) => {
+                const failure = apiFailure(resp);
+                if (failure) networkErrors.push(failure);
             };
             page.on("response", handler);
 
@@ -165,7 +166,7 @@ test.describe("Collection & Library", () => {
 
     test("collection page loads with tabs", async ({ page }) => {
         await page.goto("/collection", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
         const tabs = page.locator("text=/albums|artists|tracks/i");
         await expect(tabs.first()).toBeVisible({ timeout: 10000 });
     });
@@ -194,7 +195,6 @@ test.describe("Collection & Library", () => {
     test("tracks tab shows track rows", async ({ page }) => {
         await page.goto("/collection?tab=tracks", { waitUntil: "domcontentloaded" });
         await settle(page, 3000);
-        // Broad selector for track-like rows
         const body = await page.locator("body").textContent();
         expect(body!.length).toBeGreaterThan(200);
     });
@@ -211,7 +211,6 @@ test.describe("Collection & Library", () => {
         await expect(page).toHaveURL(/\/album\//);
         await settle(page, 3000);
 
-        // Should have a play button
         const playBtn = page.locator('button:has-text("Play"), button[aria-label*="Play" i], button[title*="Play" i]');
         const playCount = await playBtn.count();
         console.log(`Album detail: ${playCount} play buttons found`);
@@ -245,14 +244,14 @@ test.describe("Search", () => {
 
     test("search page has input field", async ({ page }) => {
         await page.goto("/search", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
         const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[type="text"]');
         await expect(searchInput.first()).toBeVisible({ timeout: 5000 });
     });
 
     test("typing in search triggers results", async ({ page }) => {
         await page.goto("/search", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[type="text"]').first();
         await searchInput.fill("a");
@@ -265,7 +264,7 @@ test.describe("Search", () => {
 
     test("search with gibberish shows no results or empty state", async ({ page }) => {
         await page.goto("/search", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[type="text"]').first();
         await searchInput.fill("xyznonexistentquery12345");
@@ -296,8 +295,7 @@ test.describe("Playback", () => {
 
         await page.getByLabel("Play all").click();
 
-        // Player should appear with a Pause button once audio starts
-        await expect(page.getByTitle("Pause", { exact: true })).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByTitle("pause", { exact: true })).toBeVisible({ timeout: 10_000 });
     });
 
     test("clicking play on album starts playback UI", async ({ page }) => {
@@ -316,8 +314,7 @@ test.describe("Playback", () => {
         await playBtn.click();
         await page.waitForTimeout(3000);
 
-        // Check if playback state changed
-        const pauseBtn = await page.locator('button[title="Pause"], button[aria-label="Pause"]').count();
+        const pauseBtn = await page.locator('button[title="pause"], button[aria-label="Pause"]').count();
         console.log(`After play click: pause button visible = ${pauseBtn > 0}`);
         if (consoleErrors.length > 0) {
             console.log("PLAYBACK console errors:", consoleErrors);
@@ -337,16 +334,10 @@ test.describe("Playback", () => {
         await playBtn.click();
         await page.waitForTimeout(2000);
 
-        const pauseBtn = page.locator('button[title="Pause"]').first();
-        if (await pauseBtn.isVisible({ timeout: 3000 })) {
-            await pauseBtn.click();
-            await page.waitForTimeout(500);
-            const playBtnAfter = page.locator('button[title="Play"]').first();
-            await expect(playBtnAfter).toBeVisible({ timeout: 3000 });
-            console.log("Play/pause toggle: WORKS");
-        } else {
-            console.log("Play/pause toggle: pause button not found after play");
-        }
+        const pauseBtn = page.locator('button[title="pause"]').first();
+        await expect(pauseBtn, "playback started").toBeVisible({ timeout: 5000 });
+        await pauseBtn.click();
+        await expect(page.locator('button[title="play"]').first()).toBeVisible({ timeout: 3000 });
     });
 
     test("next/prev buttons visible during playback", async ({ page }) => {
@@ -362,17 +353,13 @@ test.describe("Playback", () => {
         await playBtn.click();
         await page.waitForTimeout(2000);
 
-        const nextBtn = page.locator('button[title="Next"], button[aria-label="Next"]');
-        const prevBtn = page.locator('button[title="Previous"], button[aria-label="Previous"]');
-
-        const nextVisible = await nextBtn.first().isVisible({ timeout: 3000 }).catch(() => false);
-        const prevVisible = await prevBtn.first().isVisible({ timeout: 3000 }).catch(() => false);
-        console.log(`Next button: ${nextVisible}, Previous button: ${prevVisible}`);
+        await expect(page.getByRole("button", { name: "Next track" }).first()).toBeVisible({ timeout: 5000 });
+        await expect(page.getByRole("button", { name: "Previous track" }).first()).toBeVisible({ timeout: 5000 });
     });
 
     test("queue page renders", async ({ page }) => {
         await page.goto("/queue", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
         await expect(page).toHaveURL(/queue/);
         const body = await page.locator("body").textContent();
         expect(body!.length).toBeGreaterThan(20);
@@ -473,7 +460,6 @@ test.describe("Asset Loading", () => {
             brokenAssets.slice(0, 10).forEach((a) => console.log(`  ${a}`));
         }
 
-        // Check for img elements with 0 naturalWidth
         const imgs = page.locator("img");
         const imgCount = await imgs.count();
         let broken = 0;
@@ -494,22 +480,15 @@ test.describe("Mobile Layout", () => {
 
     test("mobile: home page renders without horizontal overflow", async ({ page }) => {
         await page.goto("/", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
-        const hasOverflow = await page.evaluate(() =>
-            document.documentElement.scrollWidth > document.documentElement.clientWidth
-        );
-        console.log(`Mobile home: horizontal overflow = ${hasOverflow}`);
-        if (hasOverflow) {
-            const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
-            const clientW = await page.evaluate(() => document.documentElement.clientWidth);
-            console.log(`  scrollWidth=${scrollW}, clientWidth=${clientW}, diff=${scrollW - clientW}px`);
-        }
+        const hasOverflow = await page.evaluate(OVERFLOWS);
+        expect(hasOverflow, "the home page must not scroll sideways").toBe(false);
     });
 
     test("mobile: bottom nav present", async ({ page }) => {
         await page.goto("/", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const bottomNav = page.locator('nav, [class*="mobile" i], [class*="bottom" i], [class*="MobileNav"]');
         const count = await bottomNav.count();
@@ -534,20 +513,13 @@ test.describe("Mobile Layout", () => {
         await firstAlbum.click();
         await settle(page, 3000);
 
-        const hasOverflow = await page.evaluate(() =>
-            document.documentElement.scrollWidth > document.documentElement.clientWidth
-        );
-        if (hasOverflow) {
-            const diff = await page.evaluate(() =>
-                document.documentElement.scrollWidth - document.documentElement.clientWidth
-            );
-            console.log(`Mobile album detail: horizontal overflow by ${diff}px`);
-        }
+        const hasOverflow = await page.evaluate(OVERFLOWS);
+        expect(hasOverflow, "the album page must not scroll sideways").toBe(false);
     });
 
     test("mobile: search input accessible", async ({ page }) => {
         await page.goto("/search", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const searchInput = page.locator('input[type="search"], input[placeholder*="search" i], input[type="text"]').first();
         await expect(searchInput).toBeVisible({ timeout: 5000 });
@@ -557,25 +529,12 @@ test.describe("Mobile Layout", () => {
         const overflowPages: string[] = [];
         for (const route of ["/", "/collection", "/search", "/settings", "/vibe", "/queue"]) {
             await page.goto(route, { waitUntil: "domcontentloaded" });
-            await settle(page);
+            await settle(page, 2000);
 
-            const hasOverflow = await page.evaluate(() =>
-                document.documentElement.scrollWidth > document.documentElement.clientWidth
-            );
-            if (hasOverflow) {
-                const diff = await page.evaluate(() =>
-                    document.documentElement.scrollWidth - document.documentElement.clientWidth
-                );
-                overflowPages.push(`${route} (+${diff}px)`);
-            }
+            if (await page.evaluate(OVERFLOWS)) overflowPages.push(route);
         }
 
-        if (overflowPages.length > 0) {
-            console.log("MOBILE OVERFLOW detected:");
-            overflowPages.forEach((p) => console.log(`  ${p}`));
-        } else {
-            console.log("Mobile: no horizontal overflow on any page");
-        }
+        expect(overflowPages, "pages that scroll sideways").toEqual([]);
     });
 });
 
@@ -591,7 +550,7 @@ test.describe("Accessibility", () => {
 
         for (const route of routes) {
             await page.goto(route, { waitUntil: "domcontentloaded" });
-            await settle(page);
+            await settle(page, 2000);
 
             const headings = await page.evaluate(() =>
                 Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).map(
@@ -610,7 +569,7 @@ test.describe("Accessibility", () => {
 
     test("buttons without accessible names", async ({ page }) => {
         await page.goto("/", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const unlabeled = await page.evaluate(() => {
             return Array.from(document.querySelectorAll("button"))
@@ -671,7 +630,7 @@ test.describe("Error Handling", () => {
 
     test("nonexistent route handled", async ({ page }) => {
         await page.goto("/this-route-does-not-exist-xyz", { waitUntil: "domcontentloaded" });
-        await settle(page);
+        await settle(page, 2000);
 
         const body = await page.locator("body").textContent();
         console.log(`404 page: ${body!.length} chars, url=${page.url()}`);
@@ -753,12 +712,10 @@ test.describe("Full Audit", () => {
 
         for (const route of routes) {
             const errors: string[] = [];
-            const handler = (msg: import("@playwright/test").ConsoleMessage) => {
-                if (msg.type() === "error") {
-                    const text = msg.text();
-                    if (!text.includes("favicon") && !text.includes("serviceWorker") && !text.includes("net::ERR")) {
-                        errors.push(text.slice(0, 200));
-                    }
+            const handler = (msg: ConsoleMessage) => {
+                const text = msg.text();
+                if (msg.type() === "error" && !isBrowserNoise(text) && !text.includes("net::ERR")) {
+                    errors.push(text.slice(0, 200));
                 }
             };
             page.on("console", handler);
@@ -794,11 +751,9 @@ test.describe("Full Audit", () => {
 
         for (const route of routes) {
             const errors: string[] = [];
-            const handler = (resp: import("@playwright/test").Response) => {
-                const url = resp.url();
-                if (url.includes("/api/") && resp.status() >= 400) {
-                    errors.push(`${resp.status()} ${resp.request().method()} ${url.replace("http://127.0.0.1:3006", "").replace(baseUrl, "")}`);
-                }
+            const handler = (resp: Response) => {
+                const failure = apiFailure(resp);
+                if (failure) errors.push(failure);
             };
             page.on("response", handler);
 

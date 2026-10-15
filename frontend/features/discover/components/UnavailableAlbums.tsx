@@ -1,13 +1,10 @@
-"use client";
-
 import { useState } from "react";
 import { Play, Pause, Music, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/utils/cn";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 import { UnavailableAlbum } from "../types";
 import { tierColors, tierLabels } from "../constants";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
 
 interface UnavailableAlbumsProps {
     unavailable: UnavailableAlbum[];
@@ -24,7 +21,6 @@ export function UnavailableAlbums({
     onRetryAll,
     isRetrying,
 }: UnavailableAlbumsProps) {
-    const { t, locale } = useLanguage();
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (!unavailable || unavailable.length === 0) {
@@ -38,9 +34,9 @@ export function UnavailableAlbums({
                     onClick={() => setIsExpanded(!isExpanded)}
                     className="flex items-center gap-2 hover:bg-[var(--bg-hover)] transition-colors rounded-lg flex-1"
                 >
-                    <Music className="w-5 h-5 text-orange-400" />
+                    <Music className="w-5 h-5 text-warning" />
                     <span className="text-sm font-medium text-[var(--text-secondary)]">
-                        {unavailable.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(unavailable.length === 1 ? "album" : "albums")} {t("unavailable")}
+                        {unavailable.length} album{unavailable.length !== 1 ? "s" : ""} unavailable
                     </span>
                     {isExpanded ? (
                         <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" />
@@ -49,21 +45,24 @@ export function UnavailableAlbums({
                     )}
                 </button>
                 {onRetryAll && (
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={(e) => { e.stopPropagation(); onRetryAll(); }}
                         disabled={isRetrying}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs tabular-nums text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition-colors disabled:opacity-50"
+                        className="text-warning hover:text-warning hover:bg-warning/10"
                     >
                         <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
-                        {t("Retry All")}
-                    </button>
+                        Retry All
+                    </Button>
                 )}
             </div>
             {isExpanded && (
                 <>
                     <div className="px-6 pb-4">
                         <p className="text-sm text-[var(--text-secondary)]">
-                            {t("These albums were recommended but couldn't be found by your indexers. Listen to 30-second previews below!")}
+                            These albums were recommended but couldn&apos;t be found by your indexers.
+                            Listen to 30-second previews below!
                         </p>
                     </div>
                     <div className="divide-y divide-[#1c1c1c]">
@@ -71,8 +70,8 @@ export function UnavailableAlbums({
                     const isPreviewPlaying = currentPreview === album.id;
                     const attemptLabel =
                         album.attemptNumber === 0
-                            ? t("Original Recommendation")
-                            : `${t("Replacement #")}${album.attemptNumber}`;
+                            ? "Original Recommendation"
+                            : `Replacement #${album.attemptNumber}`;
 
                     return (
                         <div
@@ -94,12 +93,11 @@ export function UnavailableAlbums({
                                             )
                                         }
                                         className="w-8 h-8 flex items-center justify-center"
-                                        aria-label={`${t(isPreviewPlaying ? "Pause" : "Play")} ${album.album}`}
                                     >
                                         {isPreviewPlaying ? (
-                                            <Pause className="w-4 h-4 text-orange-400 fill-current" />
+                                            <Pause className="w-4 h-4 text-warning fill-current" />
                                         ) : (
-                                            <Play className="w-4 h-4 text-orange-400 fill-current ml-0.5" />
+                                            <Play className="w-4 h-4 text-warning fill-current ml-0.5" />
                                         )}
                                     </button>
                                 ) : (
@@ -120,8 +118,8 @@ export function UnavailableAlbums({
                                     {album.previewUrl && (
                                         <>
                                             <span>•</span>
-                                            <span className="text-orange-400">
-                                                {t("30s Preview")}
+                                            <span className="text-warning">
+                                                30s Preview
                                             </span>
                                         </>
                                     )}
@@ -135,7 +133,7 @@ export function UnavailableAlbums({
                                         tierColors[album.tier]
                                     )}
                                 >
-                                    {tierLabels[album.tier] ? t(tierLabels[album.tier] as TranslationKey) : album.tier}
+                                    {tierLabels[album.tier]}
                                 </span>
                             </div>
 
@@ -144,8 +142,8 @@ export function UnavailableAlbums({
                                     className={cn(
                                         "px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap",
                                         album.attemptNumber === 0
-                                            ? "bg-orange-500/20 border border-orange-500/30 text-orange-400"
-                                            : "bg-blue-500/20 border border-blue-500/30 text-blue-400"
+                                            ? "bg-warning/20 border border-warning/30 text-warning"
+                                            : "bg-white/10 border border-white/10 text-[var(--text-secondary)]"
                                     )}
                                 >
                                     {attemptLabel}

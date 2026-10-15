@@ -1,5 +1,4 @@
 import { Router } from "express";
-import axios from "axios";
 import { logger } from "../utils/logger";
 import { z } from "zod";
 import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
@@ -13,23 +12,12 @@ import {
 } from "../middleware/playlistOwner";
 import * as playlistService from "../services/playlistService";
 import { eventBus } from "../services/eventBus";
-import { upstreamHeader } from "../utils/upstreamHeaders";
+import { proxyPreviewStream } from "../utils/previewProxy";
+import { soulseekConfigured } from "../utils/soulseekConfigured";
 
 const router = Router();
 
 router.use(requireAuthOrToken);
-
-// Serializable transactions abort a conflicting txn with Prisma P2034 rather than
-// blocking; retry once transparently (mirrors routes/share.ts) so a benign write-write
-// conflict on the same playlist doesn't surface to the client as an opaque 500.
-async function withSerializableRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try {
-        return await fn();
-    } catch (e: any) {
-        if (e?.code === "P2034") return await fn();
-        throw e;
-    }
-}
 
 async function getOwnedPendingTrack(
     userId: string,
@@ -270,10 +258,7 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
         const mergedItems = [
             ...formattedItems,
             ...formattedPending,
-            // Both tables draw from ONE rank space, so a string compare is a
-            // real ordering. Previously this compared two independent integer
-            // counters against each other, which is why a reorder scrambled
-            // every imported playlist.
+            // Items and pending tracks share one rank space, so a string compare orders them.
         ].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
 
         res.json({
@@ -298,7 +283,6 @@ router.put("/:id", requirePlaylistOwner, async (req, res) => {
         if (!req.user) {
             return res.status(401).json({ error: "Unauthorized" });
         }
-        const userId = req.user.id;
         const data = updatePlaylistSchema.parse(req.body);
 
         const playlist = await prisma.playlist.update({
@@ -373,8 +357,6 @@ router.delete("/:id", requirePlaylistOwner, async (req, res) => {
         if (!req.user) {
             return res.status(401).json({ error: "Unauthorized" });
         }
-        const userId = req.user.id;
-
         // Check ownership
         await prisma.playlist.delete({
             where: { id: req.params.id },
@@ -388,12 +370,7 @@ router.delete("/:id", requirePlaylistOwner, async (req, res) => {
 });
 
 // POST /playlists/:id/items
-// POST /playlists/:id/items
-//
-// Accepts a single { trackId } or a bulk { trackIds: [...] }. The single form is
-// kept because existing clients use it, but "add this album" should send one
-// bulk request -- the browser was issuing one HTTP call per track at four
-// queries each.
+// Takes { trackId } or { trackIds: [...] }; adding an album should send one bulk request.
 router.post("/:id/items", requirePlaylistOwner, async (req, res) => {
     try {
         const parsed = addTracksSchema.safeParse(req.body);
@@ -462,9 +439,7 @@ router.delete("/:id/items", requirePlaylistOwner, async (req, res) => {
 });
 
 // POST /playlists/:id/items/batch
-// Append multiple tracks in one ordered call, preserving the submitted order. iOS
-// uses this to add a whole album/artist without a serial round-trip per track
-// (which would also risk scrambled order under the single-item max-sort+1 append).
+// Appends many tracks in one call, in the submitted order.
 const addTracksBatchSchema = z.object({
     trackIds: z.array(z.string()).min(1).max(500),
 });
@@ -494,21 +469,9 @@ router.post("/:id/items/batch", async (req, res) => {
             return res.status(403).json({ error: "Access denied" });
         }
 
-        // Insert through the shared allocator rather than here. Every write to
-        // PlaylistItem must assign `rank`: the column is UNIQUE per playlist
-        // with an empty-string default, so an insert that omits it takes the
-        // single '' slot and createMany({ skipDuplicates: true }) silently
-        // drops every row after the first. This endpoint used to set only
-        // `sort`, which meant a 50-track request answered `added: 1` while
-        // storing one track, and every later batch into that playlist stored
-        // nothing at all. addTracks holds the advisory lock and chains ranks
-        // off the current maximum -- the one place that logic lives.
-        //
-        // This also scopes the add to LIBRARY tracks, matching the
-        // DISCOVER-location filter the other write paths already enforce: a
-        // track sitting in the discovery pile is not something a playlist
-        // should be able to reference. Such ids now come back under
-        // skippedInvalid instead of being added.
+        // addTracks assigns ranks under its advisory lock (rank is unique per
+        // playlist, so an insert without one would drop the batch) and accepts only
+        // LIBRARY tracks; others come back as skippedInvalid.
         const result = await playlistService.addTracks(req.params.id, trackIds);
 
         const items = await prisma.playlistItem.findMany({
@@ -540,10 +503,7 @@ router.post("/:id/items/batch", async (req, res) => {
 });
 
 // DELETE /playlists/:id/items/:trackId
-//
-// 404 when the row is already gone. This used to call prisma.delete, which
-// throws P2025 on a missing row, and the generic catch turned that into a 500 --
-// so double-clicking remove surfaced a server error.
+// 404 when the item is already gone.
 router.delete("/:id/items/:trackId", requirePlaylistOwner, async (req, res) => {
     try {
         const removed = await playlistService.removeTracks(req.params.id, [
@@ -560,9 +520,7 @@ router.delete("/:id/items/:trackId", requirePlaylistOwner, async (req, res) => {
 });
 
 // PATCH /playlists/:id/items/:itemId/move  { afterItemId: string | null }
-//
-// Replaces PUT /items/reorder, which required the client to send the complete
-// ordering, rewrote every row one UPDATE at a time, and silently reshuffled the
+// Moves one item to sit directly after the anchor, or first when null.
 router.patch("/:id/items/:itemId/move", requirePlaylistOwner, async (req, res) => {
     try {
         const parsed = moveItemSchema.safeParse(req.body);
@@ -597,11 +555,6 @@ router.patch("/:id/items/:itemId/move", requirePlaylistOwner, async (req, res) =
         res.status(500).json({ error: "Failed to move item" });
     }
 });
-
-/**
- * GET /playlists/:id/pending
- * Get pending tracks for a playlist (tracks from Spotify that haven't been matched yet)
- */
 
 /**
  * DELETE /playlists/:id/pending/:trackId
@@ -686,47 +639,11 @@ router.get("/:id/pending/:trackId/preview/stream", async (req, res) => {
                 .json({ error: "No preview available on Deezer" });
         }
 
-        const upstream = await axios.get(previewUrl, {
-            responseType: "stream",
-            timeout: 10000,
+        await proxyPreviewStream(res, previewUrl, {
+            notFoundMessage: "No preview available on Deezer",
+            logLabel: "Pending preview stream",
         });
-
-        const upstreamContentLength = upstreamHeader(upstream.headers["content-length"]);
-        const upstreamAcceptRanges = upstreamHeader(upstream.headers["accept-ranges"]);
-
-        res.setHeader(
-            "Content-Type",
-            upstreamHeader(upstream.headers["content-type"]) || "audio/mpeg"
-        );
-        if (upstreamContentLength) {
-            res.setHeader("Content-Length", upstreamContentLength);
-        }
-        if (upstreamAcceptRanges) {
-            res.setHeader("Accept-Ranges", upstreamAcceptRanges);
-        }
-        res.setHeader("Cache-Control", "no-store");
-
-        upstream.data.on("error", (streamErr: unknown) => {
-            logger.error("Pending preview stream pipe error:", streamErr);
-            if (!res.headersSent) {
-                res.status(502).end();
-            } else {
-                res.end();
-            }
-        });
-
-        // Clean up upstream stream when client disconnects (preview cancelled, tab closed, etc)
-        res.on("close", () => {
-            if (!upstream.data.destroyed) {
-                upstream.data.destroy();
-            }
-        });
-
-        upstream.data.pipe(res);
     } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 404) {
-            return res.status(404).json({ error: "No preview available on Deezer" });
-        }
         safeError(res, "Pending track preview stream", error);
     }
 });
@@ -770,12 +687,13 @@ router.post("/:id/pending/retry-all", requireMusicPermission("canDownloadTracks"
         const { getSystemSettings } = await import("../utils/systemSettings");
 
         const settings = await getSystemSettings();
-        if (!settings?.musicPath) {
+        if (!settings || !settings.musicPath) {
             return res.status(400).json({ error: "Music path not configured" });
         }
-        if (!settings?.soulseekUsername || !settings?.soulseekPassword) {
-            return res.status(400).json({ error: "Soulseek credentials not configured" });
+        if (!soulseekConfigured(settings)) {
+            return res.status(400).json({ error: "Soulseek is not configured" });
         }
+        const musicPath = settings.musicPath;
 
         // Create download jobs for all pending tracks
         const downloadJobs = [];
@@ -851,7 +769,7 @@ router.post("/:id/pending/retry-all", requireMusicPermission("canDownloadTracks"
                         pendingTrack.spotifyTitle,
                         albumName,
                         searchResult.allMatches,
-                        settings.musicPath
+                        musicPath
                     );
 
                     if (result.success) {
@@ -868,17 +786,15 @@ router.post("/:id/pending/retry-all", requireMusicPermission("canDownloadTracks"
                         });
 
                         try {
-                            const { scanQueue } = await import("../workers/queues");
-                            await scanQueue.add(
-                                "scan",
-                                {
-                                    userId,
-                                    source: "retry-pending-track-batch",
-                                    albumMbid: pendingTrack.albumMbid || undefined,
-                                    artistMbid: pendingTrack.artistMbid || undefined,
-                                },
-                                { priority: 1, removeOnComplete: true }
-                            );
+                            const { requestScan } = await import("../workers/scanRequest");
+                            await requestScan({
+                                userId,
+                                source: "retry-pending-track-batch",
+                                albumMbid: pendingTrack.albumMbid || undefined,
+                                artistMbid: pendingTrack.artistMbid || undefined,
+                                priority: 1,
+                                removeOnComplete: true,
+                            });
                         } catch (scanError) {
                             logger.error(`[Retry-All] Failed to queue scan:`, scanError);
                         }
@@ -1003,7 +919,7 @@ router.post("/:id/pending/:trackId/retry", requireMusicPermission("canDownloadTr
         const { getSystemSettings } = await import("../utils/systemSettings");
 
         const settings = await getSystemSettings();
-        if (!settings?.musicPath) {
+        if (!settings || !settings.musicPath) {
             sessionLog("PENDING-RETRY", `Music path not configured`, "WARN");
             await prisma.downloadJob.update({
                 where: { id: downloadJob.id },
@@ -1016,10 +932,10 @@ router.post("/:id/pending/:trackId/retry", requireMusicPermission("canDownloadTr
             return res.status(400).json({ error: "Music path not configured" });
         }
 
-        if (!settings?.soulseekUsername || !settings?.soulseekPassword) {
+        if (!soulseekConfigured(settings)) {
             sessionLog(
                 "PENDING-RETRY",
-                `Soulseek credentials not configured`,
+                `Soulseek is not configured`,
                 "WARN"
             );
             await prisma.downloadJob.update({
@@ -1126,29 +1042,24 @@ router.post("/:id/pending/:trackId/retry", requireMusicPermission("canDownloadTr
 
                     // Trigger a library scan to add the track and reconcile pending
                     try {
-                        const { scanQueue } = await import("../workers/queues");
-                        const scanJob = await scanQueue.add(
-                            "scan",
-                            {
-                                userId,
-                                source: "retry-pending-track",
-                                albumMbid: pendingTrack.albumMbid || undefined,
-                                artistMbid:
-                                    pendingTrack.artistMbid || undefined,
-                            },
-                            {
-                                priority: 1, // High priority
-                                removeOnComplete: true,
-                            }
-                        );
+                        const { requestScan } = await import("../workers/scanRequest");
+                        const scanResult = await requestScan({
+                            userId,
+                            source: "retry-pending-track",
+                            albumMbid: pendingTrack.albumMbid || undefined,
+                            artistMbid:
+                                pendingTrack.artistMbid || undefined,
+                            priority: 1, // High priority
+                            removeOnComplete: true,
+                        });
                         logger.debug(
                             `[Retry] Queued library scan to reconcile pending tracks`
                         );
                         sessionLog(
                             "PENDING-RETRY",
-                            `Queued library scan (bullJobId=${
-                                scanJob.id ?? "unknown"
-                            })`
+                            scanResult.queued
+                                ? `Queued library scan (bullJobId=${scanResult.jobId})`
+                                : `Library scan not re-queued: ${scanResult.reason}`
                         );
                     } catch (scanError) {
                         logger.error(

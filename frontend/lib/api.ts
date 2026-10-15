@@ -1,17 +1,11 @@
+import type { MapTrack } from "@/features/vibe/types";
+import { backendUrl } from "@/lib/backend-url";
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
 // Mood Bucket Types (simplified mood system)
-export type MoodType =
-    | "happy"
-    | "sad"
-    | "chill"
-    | "energetic"
-    | "party"
-    | "focus"
-    | "melancholy"
-    | "aggressive"
-    | "acoustic";
+export type MoodType = "happy" | "sad" | "chill" | "aggressive" | "party";
 
 export interface MoodBucketPreset {
     id: MoodType;
@@ -19,9 +13,11 @@ export interface MoodBucketPreset {
     color: string;
     icon: string;
     trackCount: number;
+    /** Tracks still waiting for audio analysis, so not yet sortable into moods. */
+    pendingTracks?: number;
 }
 
-export interface MoodBucketMix {
+interface MoodBucketMix {
     id: string;
     mood: MoodType;
     name: string;
@@ -31,6 +27,47 @@ export interface MoodBucketMix {
     trackCount: number;
     color: string;
     tracks?: ApiData[];
+}
+
+interface VibePathTrack {
+    id: string;
+    title: string;
+    duration: number;
+    albumId: string;
+    albumTitle: string;
+    albumCoverUrl: string | null;
+    artistId: string;
+    artistName: string;
+}
+
+/** Similar-tracks answers share this shape; /vibe/similar and /vibe/alchemy send no trackNo. */
+interface VibeTrack {
+    id: string;
+    title: string;
+    duration: number;
+    trackNo?: number;
+    distance: number;
+    similarity: number;
+    album: { id: string; title: string; coverUrl: string | null };
+    artist: { id: string; name: string };
+}
+
+/**
+ * The 1.11 release window's mood-mix answer (backend services/releases/moodMixes.ts).
+ * "remove" clears a retired mix and does the same as "rebuild".
+ */
+export type MoodMixDecision = "rebuild" | "keep" | "remove";
+
+export interface MoodMixReleaseState {
+    /**
+     * The user's saved mood mix; null when they have none or cleared it.
+     * `retired`: saved under a mood 1.11 removed, so it can't be shown or kept.
+     */
+    mix: { id: string; name: string; mood: string; trackCount: number; retired: boolean } | null;
+    /** "rebuild" means the mix was cleared, by Rebuild or Remove. */
+    decision: "rebuild" | "keep" | null;
+    /** The playlist this mix was already saved as, if any. */
+    playlist: { id: string; name: string } | null;
 }
 
 interface ApiError extends Error {
@@ -50,7 +87,6 @@ interface ServiceTestResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ApiData = any;
 
-
 function toSearchParams(params: Record<string, string | number | boolean | undefined>): URLSearchParams {
     const entries: Record<string, string> = {};
     for (const [key, value] of Object.entries(params)) {
@@ -63,9 +99,8 @@ function toSearchParams(params: Record<string, string | number | boolean | undef
 
 // Dynamically determine API URL based on configuration
 export const getApiBaseUrl = () => {
-    // Server-side rendering
     if (typeof window === "undefined") {
-        return process.env.BACKEND_URL || "http://127.0.0.1:3006";
+        return backendUrl;
     }
 
     // Explicit env var: used for reverse proxies where the API is on a different origin
@@ -88,32 +123,122 @@ export class NetworkError extends Error {
     name = "NetworkError";
 }
 
-/** Browser storage access may fail under private/sandboxed or storage-blocked contexts.
- * Keep the access token in memory when persistence is unavailable.
+// Enrichment engine contract (mirrors backend/src/services/enrichmentState).
+interface EnrichmentState {
+    status: "idle" | "running" | "paused" | "stopping" | "failed";
+    startedAt?: string;
+    pausedAt?: string;
+    stoppedAt?: string;
+    currentPhase: "artists" | "tracks" | "fingerprint" | "audio" | "podcasts" | "vibe" | "similarity" | null;
+    lastActivity: string;
+    /** Set by the backend when status=running but nothing has moved for >15 min. */
+    hung?: boolean;
+    artists: {
+        total: number;
+        completed: number;
+        failed: number;
+    };
+    tracks: {
+        total: number;
+        completed: number;
+        failed: number;
+    };
+    audio: {
+        total: number;
+        completed: number;
+        failed: number;
+        processing: number;
+    };
+}
+
+export interface EnrichmentFailure {
+    id: string;
+    /** track/audio/vibe/scan failures come from TrackStage records, artist ones from the failure ledger. */
+    entityType: "artist" | "track" | "audio" | "vibe" | "scan";
+    entityId: string;
+    entityName: string | null;
+    errorMessage: string | null;
+    errorCode: string | null;
+    retryCount: number;
+    maxRetries: number;
+    firstFailedAt: string;
+    lastFailedAt: string;
+    skipped: boolean;
+    skippedAt: string | null;
+    resolved: boolean;
+    resolvedAt: string | null;
+    metadata: Record<string, unknown> | null;
+}
+
+interface FailureCounts {
+    artist: number;
+    track: number;
+    audio: number;
+    vibe: number;
+    /** Fingerprint-stage failures — TrackStage-backed, same as the rest. */
+    scan: number;
+    podcast: number;
+    total: number;
+}
+
+interface ConcurrencyConfig {
+    concurrency: number;
+    estimatedSpeed: string;
+    artistsPerMin: number;
+    tracksPerMin: number;
+}
+
+export interface AnalysisWorkersConfig {
+    workers: number;
+    cpuCores: number;
+    recommended: number;
+    description: string;
+    /** Whether an analyzer is running, from the heartbeat it writes to Redis every 30s. */
+    analyzerOnline?: boolean;
+    /**
+     * How many subscribers received the change. Redis reports this; zero means
+     * the number was stored but nothing was listening.
+     */
+    delivered?: number;
+}
+
+export interface GpuRuntimeStatus {
+    /** Whether the CUDA runtime exists for this host (linux/x86_64); false hides the switches everywhere. */
+    supported: boolean;
+    /** The switch for vibe embeddings (sound vectors). */
+    enabled: boolean;
+    /** The switch for audio analysis (MusiCNN); shares the same download. */
+    analysis: boolean;
+    analysisEffective: boolean;
+    installed: boolean;
+    installing: boolean;
+    effective: boolean;
+    /** The analyzer started with the runtime and its session did not get the GPU. */
+    fellBack: boolean;
+    analysisFellBack: boolean;
+    /** The vibe embeddings analyzer, which downloads the runtime for both switches, is running. */
+    installerUp: boolean;
+    status: string;
+    reason: string | null;
+    detail: string | null;
+    bytesDownloaded: number | null;
+    pinned: string[];
+    providerActive: boolean;
+    updatedAt: string | null;
+}
+
+/**
+ * The browser's storage, when it exists. SSR never has it; some client
+ * environments throw on access (sandboxed iframes). Callers keep working in
+ * memory when it's absent. Reads the global, which is what a browser exposes.
  */
-function readAuthStorage(key: string): string | null {
+const authStorage = (): Storage | null => {
     try {
-        return typeof window === "undefined" ? null : globalThis.localStorage?.getItem(key) ?? null;
+        return (globalThis as { localStorage?: Storage }).localStorage ?? null;
     } catch {
         return null;
     }
-}
-
-function writeAuthStorage(key: string, value: string): void {
-    try {
-        if (typeof window !== "undefined") globalThis.localStorage?.setItem(key, value);
-    } catch {
-        // Memory-only authentication remains available until this page closes.
-    }
-}
-
-function removeAuthStorage(key: string): void {
-    try {
-        if (typeof window !== "undefined") globalThis.localStorage?.removeItem(key);
-    } catch {
-        // In-memory credentials are cleared independently.
-    }
-}
+};
 
 class ApiClient {
     private token: string | null = null;
@@ -122,9 +247,14 @@ class ApiClient {
     private ensurePromise: Promise<"fresh" | RefreshResult> | null = null;
 
     constructor() {
-        this.token = readAuthStorage(AUTH_TOKEN_KEY);
-        if (this.token) this.tokenInitialized = true;
-        // Refresh token is loaded on demand.
+        const storage = authStorage();
+        if (storage) {
+            this.token = storage.getItem(AUTH_TOKEN_KEY);
+            if (this.token) {
+                this.tokenInitialized = true;
+            }
+            // Note: Refresh token is loaded on-demand via getRefreshToken()
+        }
     }
 
     /**
@@ -132,11 +262,12 @@ class ApiClient {
      * Call this early in the app lifecycle to ensure the token is loaded
      */
     async initToken(): Promise<string | null> {
-        if (typeof window === "undefined") {
+        const storage = authStorage();
+        if (!storage) {
             return null;
         }
 
-        const storedToken = readAuthStorage(AUTH_TOKEN_KEY);
+        const storedToken = storage.getItem(AUTH_TOKEN_KEY);
         if (storedToken) {
             this.token = storedToken;
         }
@@ -159,27 +290,29 @@ class ApiClient {
         return this.token;
     }
 
-    // Store JWT token and optionally refresh token
     setToken(token: string, refreshToken?: string) {
         this.token = token;
-        writeAuthStorage(AUTH_TOKEN_KEY, token);
-        if (refreshToken) writeAuthStorage(REFRESH_TOKEN_KEY, refreshToken);
+        const storage = authStorage();
+        if (storage) {
+            storage.setItem(AUTH_TOKEN_KEY, token);
+            if (refreshToken) {
+                storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+            }
+        }
     }
 
-    // Get refresh token from storage
     getRefreshToken(): string | null {
-        return readAuthStorage(REFRESH_TOKEN_KEY);
+        const storage = authStorage();
+        return storage ? storage.getItem(REFRESH_TOKEN_KEY) : null;
     }
 
-    // Clear both JWT tokens
     clearToken() {
         this.token = null;
-        removeAuthStorage(AUTH_TOKEN_KEY);
-        removeAuthStorage(REFRESH_TOKEN_KEY);
-    }
-
-    private getBaseUrl(): string {
-        return getApiBaseUrl();
+        const storage = authStorage();
+        if (storage) {
+            storage.removeItem(AUTH_TOKEN_KEY);
+            storage.removeItem(REFRESH_TOKEN_KEY);
+        }
     }
 
     /**
@@ -197,13 +330,9 @@ class ApiClient {
     }
 
     /**
-     * Ensure the access token is fresh. Returns:
-     *   "fresh"         -- exp > 60 min away, no network call made
-     *   "refreshed"     -- token was refreshed successfully
-     *   "rejected"      -- server rejected the refresh token; tokens cleared
-     *   "network-error" -- fetch failed; tokens left intact (transient outage)
-     *
-     * Deduplicates concurrent calls the same way refreshAccessToken does.
+     * "fresh" when the token has over 60 minutes left (no request). Otherwise
+     * refreshes: "rejected" clears tokens, "network-error" keeps them.
+     * Concurrent calls share one request.
      */
     async ensureFreshToken(): Promise<"fresh" | RefreshResult> {
         if (this.ensurePromise) return this.ensurePromise;
@@ -216,25 +345,8 @@ class ApiClient {
     }
 
     private async _doEnsureFreshToken(): Promise<"fresh" | RefreshResult> {
-        const tok = this.getCurrentToken();
-        if (tok) {
-            try {
-                const parts = tok.split(".");
-                if (parts.length === 3) {
-                    const payload = JSON.parse(
-                        atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
-                    ) as { exp?: number };
-                    if (
-                        typeof payload.exp === "number" &&
-                        payload.exp - Date.now() / 1000 > 3600
-                    ) {
-                        return "fresh";
-                    }
-                }
-            } catch {
-                // Malformed JWT: fall through to refresh.
-            }
-        }
+        const secondsLeft = this.tokenSecondsLeft();
+        if (secondsLeft !== null && secondsLeft > 3600) return "fresh";
 
         if (this.refreshPromise) return (await this.refreshPromise);
         this.refreshPromise = this._doRefresh();
@@ -251,22 +363,25 @@ class ApiClient {
         return tok ? `Bearer ${tok}` : null;
     }
 
-    private tokenExpiresWithin60Min(): boolean {
+    /** Seconds until the access token expires; null when there is no token or it has no readable expiry. */
+    private tokenSecondsLeft(): number | null {
         const tok = this.getCurrentToken();
-        if (!tok) return false;
+        if (!tok) return null;
         try {
             const parts = tok.split(".");
-            if (parts.length !== 3) return false;
+            if (parts.length !== 3) return null;
             const payload = JSON.parse(
                 atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
             ) as { exp?: number };
-            return (
-                typeof payload.exp === "number" &&
-                payload.exp - Date.now() / 1000 < 3600
-            );
+            return typeof payload.exp === "number" ? payload.exp - Date.now() / 1000 : null;
         } catch {
-            return false;
+            return null;
         }
+    }
+
+    private tokenExpiresWithin60Min(): boolean {
+        const secondsLeft = this.tokenSecondsLeft();
+        return secondsLeft !== null && secondsLeft < 3600;
     }
 
     private async _doRefresh(): Promise<"refreshed" | "rejected" | "network-error"> {
@@ -278,7 +393,7 @@ class ApiClient {
         let response: Response;
         try {
             response = await fetch(
-                `${this.getBaseUrl()}/api/auth/refresh`,
+                `${getApiBaseUrl()}/api/auth/refresh`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -338,7 +453,6 @@ class ApiClient {
             ...fetchOptions.headers,
         };
 
-        // Add Authorization header if token exists
         if (this.token) {
             (headers as Record<string, string>)[
                 "Authorization"
@@ -346,7 +460,7 @@ class ApiClient {
         }
 
         // All API endpoints are prefixed with /api
-        const url = `${this.getBaseUrl()}/api${endpoint}`;
+        const url = `${getApiBaseUrl()}/api${endpoint}`;
 
         const response = await fetch(url, {
             ...fetchOptions,
@@ -367,8 +481,8 @@ class ApiClient {
                 };
             }
 
-            // Only log non-404 errors (404s are often expected)
-            if (!(silent404 && response.status === 404)) {
+            // 401s are handled below (refresh, or a sign-in prompt); 404s can be expected.
+            if (response.status !== 401 && !(silent404 && response.status === 404)) {
                 console.error(`[API] Request failed: ${url}`, {
                     status: response.status,
                     statusText: response.statusText,
@@ -377,16 +491,20 @@ class ApiClient {
                 });
             }
 
+            // Signing in checks credentials, not a session: its 401 is the server's answer
+            // (wrong password, wrong code), never an expired session to refresh.
+            const signingIn = endpoint === "/auth/login";
+
             // Handle 401 with token refresh (retry once)
             if (
                 response.status === 401 &&
                 _retryCount === 0 &&
-                endpoint !== "/auth/refresh"
+                endpoint !== "/auth/refresh" &&
+                !signingIn
             ) {
                 const refreshResult = await this.refreshAccessToken();
 
                 if (refreshResult === "refreshed") {
-                    // Retry the request with new token
                     return this.request<T>(endpoint, {
                         ...options,
                         _retryCount: 1, // Prevent infinite loops
@@ -406,7 +524,7 @@ class ApiClient {
             }
 
             if (response.status === 401) {
-                const err = new Error("Not authenticated");
+                const err = new Error(signingIn ? String(error.error || "Sign-in failed") : "Not authenticated");
                 (err as ApiError).status = response.status;
                 (err as ApiError).data = error;
                 throw err;
@@ -422,7 +540,6 @@ class ApiClient {
         return data;
     }
 
-    // Generic POST method for convenience
     async post<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
         return this.request<T>(endpoint, {
             method: "POST",
@@ -430,22 +547,12 @@ class ApiClient {
         });
     }
 
-    // Generic PATCH method for partial updates
-    async patch<T = unknown>(endpoint: string, data: unknown): Promise<T> {
-        return this.request<T>(endpoint, {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        });
-    }
-
-    // Generic GET method for convenience
     async get<T = unknown>(endpoint: string): Promise<T> {
         return this.request<T>(endpoint, {
             method: "GET",
         });
     }
 
-    // Generic DELETE method for convenience
     async delete<T = unknown>(endpoint: string): Promise<T> {
         return this.request<T>(endpoint, {
             method: "DELETE",
@@ -480,7 +587,6 @@ class ApiClient {
             body: JSON.stringify({ username, password, token }),
         });
 
-        // If login returned JWT tokens, store them
         if (data.token) {
             this.setToken(data.token, data.refreshToken);
         }
@@ -498,23 +604,10 @@ class ApiClient {
         };
     }
 
-    async register(username: string, password: string, email?: string) {
-        const data = await this.request<{
-            id: string;
-            username: string;
-            role: string;
-        }>("/auth/register", {
-            method: "POST",
-            body: JSON.stringify({ username, password, email }),
-        });
-        return data;
-    }
-
     async logout() {
         await this.request<void>("/auth/logout", {
             method: "POST",
         });
-        // Clear the stored JWT token
         this.clearToken();
     }
 
@@ -523,8 +616,6 @@ class ApiClient {
             id: string;
             username: string;
             role: string;
-            canRequestAlbums: boolean;
-            canDownloadTracks: boolean;
             onboardingComplete?: boolean;
             enrichmentSettings?: { enabled: boolean; lastRun?: string };
             createdAt: string;
@@ -572,12 +663,12 @@ class ApiClient {
         return this.request<{
             status: string;
             progress: number;
-            result?: { tracksAdded: number; tracksUpdated: number; tracksRemoved: number };
+            result?: { tracksAdded: number; tracksUpdated: number; tracksMissing: number };
         }>(`/library/scan/status/${jobId}`);
     }
 
     async getArtist(id: string) {
-        return this.request<ApiData>(`/library/artists/${id}`);
+        return this.request<ApiData>(`/library/artists/${encodeURIComponent(id)}`);
     }
 
     async getAlbums(params?: {
@@ -667,7 +758,12 @@ class ApiClient {
 
     // Streaming
     getStreamUrl(trackId: string): string {
-        const baseUrl = `${this.getBaseUrl()}/api/library/tracks/${trackId}/stream`;
+        return this.tokenizedUrl(`/api/library/tracks/${trackId}/stream`);
+    }
+
+    /** `<audio>` cannot send headers, so the access token rides in the query; a token near expiry is refreshed in the background. */
+    private tokenizedUrl(path: string): string {
+        const baseUrl = `${getApiBaseUrl()}${path}`;
         const token = this.getCurrentToken();
         if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
         if (token) {
@@ -682,19 +778,16 @@ class ApiClient {
         }).catch(() => {});
     }
 
-    /**
-     * Get the current token, lazily loading from localStorage if needed.
-     * This handles the case where the singleton was created during SSR
-     * and this.token wasn't set from localStorage.
-     */
+    /** The token, read from localStorage on first use when the singleton was created during SSR. */
     private getCurrentToken(): string | null {
         // If we already have a token, use it
         if (this.token) {
             return this.token;
         }
-        // Try to load from localStorage if on client
-        if (typeof window !== "undefined") {
-            const storedToken = readAuthStorage(AUTH_TOKEN_KEY);
+        // Try to load from storage if on client
+        const storage = authStorage();
+        if (storage) {
+            const storedToken = storage.getItem(AUTH_TOKEN_KEY);
             if (storedToken) {
                 this.token = storedToken;
                 this.tokenInitialized = true;
@@ -704,14 +797,9 @@ class ApiClient {
         return null;
     }
 
-    /**
-     * Get the URL for cover art.
-     * @param coverId - The cover ID, URL, or path
-     * @param size - Optional size in pixels
-     * @param includeToken - Include auth token in URL (needed for canvas color extraction)
-     */
+    /** Cover art URL for an id, URL or path; the token lets a canvas read its pixels for colour extraction. */
     getCoverArtUrl(coverId: string, size?: number, includeToken = true): string {
-        const baseUrl = this.getBaseUrl();
+        const baseUrl = getApiBaseUrl();
         const token = includeToken ? this.getCurrentToken() : null;
 
         // Check if this is an audiobook cover path (served by audiobooks endpoint, not proxied)
@@ -812,11 +900,7 @@ class ApiClient {
         });
     }
 
-    /**
-     * Add many tracks in ONE request. Looping addTrackToPlaylist cost a round
-     * trip per track (four queries each server-side), so adding a 12-track album
-     * was 12 requests and 48 queries.
-     */
+    /** Adds many tracks in one request. */
     async addTracksToPlaylist(playlistId: string, trackIds: string[]) {
         return this.request<{
             added: number;
@@ -890,7 +974,7 @@ class ApiClient {
         playlistId: string,
         pendingTrackId: string
     ): string {
-        const baseUrl = `${this.getBaseUrl()}/api/playlists/${encodeURIComponent(
+        const baseUrl = `${getApiBaseUrl()}/api/playlists/${encodeURIComponent(
             playlistId
         )}/pending/${encodeURIComponent(pendingTrackId)}/preview/stream`;
         const token = this.getCurrentToken();
@@ -960,20 +1044,6 @@ class ApiClient {
         });
     }
 
-    async testLastfm(apiKey: string) {
-        return this.request<ServiceTestResult>("/system-settings/test-lastfm", {
-            method: "POST",
-            body: JSON.stringify({ lastfmApiKey: apiKey }),
-        });
-    }
-
-    async testOpenai(apiKey: string, model: string) {
-        return this.request<ServiceTestResult>("/system-settings/test-openai", {
-            method: "POST",
-            body: JSON.stringify({ apiKey, model }),
-        });
-    }
-
     async testFanart(apiKey: string) {
         return this.request<ServiceTestResult>("/system-settings/test-fanart", {
             method: "POST",
@@ -988,17 +1058,17 @@ class ApiClient {
         });
     }
 
-    async testSoulseek(username: string, password: string) {
+    /** Tests the backend being configured: slskd by its URL and key, or the Soulseek network by account. */
+    async testSoulseek(settings: {
+        mode: "p2p" | "slskd";
+        username?: string;
+        password?: string;
+        slskdUrl?: string;
+        slskdApiKey?: string;
+    }) {
         return this.request<ServiceTestResult>("/system-settings/test-soulseek", {
             method: "POST",
-            body: JSON.stringify({ username, password }),
-        });
-    }
-
-    async testSpotify(clientId: string, clientSecret: string) {
-        return this.request<ServiceTestResult>("/system-settings/test-spotify", {
-            method: "POST",
-            body: JSON.stringify({ clientId, clientSecret }),
+            body: JSON.stringify(settings),
         });
     }
 
@@ -1172,7 +1242,7 @@ class ApiClient {
     }
 
     getTrackPreviewStreamUrl(artistName: string, trackTitle: string): string {
-        const baseUrl = `${this.getBaseUrl()}/api/artists/preview/${encodeURIComponent(
+        const baseUrl = `${getApiBaseUrl()}/api/artists/preview/${encodeURIComponent(
             artistName
         )}/${encodeURIComponent(trackTitle)}/stream`;
         const token = this.getCurrentToken();
@@ -1198,7 +1268,7 @@ class ApiClient {
     }
 
     getAudiobookStreamUrl(id: string, trackIndex = 0): string {
-        const baseUrl = `${this.getBaseUrl()}/api/audiobooks/${id}/stream`;
+        const baseUrl = `${getApiBaseUrl()}/api/audiobooks/${id}/stream`;
         const token = this.getCurrentToken();
         if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
         const params = new URLSearchParams();
@@ -1231,18 +1301,25 @@ class ApiClient {
         return this.request<ApiData[]>("/podcasts");
     }
 
-    async getPodcast(id: string) {
-        return this.request<ApiData>(`/podcasts/${id}`, { silent404: true });
+    async getPodcast(
+        id: string,
+        params?: { order?: "newest" | "oldest"; limit?: number; offset?: number }
+    ) {
+        const query = new URLSearchParams();
+        if (params?.order) query.set("order", params.order);
+        if (params?.limit) query.set("limit", String(params.limit));
+        if (params?.offset) query.set("offset", String(params.offset));
+        const suffix = query.size > 0 ? `?${query}` : "";
+        return this.request<ApiData>(`/podcasts/${id}${suffix}`, {
+            silent404: true,
+        });
     }
 
     async previewPodcast(itunesId: string) {
-        // Bound the preview so a slow or dead feed can't spin the UI forever. On
-        // timeout the request aborts and the hook renders its error surface
-        // instead of an endless spinner (#168).
+        // Bound the preview so a slow or dead feed ends in an error, not an endless spinner. 25 s sits
+        // above the backend's worst case (~18 s on the Deezer path: Deezer fetch, iTunes resolve, the
+        // 8 s RSS bound), so an answerable feed is not aborted as a false timeout.
         const controller = new AbortController();
-        // Headroom over the backend's worst-case preview time (~18s on the Deezer
-        // path: Deezer fetch + iTunes resolve + the 8s RSS bound) so a slow but
-        // answerable feed isn't aborted and shown as a false timeout (#168).
         const timer = setTimeout(() => controller.abort(), 25000);
         try {
             return await this.request<ApiData>(`/podcasts/preview/${itunesId}`, { signal: controller.signal });
@@ -1257,13 +1334,7 @@ class ApiClient {
     }
 
     getPodcastEpisodeStreamUrl(podcastId: string, episodeId: string): string {
-        const baseUrl = `${this.getBaseUrl()}/api/podcasts/${podcastId}/episodes/${episodeId}/stream`;
-        const token = this.getCurrentToken();
-        if (this.tokenExpiresWithin60Min()) void this.ensureFreshToken();
-        if (token) {
-            return `${baseUrl}?token=${encodeURIComponent(token)}`;
-        }
-        return baseUrl;
+        return this.tokenizedUrl(`/api/podcasts/${podcastId}/episodes/${episodeId}/stream`);
     }
 
     /**
@@ -1364,6 +1435,11 @@ class ApiClient {
     }
 
     // Playback State (cross-device sync)
+    /** How many tracks the server will keep, as an admin has it set. */
+    async getQueueLimit() {
+        return this.request<{ maxQueueLength: number }>("/playback-state/limit");
+    }
+
     async getPlaybackState() {
         return this.request<ApiData>("/playback-state");
     }
@@ -1380,6 +1456,20 @@ class ApiClient {
         return this.request<ApiData>("/playback-state", {
             method: "POST",
             body: JSON.stringify(state),
+        });
+    }
+
+    /** Play, pause, seek and up-next changes for the public live trip; 404 for everyone but its user. */
+    async reportLive(report: {
+        status: "playing" | "paused" | "stopped";
+        trackId: string;
+        position: number;
+        duration: number;
+        queue: { trackId: string; duration: number }[];
+    }) {
+        return this.request<{ ok: boolean }>("/playback-state/live", {
+            method: "POST",
+            body: JSON.stringify(report),
         });
     }
 
@@ -1511,6 +1601,25 @@ class ApiClient {
         );
     }
 
+    // Release window: the mood-mix question
+    async getMoodMixReleaseState() {
+        return this.get<MoodMixReleaseState>("/whats-new/mood-mixes");
+    }
+
+    async decideMoodMixes(decision: MoodMixDecision) {
+        return this.post<{ decision: MoodMixDecision; removed: number }>(
+            "/whats-new/mood-mixes/decision",
+            { decision }
+        );
+    }
+
+    async saveMoodMixAsPlaylist(mixId: string) {
+        return this.post<{ id: string; name: string; trackCount: number; created: boolean }>(
+            "/whats-new/mood-mixes/save",
+            { mixId }
+        );
+    }
+
     // Mood Bucket System (simplified, pre-computed)
     async getMoodBucketPresets() {
         return this.request<MoodBucketPreset[]>("/mixes/mood/buckets/presets");
@@ -1520,13 +1629,19 @@ class ApiClient {
         return this.request<MoodBucketMix>(`/mixes/mood/buckets/${mood}`);
     }
 
-    async saveMoodBucketMix(mood: MoodType) {
+    // Pass the ids that were actually played, so the saved mix is the one the
+    // user heard: without them the server draws a fresh selection, which
+    // skips the tracks just served and never matches.
+    async saveMoodBucketMix(mood: MoodType, trackIds?: string[]) {
         return this.request<{
             success: boolean;
             mix: MoodBucketMix & { generatedAt: string };
         }>(
             `/mixes/mood/buckets/${mood}/save`,
-            { method: "POST" }
+            {
+                method: "POST",
+                body: JSON.stringify(trackIds ? { trackIds } : {}),
+            }
         );
     }
 
@@ -1547,6 +1662,7 @@ class ApiClient {
 
     async getEnrichmentProgress() {
         return this.request<{
+            source: string;
             artists: {
                 total: number;
                 completed: number;
@@ -1558,6 +1674,8 @@ class ApiClient {
                 total: number;
                 enriched: number;
                 pending: number;
+                /** Open but blocked behind the fingerprint → recording gate. */
+                waiting: number;
                 progress: number;
             };
             audioAnalysis: {
@@ -1580,57 +1698,145 @@ class ApiClient {
                 progress: number;
                 isBackground: boolean;
             };
+            similarity: {
+                total: number;
+                completed: number;
+                pending: number;
+                progress: number;
+                isBackground: boolean;
+            };
             coreComplete: boolean;
             isFullyComplete: boolean;
         }>("/enrichment/progress");
     }
 
-    async triggerFullEnrichment() {
-        return this.request<{ message: string; description: string }>(
-            "/enrichment/full",
-            { method: "POST" }
+    async retryFailedAndBlocked() {
+        return this.request<{
+            message: string;
+            description: string;
+            queued: number;
+        }>("/enrichment/retry-failed-and-blocked", { method: "POST" });
+    }
+
+    async wipeAndRerunEnrichment() {
+        return this.request<{ artists: number; tracks: number; vectors: number }>("/enrichment/wipe-and-rerun", {
+            method: "POST",
+        });
+    }
+
+    async redecideEverything() {
+        return this.request<{
+            message: string;
+            description: string;
+            reopened: number;
+        }>("/enrichment/re-decide-everything", { method: "POST" });
+    }
+
+    // Enrichment control and failure management
+
+    async getEnrichmentState() {
+        return this.get<EnrichmentState | null>("/enrichment/status");
+    }
+
+    async pauseEnrichment() {
+        return this.post<{ message: string; state: EnrichmentState }>(
+            "/enrichment/pause",
+            {}
         );
     }
 
-    async resetArtistsOnly() {
-        return this.request<{
-            message: string;
-            description: string;
-            count: number;
-        }>("/enrichment/reset-artists", { method: "POST" });
+    async resumeEnrichment() {
+        return this.post<{ message: string; state: EnrichmentState }>(
+            "/enrichment/resume",
+            {}
+        );
     }
 
-    async resetMoodTagsOnly() {
-        return this.request<{
-            message: string;
-            description: string;
-            count: number;
-        }>("/enrichment/reset-mood-tags", { method: "POST" });
+    async stopEnrichment() {
+        return this.post<{ message: string; state: EnrichmentState }>(
+            "/enrichment/stop",
+            {}
+        );
     }
 
-    async resetAudioAnalysisOnly() {
-        return this.request<{
-            message: string;
-            description: string;
-            count: number;
-        }>("/enrichment/reset-audio-analysis", { method: "POST" });
+    async getEnrichmentFailures(params?: {
+        entityType?: "artist" | "track" | "audio" | "vibe" | "scan";
+        includeSkipped?: boolean;
+        includeResolved?: boolean;
+        limit?: number;
+        offset?: number;
+    }) {
+        const query = new URLSearchParams();
+        if (params?.entityType) query.set("entityType", params.entityType);
+        if (params?.includeSkipped) query.set("includeSkipped", "true");
+        if (params?.includeResolved) query.set("includeResolved", "true");
+        if (params?.limit) query.set("limit", params.limit.toString());
+        if (params?.offset) query.set("offset", params.offset.toString());
+
+        const queryString = query.toString();
+        return this.get<{ failures: EnrichmentFailure[]; total: number }>(
+            `/enrichment/failures${queryString ? `?${queryString}` : ""}`
+        );
     }
 
-    async resetAllEnrichmentData() {
-        return this.request<{
-            message: string;
-            tracksReset: number;
-            artistsReset: number;
-            failuresDeleted: number;
-            moodBucketsDeleted: number;
-        }>("/enrichment/reset-all", {
-            method: "POST",
+    async getEnrichmentFailureCounts() {
+        return this.get<FailureCounts>("/enrichment/failures/counts");
+    }
+
+    async getEnrichmentConcurrency() {
+        return this.get<ConcurrencyConfig>("/enrichment/concurrency");
+    }
+
+    async setEnrichmentConcurrency(concurrency: number) {
+        return this.request<ConcurrencyConfig>("/enrichment/concurrency", {
+            method: "PUT",
+            body: JSON.stringify({ concurrency }),
         });
     }
 
     async retryFailedAnalysis() {
         return this.request<{ message: string; reset: number }>("/analysis/retry-failed", {
             method: "POST",
+        });
+    }
+
+    async getAnalysisWorkers() {
+        return this.get<AnalysisWorkersConfig>("/analysis/workers");
+    }
+
+    async setAnalysisWorkers(workers: number) {
+        return this.request<AnalysisWorkersConfig>("/analysis/workers", {
+            method: "PUT",
+            body: JSON.stringify({ workers }),
+        });
+    }
+
+    async getClapWorkers() {
+        return this.get<AnalysisWorkersConfig>("/analysis/clap-workers");
+    }
+
+    async setClapWorkers(workers: number) {
+        return this.request<AnalysisWorkersConfig>("/analysis/clap-workers", {
+            method: "PUT",
+            body: JSON.stringify({ workers }),
+        });
+    }
+
+    async getGpuStatus() {
+        return this.get<GpuRuntimeStatus>("/system-settings/gpu");
+    }
+
+    async setGpuEnabled(enabled: boolean) {
+        return this.request<GpuRuntimeStatus>("/system-settings/gpu", {
+            method: "POST",
+            body: JSON.stringify({ enabled }),
+        });
+    }
+
+    async setGpuAnalysisEnabled(analysis: boolean) {
+        return this.request<GpuRuntimeStatus>("/system-settings/gpu", {
+            method: "POST",
+            body: JSON.stringify({ analysis }),
         });
     }
 
@@ -1667,10 +1873,6 @@ class ApiClient {
     }
 
     async updateTrackMetadata(trackId: string, data: ApiData) {
-        // /library/tracks/:id/metadata does not exist -- library/tracks.ts
-        // registers no metadata route -- so every track metadata edit from
-        // MetadataEditor 404'd. The real endpoint is the same one the artist
-        // and album siblings already use.
         return this.request<ApiData>(`/enrichment/tracks/${trackId}/metadata`, {
             method: "PUT",
             body: JSON.stringify(data),
@@ -1744,17 +1946,8 @@ class ApiClient {
     > {
         return this.get("/notifications");
     }
-
-    async getUnreadNotificationCount(): Promise<{ count: number }> {
-        return this.get("/notifications/unread-count");
-    }
-
     async markNotificationAsRead(id: string): Promise<{ success: boolean }> {
         return this.post(`/notifications/${id}/read`);
-    }
-
-    async markAllNotificationsAsRead(): Promise<{ success: boolean }> {
-        return this.post("/notifications/read-all");
     }
 
     async clearNotification(id: string): Promise<{ success: boolean }> {
@@ -1763,6 +1956,15 @@ class ApiClient {
 
     async clearAllNotifications(): Promise<{ success: boolean }> {
         return this.post("/notifications/clear-all");
+    }
+
+    async createNotification(body: {
+        type: "error" | "system";
+        title: string;
+        message?: string;
+        href?: string;
+    }): Promise<{ id: string }> {
+        return this.post("/notifications", body);
     }
 
     // Download Activity
@@ -1803,90 +2005,29 @@ class ApiClient {
 
     // Vibe (CLAP Similarity) API
     async getVibeSimilarTracks(trackId: string, limit = 20, signal?: AbortSignal) {
-        return this.request<{
-            sourceTrackId: string;
-            tracks: Array<{
-                id: string;
-                title: string;
-                duration: number;
-                // No trackNo here: /vibe/similar has never sent one. It was declared
-                // required, so callers could read undefined with TypeScript's blessing.
-                // Nothing consumes it, so the declaration goes rather than the endpoint
-                // inventing a value. (vibeSearch below genuinely does send it.)
-                distance: number;
-                album: {
-                    id: string;
-                    title: string;
-                    coverUrl: string | null;
-                };
-                artist: {
-                    id: string;
-                    name: string;
-                };
-            }>;
-        }>(`/vibe/similar/${trackId}?limit=${limit}`, { signal });
+        return this.request<{ sourceTrackId: string; tracks: VibeTrack[] }>(
+            `/vibe/similar/${trackId}?limit=${limit}`,
+            { signal }
+        );
     }
 
     async vibeSearch(query: string, limit = 20) {
-        return this.request<{
-            query: string;
-            tracks: Array<{
-                id: string;
-                title: string;
-                duration: number;
-                trackNo: number;
-                distance: number;
-                similarity: number;
-                album: {
-                    id: string;
-                    title: string;
-                    coverUrl: string | null;
-                };
-                artist: {
-                    id: string;
-                    name: string;
-                };
-            }>;
-            minSimilarity: number;
-            totalAboveThreshold: number;
-            debug?: {
-                matchedTerms: string[];
-                genreConfidence: number;
-                featureWeight: number;
-            };
-        }>("/vibe/search", {
+        return this.request<{ query: string; tracks: VibeTrack[] }>("/vibe/search", {
             method: "POST",
             body: JSON.stringify({ query, limit }),
         });
     }
 
     async getVibeMap() {
-        return this.request<{
-            tracks: Array<{
-                id: string;
-                x: number;
-                y: number;
-                title: string;
-                artist: string;
-                artistId: string;
-                albumId: string;
-                coverUrl: string | null;
-                dominantMood: string;
-                moodScore: number;
-                moods: Record<string, number>;
-                energy: number | null;
-                valence: number | null;
-            }>;
-            trackCount: number;
-            computedAt: string;
-        }>("/vibe/map");
+        // 202 { computing: true } until the similarity step has laid the library out; the caller polls.
+        return this.request<{ computing: true } | { tracks: MapTrack[]; trackCount: number }>("/vibe/map");
     }
 
     async getVibePath(startTrackId: string, endTrackId: string, options?: { length?: number; mode?: "smooth" | "discovery" }) {
         return this.request<{
-            startTrack: { id: string; title: string; duration: number; albumId: string; albumTitle: string; albumCoverUrl: string | null; artistId: string; artistName: string };
-            endTrack: { id: string; title: string; duration: number; albumId: string; albumTitle: string; albumCoverUrl: string | null; artistId: string; artistName: string };
-            path: Array<{ id: string; title: string; duration: number; albumId: string; albumTitle: string; albumCoverUrl: string | null; artistId: string; artistName: string }>;
+            startTrack: VibePathTrack;
+            endTrack: VibePathTrack;
+            path: Array<VibePathTrack>;
             metadata: { totalTracks: number; embeddingDistance: number; averageStepSize: number; mode: string };
         }>("/vibe/path", {
             method: "POST",
@@ -1895,17 +2036,7 @@ class ApiClient {
     }
 
     async getVibeAlchemy(add: string[], subtract: string[], limit = 20) {
-        return this.request<{
-            tracks: Array<{
-                id: string;
-                title: string;
-                duration: number;
-                distance: number;
-                similarity: number;
-                album: { id: string; title: string; coverUrl: string | null };
-                artist: { id: string; name: string };
-            }>;
-        }>("/vibe/alchemy", {
+        return this.request<{ tracks: VibeTrack[] }>("/vibe/alchemy", {
             method: "POST",
             body: JSON.stringify({ add, subtract, limit }),
         });
@@ -1943,7 +2074,6 @@ class ApiClient {
             moodElectronic: number | null;
             moodTags: string[] | null;
             essentiaGenres: string[] | null;
-            lastfmTags: string[] | null;
         }>(`/analysis/track/${trackId}`);
     }
 
@@ -1979,7 +2109,7 @@ class ApiClient {
         formData.append("file", file);
         formData.append("playlistName", playlistName);
 
-        const response = await fetch(`${this.getBaseUrl()}/api/spotify/import/m3u`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/spotify/import/m3u`, {
             method: "POST",
             headers: { Authorization: `Bearer ${this.getToken()}` },
             body: formData,
@@ -2008,13 +2138,12 @@ class ApiClient {
         }>("/library/corrupt-tracks");
     }
 
-    async deleteCorruptTracks() {
-        return this.request<{ deleted: number; message: string }>(
+    async clearCorruptTracks() {
+        return this.request<{ cleared: number; message: string }>(
             "/library/corrupt-tracks",
             { method: "DELETE" }
         );
     }
 }
 
-// Create a singleton instance without passing baseUrl - it will be determined dynamically
 export const api = new ApiClient();

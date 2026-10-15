@@ -4,12 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-import Image from "next/image";
-import { useBranding } from "@/lib/branding-context";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { Locale } from "@/lib/i18n/translations";
-import { Loader2 } from "lucide-react";
 import { GalaxyBackground } from "@/components/ui/GalaxyBackground";
+import { Button } from "@/components/ui/Button";
+import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { KimaMark } from "@/components/ui/KimaMark";
 
 const LOGIN_ERROR_MESSAGES: Record<string, string> = {
     "session_expired": "Your session has expired. Please sign in again.",
@@ -39,8 +37,6 @@ function LoginErrorHandler({
 
 export default function LoginPage() {
     const { login } = useAuth();
-    const { branding } = useBranding();
-    const { locale, setLocale, t } = useLanguage();
     const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -115,82 +111,52 @@ export default function LoginPage() {
         }
     };
 
-    // Show loading while checking if onboarding is needed
     if (isCheckingOnboarding) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-black">
-                <Loader2 className="w-8 h-8 animate-spin text-[var(--text-secondary)]" />
+                <GradientSpinner size="md" />
             </div>
         );
     }
 
     return (
         <div className="min-h-screen w-full relative overflow-hidden">
-            {/* Handle error from URL params */}
             <Suspense fallback={null}>
                 <LoginErrorHandler setError={setError} />
             </Suspense>
 
-            {/* Background */}
             <div className="absolute inset-0 bg-[#000]">
                 <div className="absolute inset-0 bg-gradient-to-br from-brand/5 via-transparent to-transparent" />
                 <div className="opacity-[0.08]">
-                    <GalaxyBackground
-                        primaryColor="#fca200"
-                        secondaryColor="#fca200"
-                    />
+                    <GalaxyBackground primaryColor="#fca200" />
                 </div>
             </div>
 
-            {/* Login Form - Centered */}
             <div className="relative z-(--z-raised) min-h-screen flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
-                    {/* Logo */}
                     <div className="flex items-center justify-center mb-8">
                         <div className="relative flex gap-3 items-center group">
                             <div className="relative">
                                 <div className="absolute inset-0 bg-white/10 blur-xl rounded-full group-hover:bg-white/20 transition-all duration-300" />
-                                <Image
-                                    src={branding.logoUrl}
-                                    alt={branding.name}
-                                    unoptimized
-                                    width={40}
-                                    height={40}
-                                    className="relative z-(--z-raised)"
-                                />
+                                <KimaMark size={40} className="relative z-(--z-raised)" />
                             </div>
                             <span className="text-3xl font-bold text-white">
-                                {branding.name}
+                                Kima
                             </span>
                         </div>
                     </div>
 
-                    <div className="mb-4 flex justify-end">
-                        <label className="sr-only" htmlFor="login-language">{t("Language")}</label>
-                        <select
-                            id="login-language"
-                            aria-label={t("Language")}
-                            value={locale}
-                            onChange={(event) => setLocale(event.target.value as Locale)}
-                            className="rounded-md border border-white/20 bg-[#111] px-3 py-1.5 text-sm text-white"
-                        >
-                            <option value="en">English</option>
-                            <option value="nl">Nederlands</option>
-                        </select>
-                    </div>
-
-                    {/* Login Card */}
                     <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 animate-rise transition-shadow duration-200">
                         <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                            {t("Welcome back")}
+                            Welcome back
                         </h1>
                         <p className="text-[var(--text-secondary)] text-center mb-8">
-                            {t("Sign in to continue to")} {branding.name}
+                            Sign in to continue to Kima
                         </p>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {error && (
-                                <div className="bg-red-500/10  border border-red-500/30 rounded-lg p-4 text-sm text-red-400 animate-shake">
+                                <div className="bg-danger/10  border border-danger/30 rounded-lg p-4 text-sm text-danger-light animate-shake">
                                     {error}
                                 </div>
                             )}
@@ -203,7 +169,7 @@ export default function LoginPage() {
                                             htmlFor="username"
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
-                                            {t("Username")}
+                                            Username
                                         </label>
                                         <input
                                             id="username"
@@ -212,7 +178,7 @@ export default function LoginPage() {
                                             onChange={(e) =>
                                                 setUsername(e.target.value)
                                             }
-                                            placeholder={t("Enter your username")}
+                                            placeholder="Enter your username"
                                             required
                                             autoFocus
                                             autoCapitalize="none"
@@ -226,7 +192,7 @@ export default function LoginPage() {
                                             htmlFor="password"
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
-                                            {t("Password")}
+                                            Password
                                         </label>
                                         <input
                                             id="password"
@@ -235,7 +201,7 @@ export default function LoginPage() {
                                             onChange={(e) =>
                                                 setPassword(e.target.value)
                                             }
-                                            placeholder={t("Enter your password")}
+                                            placeholder="Enter your password"
                                             required
                                             autoCapitalize="none"
                                             autoCorrect="off"
@@ -250,10 +216,10 @@ export default function LoginPage() {
                                 <div className="animate-fade-in space-y-4">
                                     <div className="p-4 bg-brand/10 border border-brand/20 rounded-lg">
                                         <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">
-                                            {t("Two-Factor Authentication Required")}
+                                            Two-Factor Authentication Required
                                         </p>
                                         <p className="text-[var(--text-secondary)] text-xs">
-                                            {t("Logging in as")}{" "}
+                                            Logging in as{" "}
                                             <strong>{username}</strong>
                                         </p>
                                     </div>
@@ -263,8 +229,8 @@ export default function LoginPage() {
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
                                             {useRecoveryCode
-                                                ? t("Recovery Code")
-                                                : t("Authentication Code")}
+                                                ? "Recovery Code"
+                                                : "Authentication Code"}
                                         </label>
                                         <input
                                             id="twoFactorToken"
@@ -305,12 +271,11 @@ export default function LoginPage() {
                                         />
                                         <p className="text-xs text-[var(--text-secondary)] mt-2">
                                             {useRecoveryCode
-                                                ? t("Enter your 8-character recovery code")
-                                                : t("Enter the 6-digit code from your authenticator app")}
+                                                ? "Enter your 8-character recovery code"
+                                                : "Enter the 6-digit code from your authenticator app"}
                                         </p>
                                     </div>
 
-                                    {/* Toggle between TOTP and Recovery Code */}
                                     <div className="flex items-center justify-center">
                                         <button
                                             type="button"
@@ -324,29 +289,22 @@ export default function LoginPage() {
                                             className="text-xs text-brand hover:text-brand-light transition-colors underline"
                                         >
                                             {useRecoveryCode
-                                                ? t("Use authenticator app instead")
-                                                : t("Use recovery code instead")}
+                                                ? "Use authenticator app instead"
+                                                : "Use recovery code instead"}
                                         </button>
                                     </div>
                                 </div>
                             )}
 
-                            <button
+                            <Button
+                                variant="primary"
+                                size="lg"
                                 type="submit"
-                                disabled={isLoading}
-                                className="w-full py-3 bg-brand text-black font-bold rounded-lg hover:bg-[#e69200] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                isLoading={isLoading}
+                                className="w-full"
                             >
-                                <span className="flex items-center justify-center gap-2">
-                                    {isLoading ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            {t("Signing in...")}
-                                        </>
-                                    ) : (
-                                        t("Sign In")
-                                    )}
-                                </span>
-                            </button>
+                                {isLoading ? "Signing in..." : "Sign In"}
+                            </Button>
 
                             {requires2FA && (
                                 <button
@@ -359,15 +317,14 @@ export default function LoginPage() {
                                     }}
                                     className="w-full text-xs text-[var(--text-secondary)] hover:text-white/80 transition-colors"
                                 >
-                                    {t("← Back to login")}
+                                    ← Back to login
                                 </button>
                             )}
                         </form>
                     </div>
 
-                    {/* Footer */}
                     <p className="text-center text-[var(--text-muted)] text-sm mt-6" suppressHydrationWarning>
-                        © {new Date().getFullYear()} {branding.name}. {branding.tagline}.
+                        © {new Date().getFullYear()} Kima. Your music, your way.
                     </p>
                 </div>
             </div>

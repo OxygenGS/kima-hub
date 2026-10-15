@@ -36,10 +36,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Paths reachable without being signed in. "/setup" is the first-run wizard,
-// which by definition runs before an account exists, so it must not bounce to
-// the login page.
-const publicPaths = ["/login", "/register", "/onboarding", "/setup", "/sync", "/share"];
+// Paths reachable without being signed in. "/onboarding" is the first-run
+// wizard, which runs before an account exists.
+const publicPaths = ["/login", "/onboarding", "/sync", "/share"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -140,7 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             const userData = await api.login(username, password, token);
 
-            // Check if 2FA is required
             if (userData.requires2FA) {
                 // Don't set user or redirect, just throw an error to trigger 2FA UI
                 throw new Error("2FA token required");
@@ -176,7 +174,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.push("/login");
     }, [router]);
 
-    // Memoize context value to prevent unnecessary re-renders
     const contextValue = useMemo(() => ({
         isAuthenticated,
         isLoading,

@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Timer } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { useSleepTimer } from "@/hooks/useSleepTimer";
-import { useLanguage } from "@/lib/i18n/language-context";
 
 const PRESETS = [15, 30, 45, 60, 90, 120] as const;
+
+function formatPreset(mins: number): string {
+    if (mins >= 60) return `${mins / 60} hour${mins > 60 ? "s" : ""}`;
+    return `${mins} minutes`;
+}
 
 interface SleepTimerProps {
     size?: "sm" | "md";
@@ -14,16 +18,11 @@ interface SleepTimerProps {
 
 export function SleepTimer({ size = "md" }: SleepTimerProps) {
     const { isActive, remainingSeconds, displayRemaining, setTimer, clearTimer } = useSleepTimer();
-    const { t, locale } = useLanguage();
-    const formatPreset = (mins: number): string => mins >= 60
-        ? `${(mins / 60).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(mins === 60 ? "hour" : "hours")}`
-        : `${mins} ${t(mins === 1 ? "minute" : "minutes")}`;
     const [isOpen, setIsOpen] = useState(false);
     const [customMinutes, setCustomMinutes] = useState("");
     const popoverRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
-    // Close on outside click or Escape
     useEffect(() => {
         if (!isOpen) return;
 
@@ -75,10 +74,10 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                         ? "text-brand hover:text-brand-hover"
                         : "text-[var(--text-secondary)] hover:text-white"
                 )}
-                aria-label={isActive ? `${t("Sleep timer")}: ${displayRemaining} ${t("remaining")}` : t("Sleep timer")}
+                aria-label={isActive ? `Sleep timer: ${displayRemaining} remaining` : "Sleep timer"}
                 aria-expanded={isOpen}
                 aria-haspopup="dialog"
-                title={isActive ? `Sleep timer: ${displayRemaining} remaining` : "Sleep timer"}
+                title={isActive ? `Sleep timer: ${displayRemaining} remaining`.toLowerCase() : "sleep timer"}
             >
                 <Timer className={iconSize} />
                 {isActive && remainingSeconds !== null && (
@@ -92,13 +91,10 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                 <div
                     ref={popoverRef}
                     role="dialog"
-                    aria-label={t("Sleep timer options")}
-                    className={cn(
-                        isOpen ? "animate-panel-up" : "animate-panel-down",
-                        "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-[var(--bg-hover)] border border-white/10 rounded-lg overflow-hidden z-(--z-dropdown)"
-                    )}>
+                    aria-label="Sleep timer options"
+                    className="animate-panel-up absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-[var(--bg-hover)] border border-white/10 rounded-lg overflow-hidden z-(--z-dropdown)">
                     <div className="px-3 py-2 border-b border-white/[0.06]">
-                        <span className="text-xs text-[var(--text-secondary)] font-medium">{t("Sleep Timer")}</span>
+                        <span className="text-xs text-[var(--text-secondary)] font-medium">Sleep Timer</span>
                     </div>
 
                     <div className="p-1.5">
@@ -113,7 +109,6 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                         ))}
                     </div>
 
-                    {/* Custom input */}
                     <div className="px-3 py-2 border-t border-white/[0.06]">
                         <div className="flex items-center gap-2">
                             <input
@@ -121,18 +116,17 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                                 value={customMinutes}
                                 onChange={(e) => setCustomMinutes(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleCustom()}
-                                placeholder={t("Custom")}
+                                placeholder="Custom"
                                 min={1}
                                 max={480}
                                 step={1}
-                                aria-label={t("Custom minutes")}
+                                aria-label="Custom minutes"
                                 className="flex-1 bg-white/[0.06] border border-white/10 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand/50 w-0"
                             />
                             <span className="text-xs text-[var(--text-muted)]">min</span>
                         </div>
                     </div>
 
-                    {/* Cancel button when active */}
                     {isActive && (
                         <div className="px-3 py-2 border-t border-white/[0.06]">
                             <button
@@ -140,9 +134,9 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                                     clearTimer();
                                     setIsOpen(false);
                                 }}
-                                className="w-full text-center text-sm text-red-400 hover:text-red-300 py-1 transition-colors"
+                                className="w-full text-center text-sm text-danger-light hover:brightness-125 py-1 transition-colors"
                             >
-                                {t("Cancel Timer")}
+                                Cancel Timer
                             </button>
                         </div>
                     )}

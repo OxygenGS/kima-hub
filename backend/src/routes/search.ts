@@ -2,11 +2,18 @@ import { Router } from "express";
 import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
-import { lastFmService, type SimilarArtist } from "../services/lastfm";
+import {
+    getSimilarArtists,
+    enrichSimilarArtists,
+    type SimilarArtist,
+} from "../services/artistSimilarity";
+import { getArtistCorrection } from "../services/artistCorrection";
+import { musicBrainzService } from "../services/musicbrainz";
 import { searchService, normalizeCacheQuery, type SearchResults } from "../services/search";
 import axios from "axios";
 import { redisClient } from "../utils/redis";
 import { deezerService, mergeAndDedupePodcasts } from "../services/deezer";
+import { failureCause } from "../utils/outcome";
 
 const router = Router();
 
@@ -98,31 +105,6 @@ router.get("/", async (req, res) => {
     }
 });
 
-// GET /search/genres
-router.get("/genres", async (_req, res) => {
-    try {
-        const genres = await prisma.genre.findMany({
-            orderBy: { name: "asc" },
-            include: {
-                _count: {
-                    select: { trackGenres: true },
-                },
-            },
-        });
-
-        res.json(
-            genres.map((g) => ({
-                id: g.id,
-                name: g.name,
-                trackCount: g._count.trackGenres,
-            }))
-        );
-    } catch (error) {
-        logger.error("Get genres error:", error);
-        res.status(500).json({ error: "Failed to get genres" });
-    }
-});
-
 /**
  * GET /search/discover?q=query&type=music|podcasts
  * Search for NEW content to discover (not in your library).
@@ -153,6 +135,10 @@ router.get("/discover", async (req, res) => {
         }
 
         const results: any[] = [];
+        // An empty section that came from a source failure must not be
+        // cached as an empty answer, or a recovered source keeps serving
+        // "no results" until the TTL expires.
+        let cacheable = true;
 
         // Resolve alias (sequential -- modifies the search query, cached 30 days)
         let searchQuery = query;
@@ -160,7 +146,7 @@ router.get("/discover", async (req, res) => {
 
         if (type === "music" || type === "all") {
             try {
-                const correction = await lastFmService.getArtistCorrection(query);
+                const correction = await getArtistCorrection(query);
                 if (correction?.corrected) {
                     searchQuery = correction.canonicalName;
                     aliasInfo = {
@@ -172,6 +158,7 @@ router.get("/discover", async (req, res) => {
                 }
             } catch (correctionError) {
                 logger.warn("[SEARCH DISCOVER] Correction check failed:", correctionError);
+                cacheable = false;
             }
         }
 
@@ -179,8 +166,51 @@ router.get("/discover", async (req, res) => {
         const promiseMap: Record<string, Promise<any>> = {};
 
         if (type === "music" || type === "all") {
-            promiseMap.artists = lastFmService.searchArtists(searchQuery, searchLimit);
-            promiseMap.tracks = lastFmService.searchTracks(searchQuery, searchLimit);
+            // Artist results: MusicBrainz search.
+            promiseMap.artists = (async () => {
+                const found = await musicBrainzService.searchArtist(searchQuery, searchLimit);
+                if (found.kind !== "answered") {
+                    // Empty section, not a fabricated answer: the real
+                    // cause goes to the log.
+                    logger.warn(
+                        `[SEARCH] MB artist search ${found.kind}: ${
+                            found.kind === "absent"
+                                ? "no matches"
+                                : failureCause(found)
+                        }`,
+                    );
+                    if (found.kind !== "absent") cacheable = false;
+                    return [];
+                }
+                const similar: SimilarArtist[] = found.value.map((a: { id: string; name: string }) => ({
+                    name: a.name,
+                    mbid: a.id,
+                    match: 1,
+                    url: `https://musicbrainz.org/artist/${a.id}`,
+                }));
+                return enrichSimilarArtists(similar, searchLimit);
+            })();
+            // Track results: local library search.
+            promiseMap.tracks = (async () => {
+                const local = await searchService.searchTracks({ query: searchQuery, limit: searchLimit });
+                const albumIds = [...new Set(local.map((t) => t.albumId).filter(Boolean))];
+                const albums = await prisma.album.findMany({
+                    where: { id: { in: albumIds } },
+                    select: { id: true, coverUrl: true },
+                });
+                const coverById = new Map(albums.map((a) => [a.id, a.coverUrl]));
+                return local.map((t) => ({
+                    type: "track",
+                    id: t.id,
+                    name: t.title,
+                    artist: t.artistName,
+                    album: t.albumTitle,
+                    listeners: 0,
+                    url: "",
+                    image: coverById.get(t.albumId) || null,
+                    mbid: undefined,
+                }));
+            })();
         }
 
         if (type === "podcasts" || type === "all") {
@@ -198,6 +228,11 @@ router.get("/discover", async (req, res) => {
 
                 if (itunesResult.status === "rejected") {
                     logger.warn("[SEARCH DISCOVER] iTunes podcast search failed:", itunesResult.reason?.message || itunesResult.reason);
+                    cacheable = false;
+                }
+                if (deezerResult.status === "rejected") {
+                    logger.warn("[SEARCH DISCOVER] Deezer podcast search failed:", deezerResult.reason?.message || deezerResult.reason);
+                    cacheable = false;
                 }
 
                 const itunesMapped = itunesPodcasts.map((podcast: any) => ({
@@ -241,6 +276,7 @@ router.get("/discover", async (req, res) => {
             } else {
                 logger.error(`[SEARCH DISCOVER] ${k} search failed:`, result.reason);
                 resolved[k] = [];
+                cacheable = false;
             }
         });
 
@@ -258,10 +294,16 @@ router.get("/discover", async (req, res) => {
 
         const payload = { results, aliasInfo };
 
-        try {
-            await redisClient.setex(cacheKey, 900, JSON.stringify(payload));
-        } catch (err) {
-            logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+        if (cacheable) {
+            try {
+                await redisClient.setex(cacheKey, 900, JSON.stringify(payload));
+            } catch (err) {
+                logger.warn("[SEARCH DISCOVER] Redis write error:", err);
+            }
+        } else {
+            logger.debug(
+                `[SEARCH DISCOVER] Not caching "${query}" — at least one section came from a source failure`
+            );
         }
 
         res.json(payload);
@@ -273,7 +315,7 @@ router.get("/discover", async (req, res) => {
 
 /**
  * GET /search/discover/similar?artist=name&mbid=xxx
- * Fetch musically similar artists (Last.fm getSimilar).
+ * Fetch musically similar artists (ListenBrainz, then Deezer).
  * Separate from discover so main search results return immediately.
  * Cache TTL: 1 hour -- similar artists change very rarely.
  */
@@ -299,24 +341,18 @@ router.get("/discover/similar", async (req, res) => {
         }
 
         let similar: SimilarArtist[] = [];
-        let fetchFailed = false;
 
-        // On transient Last.fm failure, return an empty list WITHOUT caching it,
-        // so the next request retries instead of reading a poisoned cache entry.
-        try {
-            similar = await lastFmService.getSimilarArtists(artistMbid, artistName, 10);
-        } catch (err) {
-            logger.warn("[SEARCH SIMILAR] Last.fm similar fetch failed, returning empty:", err);
-            fetchFailed = true;
-        }
+        // artistSimilarity never throws; empty means "no data anywhere".
+        similar = await getSimilarArtists(artistMbid, artistName, 10);
 
-        const similarArtists = !fetchFailed && similar.length > 0
-            ? await lastFmService.enrichSimilarArtists(similar, 6)
-            : [];
+        const similarArtists =
+            similar.length > 0
+                ? await enrichSimilarArtists(similar, 6)
+                : [];
 
         const payload = { similarArtists };
 
-        if (!fetchFailed) {
+        if (similar.length > 0) {
             try {
                 // Cache TTL: 1 hour (3600s) -- similar artists rarely change
                 await redisClient.setex(cacheKey, 3600, JSON.stringify(payload));

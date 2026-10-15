@@ -2,7 +2,8 @@ import { Router } from "express";
 import { logger } from "../utils/logger";
 import { requireAuthOrToken } from "../middleware/auth";
 import { prisma } from "../utils/db";
-import { lastFmService, type SimilarTrack } from "../services/lastfm";
+import { redisClient } from "../utils/redis";
+import { findSimilarTracks } from "../services/hybridSimilarity";
 
 const router = Router();
 
@@ -117,20 +118,18 @@ router.get("/for-you", async (req, res) => {
 
         // Only use cached data (DB heroUrl or Redis cache) - no API calls during page loads.
         // Background enrichment worker will populate cache over time.
-        const { redisClient } = await import("../utils/redis");
-
         // Get all cached images in a single Redis call for efficiency
         const artistsToCheck = newArtists.slice(0, limitNum);
         const cacheKeys = artistsToCheck
             .filter(a => !a.heroUrl)
             .map(a => `hero:${a.id}`);
-        
+
         let cachedImages: (string | null)[] = [];
         if (cacheKeys.length > 0) {
             try {
                 cachedImages = await redisClient.mget(cacheKeys);
-            } catch (err) {
-                // Redis errors are non-critical
+            } catch {
+                // Redis is down: these artists go out without a cached image.
             }
         }
 
@@ -411,56 +410,25 @@ router.get("/tracks", async (req, res) => {
             return res.status(404).json({ error: "Track not found" });
         }
 
-        // Use Last.fm to get similar tracks; on a transient failure, continue with an
-        // empty list so the radio builds from library tracks instead of 500ing.
-        let similarTracksFromLastFm: SimilarTrack[] = [];
-        try {
-            similarTracksFromLastFm = await lastFmService.getSimilarTracks(
-                seedTrack.album.artist.name,
-                seedTrack.title,
-                20
-            );
-        } catch (err) {
-            logger.warn("Last.fm similar tracks fetch failed, continuing without:", err);
+        // Local hybrid similarity (CLAP embeddings + audio features), so every
+        // result is a track in the library.
+        const similarTracks = await findSimilarTracks(seedTrackId as string, 20);
+
+        // Same contract as /vibe/similar: no similar rows means the seed has
+        // no fingerprint (or no analyzer is running), and the caller must get
+        // a 404 rather than an empty-but-successful payload.
+        if (similarTracks.length === 0) {
+            return res.status(404).json({
+                error: "No similar tracks found",
+                message: "This track may not have been analyzed yet, or no analyzer is running",
+            });
         }
 
-        // Batch match similar tracks in our library instead of N+1
-        const trackTitles = similarTracksFromLastFm.map((t: any) => t.name);
-        const matchedTracks = await prisma.track.findMany({
-            where: {
-                title: { in: trackTitles, mode: "insensitive" },
-            },
-            include: {
-                album: { include: { artist: true } },
-            },
-        });
-
-        // Index matched tracks by lowercase title+artist for lookup
-        const matchIndex = new Map<string, typeof matchedTracks[0]>();
-        for (const t of matchedTracks) {
-            const key = `${t.title.toLowerCase()}::${t.album.artist.name.toLowerCase()}`;
-            if (!matchIndex.has(key)) matchIndex.set(key, t);
-        }
-
-        const recommendations = similarTracksFromLastFm.map((lfmTrack: any) => {
-            const key = `${lfmTrack.name.toLowerCase()}::${(lfmTrack.artist?.name || "").toLowerCase()}`;
-            const matched = matchIndex.get(key);
-
-            if (matched) {
-                return {
-                    ...matched,
-                    inLibrary: true,
-                    similarity: lfmTrack.match || 0,
-                };
-            }
-            return {
-                title: lfmTrack.name,
-                artist: lfmTrack.artist?.name || "Unknown",
-                inLibrary: false,
-                similarity: lfmTrack.match || 0,
-                lastFmUrl: lfmTrack.url,
-            };
-        });
+        const recommendations = similarTracks.map((t) => ({
+            ...t,
+            artist: t.artistName,
+            inLibrary: true,
+        }));
 
         res.json({
             seedTrack: {

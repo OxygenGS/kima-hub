@@ -3,16 +3,10 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { useDownloadProgress } from "@/lib/download-progress-context";
 import { searchResultStore } from "@/lib/search-result-store";
 import { api, getApiBaseUrl } from "@/lib/api";
 
-/**
- * Returns the base URL for SSE connections.
- * Uses getApiBaseUrl() directly -- in proxy/all-in-one mode this returns ""
- * (relative path), which hits the dedicated SSE proxy route (app/api/events/route.ts)
- * that properly streams events without buffering.
- */
+/** In proxy mode this is "", so events go through the streaming route in app/api/events. */
 function getSSEBaseUrl(): string {
     if (typeof window === "undefined") return "";
     return getApiBaseUrl();
@@ -21,7 +15,6 @@ function getSSEBaseUrl(): string {
 export function useEventSource() {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
-    const { updateProgress, clearProgress } = useDownloadProgress();
     const eventSourceRef = useRef<EventSource | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
@@ -53,27 +46,13 @@ export function useEventSource() {
                     switch (data.type) {
                         case "notification":
                         case "notification:cleared":
+                        case "notification:read":
                             queryClient.invalidateQueries({ queryKey: ["notifications"] });
                             if (data.notificationType === "playlist_ready" || data.notificationType === "import_complete") {
                                 queryClient.invalidateQueries({ queryKey: ["playlists"] });
                             }
                             break;
-                        case "download:progress":
-                            updateProgress(data.jobId, {
-                                bytesReceived: data.bytesReceived,
-                                totalBytes: data.totalBytes,
-                                filename: data.filename,
-                            });
-                            break;
-                        case "download:queued":
-                            updateProgress(data.jobId, {
-                                queuePosition: data.position,
-                                username: data.username,
-                                filename: data.filename,
-                            });
-                            break;
                         case "download:complete":
-                            clearProgress(data.jobId);
                             queryClient.invalidateQueries({ queryKey: ["active-downloads"] });
                             queryClient.invalidateQueries({ queryKey: ["download-history"] });
                             queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -82,7 +61,6 @@ export function useEventSource() {
                             }
                             break;
                         case "download:failed":
-                            clearProgress(data.jobId);
                             queryClient.invalidateQueries({ queryKey: ["active-downloads"] });
                             queryClient.invalidateQueries({ queryKey: ["download-history"] });
                             queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -108,7 +86,6 @@ export function useEventSource() {
                                 ["scan-status", data.jobId],
                                 { status: data.error ? "failed" : "completed", progress: 100, jobId: data.jobId, result: data.result, error: data.error }
                             );
-                            queryClient.invalidateQueries({ queryKey: ["notifications"] });
                             queryClient.invalidateQueries({ queryKey: ["enrichment-progress"] });
                             queryClient.invalidateQueries({ queryKey: ["library", "recently-added"] });
                             break;
@@ -124,9 +101,6 @@ export function useEventSource() {
                             if (data.status === "completed" || data.status === "failed" || data.status === "cancelled") {
                                 queryClient.invalidateQueries({ queryKey: ["notifications"] });
                                 queryClient.invalidateQueries({ queryKey: ["playlists"] });
-                                window.dispatchEvent(new CustomEvent("import-status-change", {
-                                    detail: { status: data.status, playlistName: data.playlistName, error: data.error }
-                                }));
                             }
                             break;
                         case "discover:progress":
@@ -148,11 +122,6 @@ export function useEventSource() {
                                 { status: "running", phase: data.phase, message: data.message, jobId: data.jobId }
                             );
                             break;
-                        case "preview:complete":
-                            queryClient.setQueryData(
-                                ["preview-status", data.jobId],
-                                { status: data.error ? "failed" : "completed", preview: data.preview, error: data.error, jobId: data.jobId }
-                            );
                         case "preview:complete":
                             queryClient.setQueryData(
                                 ["preview-status", data.jobId],
@@ -213,5 +182,5 @@ export function useEventSource() {
                 eventSourceRef.current = null;
             }
         };
-    }, [isAuthenticated, queryClient, updateProgress, clearProgress]);
+    }, [isAuthenticated, queryClient]);
 }

@@ -1,8 +1,11 @@
 import { Worker, Job } from "bullmq";
 import { createWorkerConnection, QUEUE_NAMES } from "./enrichmentQueues";
-import { enrichSingleTrack } from "./unifiedEnrichment";
-import { enrichmentFailureService } from "../services/enrichmentFailureService";
-import { prisma } from "../utils/db";
+import { isEntityGone } from "./entityGone";
+import {
+    claimIsCurrent,
+    enrichSingleTrack,
+    recordStageFailure,
+} from "./unifiedEnrichment";
 import { logger } from "../utils/logger";
 import { getSystemSettings } from "../utils/systemSettings";
 
@@ -19,8 +22,15 @@ export async function startTrackEnrichmentWorker(): Promise<Worker> {
         QUEUE_NAMES.TRACKS,
         async (job: Job<TrackJobData>) => {
             const { trackId, trackTitle } = job.data;
+            if (!(await claimIsCurrent(trackId, "recording", job.id))) {
+                logger.debug(`[TrackWorker] ${trackId}: claim ${job.id} was re-issued; skipped`);
+                return;
+            }
             logger.debug(`[TrackWorker] Processing ${trackId} (${trackTitle})`);
-            await enrichSingleTrack(trackId);
+            // enrichSingleTrack settles the stage record itself (done, absent, failed
+            // with its cause, or left pending for a paused source); don't settle it again.
+            const outcome = await enrichSingleTrack(trackId, job.id);
+            logger.debug(`[TrackWorker] ${trackId}: recording question settled (${outcome})`);
         },
         {
             connection: createWorkerConnection(),
@@ -33,31 +43,21 @@ export async function startTrackEnrichmentWorker(): Promise<Worker> {
 
     worker.on("failed", async (job, err) => {
         if (!job) return;
-        const { trackId, trackTitle } = job.data;
+        const { trackId } = job.data;
 
-        if ((err as any).entityNotFound) {
+        if (isEntityGone(err)) {
             logger.info(`[TrackWorker] Track ${trackId} no longer exists, resolving silently`);
             return;
         }
 
-        logger.error(`[TrackWorker] Track ${trackId} failed (attempt ${job.attemptsMade}): ${err.message}`);
+        logger.error(`[TrackWorker] Track ${trackId} failed: ${err.message}`);
 
-        const isFinalAttempt = job.attemptsMade >= (job.opts.attempts ?? 3);
-        if (isFinalAttempt) {
-            // Clear the "_queued" sentinel so the orchestrator can re-pick this
-            // track up on the next library re-enrich rather than leaving it stuck
-            await prisma.track
-                .update({ where: { id: trackId }, data: { lastfmTags: [] } })
-                .catch(() => {});
-            await enrichmentFailureService
-                .recordFailure({
-                    entityType: "track",
-                    entityId: trackId,
-                    entityName: trackTitle,
-                    errorMessage: err.message,
-                })
-                .catch(() => {});
-        }
+        // The stage record owns the attempt: its retry ladder decides when to stop
+        // asking, and it is the only record of this failure the failures API reads.
+        await recordStageFailure(trackId, "recording", "musicbrainz", err, { queueJobId: job.id }, job.id).catch(
+            (reportErr: Error) =>
+                logger.warn(`[TrackWorker] Could not record track ${trackId}'s failure: ${reportErr.message}`),
+        );
     });
 
     worker.on("error", (err) => logger.error(`[TrackWorker] Error: ${err.message}`));

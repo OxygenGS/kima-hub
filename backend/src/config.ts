@@ -59,6 +59,23 @@ export async function initializeMusicConfig() {
     }
 }
 
+const PUBLIC_VIBE_TOKEN_MIN = 32;
+
+// The /api/public/vibe surface exists only when KIMA_PUBLIC_VIBE=true and both
+// its token and its user are set; otherwise the routes are never mounted.
+function readPublicVibe(): { token: string; username: string } | null {
+    if (process.env.KIMA_PUBLIC_VIBE !== "true") return null;
+    const token = process.env.KIMA_PUBLIC_VIBE_TOKEN ?? "";
+    const username = process.env.KIMA_PUBLIC_VIBE_USER?.trim() ?? "";
+    if (token.length < PUBLIC_VIBE_TOKEN_MIN || !username) {
+        logger.error(
+            `KIMA_PUBLIC_VIBE is true but KIMA_PUBLIC_VIBE_TOKEN (at least ${PUBLIC_VIBE_TOKEN_MIN} characters) or KIMA_PUBLIC_VIBE_USER is missing; the public vibe routes stay off`
+        );
+        return null;
+    }
+    return { token, username };
+}
+
 export const APP_VERSION = packageJson.version;
 export const USER_AGENT = `Kima/${APP_VERSION} (https://github.com/Chevron7Locked/kima-hub)`;
 
@@ -78,7 +95,7 @@ export const config = {
         return musicConfig;
     },
 
-    // Lidarr - now reads from database via lidarrService.ensureInitialized()
+    // Lidarr from the environment; lidarrService.ensureInitialized() reads the database settings.
     lidarr:
         process.env.LIDARR_ENABLED === "true"
             ? {
@@ -88,20 +105,22 @@ export const config = {
               }
             : undefined,
 
-    // Last.fm
-    lastfm: {
-        apiKey: process.env.LASTFM_API_KEY || "c1797de6bf0b7e401b623118120cd9e1",
+    // AcoustID - the shared opt-in client key baked in as a default so the
+    // fingerprint-identification path works out of the box: operators are
+    // expected to drop their own key in ACOUSTID_CLIENT_KEY to lift the
+    // rate-limit ceiling. Safe to store in config (public, opt-in).
+    acoustid: {
+        clientKey: process.env.ACOUSTID_CLIENT_KEY || "JaLCkK9Xvt",
     },
+
+    publicVibe: readPublicVibe(),
 
     allowedOrigins:
         process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()) ||
         (process.env.NODE_ENV === "development" ? true : []),
 
-    // TCP keepalive idle delay for incoming connections. Dead/half-open peers
-    // (a mobile client whose network vanished without FIN/RST) are reaped by the
-    // OS once keepalive probes start failing, WITHOUT cutting a paused-but-alive
-    // audio stream -- unlike a blunt socket-inactivity timeout, which fires on a
-    // paused stream (no bytes flow) and forces a reconnect on resume.
+    // TCP keepalive idle delay. The OS reaps dead peers through failed probes
+    // without cutting a paused audio stream, which an inactivity timeout would.
     socketKeepAliveDelayMs: parseInt(
         process.env.SOCKET_KEEPALIVE_DELAY_MS || "30000",
         10

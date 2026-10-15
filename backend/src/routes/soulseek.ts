@@ -1,14 +1,11 @@
 import { logger } from "../utils/logger";
 import { safeError } from "../utils/errors";
 
-/**
- * Soulseek routes - Direct connection via vendored soulseek-ts
- * Supports both general searches (for UI) and track-specific searches (for downloads)
- */
+/** Soulseek routes: UI searches and track downloads over the vendored soulseek-ts connection. */
 
 import { Router } from "express";
-import { requireAuth, requireMusicPermission } from "../middleware/auth";
-import { soulseekService, SearchResult } from "../services/soulseek";
+import { requireAuth } from "../middleware/auth";
+import { soulseekService } from "../services/soulseek";
 import { getSystemSettings } from "../utils/systemSettings";
 import { randomUUID } from "crypto";
 import { eventBus } from "../services/eventBus";
@@ -20,10 +17,9 @@ import { FileAttribute } from "../lib/soulseek/messages/common";
 
 const router = Router();
 
-// In-memory store for search results (with TTL cleanup)
 interface SearchSession {
     query: string;
-    results: SearchResult[];
+    results: FormattedSearchResult[];
     createdAt: Date;
     userId: string;
 }
@@ -57,7 +53,8 @@ function formatSearchResult(response: FileSearchResponse) {
     });
 }
 
-// Cleanup old search sessions every minute
+type FormattedSearchResult = ReturnType<typeof formatSearchResult>[number];
+
 setInterval(() => {
     const now = Date.now();
     for (const [searchId, session] of searchSessions.entries()) {
@@ -65,10 +62,9 @@ setInterval(() => {
             searchSessions.delete(searchId);
         }
     }
-}, 60000);
+}, 60_000).unref();
 
-// Middleware to check if Soulseek credentials are configured
-async function requireSoulseekConfigured(req: any, res: any, next: any) {
+async function requireSoulseekConfigured(_req: any, res: any, next: any) {
     try {
         const available = await soulseekService.isAvailable();
 
@@ -89,7 +85,7 @@ async function requireSoulseekConfigured(req: any, res: any, next: any) {
  * GET /soulseek/status
  * Check connection status
  */
-router.get("/status", requireAuth, async (req, res) => {
+router.get("/status", requireAuth, async (_req, res) => {
     try {
         const available = await soulseekService.isAvailable();
 
@@ -121,7 +117,7 @@ router.post(
     "/connect",
     requireAuth,
     requireSoulseekConfigured,
-    async (req, res) => {
+    async (_req, res) => {
         try {
             await soulseekService.connect();
 
@@ -148,14 +144,12 @@ router.post(
         try {
             const { query, artist, title } = req.body;
 
-            // Support both query formats for backward compatibility
+            // Either a free-text query or an artist and title
             let searchQuery: string;
 
             if (query) {
-                // General search (from UI search bar)
                 searchQuery = query;
             } else if (artist && title) {
-                // Track-specific search (for downloads)
                 searchQuery = `${artist} ${title}`;
             } else {
                 return res.status(400).json({
@@ -167,7 +161,6 @@ router.post(
                 `[Soulseek] Starting general search: "${searchQuery}"`,
             );
 
-            // Evict oldest session if at capacity
             if (searchSessions.size >= MAX_SEARCH_SESSIONS) {
                 let oldestId: string | null = null;
                 let oldestTime = Infinity;
@@ -180,10 +173,8 @@ router.post(
                 if (oldestId) searchSessions.delete(oldestId);
             }
 
-            // Extract userId for SSE targeting and session ownership
-            const userId = (req as any).user?.id;
+            const userId = req.user!.id;
 
-            // Create search session
             const searchId = randomUUID();
             searchSessions.set(searchId, {
                 query: searchQuery,
@@ -192,22 +183,18 @@ router.post(
                 userId,
             });
 
-            // Track streamed results count to limit UI overload
             let streamedCount = 0;
             const MAX_STREAMED_RESULTS = 200;
             let searchAborted = false;
 
-            // Start async search with onResult callback for SSE streaming
-            // Use 10s timeout for faster UI response (plenty of time to get 200+ results)
+            // 10 s is enough for 200+ results and keeps the UI quick
             soulseekService
                 .searchTrack(searchQuery, "", undefined, false, 10000, (response) => {
-                    // Stop streaming if we've already sent enough results
                     if (searchAborted || streamedCount >= MAX_STREAMED_RESULTS) {
                         searchAborted = true;
                         return;
                     }
 
-                    // Stream each peer response via SSE
                     const formatted = formatSearchResult(response);
 
                     // Filter for decent quality results (FLAC or 128kbps+ MP3, allow unknown bitrate)
@@ -216,7 +203,6 @@ router.post(
                     );
 
                     if (highQuality.length > 0 && userId) {
-                        // Limit to remaining quota
                         const toSend = highQuality.slice(0, MAX_STREAMED_RESULTS - streamedCount);
                         streamedCount += toSend.length;
 
@@ -230,14 +216,7 @@ router.post(
                     // Also accumulate in session for GET fallback (all results, not filtered)
                     const session = searchSessions.get(searchId);
                     if (session) {
-                        session.results.push(...formatted.map((r) => ({
-                            user: r.username,
-                            file: r.path,
-                            size: r.size,
-                            slots: true,
-                            bitrate: r.bitrate,
-                            speed: 0,
-                        })));
+                        session.results.push(...formatted);
                     }
                 })
                 .then((result) => {
@@ -292,7 +271,7 @@ router.get("/search/:searchId", requireAuth, async (req, res) => {
     try {
         const { searchId } = req.params;
         const session = searchSessions.get(searchId);
-        const userId = (req as any).user?.id;
+        const userId = req.user!.id;
 
         if (!session || session.userId !== userId) {
             return res.status(404).json({
@@ -302,32 +281,9 @@ router.get("/search/:searchId", requireAuth, async (req, res) => {
             });
         }
 
-        // Format results for frontend (reuse accumulated results from SSE callbacks)
-        const formattedResults = session.results.map((r) => {
-            const filename = r.file.split(/[/\\]/).pop() || r.file;
-            const format = filename.toLowerCase().endsWith(".flac") ? "flac" : "mp3";
-            const pathParts = r.file.split(/[/\\]/);
-            const parsedArtist = pathParts.length > 2 ? pathParts[pathParts.length - 3] : undefined;
-            const parsedAlbum = pathParts.length > 1 ? pathParts[pathParts.length - 2] : undefined;
-            const nameWithoutExt = filename.replace(/\.[^.]+$/, "");
-            const parsedTitle = nameWithoutExt.replace(/^\d+[\s.\-_]*/, "").replace(/^\s*-\s*/, "").trim() || undefined;
-
-            return {
-                username: r.user,
-                path: r.file,
-                filename,
-                size: r.size,
-                bitrate: r.bitrate || 0,
-                format,
-                parsedArtist,
-                parsedAlbum,
-                parsedTitle,
-            };
-        });
-
         res.json({
-            results: formattedResults,
-            count: formattedResults.length,
+            results: session.results,
+            count: session.results.length,
         });
     } catch (error) {
         safeError(res, "Get search results", error);
@@ -341,7 +297,6 @@ router.get("/search/:searchId", requireAuth, async (req, res) => {
 router.post(
     "/download",
     requireAuth,
-    requireMusicPermission("canDownloadTracks"),
     requireSoulseekConfigured,
     async (req, res) => {
         let jobId: string | null = null;
@@ -446,13 +401,14 @@ router.post(
                     },
                 });
 
-                // Trigger library scan to import the new file
+                // Trigger library scan to import the new file (keyed on
+                // this download job; a repeat click finds it queued/running)
                 try {
-                    const { scanQueue } = await import("../workers/queues");
-                    await scanQueue.add("scan", {
+                    const { requestScan } = await import("../workers/scanRequest");
+                    await requestScan({
                         userId,
                         source: "soulseek-manual-download",
-                        artistName: resolvedArtist,
+                        downloadId: job.id,
                     });
                     logger.debug(`[Soulseek] Library scan queued for: ${resolvedArtist} - ${resolvedTitle}`);
                 } catch (scanError: any) {
@@ -492,7 +448,7 @@ router.post(
  * POST /soulseek/disconnect
  * Disconnect from Soulseek network
  */
-router.post("/disconnect", requireAuth, async (req, res) => {
+router.post("/disconnect", requireAuth, async (_req, res) => {
     try {
         soulseekService.disconnect();
         res.json({ success: true, message: "Disconnected" });

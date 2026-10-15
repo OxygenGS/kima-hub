@@ -1,52 +1,42 @@
-import { Play, Pause, Shuffle, Download, Radio } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useMusicPermissions } from "@/lib/auth-context";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { Artist } from "../types";
-import type { Album } from "../types";
-import type { ArtistSource } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
+import { Download, Radio } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
+import type { Album, ArtistSource } from "../types";
 
 interface ArtistActionBarProps {
-    artist: Artist;
     albums: Album[];
     source: ArtistSource | null;
-    colors: ColorPalette | null;
     onPlayAll: () => void;
     onShuffle: () => void;
     onDownloadAll: () => void;
-    onStartRadio?: () => void;
+    onStartRadio: () => void;
     isPendingDownload: boolean;
-    isPlaying?: boolean;
-    isPlayingThisArtist?: boolean;
-    onPause?: () => void;
+    isPlaying: boolean;
+    isPlayingThisArtist: boolean;
+    onPause: () => void;
 }
 
 export function ArtistActionBar({
-    artist: _artist,
     albums,
     source,
-    colors: _colors,
     onPlayAll,
     onShuffle,
     onDownloadAll,
     onStartRadio,
     isPendingDownload,
-    isPlaying = false,
-    isPlayingThisArtist = false,
+    isPlaying,
+    isPlayingThisArtist,
     onPause,
 }: ArtistActionBarProps) {
-    const { canRequestAlbums } = useMusicPermissions();
-    const { t } = useLanguage();
     const availableAlbums = albums.filter(
         (album) => album.availability !== "unavailable"
     );
-    const showDownloadAll = canRequestAlbums && (source === "discovery" || availableAlbums.length > 0);
+    const showDownloadAll = source === "discovery" || availableAlbums.length > 0;
     const showPause = isPlaying && isPlayingThisArtist;
-    const showRadio = source === "library" && onStartRadio;
+    const showRadio = source === "library";
 
     const handlePlayPauseClick = () => {
-        if (showPause && onPause) {
+        if (showPause) {
             onPause();
         } else {
             onPlayAll();
@@ -54,40 +44,21 @@ export function ArtistActionBar({
     };
 
     return (
-        <div className="flex items-center gap-4">
-            {/* Play Button */}
-            <button
-                onClick={handlePlayPauseClick}
-                className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 bg-brand"
-            >
-                {showPause ? (
-                    <Pause className="w-5 h-5 fill-current text-black" />
-                ) : (
-                    <Play className="w-5 h-5 fill-current text-black ml-0.5" />
-                )}
-            </button>
-
-            {/* Shuffle Button */}
-            <button
-                onClick={onShuffle}
-                className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                title={t("Shuffle play")}
-            >
-                <Shuffle className="w-5 h-5" />
-            </button>
-
-            {/* Radio Button - Only for library artists */}
+        <MediaActionBar
+            showPause={showPause}
+            onPlayPause={handlePlayPauseClick}
+            onShuffle={onShuffle}
+            secondaryShape="square"
+        >
             {showRadio && (
-                <button
+                <MediaActionButton
+                    shape="square"
+                    icon={<Radio className="w-5 h-5" />}
+                    label="start artist radio"
                     onClick={onStartRadio}
-                    className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                    title={t("Start artist radio")}
-                >
-                    <Radio className="w-5 h-5" />
-                </button>
+                />
             )}
 
-            {/* Download All Button */}
             {showDownloadAll && (
                 <button
                     onClick={onDownloadAll}
@@ -101,10 +72,10 @@ export function ArtistActionBar({
                 >
                     <Download className="w-4 h-4" />
                     <span className="hidden sm:inline">
-                        {isPendingDownload ? t("Downloading...") : t("Download All")}
+                        {isPendingDownload ? "Downloading..." : "Download All"}
                     </span>
                 </button>
             )}
-        </div>
+        </MediaActionBar>
     );
 }

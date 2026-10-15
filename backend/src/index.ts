@@ -4,7 +4,7 @@ import RedisStore from "connect-redis";
 import cors from "cors";
 import helmet from "helmet";
 import { config } from "./config";
-import { redisClient } from "./utils/redis";
+import { redisClient, waitForRedisReady } from "./utils/redis";
 import { prisma } from "./utils/db";
 import { logger } from "./utils/logger";
 
@@ -12,10 +12,10 @@ import authRoutes from "./routes/auth";
 import onboardingRoutes from "./routes/onboarding";
 import libraryRoutes from "./routes/library";
 import playsRoutes from "./routes/plays";
+import whatsNewRoutes from "./routes/whatsNew";
+import statsRoutes from "./routes/stats";
 import settingsRoutes from "./routes/settings";
 import systemSettingsRoutes from "./routes/systemSettings";
-import brandingRoutes from "./routes/branding";
-import listeningStateRoutes from "./routes/listeningState";
 import playbackStateRoutes from "./routes/playbackState";
 import offlineRoutes from "./routes/offline";
 import playlistsRoutes from "./routes/playlists";
@@ -31,7 +31,6 @@ import discoverRoutes from "./routes/discover";
 import apiKeysRoutes from "./routes/apiKeys";
 import mixesRoutes from "./routes/mixes";
 import enrichmentRoutes from "./routes/enrichment";
-import homepageRoutes from "./routes/homepage";
 import deviceLinkRoutes from "./routes/deviceLink";
 import spotifyRoutes from "./routes/spotify";
 import notificationsRoutes from "./routes/notifications";
@@ -39,20 +38,24 @@ import browseRoutes from "./routes/browse";
 import analysisRoutes from "./routes/analysis";
 import releasesRoutes from "./routes/releases";
 import vibeRoutes from "./routes/vibe";
+import publicVibeRoutes from "./routes/publicVibe";
 import systemRoutes from "./routes/system";
 import shareRoutes from "./routes/share";
 import eventsRoutes from "./routes/events";
 import eventsTicketRoutes from "./routes/eventsTicket";
-import debugRouter from "./routes/debug";
 import { subsonicRouter } from "./routes/subsonic/index";
 import { dataCacheService } from "./services/dataCache";
 import { enrichmentStateService } from "./services/enrichmentState";
+import {
+    checkEmbeddingWritePath,
+    reportEmbeddingWritePathAtStartup,
+} from "./services/embeddingsHealth";
+import { lidarrHealthMonitor } from "./services/lidarrHealth";
 import { errorHandler } from "./middleware/errorHandler";
 import { requireAuth, requireAdmin, invalidateUserCache } from "./middleware/auth";
 import {
     authLimiter,
     apiLimiter,
-    webhookLimiter,
 } from "./middleware/rateLimiter";
 const app = express();
 
@@ -149,11 +152,10 @@ app.use("/api/device-link", apiLimiter, deviceLinkRoutes);
 // NOTE: /api/library has its own rate limiting (imageLimiter for cover-art, apiLimiter for others)
 app.use("/api/library", libraryRoutes);
 app.use("/api/plays", apiLimiter, playsRoutes);
+app.use("/api/whats-new", apiLimiter, whatsNewRoutes);
+app.use("/api/stats", apiLimiter, statsRoutes);
 app.use("/api/settings", apiLimiter, settingsRoutes);
 app.use("/api/system-settings", apiLimiter, systemSettingsRoutes);
-// Branding is readable even on the login screen; writes self-check admin rights.
-app.use("/api/branding", apiLimiter, brandingRoutes);
-app.use("/api/listening-state", apiLimiter, listeningStateRoutes);
 app.use("/api/playback-state", playbackStateRoutes); // No rate limit - syncs frequently
 app.use("/api/offline", apiLimiter, offlineRoutes);
 app.use("/api/playlists", apiLimiter, playlistsRoutes);
@@ -161,27 +163,31 @@ app.use("/api/search", apiLimiter, searchRoutes);
 app.use("/api/recommendations", apiLimiter, recommendationsRoutes);
 app.use("/api/downloads", apiLimiter, downloadsRoutes);
 app.use("/api/notifications", apiLimiter, notificationsRoutes);
-app.use("/api/webhooks", webhookLimiter, webhooksRoutes); // Excluded from apiLimiter; bounded by a dedicated webhookLimiter (120/min)
-// NOTE: /api/audiobooks has its own rate limiting (imageLimiter for covers, apiLimiter for others)
-app.use("/api/audiobooks", audiobooksRoutes);
+app.use("/api/webhooks", webhooksRoutes); // Excluded from apiLimiter; the router applies webhookLimiter
+// /api/audiobooks gets apiLimiter like every other mount. The cover route stays
+// unauthenticated by design (lockscreen artwork requests it without a session),
+// so the limiter is its only bound; the stream route accepts a token in the URL.
+app.use("/api/audiobooks", apiLimiter, audiobooksRoutes);
 app.use("/api/podcasts", apiLimiter, podcastsRoutes);
 app.use("/api/artists", apiLimiter, artistsRoutes);
 app.use("/api/soulseek", apiLimiter, soulseekRoutes);
 app.use("/api/discover", apiLimiter, discoverRoutes);
 app.use("/api/mixes", apiLimiter, mixesRoutes);
 app.use("/api/enrichment", apiLimiter, enrichmentRoutes);
-app.use("/api/homepage", apiLimiter, homepageRoutes);
 app.use("/api/spotify", apiLimiter, spotifyRoutes);
 app.use("/api/browse", apiLimiter, browseRoutes);
 app.use("/api/analysis", apiLimiter, analysisRoutes);
 app.use("/api/releases", apiLimiter, releasesRoutes);
 app.use("/api/vibe", apiLimiter, vibeRoutes);
+// Read-only public vibe feed; it does not exist unless KIMA_PUBLIC_VIBE=true.
+if (config.publicVibe) {
+    app.use("/api/public/vibe", apiLimiter, publicVibeRoutes);
+}
 app.use("/api/system", apiLimiter, systemRoutes);
 // SSE ticket endpoint (must be registered before /api/events)
 app.use("/api/events/ticket", apiLimiter, eventsTicketRoutes);
 // SSE - no rate limit, long-lived connections
 app.use("/api/events", eventsRoutes);
-app.use("/api/debug", apiLimiter, debugRouter);
 
 // Subsonic-compatible API — rate limiting is internal to the router
 app.use("/rest", subsonicRouter);
@@ -204,12 +210,43 @@ async function healthHandler(_req: express.Request, res: express.Response) {
         checks.redis = "error";
     }
 
+    // Reported but not part of the health verdict: a broken vibe engine or Lidarr
+    // must not put the server into a 503 restart loop.
+    const embeddingCheck = await checkEmbeddingWritePath();
+    const lidarr = lidarrHealthMonitor.getState();
+
+    // Both analyzers hold an open Postgres connection under their own
+    // application_name, so the database answers "are they alive". A dead
+    // analyzer (crash loop, gave up) shows up here instead of hiding behind
+    // an all-ok — the 20h silent outage this would have caught.
+    let analyzers: string;
+    try {
+        const rows = await prisma.$queryRaw<Array<{ application_name: string }>>`
+            SELECT DISTINCT application_name FROM pg_stat_activity
+            WHERE datname = current_database() AND application_name IN ('audio-analyzer', 'clap-analyzer')`;
+        const names = new Set(rows.map((r) => r.application_name));
+        analyzers = names.has("audio-analyzer")
+            ? names.has("clap-analyzer")
+                ? "ok"
+                : "analysis-only"
+            : names.has("clap-analyzer")
+              ? "embeddings-only"
+              : "offline";
+    } catch {
+        analyzers = "unknown";
+    }
+
     const allOk = Object.values(checks).every((v) => v === "ok");
     res.status(allOk ? 200 : 503).json({
         status: allOk ? "ok" : "degraded",
         uptime: Math.floor(process.uptime()),
         version: config.version,
         ...checks,
+        analyzers,
+        // Codes only: this route needs no login, and the full reasons are in the log.
+        embeddingWritePath: embeddingCheck.ok ? "ok" : "error",
+        ...(embeddingCheck.ok ? {} : { embeddingWritePathReason: embeddingCheck.reason }),
+        lidarr: lidarr.status,
     });
 }
 
@@ -249,60 +286,6 @@ async function checkPostgresConnection() {
         logger.error("  3. Database credentials are valid");
         process.exit(1);
     }
-}
-
-/**
- * How long to let Redis finish connecting before giving up on it at boot.
- *
- * Ten seconds is generous for a local socket and still short enough that a
- * genuinely absent Redis fails the container fast rather than hanging a
- * deployment.
- */
-const REDIS_READY_TIMEOUT_MS = 10_000;
-
-/**
- * Wait for the client to reach "ready", rather than asking once and giving up.
- *
- * ioredis connects asynchronously. This used to read `redisClient.status` a
- * single time the instant the process booted and exit(1) if it was anything
- * but "ready" -- which is a race the backend loses whenever it starts at the
- * same moment as Redis, exactly what happens on `docker compose up` and on any
- * restart where Redis has not finished accepting connections yet. The symptom
- * is a backend that refuses to start against a Redis that is perfectly
- * healthy and answering PING from the same host.
- */
-async function waitForRedisReady(): Promise<void> {
-    if (redisClient.status === "ready") return;
-
-    await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-            cleanup();
-            reject(
-                new Error(
-                    `Redis did not become ready within ${REDIS_READY_TIMEOUT_MS}ms ` +
-                        `(last status: ${redisClient.status})`
-                )
-            );
-        }, REDIS_READY_TIMEOUT_MS);
-
-        const onReady = () => {
-            cleanup();
-            resolve();
-        };
-        // A connection error is not fatal on its own -- ioredis retries -- so it
-        // is logged and the timeout above remains the decider.
-        const onError = (err: Error) => {
-            logger.debug(`Redis still connecting: ${err.message}`);
-        };
-        function cleanup() {
-            clearTimeout(timer);
-            redisClient.off("ready", onReady);
-            redisClient.off("error", onError);
-        }
-
-        redisClient.on("ready", onReady);
-        redisClient.on("error", onError);
-    });
 }
 
 async function checkRedisConnection() {
@@ -345,11 +328,7 @@ async function checkPasswordReset() {
         where: { id: adminUser.id },
         data: {
             passwordHash: hashedPassword,
-            // Bump tokenVersion, exactly as POST /auth/change-password does.
-            // Without it a reset changed the password but left every JWT issued
-            // BEFORE the reset valid until it expired -- so the one path you
-            // reach for when you have lost control of the account was the one
-            // that did not revoke the sessions you are trying to lock out.
+            // Revoke every session issued before the reset, as change-password does.
             tokenVersion: { increment: 1 },
         },
     });
@@ -417,19 +396,14 @@ async function main() {
     // Check for admin password reset
     await checkPasswordReset();
 
-    const server = app.listen(config.port, config.host, async () => {
+    const server = app.listen(config.port, "0.0.0.0", async () => {
     logger.debug(
-        `Kima API listening on ${config.host}:${config.port}`
+        `Kima API running on port ${config.port} (accessible on all network interfaces)`
     );
     server.keepAliveTimeout = 65_000;  // > common LB idle of 60s
     server.headersTimeout = 70_000;    // must exceed keepAliveTimeout
-    // Do NOT set server.timeout: it fires on socket INACTIVITY, and a paused
-    // audio stream is inactive (no bytes flow while backpressured), so it would
-    // destroy the stream's connection after the timeout and force a reconnect on
-    // resume -- a regression seen on both web and iOS after a multi-minute pause.
-    // Reap genuinely dead/half-open peers (mobile network gone without FIN/RST)
-    // via TCP keepalive instead: the OS drops the socket once probes fail, while
-    // a paused-but-alive stream keeps answering probes and stays connected.
+    // No server.timeout: a paused audio stream is idle and would be cut. Dead
+    // peers are reaped by TCP keepalive instead, which a live paused stream answers.
     server.timeout = 0;
     server.on("connection", (socket) => {
         socket.setKeepAlive(true, config.socketKeepAliveDelayMs);
@@ -446,6 +420,59 @@ async function main() {
     // Initialize music configuration (reads from SystemSettings)
     const { initializeMusicConfig } = await import("./config");
     await initializeMusicConfig();
+
+    // Rewrite the GPU toggle file from the DB so the two cannot disagree after a restart.
+    const { initGpuRuntimeProjection } = await import("./services/gpuRuntime");
+    await initGpuRuntimeProjection();
+
+    // Verify that an audio embedding can actually be stored, and say so in the
+    // log either way: the database, Redis and workers can all look healthy
+    // while embeddings silently fail to write.
+    await reportEmbeddingWritePathAtStartup();
+
+    // Build the public library export now, so its first request finds one.
+    if (config.publicVibe) {
+        const { latestLibraryExport } = await import("./services/publicLibraryExport");
+        latestLibraryExport();
+    }
+
+    // AcoustID fingerprinting is on only when the fpcalc binary exists; log
+    // either way. Without it identification uses MusicBrainz alone.
+    {
+        const { execFile } = await import("child_process");
+        const { promisify } = await import("util");
+        const exec = promisify(execFile);
+        try {
+            await exec("fpcalc", ["-h"], { timeout: 5000 });
+            logger.info("[AcoustID] fpcalc found — fingerprint identification ENABLED");
+        } catch (err: unknown) {
+            const code = (err as { code?: string })?.code;
+            if (code === "ENOENT") {
+                logger.warn(
+                    "[AcoustID] fpcalc NOT installed — fingerprint identification DISABLED; " +
+                        "identification falls back to the MusicBrainz search path",
+                );
+            } else {
+                // Binary exists but errored on -h (fpcalc prints usage + non-zero exit);
+                // probe with a nonexistent file to confirm it is actually runnable.
+                try {
+                    await exec("fpcalc", ["/nonexistent"], { timeout: 5000 });
+                    logger.info("[AcoustID] fpcalc found — fingerprint identification ENABLED");
+                } catch (err2: unknown) {
+                    const code2 = (err2 as { code?: string })?.code;
+                    if (code2 === "ENOENT") {
+                        logger.warn(
+                            "[AcoustID] fpcalc NOT installed — fingerprint identification DISABLED",
+                        );
+                    } else {
+                        logger.info(
+                            "[AcoustID] fpcalc present (exited non-zero on probe) — fingerprint identification ENABLED",
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     // Initialize BullMQ workers
     await import("./workers");
@@ -487,8 +514,7 @@ async function main() {
         "Bull Board dashboard available at /api/admin/queues (admin-only)"
     );
 
-    // Note: Native library scanning is now triggered manually via POST /library/scan
-    // No automatic sync on startup - user must manually scan their music folder
+    // No automatic sync on startup: library scanning is triggered manually via POST /library/scan.
 
     // Enrichment worker enabled for OWNED content only
     // - Background enrichment: Genres, MBIDs, similar artists for owned albums/artists
@@ -504,9 +530,9 @@ async function main() {
         logger.error("Cache warmup failed:", err);
     });
 
-    // Webhook reconciliation - runs every 5 minutes to process missed events
     const { webhookReconciliation } = await import("./jobs/webhookReconciliation");
     webhookReconciliation.start();
+    lidarrHealthMonitor.start();
 
     // Webhook event cleanup - runs daily to remove old processed events
     const { webhookEventStore } = await import("./services/webhookEventStore");
@@ -540,18 +566,6 @@ async function main() {
         });
     }, TWENTY_FOUR_HOURS);
     logger.debug("Podcast cache cleanup scheduled (daily, 30-day expiry)");
-
-    // Reconcile download queue state with database
-    const { downloadQueueManager } = await import("./services/downloadQueue");
-    try {
-        const result = await downloadQueueManager.reconcileOnStartup();
-        logger.debug(
-            `Download queue reconciled: ${result.loaded} active, ${result.failed} marked failed`
-        );
-    } catch (err) {
-        logger.error("Download queue reconciliation failed:", err);
-        // Non-fatal - queue will start fresh
-    }
 
     runStartupTasks().catch((err) =>
         logger.error("[STARTUP] Background tasks failed:", err)
@@ -589,9 +603,10 @@ async function gracefulShutdown(signal: string) {
         if (podcastCleanupInterval) clearInterval(podcastCleanupInterval);
         if (webhookCleanupInterval) clearInterval(webhookCleanupInterval);
 
-        // Stop webhook reconciliation
+        // Stop the Lidarr background loops
         const { webhookReconciliation } = await import("./jobs/webhookReconciliation");
         webhookReconciliation.stop();
+        lidarrHealthMonitor.stop();
 
         // Disconnect Soulseek
         logger.debug("Disconnecting Soulseek...");

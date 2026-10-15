@@ -3,17 +3,9 @@ import { logger } from "./logger";
 import * as path from 'path';
 
 /**
- * Dedicated logger for Spotify Import and Playlist operations.
- *
- * In Docker, the backend runs under /app and typically mounts /app/logs.
- * This logger defaults to writing under ./logs/playlists (relative to process.cwd()).
- *
- * Override with PLAYLIST_LOG_DIR if you want a different location.
- *
- * Log files:
- * - import_<jobId>_<timestamp>.log - Per-job detailed log
- * - session.log - Current session unified log (cleared on restart)
- * - events.log - Persistent event log
+ * Log files for Spotify import and playlist work, under ./logs/playlists or
+ * PLAYLIST_LOG_DIR: import_<jobId>_<timestamp>.log per job, and session.log,
+ * cleared on each start.
  */
 
 const LOGS_DIR = process.env.PLAYLIST_LOG_DIR
@@ -112,12 +104,9 @@ function formatLogLine(level: string, message: string): string {
 }
 
 class PlaylistLogger {
-    private jobId: string;
     private logFile: string;
-    private buffer: string[] = [];
 
     constructor(jobId: string) {
-        this.jobId = jobId;
         ensureLogsDir();
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -128,9 +117,6 @@ class PlaylistLogger {
     }
 
     private write(level: string, message: string): void {
-        const line = formatLogLine(level, message);
-        this.buffer.push(line);
-
         // Write to unified session log
         writeToSessionLog('IMPORT', level, message);
 
@@ -141,14 +127,7 @@ class PlaylistLogger {
             logger.debug(`[Playlist Logger] ${message}`);
         }
 
-        // Flush to file
-        this.flush();
-    }
-
-    private flush(): void {
-        const data = this.buffer.join('');
-        this.buffer = [];
-        fs.promises.appendFile(this.logFile, data).catch((error) => {
+        fs.promises.appendFile(this.logFile, formatLogLine(level, message)).catch((error) => {
             logger.error(`[Playlist Logger] Failed to write to ${this.logFile}:`, error);
         });
     }
@@ -169,9 +148,8 @@ class PlaylistLogger {
         this.write('DEBUG', message);
     }
 
-    // Alias for info - used for generic logging
     log(message: string): void {
-        this.write('DEBUG', message);
+        this.write('INFO', message);
     }
 
     // Structured logging methods
@@ -206,11 +184,6 @@ class PlaylistLogger {
         this.info(`Requesting ${count} album(s) from Lidarr`);
     }
 
-    logAlbumQueued(albumName: string, artistName: string, mbid: string, lidarrId?: number): void {
-        const lidarrInfo = lidarrId ? ` (Lidarr ID: ${lidarrId})` : '';
-        this.info(`✓ Queued: "${albumName}" by ${artistName} [MBID: ${mbid}]${lidarrInfo}`);
-    }
-
     logAlbumFailed(albumName: string, artistName: string, reason: string): void {
         this.error(`✗ Failed: "${albumName}" by ${artistName} - ${reason}`);
     }
@@ -238,34 +211,10 @@ class PlaylistLogger {
         }
         this.info(`Log file: ${this.logFile}`);
     }
-
-    logJobFailed(error: string): void {
-        this.info('');
-        this.error('=== JOB FAILED ===');
-        this.error(error);
-        this.error(`Log file: ${this.logFile}`);
-    }
-
-    getLogFilePath(): string {
-        return this.logFile;
-    }
 }
 
 // Factory function to create loggers
 export function createPlaylistLogger(jobId: string): PlaylistLogger {
     return new PlaylistLogger(jobId);
-}
-
-// Quick console+file log for one-off messages
-export function logPlaylistEvent(message: string): void {
-    ensureLogsDir();
-    const line = formatLogLine('INFO', message);
-    const eventsFile = path.join(LOGS_DIR, 'events.log');
-    
-    logger.debug(`[Playlist] ${message}`);
-    
-    fs.promises.appendFile(eventsFile, line).catch((error) => {
-        logger.error(`Failed to write to events log:`, error);
-    });
 }
 

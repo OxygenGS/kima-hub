@@ -11,29 +11,11 @@ import {
 } from "react";
 import { api } from "@/lib/api";
 import type { Episode } from "@/features/podcast/types";
+import { STORAGE_KEYS } from "./storage-keys";
 
 export type PlayerMode = "full" | "mini" | "overlay";
 
 // Audio features for vibe mode visualization
-export interface AudioFeatures {
-    bpm?: number | null;
-    energy?: number | null;
-    valence?: number | null;
-    arousal?: number | null;
-    danceability?: number | null;
-    keyScale?: string | null;
-    instrumentalness?: number | null;
-    // ML Mood predictions (Enhanced mode)
-    moodHappy?: number | null;
-    moodSad?: number | null;
-    moodRelaxed?: number | null;
-    moodAggressive?: number | null;
-    moodParty?: number | null;
-    moodAcoustic?: number | null;
-    moodElectronic?: number | null;
-    analysisMode?: string | null;
-}
-
 export interface Track {
     id: string;
     title: string;
@@ -109,7 +91,7 @@ type SetStateAction<T> = T | ((prev: T) => T);
 
 export type VibeOperation =
     | { type: 'idle' }
-    | { type: 'vibe'; sourceTrackId: string; sourceFeatures: AudioFeatures; trackIds: string[] }
+    | { type: 'vibe'; sourceTrackId: string; matches: Record<string, number>; trackIds: string[] }
     | { type: 'drift'; startTrackId: string; endTrackId: string; pathTrackIds: string[] }
     | { type: 'blend'; addTrackIds: string[]; subtractTrackIds: string[]; resultTrackIds: string[] }
     | { type: 'similar'; sourceTrackId: string; trackIds: string[] };
@@ -166,22 +148,6 @@ const AudioStateContext = createContext<AudioStateContextType | undefined>(
     undefined
 );
 
-// LocalStorage keys
-const STORAGE_KEYS = {
-    CURRENT_TRACK: "kima_current_track",
-    CURRENT_AUDIOBOOK: "kima_current_audiobook",
-    CURRENT_PODCAST: "kima_current_podcast",
-    PLAYBACK_TYPE: "kima_playback_type",
-    QUEUE: "kima_queue",
-    CURRENT_INDEX: "kima_current_index",
-    IS_SHUFFLE: "kima_is_shuffle",
-    REPEAT_MODE: "kima_repeat_mode",
-    PLAYER_MODE: "kima_player_mode",
-    VOLUME: "kima_volume",
-    IS_MUTED: "kima_muted",
-    PODCAST_EPISODE_QUEUE: "kima_podcast_episode_queue",
-};
-
 function readStorage(key: string): string | null {
     if (typeof window === "undefined") return null;
     try { return localStorage.getItem(key); } catch { return null; }
@@ -194,11 +160,8 @@ function parseStorageJson<T>(key: string, fallback: T): T {
 }
 
 /**
- * Did the server say this thing no longer exists?
- *
- * 404 means gone: unsubscribed, deleted, or removed from the library. Anything else --
- * a timeout, a 500, the laptop waking up on a dead wifi connection -- is a reason to try
- * again later, not a reason to throw away what the user was listening to.
+ * Only a 404 means the item is gone. Any other failure, such as a timeout or a
+ * 500, is retried later rather than discarding what the user was listening to.
  */
 function isGone(err: unknown): boolean {
     return (err as { status?: number } | null)?.status === 404;
@@ -225,11 +188,32 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         "track" | "audiobook" | "podcast" | null
     >(() => {
         const stored = readStorage(STORAGE_KEYS.PLAYBACK_TYPE) as "track" | "audiobook" | "podcast" | null;
-        // Don't restore "track" type since we no longer restore currentTrack from localStorage.
+        // "track" type is not restored from localStorage.
         // Server state will re-set this if there was an active track.
         return stored === "track" ? null : stored;
     });
     const [queue, setQueue] = useState<Track[]>([]);
+
+    /**
+     * The server's queue ceiling, fetched once. A ref so its arrival does not
+     * re-run the save effect; starts at the server's own default.
+     */
+    const queueLimitRef = useRef(10000);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.getQueueLimit()
+            .then((r) => {
+                if (!cancelled && Number.isFinite(r?.maxQueueLength)) {
+                    queueLimitRef.current = r.maxQueueLength;
+                }
+            })
+            .catch(() => {
+                // The default stands. A queue that saves slightly short is a
+                // far smaller problem than one that does not save.
+            });
+        return () => { cancelled = true; };
+    }, []);
     const [currentIndex, setCurrentIndex] = useState(
         () => { const v = readStorage(STORAGE_KEYS.CURRENT_INDEX); return v ? parseInt(v) : 0; }
     );
@@ -352,13 +336,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             } catch { /* ignore parse errors */ }
         }
 
-        // Wipe whatever the server told us to restore, when it turns out not to exist.
-        //
-        // These lookups are asynchronous and can land seconds after the page loads -- long
-        // enough for someone to have pressed play in the meantime. Clearing unconditionally
-        // then throws away the album they just started: measured as a queue of 13 tracks
-        // collapsing to 1. So this backs off entirely if anything is queued by the time it
-        // resolves, because a stale restore is worth less than live playback.
+        // Clear a server-restored item that turns out not to exist, unless
+        // something has been queued since: live playback beats a stale restore.
         const clearRestoredPlayback = () => {
             if (queueRef.current.length > 0) return;
             setCurrentTrack(null);
@@ -369,7 +348,6 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
             setCurrentIndex(0);
         };
 
-        // Load playback state from server
         api.getPlaybackState()
             .then((serverState) => {
                 if (!serverState) return;
@@ -385,8 +363,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             setCurrentAudiobook(null);
                             setCurrentPodcast(null);
                         })
-                        .catch(() => {
-                            // Fire-and-forget: clearing stale server state, failure is non-critical
+                        .catch((err) => {
+                            if (!isGone(err)) return;
                             api.clearPlaybackState().catch(() => {});
                             clearRestoredPlayback();
                         });
@@ -401,11 +379,8 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                             setCurrentTrack(null);
                             setCurrentPodcast(null);
                         })
-                        .catch(() => {
-                            // The audiobook the server says you were on is gone. Without
-                            // this the rejection was unhandled -- a page error on sign-in,
-                            // every sign-in, because the stale server state never cleared
-                            // itself. The track branch above has always done this.
+                        .catch((err) => {
+                            if (!isGone(err)) return;
                             api.clearPlaybackState().catch(() => {});
                             clearRestoredPlayback();
                         });
@@ -434,30 +409,17 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 setCurrentAudiobook(null);
                             }
                         })
-                        .catch(() => {
-                            // Unsubscribed -- possibly on another device -- so the podcast
-                            // the server remembers no longer resolves. This rejection was
-                            // unhandled, which meant an error on every sign-in for as long
-                            // as the stale state survived, which was forever because
-                            // nothing cleared it.
+                        .catch((err) => {
+                            // A podcast unsubscribed on another device no longer resolves.
+                            if (!isGone(err)) return;
                             api.clearPlaybackState().catch(() => {});
                             clearRestoredPlayback();
                         });
                 }
 
-                // Restoring the previous session's queue must not overwrite one the
-                // listener has built in the meantime. This request is asynchronous and can
-                // land seconds after the page is usable, which is easily long enough to
-                // open an album and press play: measured as an eight-track album collapsing
-                // to a single track, because the old one-track queue arrived late and won.
-                //
-                // Shuffle is a preference rather than content, so it is restored either way.
-                // The guard has to read the real current queue, not a ref that trails it.
-                // queueRef is synced by an effect, so between "the listener pressed play"
-                // and "the ref catches up" there is a window where the ref still says empty
-                // and the stale queue wins anyway -- which showed up as this overwrite
-                // happening on some runs and not others. A functional update sees the
-                // actual value at the moment React applies it, with no window at all.
+                // A late restore must not overwrite a queue built since page load.
+                // A functional update reads the real current queue; the effect-synced
+                // queueRef can still be empty. Shuffle is restored either way.
                 if (serverState.queue) {
                     setQueue((prev) => (prev.length > 0 ? prev : serverState.queue));
                 }
@@ -482,14 +444,6 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
 
         const timeoutId = setTimeout(() => {
             try {
-                if (currentTrack) {
-                    localStorage.setItem(
-                        STORAGE_KEYS.CURRENT_TRACK,
-                        JSON.stringify(currentTrack)
-                    );
-                } else {
-                    localStorage.removeItem(STORAGE_KEYS.CURRENT_TRACK);
-                }
                 if (currentAudiobook) {
                     localStorage.setItem(
                         STORAGE_KEYS.CURRENT_AUDIOBOOK,
@@ -511,7 +465,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                 } else {
                     localStorage.removeItem(STORAGE_KEYS.PLAYBACK_TYPE);
                 }
-                localStorage.setItem(STORAGE_KEYS.QUEUE, JSON.stringify(queue));
+                // The queue is not written here: it lives on the server
+                // (`PlaybackState.queue`), and a large queue in this try/catch would
+                // exceed the storage quota and take the other keys down with it.
                 localStorage.setItem(
                     STORAGE_KEYS.CURRENT_INDEX,
                     currentIndex.toString()
@@ -536,7 +492,6 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
 
         return () => clearTimeout(timeoutId);
     }, [
-        currentTrack,
         currentAudiobook,
         currentPodcast,
         playbackType,
@@ -551,16 +506,14 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
         isHydrated,
     ]);
 
-    // Save playback state to server
     useEffect(() => {
         if (!isHydrated) return;
         if (!playbackType) return;
 
         const saveToServer = async () => {
             try {
-                // Limit queue to first 2000 items to reduce payload size
-                // Backend also limits to 2000, so this matches server storage
-                const limitedQueue = queue?.slice(0, 2000);
+                // Sliced to the server's queue limit, fetched once and remembered.
+                const limitedQueue = queue?.slice(0, queueLimitRef.current);
                 const adjustedIndex = Math.min(
                     currentIndex,
                     (limitedQueue?.length || 1) - 1
@@ -662,15 +615,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                                 setCurrentIndex(serverState.currentIndex || 0);
                                 setIsShuffle(serverState.isShuffle || false);
                             }
-                        } catch {
-                            if (!mounted) return;
-                            await api.clearPlaybackState().catch(() => {});
-                            setCurrentTrack(null);
-                            setCurrentAudiobook(null);
-                            setCurrentPodcast(null);
-                            setPlaybackType(null);
-                            setQueue([]);
-                            setCurrentIndex(0);
+                        } catch (err) {
+                            // The server remembers a track that is gone; what plays here stays.
+                            if (mounted && isGone(err)) await api.clearPlaybackState().catch(() => {});
                             return;
                         }
                     } else if (
@@ -712,15 +659,9 @@ export function AudioStateProvider({ children }: { children: ReactNode }) {
                     }
 
                     if (!mounted) return;
-                    // Adopt the server's queue only when it is genuinely newer than the one
-                    // in front of the listener.
-                    //
-                    // "Different from mine" is not the same as "newer than mine". Saving
-                    // playback state is debounced, so for a few seconds after pressing play
-                    // the server still holds the PREVIOUS queue -- which differs, so this
-                    // adopted it and the album that had just started collapsed back to
-                    // yesterday's single track. Intermittent, because it only bites when a
-                    // poll lands inside that window.
+                    // Adopt the server's queue only when it is newer than the local one.
+                    // Saves are debounced, so right after play the server still holds
+                    // the previous queue, which differs but is older.
                     const serverIsNewer =
                         serverUpdatedAt.getTime() > localQueueChangedAtRef.current.getTime();
                     if (

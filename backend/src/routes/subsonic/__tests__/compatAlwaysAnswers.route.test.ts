@@ -1,15 +1,7 @@
 /**
- * The compat router must ANSWER every request, including when a dependency
- * rejects.
- *
- * In Express 4 a rejected handler promise produces no response and never
- * reaches an error handler -- the socket just stays open until the client gives
- * up. createShare.view had a bare `throw` for non-ShareError failures, and both
- * async handlers in this file ran their awaits with no wrapper, so a Prisma or
- * Redis failure meant a Subsonic client hung.
- *
- * These tests fail by TIMING OUT when the fix is absent, which is exactly the
- * production symptom.
+ * The compat router answers every request even when a dependency rejects; in
+ * Express 4 a rejected handler otherwise leaves the client hanging. A missing
+ * fix shows up as a timeout.
  */
 
 jest.mock('../../../utils/db', () => ({
@@ -64,7 +56,7 @@ describe('compat router answers even when a dependency fails', () => {
     });
 
     it('createShare answers when the share service throws something unexpected', async () => {
-        // Not a ShareError -- the class the handler used to rethrow.
+        // Not a ShareError, so the handler's own error branch does not apply.
         (createShareLink as jest.Mock).mockRejectedValue(
             new Error('P2034: transaction conflict on ShareLink'),
         );

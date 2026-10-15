@@ -1,15 +1,7 @@
 /**
- * POST /playlists/:id/items/batch must insert through the shared rank
- * allocator, not with its own createMany.
- *
- * `rank` is UNIQUE per playlist with an empty-string default. This endpoint
- * used to write only `sort`, so every row landed on the single "" slot and
- * createMany({ skipDuplicates: true }) silently dropped all but the first: a
- * 50-track request answered `added: 1` while storing one track, and every later
- * batch into the same playlist stored nothing.
- *
- * The regression this pins is someone reintroducing a local insert here. The
- * allocator's own correctness lives in playlistService + lexoRank tests.
+ * POST /playlists/:id/items/batch inserts through the shared rank allocator.
+ * `rank` is unique per playlist, and a local createMany with skipDuplicates
+ * would keep only the first track.
  */
 
 jest.mock('../../utils/db', () => ({
@@ -96,8 +88,7 @@ describe('POST /playlists/:id/items/batch', () => {
 
         expect(res.status).toBe(200);
         expect(playlistService.addTracks).toHaveBeenCalledWith('pl-1', trackIds);
-        // A local insert here is exactly the bug: it cannot know the current
-        // max rank and has no lock.
+        // Ranks are assigned under the playlist service's lock, never by a local insert.
         expect(prisma.playlistItem.createMany).not.toHaveBeenCalled();
     });
 

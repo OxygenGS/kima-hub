@@ -1,33 +1,8 @@
 /**
- * Task 6 adversarial route tests -- POST /discover/retry-unavailable must route
- * its background processing through the PROVEN completion flow
- * (discoverWeeklyService.checkBatchCompletion), NOT the broken force-complete
- * subset it currently reimplements.
- *
- * Doctrine: failure / edge / boundary paths FIRST, happy path LAST.
- *
- * The confirmed production defect (plan Task 6):
- *   The retry IIFE downloads albums, then (a) queues a scan with
- *   source:"discover-retry-unavailable" -- but scanProcessor only builds the
- *   playlist for source==="discover-weekly-completion" -- and (b) force-sets the
- *   batch status to "completed" itself. buildFinalPlaylist reads
- *   downloadJob.findMany({status:"completed"}); Lidarr jobs finish ASYNC after
- *   the scan, so a bare force-complete ships an EMPTY playlist and marks the
- *   batch done while imports are still in flight. checkBatchCompletion is the one
- *   path that owns the Lidarr wait + the completion-source scan + reconcile.
- *
- * The fix also adds a top-level `.catch` to the previously unguarded
- * fire-and-forget IIFE so a crash in background processing marks the batch
- * `failed` ("Retry processing crashed") instead of leaving it stuck.
- *
- * Each assertion targets a SPECIFIC discriminator that can ONLY be produced by
- * the Task-6 code path, so the test cannot pass against the unmodified handler:
- *   - checkBatchCompletion(batch.id) MUST be invoked (the unmodified handler
- *     never imports discoverWeeklyService at all).
- *   - The handler MUST NOT force-set status:"completed" itself, and MUST NOT
- *     enqueue the dead-end "discover-retry-unavailable" scan.
- *   - On a background crash, the IIFE's .catch MUST write
- *     status:"failed" + errorMessage:"Retry processing crashed".
+ * POST /discover/retry-unavailable downloads the albums, saves the counts, then
+ * hands the batch to checkBatchCompletion, which waits for Lidarr imports. It
+ * never marks the batch completed itself, and any crash in the background work
+ * marks it failed ("Retry processing crashed"). Failure and edge paths first.
  */
 
 // All mocks before imports.
@@ -76,7 +51,6 @@ jest.mock('../../middleware/auth', () => ({
 }));
 
 // Module-load-time imports in discover.ts that we do not exercise here.
-jest.mock('../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../workers/queues', () => ({
     discoverQueue: { getJob: jest.fn(), add: jest.fn() },
     scanQueue: { add: jest.fn().mockResolvedValue(undefined) },
@@ -152,11 +126,8 @@ const RETRY_JOB = {
 };
 
 /**
- * The IIFE runs fire-and-forget AFTER res.json(); supertest resolves on response
- * end, before the background work settles. Poll until a `predicate` observes the
- * mock state the IIFE produces, advancing timers so any internal awaits flush.
- * Throws (rather than hanging) if the predicate never holds, so a regression
- * reads as an explicit timeout, not a silent pass.
+ * The background work runs after the response, so poll until `predicate` holds,
+ * advancing timers. Throws when it never does.
  */
 async function waitFor(predicate: () => boolean, label: string): Promise<void> {
     for (let i = 0; i < 50; i++) {
@@ -168,8 +139,11 @@ async function waitFor(predicate: () => boolean, label: string): Promise<void> {
     throw new Error(`waitFor timed out: ${label}`);
 }
 
+const SECOND_ALBUM = { ...UNAVAILABLE_ALBUM, id: 'unavail-2', albumMbid: 'mbid-bbb', albumTitle: 'Windowlicker' };
+const SECOND_JOB = { ...RETRY_JOB, id: 'job-2', targetMbid: 'mbid-bbb' };
+
 /** Wire every query the handler runs BEFORE its res.json, plus the transaction. */
-function primeHandlerPreResponse() {
+function primeHandlerPreResponse({ twoAlbums = false } = {}) {
     // resolveViewWeek source: latest completed batch (tagged the prior week).
     (prisma.discoveryBatch.findFirst as jest.Mock)
         // 1st findFirst -> resolveViewWeek's completed-batch lookup
@@ -177,7 +151,9 @@ function primeHandlerPreResponse() {
         // 2nd findFirst -> active-batch guard (none in progress)
         .mockResolvedValueOnce(null);
 
-    (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue([UNAVAILABLE_ALBUM]);
+    (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue(
+        twoAlbums ? [UNAVAILABLE_ALBUM, SECOND_ALBUM] : [UNAVAILABLE_ALBUM],
+    );
     // No successful discovery / library matches -> the album survives filtering.
     (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.album.findMany as jest.Mock).mockResolvedValue([]);
@@ -192,13 +168,15 @@ function primeHandlerPreResponse() {
         }),
     );
 
-    // The IIFE's job list.
-    (prisma.downloadJob.findMany as jest.Mock).mockResolvedValue([RETRY_JOB]);
+    // No download is already working on the album; then the IIFE's job list.
+    (prisma.downloadJob.findMany as jest.Mock)
+        .mockResolvedValueOnce([])
+        .mockResolvedValue(twoAlbums ? [RETRY_JOB, SECOND_JOB] : [RETRY_JOB]);
     (prisma.discoveryBatch.update as jest.Mock).mockResolvedValue({});
     (prisma.downloadJob.update as jest.Mock).mockResolvedValue({});
 }
 
-describe('POST /discover/retry-unavailable -- routes through checkBatchCompletion (Task 6)', () => {
+describe('POST /discover/retry-unavailable -- routes through checkBatchCompletion', () => {
     let app: express.Application;
 
     beforeAll(() => { app = makeApp(); });
@@ -211,11 +189,7 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
     });
 
     it('CRASH PATH: a rejected checkBatchCompletion is caught and marks the batch failed', async () => {
-        // The IIFE was previously unguarded fire-and-forget. The Task-6 top-level
-        // .catch must convert ANY background crash into status:"failed" with the
-        // distinguishing errorMessage "Retry processing crashed". We force the
-        // handoff itself to reject (the deepest background await) to prove the
-        // catch wraps the WHOLE IIFE, not just the acquire loop.
+        // The handoff rejects, the last await, and the batch is marked failed.
         primeHandlerPreResponse();
         mockAcquireAlbum.mockResolvedValue({ success: true });
         mockCheckBatchCompletion.mockRejectedValue(new Error('reconcile exploded'));
@@ -223,9 +197,8 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
         const res = await request(app).post('/discover/retry-unavailable');
         expect(res.status).toBe(200); // response already sent before background work
 
-        // DISCRIMINATOR: the unmodified handler has NO top-level catch, so a
-        // rejected handoff would surface as an unhandled rejection and the batch
-        // would never be marked failed. The fix must write this exact shape.
+        // A rejected handoff must not surface as an unhandled rejection: the
+        // batch is marked failed with this exact shape.
         await waitFor(
             () =>
                 (prisma.discoveryBatch.update as jest.Mock).mock.calls.some(
@@ -244,11 +217,8 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
     });
 
     it('NO FORCE-COMPLETE: the handler never self-sets status:"completed" (that is checkBatchCompletion\'s job)', async () => {
-        // The core defect: the old IIFE force-set the batch to "completed" itself,
-        // shipping an empty playlist before async Lidarr imports landed. After the
-        // fix, the handler must hand off and let checkBatchCompletion own the
-        // terminal transition -- so NO discoveryBatch.update with
-        // status:"completed" may originate from this handler.
+        // checkBatchCompletion owns the terminal transition; this handler never
+        // writes status "completed".
         primeHandlerPreResponse();
         mockAcquireAlbum.mockResolvedValue({ success: true });
         mockCheckBatchCompletion.mockResolvedValue(undefined);
@@ -261,9 +231,7 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
             'checkBatchCompletion invoked',
         );
 
-        // DISCRIMINATOR: zero self-driven "completed" transitions. The unmodified
-        // handler writes status:"completed" at discover.ts:1073 -- this assertion
-        // fails against it.
+        // The handler never marks the batch "completed" itself; checkBatchCompletion does.
         const completedSelfWrites = (prisma.discoveryBatch.update as jest.Mock).mock.calls.filter(
             (c) => c[0]?.data?.status === 'completed',
         );
@@ -287,8 +255,7 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
             'checkBatchCompletion invoked',
         );
 
-        // DISCRIMINATOR: the unmodified handler calls scanQueue.add('scan', {
-        // ..., source:'discover-retry-unavailable' }). The fix removes it.
+        // The handler enqueues no library scan of its own.
         const retrySourceScans = (scanQueue.add as jest.Mock).mock.calls.filter(
             (c) => c[1]?.source === 'discover-retry-unavailable',
         );
@@ -299,29 +266,7 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
         // One album acquires, the next fails its acquire result. The handler must
         // record completed/failed counts AND still hand off to checkBatchCompletion
         // -- failures alone must not short-circuit into a self-completed batch.
-        (prisma.discoveryBatch.findFirst as jest.Mock)
-            .mockResolvedValueOnce({ weekStart: new Date('2026-05-18T00:00:00.000Z') })
-            .mockResolvedValueOnce(null);
-        (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue([
-            UNAVAILABLE_ALBUM,
-            { ...UNAVAILABLE_ALBUM, id: 'unavail-2', albumMbid: 'mbid-bbb', albumTitle: 'Windowlicker' },
-        ]);
-        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.album.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
-        (prisma.$transaction as jest.Mock).mockImplementation(async (cb: any) =>
-            cb({
-                discoveryBatch: { create: jest.fn().mockResolvedValue({ id: RETRY_BATCH_ID }) },
-                downloadJob: { create: jest.fn().mockResolvedValue({}) },
-                unavailableAlbum: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-            }),
-        );
-        (prisma.downloadJob.findMany as jest.Mock).mockResolvedValue([
-            RETRY_JOB,
-            { ...RETRY_JOB, id: 'job-2', targetMbid: 'mbid-bbb' },
-        ]);
-        (prisma.discoveryBatch.update as jest.Mock).mockResolvedValue({});
-        (prisma.downloadJob.update as jest.Mock).mockResolvedValue({});
+        primeHandlerPreResponse({ twoAlbums: true });
 
         mockAcquireAlbum
             .mockResolvedValueOnce({ success: true })
@@ -361,55 +306,19 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
             'checkBatchCompletion invoked on happy path',
         );
 
-        // DISCRIMINATOR: the proven flow is invoked with the retry batch id.
+        // The batch is handed to checkBatchCompletion by its id.
         expect(mockCheckBatchCompletion).toHaveBeenCalledWith(RETRY_BATCH_ID);
         // And the album was actually acquired first.
         expect(mockAcquireAlbum).toHaveBeenCalledTimes(1);
     });
 
-    // ---------------------------------------------------------------------
-    // CRITIC ADDITIONS (gap closure). The five tests above pin the handoff,
-    // the no-self-complete, the no-dead-end-scan, and one crash shape. They do
-    // NOT pin: (a) that the completed/failed COUNTS are actually persisted to
-    // the batch before the handoff -- Step 1's update at plan lines 559-563 --
-    // so a handoff that ships uncounted progress still passes; (b) that the
-    // acquire loop runs BEFORE the handoff -- a broken impl calling
-    // checkBatchCompletion first (empty batch) still passes the happy path;
-    // (c) that the Step-2 .catch wraps the WHOLE IIFE -- the crash test only
-    // rejects checkBatchCompletion (the deepest await), so a narrow local
-    // try/catch around just that call would pass while a PRE-handoff crash
-    // (downloadJob.findMany / the count update) leaks unhandled and never
-    // marks the batch failed; (d) that the handoff happens exactly once.
-    // ---------------------------------------------------------------------
+    // Counts are saved before the handoff, the downloads run before it, the
+    // crash handler covers the whole background job, and the handoff runs once.
 
     it('COUNTS PERSISTED: the completed/failed tally is written to the batch BEFORE handing off', async () => {
-        // Plan Step 1: the fix must
-        //   prisma.discoveryBatch.update({ data:{ completedAlbums, failedAlbums }})
-        // and THEN call checkBatchCompletion. A broken impl that hands off without
-        // persisting the tally would ship a batch whose progress is wrong/zero.
-        // One success + one failure => completedAlbums:1, failedAlbums:1.
-        (prisma.discoveryBatch.findFirst as jest.Mock)
-            .mockResolvedValueOnce({ weekStart: new Date('2026-05-18T00:00:00.000Z') })
-            .mockResolvedValueOnce(null);
-        (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue([
-            UNAVAILABLE_ALBUM,
-            { ...UNAVAILABLE_ALBUM, id: 'unavail-2', albumMbid: 'mbid-bbb', albumTitle: 'Windowlicker' },
-        ]);
-        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.album.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
-        (prisma.$transaction as jest.Mock).mockImplementation(async (cb: any) =>
-            cb({
-                discoveryBatch: { create: jest.fn().mockResolvedValue({ id: RETRY_BATCH_ID }) },
-                downloadJob: { create: jest.fn().mockResolvedValue({}) },
-                unavailableAlbum: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-            }),
-        );
-        (prisma.downloadJob.findMany as jest.Mock).mockResolvedValue([
-            RETRY_JOB,
-            { ...RETRY_JOB, id: 'job-2', targetMbid: 'mbid-bbb' },
-        ]);
-        (prisma.downloadJob.update as jest.Mock).mockResolvedValue({});
+        // One success and one failure: completedAlbums 1, failedAlbums 1, saved
+        // before checkBatchCompletion.
+        primeHandlerPreResponse({ twoAlbums: true });
 
         // Record the order of (a) every batch update and (b) the handoff so we can
         // assert the final tally is persisted and that it lands at-or-before handoff.
@@ -435,14 +344,14 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
 
         await waitFor(() => events.includes('handoff'), 'handoff recorded');
 
-        // DISCRIMINATOR 1: a final tally of 1 completed / 1 failed is persisted.
+        // A final tally of 1 completed / 1 failed is persisted.
         const persistedFinalTally = (prisma.discoveryBatch.update as jest.Mock).mock.calls.some(
             (c) => c[0]?.data?.completedAlbums === 1 && c[0]?.data?.failedAlbums === 1,
         );
         expect(persistedFinalTally).toBe(true);
 
-        // DISCRIMINATOR 2: the final 1/1 tally is written at or before the handoff,
-        // never only after -- otherwise checkBatchCompletion sees stale counts.
+        // The final 1/1 tally is written at or before the handoff, or
+        // checkBatchCompletion would see stale counts.
         const handoffIdx = events.indexOf('handoff');
         const finalTallyIdx = events.indexOf('count:1/1');
         expect(finalTallyIdx).toBeGreaterThanOrEqual(0);
@@ -468,23 +377,14 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
 
         await waitFor(() => order.includes('handoff'), 'handoff after acquire');
 
-        // DISCRIMINATOR: the first recorded event is the acquire, not the handoff.
+        // The acquire comes first, then the handoff.
         expect(order[0]).toBe('acquire');
         expect(order.indexOf('acquire')).toBeLessThan(order.indexOf('handoff'));
     });
 
     it('PRE-HANDOFF CRASH: a failure BEFORE the handoff still marks the batch failed (catch wraps the whole IIFE)', async () => {
-        // The existing crash test rejects checkBatchCompletion -- effectively the
-        // LAST await in the IIFE. That passes even if the .catch only wraps the
-        // handoff call. Step 2 requires the .catch to wrap the ENTIRE IIFE. Force
-        // a crash in an await that runs INSIDE the IIFE but BEFORE the handoff:
-        // the post-loop count update (Step 1's
-        //   discoveryBatch.update({ data:{ completedAlbums, failedAlbums }})).
-        // We make THAT update reject while the later failed-status update (driven
-        // by the .catch) resolves. A narrow local catch around only
-        // checkBatchCompletion leaves this crash unhandled and the test times out
-        // -- the correct failure signal. The whole-IIFE .catch must still write
-        // status:"failed" / "Retry processing crashed".
+        // The count update, before the handoff, rejects; the batch is still
+        // marked failed.
         primeHandlerPreResponse();
         mockAcquireAlbum.mockResolvedValue({ success: true });
         mockCheckBatchCompletion.mockResolvedValue(undefined);
@@ -505,9 +405,8 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
         const res = await request(app).post('/discover/retry-unavailable');
         expect(res.status).toBe(200);
 
-        // DISCRIMINATOR: even though the crash happens BEFORE the handoff, the
-        // whole-IIFE .catch must still write the failed shape, and the handoff
-        // must NEVER run because the crash precedes it.
+        // A crash before the handoff still writes the failed shape from the
+        // outer catch, and the handoff never runs.
         await waitFor(
             () =>
                 (prisma.discoveryBatch.update as jest.Mock).mock.calls.some(
@@ -521,32 +420,9 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
     });
 
     it('SINGLE HANDOFF: checkBatchCompletion is invoked exactly once for the batch', async () => {
-        // Removing the force-complete must not be "compensated" by calling the
-        // proven flow per-job or twice. Two albums, both succeed -> exactly ONE
-        // handoff after the loop.
-        (prisma.discoveryBatch.findFirst as jest.Mock)
-            .mockResolvedValueOnce({ weekStart: new Date('2026-05-18T00:00:00.000Z') })
-            .mockResolvedValueOnce(null);
-        (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue([
-            UNAVAILABLE_ALBUM,
-            { ...UNAVAILABLE_ALBUM, id: 'unavail-2', albumMbid: 'mbid-bbb', albumTitle: 'Windowlicker' },
-        ]);
-        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.album.findMany as jest.Mock).mockResolvedValue([]);
-        (prisma.unavailableAlbum.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
-        (prisma.$transaction as jest.Mock).mockImplementation(async (cb: any) =>
-            cb({
-                discoveryBatch: { create: jest.fn().mockResolvedValue({ id: RETRY_BATCH_ID }) },
-                downloadJob: { create: jest.fn().mockResolvedValue({}) },
-                unavailableAlbum: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-            }),
-        );
-        (prisma.downloadJob.findMany as jest.Mock).mockResolvedValue([
-            RETRY_JOB,
-            { ...RETRY_JOB, id: 'job-2', targetMbid: 'mbid-bbb' },
-        ]);
-        (prisma.discoveryBatch.update as jest.Mock).mockResolvedValue({});
-        (prisma.downloadJob.update as jest.Mock).mockResolvedValue({});
+        // Two albums, both succeed: exactly one handoff after the loop, not one
+        // per job.
+        primeHandlerPreResponse({ twoAlbums: true });
         mockAcquireAlbum.mockResolvedValue({ success: true });
         mockCheckBatchCompletion.mockResolvedValue(undefined);
 
@@ -562,8 +438,19 @@ describe('POST /discover/retry-unavailable -- routes through checkBatchCompletio
         await Promise.resolve();
         await Promise.resolve();
 
-        // DISCRIMINATOR: exactly one handoff, despite two acquired albums.
+        // One handoff, despite two acquired albums.
         expect(mockCheckBatchCompletion).toHaveBeenCalledTimes(1);
         expect(mockCheckBatchCompletion).toHaveBeenCalledWith(RETRY_BATCH_ID);
+    });
+    it('IN FLIGHT: an album a download is already working on is not queued again', async () => {
+        primeHandlerPreResponse();
+        (prisma.downloadJob.findMany as jest.Mock).mockReset().mockResolvedValueOnce([{ targetMbid: UNAVAILABLE_ALBUM.albumMbid }]);
+
+        const res = await request(app).post('/discover/retry-unavailable');
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ success: true, queued: 0, message: 'The unavailable albums are already downloading' });
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        expect(mockAcquireAlbum).not.toHaveBeenCalled();
     });
 });

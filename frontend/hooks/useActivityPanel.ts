@@ -4,6 +4,42 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 const ACTIVITY_PANEL_KEY = "kima_activity_panel_open";
 
+export type ActivityPanelTab = "notifications" | "active" | "imports" | "history" | "settings";
+
+export function setActivityPanelTab(tab: ActivityPanelTab) {
+    window.dispatchEvent(new CustomEvent("set-activity-panel-tab", { detail: { tab } }));
+}
+
+/** Opens the activity panel, on `tab` when one is given. */
+export function openActivityPanel(tab?: ActivityPanelTab) {
+    if (tab) setActivityPanelTab(tab);
+    window.dispatchEvent(new CustomEvent("open-activity-panel"));
+}
+
+/** Follows the panel's open state from the window events, for controls that only show it. */
+export function useActivityPanelOpen(): boolean {
+    const [isOpen, setIsOpen] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return localStorage.getItem(ACTIVITY_PANEL_KEY) === "true";
+    });
+
+    useEffect(() => {
+        const handleToggle = () => setIsOpen((prev) => !prev);
+        const handleOpen = () => setIsOpen(true);
+        const handleClose = () => setIsOpen(false);
+        window.addEventListener("toggle-activity-panel", handleToggle);
+        window.addEventListener("open-activity-panel", handleOpen);
+        window.addEventListener("close-activity-panel", handleClose);
+        return () => {
+            window.removeEventListener("toggle-activity-panel", handleToggle);
+            window.removeEventListener("open-activity-panel", handleOpen);
+            window.removeEventListener("close-activity-panel", handleClose);
+        };
+    }, []);
+
+    return isOpen;
+}
+
 export function useActivityPanel() {
     const [isOpen, setIsOpen] = useState(() => {
         if (typeof window === "undefined") return false;
@@ -14,9 +50,8 @@ export function useActivityPanel() {
             return false;
         }
     });
-    const [activeTab, setActiveTab] = useState<"notifications" | "active" | "imports" | "history" | "settings">("notifications");
+    const [activeTab, setActiveTab] = useState<ActivityPanelTab>("notifications");
 
-    // Persist state to localStorage
     useEffect(() => {
         if (typeof window !== "undefined") {
             try {
@@ -27,27 +62,10 @@ export function useActivityPanel() {
         }
     }, [isOpen]);
 
-    // The current value, readable without going through a state updater.
-    //
-    // These three actions announce themselves on the window, because TopBar and
-    // ActivityPanel both listen in order to keep their aria-expanded in step.
-    // That announcement used to happen INSIDE the setIsOpen updater, which is
-    // the bug: a state updater must be a pure function of its argument, and
-    // this one fired a synchronous window event. AuthenticatedLayout listens
-    // for that very event and calls open() or close() in response, so toggle()
-    // re-entered this hook while React was still mid-update.
-    //
-    // The observable symptom was that the panel could not be opened from its
-    // button at all, while dispatching "open-activity-panel" directly did work
-    // -- open() and close() ignore prev and return a constant, so re-entering
-    // them is harmless. That asymmetry is what identified the updater as the
-    // culprit. The precise interleaving that produced a net "stays closed" was
-    // not pinned down, and this comment does not guess at one.
-    //
-    // Reading the current value from a ref keeps the updater pure and moves the
-    // announcement outside it, where a side effect is allowed to live. The
-    // early return in open()/close() is load-bearing, not tidiness: it is what
-    // stops the listener feeding an event straight back into the hook.
+    // The actions announce themselves on the window so TopBar and ActivityPanel
+    // keep aria-expanded in step, and AuthenticatedLayout reacts to that event.
+    // The announcement must stay outside any state updater; reading the current
+    // value from this ref, plus the early return in open()/close(), prevents re-entry.
     const isOpenRef = useRef(isOpen);
     useEffect(() => {
         isOpenRef.current = isOpen;

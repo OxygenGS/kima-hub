@@ -1,29 +1,25 @@
 "use client";
 
-import { PlayableCard } from "@/components/ui/PlayableCard";
-import { Disc3 } from "lucide-react";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { Disc3, Play } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Album } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { plural } from "@/lib/format";
 
 interface DiscographyProps {
     albums: Album[];
-    colors: ColorPalette | null;
-    onPlayAlbum: (albumId: string, albumTitle: string) => Promise<void>;
+    onPlayAlbum: (albumId: string) => Promise<void>;
     sortBy: "year" | "dateAdded";
     onSortChange: (sortBy: "year" | "dateAdded") => void;
 }
 
 export function Discography({
     albums,
-    colors,
     onPlayAlbum,
     sortBy,
     onSortChange,
 }: DiscographyProps) {
-    const { t, locale } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -31,9 +27,9 @@ export function Discography({
     return (
         <section>
             <SectionHeader
-                color="albums"
-                title={t("Discography")}
-                rightAction={
+                type="album"
+                title="Discography"
+                action={
                     <select
                         value={sortBy}
                         onChange={(e) =>
@@ -41,8 +37,8 @@ export function Discography({
                         }
                         className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-[var(--bg-hover)] [&>option]:text-white"
                     >
-                        <option value="year">{t("Year (Newest)")}</option>
-                        <option value="dateAdded">{t("Date Added (Recent)")}</option>
+                        <option value="year">year (newest)</option>
+                        <option value="dateAdded">date added (recent)</option>
                     </select>
                 }
             />
@@ -53,30 +49,22 @@ export function Discography({
                 {albums.map((album, index) => {
                     const subtitle = [
                         album.year,
-                        album.trackCount && `${album.trackCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${album.trackCount === 1 ? t("track") : t("tracks")}`,
+                        album.trackCount && plural(album.trackCount, "track"),
                     ]
                         .filter(Boolean)
                         .join(" • ");
 
                     return (
-                        <PlayableCard
+                        <MediaCard
                             key={album.id}
                             href={`/album/${album.id}`}
-                            coverArt={
-                                album.coverArt
-                                    ? api.getCoverArtUrl(album.coverArt, 300)
-                                    : null
-                            }
+                            imageUrl={album.coverArt ? api.getCoverArtUrl(album.coverArt, 300) : null}
                             title={album.title}
                             subtitle={subtitle}
-                            placeholderIcon={
-                                <Disc3 className="w-12 h-12 text-[var(--text-muted)]" />
-                            }
-                            badge="owned"
-                            circular={false}
-                            colors={colors}
-                            onPlay={() => onPlayAlbum(album.id, album.title)}
-                            tvCardIndex={index}
+                            fallbackIcon={Disc3}
+                            type="album"
+                            index={index}
+                            action={{ icon: Play, label: "Play", onClick: () => onPlayAlbum(album.id) }}
                         />
                     );
                 })}

@@ -1,28 +1,24 @@
 "use client";
 
 import { use, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
-import { queryKeys } from "@/hooks/useQueries";
+import { useAddToPlaylistMutation } from "@/hooks/useQueries";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { useDownloadContext } from "@/lib/download-context";
-import { useLanguage } from "@/lib/i18n/language-context";
 
-// Custom hooks
 import { useAlbumData } from "@/features/album/hooks/useAlbumData";
 import { useAlbumActions } from "@/features/album/hooks/useAlbumActions";
-import { useTrackPreview } from "@/hooks/useTrackPreview";
+import { usePreview } from "@/hooks/usePreview";
 import type { MissingTrack, Track as AlbumTrack } from "@/features/album/types";
 
-// Components
 import { AlbumHero } from "@/features/album/components/AlbumHero";
 import { AlbumActionBar } from "@/features/album/components/AlbumActionBar";
 import { TrackList } from "@/features/album/components/TrackList";
 import { SimilarAlbums } from "@/features/album/components/SimilarAlbums";
+import { PageMessage } from "@/components/ui/PageMessage";
 
 interface AlbumPageProps {
     params: Promise<{
@@ -32,24 +28,20 @@ interface AlbumPageProps {
 
 export default function AlbumPage({ params }: AlbumPageProps) {
     const { id } = use(params);
-    const router = useRouter();
-    const { t } = useLanguage();
-    const queryClient = useQueryClient();
-    // Use split hooks to avoid re-renders from currentTime updates
+    const addToPlaylist = useAddToPlaylistMutation();
+    // Split hooks avoid re-renders from currentTime updates.
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { pause } = useAudioControls();
 
-    // State
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [pendingTrackIds, setPendingTrackIds] = useState<string[]>([]);
 
-    // Custom hooks
-    const { album, source, loading, reloadAlbum } = useAlbumData(id);
+    const { album, source, loading, failed, notFound, reloadAlbum } = useAlbumData(id);
     const { playAlbum, shufflePlay, addToQueue, downloadAlbum } =
         useAlbumActions();
     const { isPendingByMbid } = useDownloadContext();
-    const { previewTrack, previewPlaying, handlePreview } = useTrackPreview();
+    const preview = usePreview();
 
     const combinedTracks = useMemo<AlbumTrack[]>(() => {
         const ownedTracks = (album?.tracks || []).map((track: AlbumTrack) => ({
@@ -121,48 +113,34 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         return [...merged, ...unnumberedMissing];
     }, [album?.tracks, album?.missingTracks]);
 
-    // Get cover URL for display and color extraction
-    // Proxy through API to handle native: URLs and CORS
-    const rawCoverUrl =
-        album?.coverUrl || album?.coverArt || "/placeholder-album.png";
-    const coverUrl =
-        rawCoverUrl === "/placeholder-album.png"
-            ? rawCoverUrl
-            : api.getCoverArtUrl(rawCoverUrl, 1200);
-    // Separate URL with token for color extraction (CORS access for canvas)
-    const colorExtractionUrl =
-        rawCoverUrl === "/placeholder-album.png"
-            ? rawCoverUrl
-            : api.getCoverArtUrl(rawCoverUrl, 300, true);
+    const rawCoverUrl = album?.coverUrl || album?.coverArt || null;
+    const coverUrl = rawCoverUrl ? api.getCoverArtUrl(rawCoverUrl, 1200) : null;
+    const colorExtractionUrl = rawCoverUrl ? api.getCoverArtUrl(rawCoverUrl, 300, true) : null;
 
-    // Extract colors
     const { colors } = useImageColor(colorExtractionUrl);
 
-    // Loading and error states
     if (loading) {
         return <LoadingScreen />;
     }
 
-    if (!album) {
+    if (failed && !notFound) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                    <h1 className="text-2xl font-bold mb-4">
-                        {t("Error Loading Album")}
-                    </h1>
-                    <p className="text-[var(--text-secondary)] mb-4">{t("Album not found")}</p>
-                    <button
-                        onClick={() => router.push("/albums")}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-                    >
-                        {t("Back to Albums")}
-                    </button>
-                </div>
-            </div>
+            <PageMessage
+                title="Couldn't load this album"
+                action={{ label: "Try again", onClick: () => reloadAlbum() }}
+            />
         );
     }
 
-    // Event handlers
+    if (!album) {
+        return (
+            <PageMessage
+                title="Album not found"
+                action={{ label: "Albums", href: "/collection?tab=albums" }}
+            />
+        );
+    }
+
     const handlePlayTrack = (track: AlbumTrack, index: number) => {
         const ownedTrackIndex = (album.tracks || []).findIndex(
             (ownedTrack: AlbumTrack) => ownedTrack.id === track.id
@@ -194,9 +172,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         // Errors propagate to the selector, which reports them and stays
         // open. Swallowing here closed the dialog and made a rejected add
         // look like success.
-        await api.addTracksToPlaylist(playlistId, pendingTrackIds);
-        queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
-        queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+        await addToPlaylist.mutateAsync({ playlistId, trackIds: pendingTrackIds });
         setPendingTrackIds([]);
         setShowPlaylistSelector(false);
     };
@@ -213,7 +189,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 <AlbumActionBar
                     album={album}
                     source={source || "discovery"}
-                    colors={colors}
                     onPlayAll={() => playAlbum(album, 0)}
                     onShuffle={() => shufflePlay(album)}
                     onDownloadAlbum={() => downloadAlbum(album)}
@@ -227,9 +202,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 />
             </AlbumHero>
 
-            {/* Main Content - fills remaining viewport height */}
             <div className="relative min-h-[50vh] flex-1 animate-rise">
-                {/* Dynamic color gradient */}
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
@@ -240,16 +213,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     }}
                 />
 
-                {/* Texture overlay */}
-                <div
-                    className="absolute inset-0 pointer-events-none opacity-[0.015]"
-                    style={{
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                        backgroundSize: "30px 30px",
-                    }}
-                />
-
-                <div className="relative px-4 md:px-8 py-6 space-y-8">
+                <div className="relative page-shell py-6 space-y-8">
                     {combinedTracks.length > 0 && (
                         <TrackList
                             tracks={combinedTracks}
@@ -262,14 +226,10 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                                 addToQueue(track, album)
                             }
                             onAddToPlaylist={handleAddToPlaylist}
-                            previewTrack={previewTrack}
-                            previewPlaying={previewPlaying}
-                            onPreview={(track: AlbumTrack, e: React.MouseEvent) =>
-                                handlePreview(
-                                    track,
-                                    album.artist?.name || "",
-                                    e
-                                )
+                            previewTrack={preview.previewId}
+                            previewPlaying={preview.playing}
+                            onPreview={(track: AlbumTrack) =>
+                                preview.toggle(track.id, api.getTrackPreviewStreamUrl(album.artist?.name || "", track.title))
                             }
                         />
                     )}
@@ -277,8 +237,6 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                     {album.similarAlbums && album.similarAlbums.length > 0 && (
                         <SimilarAlbums
                             similarAlbums={album.similarAlbums}
-                            colors={colors}
-                            onNavigate={(id) => router.push(`/album/${id}`)}
                         />
                     )}
                 </div>

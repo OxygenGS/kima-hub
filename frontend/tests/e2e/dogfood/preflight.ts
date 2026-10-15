@@ -1,15 +1,6 @@
 /**
- * Data readiness gate for the dogfood walkthrough.
- *
- * The rest of the suite calls test.skip() when the library is empty, which is the right
- * call for a feature test -- there is no album page to check if there are no albums. It is
- * the wrong call for a deployment gate. A suite that skips its way to green has tested
- * nothing and reports the same colour as a suite that passed, which is precisely the signal
- * you must not send just before a deploy.
- *
- * So this gate fails instead of skipping, and it fails with an explanation of what is
- * missing and how to supply it. "Not enough data to test this build" is a real answer. A
- * green tick over an untested build is not.
+ * Data readiness gate for the dogfood walkthrough. It fails, with what is
+ * missing and how to supply it, instead of letting the suite skip to green.
  */
 import { APIRequestContext, expect } from "@playwright/test";
 
@@ -17,12 +8,10 @@ export interface LibraryFacts {
     albums: number;
     artists: number;
     tracks: number;
-    playlists: number;
     /** Tracks carrying analyzer output (bpm/key/energy) -- proves the pipeline ran. */
     tracksWithAudioFeatures: number;
     /** Tracks with a CLAP embedding, which is what the vibe map is built from. */
     embeddedTracks: number;
-    podcasts: number;
     audiobooks: number;
 }
 
@@ -44,22 +33,17 @@ async function getJson<T>(
 }
 
 /**
- * Read what is actually in this instance.
- *
- * Everything is best-effort except the three counts the walkthrough cannot proceed without.
- * A missing podcast feed means the podcast journey is skipped with a reason recorded; a
- * missing library means the run stops.
+ * Reads what is actually in this instance. Everything is best-effort except the
+ * three counts the walkthrough cannot proceed without, which `assertReady` enforces.
  */
 export async function readLibraryFacts(
     api: APIRequestContext,
     token: string,
 ): Promise<LibraryFacts> {
-    const [albums, artists, tracks, playlists, podcasts, audiobooks] = await Promise.all([
+    const [albums, artists, tracks, audiobooks] = await Promise.all([
         getJson<{ total: number }>(api, "/api/library/albums?limit=1", token),
         getJson<{ total: number }>(api, "/api/library/artists?limit=1", token),
         getJson<{ total: number }>(api, "/api/library/tracks?limit=1", token),
-        getJson<unknown>(api, "/api/playlists", token),
-        getJson<unknown>(api, "/api/podcasts", token),
         getJson<unknown>(api, "/api/audiobooks", token),
     ]);
 
@@ -71,15 +55,8 @@ export async function readLibraryFacts(
     const withFeatures =
         sample?.tracks?.filter((t) => t.audioFeatures && t.audioFeatures.bpm != null).length ?? 0;
 
-    // Embeddings are counted from enrichment progress, NOT from the vibe map.
-    //
-    // The map is a UMAP projection built ON TOP of the embeddings, so a broken projection
-    // makes it answer "no tracks" while every embedding sits happily in the database. This
-    // preflight used to read the map, and it did exactly that: it reported zero embeddings
-    // against a library with all 59 present, and the walkthrough recorded the vibe journey
-    // as "not covered" instead of failing on a map that was returning 500. Using a derived,
-    // failure-prone endpoint to decide whether to test its own upstream turned a broken
-    // feature into a skipped one -- the precise outcome this file exists to prevent.
+    // Embeddings are counted from enrichment progress, not the vibe map: a broken
+    // map would otherwise read as "no embeddings" and skip the journey that should fail.
     const progress = await getJson<{ clapEmbeddings?: { completed?: number } }>(
         api,
         "/api/enrichment/progress",
@@ -104,19 +81,13 @@ export async function readLibraryFacts(
         albums: albums?.total ?? 0,
         artists: artists?.total ?? 0,
         tracks: tracks?.total ?? 0,
-        playlists: countOf(playlists),
         tracksWithAudioFeatures: withFeatures,
         embeddedTracks: progress?.clapEmbeddings?.completed ?? 0,
-        podcasts: countOf(podcasts),
         audiobooks: countOf(audiobooks),
     };
 }
 
-/**
- * Stop the run if this instance cannot support a meaningful walkthrough.
- *
- * Deliberately hard. The point of a pre-deployment gate is to be the thing that says no.
- */
+/** Stops the run if this instance cannot support a meaningful walkthrough. */
 export function assertReady(facts: LibraryFacts, baseUrl: string): void {
     const missing: string[] = [];
     if (facts.albums < MINIMUMS.albums) {
@@ -140,45 +111,21 @@ export function assertReady(facts: LibraryFacts, baseUrl: string): void {
 }
 
 /**
- * Which optional journeys this instance can support.
- *
- * These are recorded rather than asserted. A test stack with no podcast feeds is a normal
- * state, and the report says so out loud so nobody mistakes an unexercised journey for a
- * passing one.
+ * What this instance cannot exercise. These are recorded, not asserted: a test
+ * stack with no audiobooks is a normal state, and the report names it so an
+ * unexercised journey is never mistaken for a passing one.
  */
-export function availableJourneys(facts: LibraryFacts): {
-    /** Whether the data-collection journey has enough material to be meaningful. */
-    vibe: boolean;
-    /** Whether the audiobook journey can run (needs audiobooks on this instance). */
-    audiobooks: boolean;
-    reasons: string[];
-} {
-    const reasons: string[] = [];
+export function coverageGaps(facts: LibraryFacts): string[] {
+    const gaps: string[] = [];
 
-    // The collect journey rebuilds embeddings itself, so it does not need any to exist
-    // beforehand -- it needs a library big enough for the timing to mean something. A
-    // handful of tracks would make throughput noise rather than signal.
-    const vibe = facts.tracks >= 10;
-    if (!vibe) {
-        reasons.push(
-            `data-collection journey not run: ${facts.tracks} tracks is too few to say ` +
-                `anything about pipeline throughput (needs 10+)`,
-        );
-    }
-
-    // Podcasts are created by journey 5b (subscribe), so the preflight count
-    // is always zero. The journey runs regardless and the deeper management
-    // journey (5c) exercises the subscription lifecycle.
-
-    const audiobooks = facts.audiobooks > 0;
-    if (!audiobooks) reasons.push("audiobook journey not run: no audiobooks on this instance");
+    if (facts.audiobooks === 0) gaps.push("audiobook journey not run: no audiobooks on this instance");
 
     if (facts.tracksWithAudioFeatures === 0) {
-        reasons.push(
+        gaps.push(
             "no analyzer output found in a 50-track sample: bpm/key/energy are absent, so " +
                 "anything downstream of audio analysis is untested",
         );
     }
 
-    return { vibe, audiobooks, reasons };
+    return gaps;
 }

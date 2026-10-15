@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAudio } from "@/lib/audio-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { api } from "@/lib/api";
+import { notify } from "@/lib/notify";
 import { Podcast, Episode, PodcastPreview } from "../types";
 import { queryKeys } from "@/hooks/useQueries";
 import { dispatchQueryEvent } from "@/lib/query-events";
@@ -33,13 +34,11 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
                 );
 
                 if (response.success && response.podcast?.id) {
-                    // Invalidate podcasts cache so the list refreshes
                     queryClient.invalidateQueries({ queryKey: queryKeys.podcasts() });
                     router.push(`/podcasts/${response.podcast.id}`);
                 }
             } catch (error: unknown) {
-                console.error("Subscribe error:", error);
-                alert(error instanceof Error ? error.message : "Failed to subscribe to podcast");
+                notify.error("Couldn't subscribe to this podcast", { message: error instanceof Error ? error.message : undefined });
             } finally {
                 setIsSubscribing(false);
             }
@@ -54,15 +53,18 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
             queryClient.invalidateQueries({ queryKey: queryKeys.podcasts() });
             router.push("/podcasts");
         } catch (error) {
-            console.error("Failed to remove podcast:", error);
+            notify.error("Couldn't remove this podcast", { message: error instanceof Error ? error.message : undefined });
         }
     }, [podcastId, router, queryClient]);
 
     const handlePlayEpisode = useCallback(
-        (episode: Episode, podcast: Podcast) => {
-            // Build episode queue from sorted episodes
-            if (sortedEpisodes && sortedEpisodes.length > 0) {
-                setPodcastEpisodeQueue(sortedEpisodes);
+        (episode: Episode, podcast: Podcast, around: Episode[] | undefined = sortedEpisodes) => {
+            // The queue is saved in the browser: 200 episodes around the one
+            // played, from the list it was picked from.
+            if (around && around.length > 0) {
+                const at = Math.max(0, around.findIndex((e) => e.id === episode.id));
+                const start = Math.max(0, Math.min(at - 100, around.length - 200));
+                setPodcastEpisodeQueue(around.slice(start, start + 200));
             }
             
             playPodcast({
@@ -112,16 +114,12 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
                     true
                 );
                 
-                // Invalidate podcast query to refresh UI
-                queryClient.invalidateQueries({
-                    queryKey: queryKeys.podcast(podcastId)
-                });
+                // A fresh read after the write, so the episode shows as played.
+                queryClient.invalidateQueries({ queryKey: queryKeys.podcast(podcastId) });
                 
-                // Dispatch event for real-time UI updates
                 dispatchQueryEvent("podcast-progress-updated");
             } catch (error) {
-                console.error("Failed to mark episode as complete:", error);
-                throw error;
+                notify.error("Couldn't mark the episode as played", { message: error instanceof Error ? error.message : undefined });
             }
         },
         [podcastId, queryClient]
@@ -134,8 +132,7 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
             queryClient.invalidateQueries({ queryKey: queryKeys.podcast(podcastId) });
             return result;
         } catch (error) {
-            console.error("Failed to refresh podcast:", error);
-            throw error;
+            notify.error("Couldn't refresh this podcast", { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsRefreshing(false);
         }

@@ -13,8 +13,8 @@ jest.mock('p-limit', () => {
     return () => (fn: (...args: any[]) => any) => fn();
 });
 
-// DELETE /albums/:id now requires admin (STREAM-1 fix). Inject an admin user so
-// these tests exercise the handler rather than 403 at the guard.
+// DELETE /albums/:id requires admin. Inject an admin user so these tests
+// exercise the handler rather than 403 at the guard.
 jest.mock('../../middleware/auth', () => ({
     requireAdmin: (req: any, _res: any, next: any) => {
         req.user = { id: 'test-admin', username: 'admin', role: 'admin' };
@@ -39,6 +39,7 @@ jest.mock('../../utils/db', () => ({
             findUnique: jest.fn(),
         },
         track: { findMany: jest.fn() },
+        $transaction: jest.fn(async (fn: (tx: any) => Promise<any[]>) => fn(prisma)),
     },
 }));
 
@@ -333,10 +334,9 @@ describe('DELETE /albums/:id', () => {
     });
 
     it('refuses a track path and an album title that escape the music root', async () => {
-        // Artist.name and Album.title are ID3 tag values, so a file added to
-        // the watched folder chooses them. Before the guard, the album folder
-        // here resolved to /tmp/x and was handed to a recursive delete, and the
-        // track path resolved to /etc/passwd and was handed to unlinkSync.
+        // Artist.name and Album.title are ID3 tag values, so a file added to the
+        // watched folder chooses them. Neither the album folder nor the track
+        // path may reach the recursive delete or unlinkSync.
         const albumToDelete = {
             ...BASE_ALBUM,
             title: '../../../../tmp/x',

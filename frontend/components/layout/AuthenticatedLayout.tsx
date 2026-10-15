@@ -9,6 +9,7 @@ import { TVLayout } from "./TVLayout";
 import { BottomNavigation } from "./BottomNavigation";
 import { UniversalPlayer } from "../player/UniversalPlayer";
 import { MediaControlsHandler } from "../player/MediaControlsHandler";
+import { WhatsNewGate } from "@/components/whats-new/WhatsNewGate";
 import { PlayerModeWrapper } from "../player/PlayerModeWrapper";
 import { ActivityPanel } from "./ActivityPanel";
 import { UnifiedPanel } from "./UnifiedPanel";
@@ -17,23 +18,12 @@ import { GradientSpinner } from "../ui/GradientSpinner";
 import { ReactNode } from "react";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useIsTV } from "@/lib/tv-utils";
-import { useActivityPanel } from "@/hooks/useActivityPanel";
-import { useImportToasts } from "@/hooks/useImportToasts";
+import { useActivityPanel, type ActivityPanelTab } from "@/hooks/useActivityPanel";
 
-// Paths that render without the sidebar, top bar and player.
-//
-// "/setup" belongs here and was missing, which crashed the page outright.
-// ConditionalAudioProvider already treats /setup as public and skips the
-// audio providers, but this list did not, so the chrome still mounted --
-// and the sidebar calls useAudioState. First-run setup is the first screen
-// a new install shows, and it died with "useAudioState must be used within
-// AudioStateProvider".
-//
-// These three lists answer three different questions and are deliberately
-// not identical: this one is "no chrome", auth-context's is "no login
-// required", and ConditionalAudioProvider's is "no audio". /share, for
-// instance, needs audio but no chrome.
-const publicPaths = ["/login", "/register", "/onboarding", "/setup", "/sync", "/share"];
+// Paths that render without the sidebar, top bar and player. Not the same list
+// as auth-context's (no login) or ConditionalAudioProvider's (no audio): /share
+// needs audio but no chrome.
+const publicPaths = ["/login", "/onboarding", "/sync", "/share"];
 
 export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     const { isAuthenticated, isLoading } = useAuth();
@@ -44,15 +34,13 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
     const isMobileOrTablet = isMobile || isTablet;
     const activityPanel = useActivityPanel();
     const { toggle, open, close, setActiveTab } = activityPanel;
-    useImportToasts();
 
-    // Listen for activity panel events (toggle/open/close/tab)
     useEffect(() => {
         const handleToggle = () => toggle();
         const handleOpen = () => open();
         const handleClose = () => close();
         const handleSetTab = (
-            e: CustomEvent<{ tab: "notifications" | "active" | "imports" | "history" | "settings" }>
+            e: CustomEvent<{ tab: ActivityPanelTab }>
         ) => {
             setActiveTab(e.detail.tab);
         };
@@ -91,7 +79,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
         );
     }
 
-    // On public pages (login/register), don't show sidebar/player/topbar
+    // Public pages render without the sidebar, player and top bar
     if (isPublicPage) {
         return <>{children}</>;
     }
@@ -104,28 +92,29 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                 <PlayerModeWrapper>
                     <a
                         href="#main-content"
-                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                     >
                         Skip to main content
                     </a>
                     <MediaControlsHandler />
+                    <WhatsNewGate />
                     <TVLayout>{children}</TVLayout>
                 </PlayerModeWrapper>
             );
         }
 
-        // Mobile/Tablet Layout
         if (isMobileOrTablet) {
             return (
                 <PlayerModeWrapper>
                     <a
                         href="#main-content"
-                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                     >
                         Skip to main content
                     </a>
                     <div className="h-screen bg-[var(--bg-primary)] overflow-hidden flex flex-col">
                         <MediaControlsHandler />
+                    <WhatsNewGate />
                         <TopBar />
 
                         {/* Sidebar - renders MobileSidebar for hamburger menu */}
@@ -145,8 +134,8 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                             tabIndex={-1}
                             className="flex-1 bg-gradient-to-b from-[var(--bg-hover)] via-[var(--bg-primary)] to-[var(--bg-primary)] mx-2 mb-2 rounded-lg overflow-y-auto relative focus:outline-none"
                             style={{
-                                marginTop: "calc(58px + var(--standalone-safe-area-top, 0px))",
-                                marginBottom: "calc(56px + var(--standalone-safe-area-bottom, 0px))",
+                                marginTop: "calc(var(--topbar-h) + var(--standalone-safe-area-top, 0px))",
+                                marginBottom: "calc(var(--nav-h) + var(--standalone-safe-area-bottom, 0px))",
                             }}
                         >
                             <GalaxyBackground />
@@ -163,12 +152,11 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
             );
         }
 
-        // Desktop Layout
         return (
             <PlayerModeWrapper>
                 <a
                     href="#main-content"
-                    className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-(--z-panel) focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded-lg focus:font-medium"
                 >
                     Skip to main content
                 </a>
@@ -177,6 +165,7 @@ export function AuthenticatedLayout({ children }: { children: ReactNode }) {
                     style={{ paddingTop: "calc(64px + var(--titlebar-height, 0px))" }}
                 >
                     <MediaControlsHandler />
+                    <WhatsNewGate />
                     <TopBar />
                     <div className="flex-1 flex gap-2 p-2 pt-0 overflow-hidden">
                         <Sidebar />

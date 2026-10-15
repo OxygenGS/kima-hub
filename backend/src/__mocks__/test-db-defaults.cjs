@@ -1,13 +1,42 @@
 /**
- * Shared local-dev fallback values for DATABASE_URL/REDIS_URL.
- *
- * Both test-env.cjs (loaded per Jest worker via `setupFiles`) and
- * test-global-setup.cjs (run ONCE by Jest in a separate process via
- * `globalSetup`, which never loads `setupFiles`) need to know the same "if
- * nothing else is configured, assume local dev" values. Factored out here so
- * the two can't drift apart into disagreeing about what "local dev" means.
+ * Local-dev DATABASE_URL/REDIS_URL fallbacks shared by test-env.cjs and
+ * test-global-setup.cjs. Credentials come from the gitignored backend/.env,
+ * with the database swapped to this checkout's own test database; without a
+ * .env they are the docker-compose.dev.yml servers. CI sets its own URLs.
  */
+const fs = require("fs");
+const path = require("path");
+
+// backend/.env lives one directory up from this file (cwd may vary).
+function envValue(name) {
+    for (const dir of [path.resolve(__dirname, "../.."), process.cwd()]) {
+        try {
+            const text = fs.readFileSync(path.join(dir, ".env"), "utf8");
+            const m = text.match(new RegExp(`^${name}=["']?([^"'\\n]+)["']?`, "m"));
+            if (m) return m[1].trim();
+        } catch {
+            /* no .env here; try the next candidate */
+        }
+    }
+    return null;
+}
+
+function swapDbName(url, dbName) {
+    try {
+        const u = new URL(url);
+        u.pathname = `/${dbName}`;
+        return u.toString();
+    } catch {
+        return null;
+    }
+}
+
+const devDatabaseUrl = envValue("DATABASE_URL");
+
 module.exports = {
-    DATABASE_URL_FALLBACK: 'postgresql://test:test@localhost:5433/test',
-    REDIS_URL_FALLBACK: 'redis://localhost:6379',
+    // This checkout's dedicated test database, on its dedicated server.
+    DATABASE_URL_FALLBACK:
+        (devDatabaseUrl && swapDbName(devDatabaseUrl, "kima_v1_test")) ||
+        "postgresql://kima:kima@localhost:5455/kima_v1_test",
+    REDIS_URL_FALLBACK: envValue("REDIS_URL") || "redis://localhost:6390",
 };

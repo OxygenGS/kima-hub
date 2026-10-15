@@ -1,15 +1,6 @@
 /**
- * Notification Policy Service
- *
- * Intelligent notification filtering for download jobs.
- * Suppresses intermediate failures during active retry cycles,
- * only sending notifications for terminal states (completed/exhausted).
- *
- * State Machine: PENDING → PROCESSING → COMPLETED/EXHAUSTED
- *
- * Policy:
- * - SUPPRESS: All failures during active retry window
- * - SEND: Final success, permanent failure after retries exhausted
+ * Download-job notifications: one per album, when the download completes or
+ * fails for good. Discover and playlist-import jobs report as a batch instead.
  */
 
 import { logger } from "../utils/logger";
@@ -21,60 +12,23 @@ interface NotificationDecision {
     notificationType?: "download_complete" | "download_failed";
 }
 
-// Configuration constants
 const DEFAULT_RETRY_WINDOW_MINUTES = 30;
-const SUPPRESS_TRANSIENT_FAILURES = true;
-// How many of the user's most recent terminal jobs hasAlreadyNotified()
-// scans for a duplicate. A duplicate job for the same album is created
-// close in time to the original (retry-driven), so recency is what
-// matters; bounding it keeps the cost independent of lifetime history.
-// A match older than this window is missed -- the user gets one extra
-// notification, not data loss. Matches notificationService.ts's per-user
-// history bound (same domain, same shape).
+// How many of the user's recent terminal jobs are checked for an earlier
+// notification of the same album. Retries land close in time, so a bounded
+// recent window suffices; a miss costs one extra notification.
 const DUPLICATE_CHECK_WINDOW = 100;
-
-// Failure classification patterns
-const TRANSIENT_PATTERNS = [
-    "no sources found",
-    "no indexer results",
-    "no releases available",
-    "import failed",
-    "connection timeout",
-    "rate limited",
-    "temporarily unavailable",
-    "searching for alternative",
-    "download stuck",
-];
-
-const PERMANENT_PATTERNS = [
-    "all releases exhausted",
-    "all albums exhausted",
-    "artist not found",
-    "download cancelled",
-    "album not found in lidarr",
-];
-
-const CRITICAL_PATTERNS = [
-    "disk full",
-    "permission denied",
-    "lidarr unavailable",
-    "authentication failed",
-    "invalid api key",
-];
-
-type FailureClassification = "transient" | "permanent" | "critical";
 
 class NotificationPolicyService {
     /**
      * Evaluate whether a notification should be sent for a download job.
      *
      * @param jobId - The download job ID
-     * @param eventType - The type of event (complete, failed, retry, timeout)
+     * @param eventType - The type of event (complete, failed, retry)
      * @returns Decision on whether to send notification
      */
     async evaluateNotification(
         jobId: string,
-        eventType: "complete" | "failed" | "retry" | "timeout"
+        eventType: "complete" | "failed" | "retry"
     ): Promise<NotificationDecision> {
         logger.debug(
             `[NOTIFICATION-POLICY] Evaluating: ${jobId} (${eventType})`
@@ -115,14 +69,20 @@ class NotificationPolicyService {
         // Handle based on job status
         switch (job.status) {
             case "completed":
-                return await this.evaluateCompletedJob(job, eventType);
+                return await this.evaluateTerminalJob(job, eventType, "complete", {
+                    reason: "Download completed successfully",
+                    notificationType: "download_complete",
+                });
 
             case "processing":
                 return await this.evaluateProcessingJob(job, eventType);
 
             case "failed":
             case "exhausted":
-                return await this.evaluateFailedJob(job, eventType);
+                return await this.evaluateTerminalJob(job, eventType, "failed", {
+                    reason: "Download failed",
+                    notificationType: "download_failed",
+                });
 
             case "pending":
                 return {
@@ -139,16 +99,22 @@ class NotificationPolicyService {
     }
 
     /**
-     * Evaluate notification for completed job
+     * A job that reached a terminal state notifies once — unless another job
+     * for the same album already did.
      */
-    private async evaluateCompletedJob(
+    private async evaluateTerminalJob(
         job: any,
-        eventType: string
+        eventType: string,
+        wantedEvent: "complete" | "failed",
+        notification: {
+            reason: string;
+            notificationType: "download_complete" | "download_failed";
+        }
     ): Promise<NotificationDecision> {
-        if (eventType !== "complete") {
+        if (eventType !== wantedEvent) {
             return {
                 shouldNotify: false,
-                reason: "Invalid event type for completed job",
+                reason: `Invalid event type for ${job.status} job`,
             };
         }
 
@@ -163,8 +129,7 @@ class NotificationPolicyService {
 
         return {
             shouldNotify: true,
-            reason: "Download completed successfully",
-            notificationType: "download_complete",
+            ...notification,
         };
     }
 
@@ -193,25 +158,11 @@ class NotificationPolicyService {
                     reason: "Job in active retry window - suppressing notification",
                 };
             }
-            // Retry window expired but still processing - extend it
+            // Retry window expired but still processing: stay quiet until the
+            // job reaches a terminal status and reports through it.
             return {
                 shouldNotify: false,
-                reason: "Retry window expired but job still processing - extending timeout",
-            };
-        }
-
-        if (eventType === "timeout") {
-            const inRetryWindow = await this.isInRetryWindow(job);
-            if (inRetryWindow) {
-                return {
-                    shouldNotify: false,
-                    reason: "Still in retry window - extending timeout",
-                };
-            }
-            // Timeout expired and out of retry window - let caller handle failure
-            return {
-                shouldNotify: false,
-                reason: "Timeout expired - caller should mark as failed",
+                reason: "Retry window expired but job still processing - waiting for terminal status",
             };
         }
 
@@ -222,67 +173,8 @@ class NotificationPolicyService {
     }
 
     /**
-     * Evaluate notification for failed/exhausted job
-     */
-    private async evaluateFailedJob(
-        job: any,
-        eventType: string
-    ): Promise<NotificationDecision> {
-        if (eventType !== "failed" && eventType !== "timeout") {
-            return {
-                shouldNotify: false,
-                reason: "Invalid event type for failed job",
-            };
-        }
-
-        // Check if another job for same album already notified
-        const hasOtherNotification = await this.hasAlreadyNotified(job);
-        if (hasOtherNotification) {
-            return {
-                shouldNotify: false,
-                reason: "Another job for same album already sent notification",
-            };
-        }
-
-        // Classify the failure
-        const classification = this.classifyFailure(
-            job,
-            job.error || "Unknown error"
-        );
-
-        // Critical errors always notify
-        if (classification === "critical") {
-            return {
-                shouldNotify: true,
-                reason: "Critical error requires user intervention",
-                notificationType: "download_failed",
-            };
-        }
-
-        // Transient failures - suppress if configured
-        if (classification === "transient" && SUPPRESS_TRANSIENT_FAILURES) {
-            return {
-                shouldNotify: false,
-                reason: "Transient failure - suppressed (may succeed on retry)",
-            };
-        }
-
-        // Permanent failures or transient with suppress disabled
-        return {
-            shouldNotify: true,
-            reason:
-                classification === "permanent"
-                    ? "Permanent failure after retries exhausted"
-                    : "Failure notification (transient suppression disabled)",
-            notificationType: "download_failed",
-        };
-    }
-
-    /**
-     * Check if job is in active retry window
-     * A job is in retry window if:
-     * 1. Status is 'processing'
-     * 2. Started within the last RETRY_WINDOW_MINUTES
+     * True while a processing job is young enough that a retry may still
+     * succeed: it started (or was created) within the retry window.
      */
     private async isInRetryWindow(job: any): Promise<boolean> {
         if (job.status !== "processing") {
@@ -290,25 +182,18 @@ class NotificationPolicyService {
         }
 
         const metadata = (job.metadata as any) || {};
-
-        // Get retry window duration (configurable per job or use default)
-        const retryWindowMinutes =
-            metadata.retryWindowMinutes || DEFAULT_RETRY_WINDOW_MINUTES;
-
-        // Get start time
         const startedAt = metadata.startedAt
             ? new Date(metadata.startedAt)
             : job.createdAt;
 
-        // Calculate if window has expired
-        const windowMs = retryWindowMinutes * 60 * 1000;
+        const windowMs = DEFAULT_RETRY_WINDOW_MINUTES * 60 * 1000;
         const elapsed = Date.now() - startedAt.getTime();
 
         if (elapsed > windowMs) {
             logger.debug(
                 `[NOTIFICATION-POLICY]   Retry window expired (${Math.round(
                     elapsed / 60000
-                )}m > ${retryWindowMinutes}m)`
+                )}m > ${DEFAULT_RETRY_WINDOW_MINUTES}m)`
             );
             return false;
         }
@@ -316,7 +201,7 @@ class NotificationPolicyService {
         logger.debug(
             `[NOTIFICATION-POLICY]   In retry window (${Math.round(
                 elapsed / 60000
-            )}m < ${retryWindowMinutes}m)`
+            )}m < ${DEFAULT_RETRY_WINDOW_MINUTES}m)`
         );
         return true;
     }
@@ -334,19 +219,9 @@ class NotificationPolicyService {
             return false;
         }
 
-        // Find the user's most recent terminal jobs, then check metadata for
-        // matching artist+album with a notification already sent. We must
-        // use findMany because Prisma cannot filter on JSON fields
-        // portably, and findFirst only checked the first row.
-        //
-        // Bounded to DUPLICATE_CHECK_WINDOW rows, ordered by completedAt --
-        // see the constant's comment for why. completedAt is nullable
-        // (endJob() sets it on every terminal transition, but rows written
-        // before endJob() existed, or by a terminal write that bypasses it,
-        // can still have it null), and Postgres sorts NULLS FIRST on a bare
-        // DESC order -- without `nulls: "last"` the null rows would fill the
-        // window ahead of every dated one, silently defeating the bound.
-        // Select only the columns the loop below actually reads.
+        // Recent terminal jobs, matched on artist+album in their JSON metadata (Prisma
+        // cannot filter JSON portably). completedAt can be null and Postgres sorts
+        // NULLS FIRST on DESC, so `nulls: "last"` keeps them from filling the window.
         const otherJobs = await prisma.downloadJob.findMany({
             where: {
                 id: { not: job.id },
@@ -378,64 +253,6 @@ class NotificationPolicyService {
         }
 
         return false;
-    }
-
-    /**
-     * Classify failure type based on error message
-     * @returns 'transient' | 'permanent' | 'critical'
-     */
-    private classifyFailure(job: any, error: string): FailureClassification {
-        const errorLower = error.toLowerCase();
-
-        // Check critical patterns first
-        for (const pattern of CRITICAL_PATTERNS) {
-            if (errorLower.includes(pattern)) {
-                logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as CRITICAL: ${pattern}`
-                );
-                return "critical";
-            }
-        }
-
-        // Check permanent patterns
-        for (const pattern of PERMANENT_PATTERNS) {
-            if (errorLower.includes(pattern)) {
-                logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as PERMANENT: ${pattern}`
-                );
-                return "permanent";
-            }
-        }
-
-        // Check transient patterns
-        for (const pattern of TRANSIENT_PATTERNS) {
-            if (errorLower.includes(pattern)) {
-                logger.debug(
-                    `[NOTIFICATION-POLICY]   Classified as TRANSIENT: ${pattern}`
-                );
-                return "transient";
-            }
-        }
-
-        // Default to transient if unknown
-        logger.debug(
-            `[NOTIFICATION-POLICY]   Classified as TRANSIENT (default)`
-        );
-        return "transient";
-    }
-
-    /**
-     * Get configuration for notification policy
-     * Can be extended to pull from user settings or system config
-     */
-    getConfig(): {
-        retryWindowMinutes: number;
-        suppressTransientFailures: boolean;
-    } {
-        return {
-            retryWindowMinutes: DEFAULT_RETRY_WINDOW_MINUTES,
-            suppressTransientFailures: SUPPRESS_TRANSIENT_FAILURES,
-        };
     }
 }
 

@@ -6,11 +6,13 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true
     },
     "include": ["src/**/*"],
-    "exclude": ["node_modules", "seeds"]
+    "exclude": ["node_modules"]
 }

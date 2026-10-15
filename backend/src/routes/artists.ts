@@ -1,15 +1,21 @@
 import { Router } from "express";
-import axios from "axios";
 import { logger } from "../utils/logger";
-import { lastFmService } from "../services/lastfm";
+import { withTimeout } from "../utils/timeout";
+import { getSimilarArtists } from "../services/artistSimilarity";
+import { listenBrainzService } from "../services/listenBrainz";
 import { musicBrainzService } from "../services/musicbrainz";
-import { fanartService } from "../services/fanart";
+import { resolveArtistMbid } from "../services/artistCorrection";
 import { deezerService } from "../services/deezer";
 import { redisClient } from "../utils/redis";
-import { normalizeToArray } from "../utils/normalize";
 import { requireAuthOrToken } from "../middleware/auth";
+import {
+    withAlbumArtwork,
+    findAlbumArtwork,
+    findArtistArtwork,
+} from "../services/artwork";
 import { safeError } from "../utils/errors";
-import { upstreamHeader } from "../utils/upstreamHeaders";
+import { proxyPreviewStream } from "../utils/previewProxy";
+import { failureCause } from "../utils/outcome";
 
 const router = Router();
 router.use(requireAuthOrToken);
@@ -17,20 +23,22 @@ router.use(requireAuthOrToken);
 // Cache TTL for discovery content (shorter since it's not owned)
 const DISCOVERY_CACHE_TTL = 24 * 60 * 60; // 24 hours
 
+// MusicBrainz ids are UUIDs; anything else is a plain name.
+const MBID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // GET /artists/preview/:artistName/:trackTitle - Get Deezer preview URL for a track
 router.get("/preview/:artistName/:trackTitle", async (req, res) => {
     try {
         const { artistName, trackTitle } = req.params;
-        const decodedArtist = decodeURIComponent(artistName);
-        const decodedTrack = decodeURIComponent(trackTitle);
 
         logger.debug(
-            `Getting preview for "${decodedTrack}" by ${decodedArtist}`
+            `Getting preview for "${trackTitle}" by ${artistName}`
         );
 
         const previewUrl = await deezerService.getTrackPreview(
-            decodedArtist,
-            decodedTrack
+            artistName,
+            trackTitle
         );
 
         if (previewUrl) {
@@ -47,69 +55,32 @@ router.get("/preview/:artistName/:trackTitle", async (req, res) => {
 router.get("/preview/:artistName/:trackTitle/stream", async (req, res) => {
     try {
         const { artistName, trackTitle } = req.params;
-        const decodedArtist = decodeURIComponent(artistName);
-        const decodedTrack = decodeURIComponent(trackTitle);
 
         logger.debug(
-            `Streaming preview for "${decodedTrack}" by ${decodedArtist}`
+            `Streaming preview for "${trackTitle}" by ${artistName}`
         );
 
         const previewUrl = await deezerService.getFreshTrackPreview(
-            decodedArtist,
-            decodedTrack
+            artistName,
+            trackTitle
         );
 
         if (!previewUrl) {
             return res.status(404).json({ error: "Preview not found" });
         }
 
-        const upstream = await axios.get(previewUrl, {
-            responseType: "stream",
-            timeout: 10000,
+        await proxyPreviewStream(res, previewUrl, {
+            notFoundMessage: "Preview not found",
+            logLabel: "Preview stream",
         });
-
-        const upstreamContentLength = upstreamHeader(upstream.headers["content-length"]);
-        const upstreamAcceptRanges = upstreamHeader(upstream.headers["accept-ranges"]);
-
-        res.setHeader(
-            "Content-Type",
-            upstreamHeader(upstream.headers["content-type"]) || "audio/mpeg"
-        );
-        if (upstreamContentLength) {
-            res.setHeader("Content-Length", upstreamContentLength);
-        }
-        if (upstreamAcceptRanges) {
-            res.setHeader("Accept-Ranges", upstreamAcceptRanges);
-        }
-        res.setHeader("Cache-Control", "no-store");
-
-        upstream.data.on("error", (streamErr: unknown) => {
-            logger.error("Preview stream pipe error:", streamErr);
-            if (!res.headersSent) {
-                res.status(502).end();
-            } else {
-                res.end();
-            }
-        });
-
-        // Clean up upstream stream when client disconnects (preview cancelled, tab closed, etc)
-        res.on("close", () => {
-            if (!upstream.data.destroyed) {
-                upstream.data.destroy();
-            }
-        });
-
-        upstream.data.pipe(res);
     } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 404) {
-            return res.status(404).json({ error: "Preview not found" });
-        }
         safeError(res, "Track preview stream", error);
     }
 });
 
 // GET /artists/discover/:nameOrMbid - Get artist details for discovery (not in library yet)
 router.get("/discover/:nameOrMbid", async (req, res) => {
+    const start = Date.now();
     try {
         const { nameOrMbid } = req.params;
 
@@ -121,47 +92,54 @@ router.get("/discover/:nameOrMbid", async (req, res) => {
                 logger.debug(`[Discovery] Cache hit for artist: ${nameOrMbid}`);
                 return res.json(JSON.parse(cached));
             }
-        } catch (err) {
-            // Redis errors are non-critical
+        } catch {
+            // A failed cache read falls through to a fresh lookup.
         }
 
-        // Check if it's an MBID (UUID format) or name
-        const isMbid =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-                nameOrMbid
-            );
+        const isMbid = MBID_PATTERN.test(nameOrMbid);
 
         let mbid: string | null = isMbid ? nameOrMbid : null;
-        let artistName: string = isMbid ? "" : decodeURIComponent(nameOrMbid);
+        let artistName: string = isMbid ? "" : nameOrMbid;
+        // A page built while MusicBrainz failed is served but not cached.
+        let complete = true;
 
         // If we have a name but no MBID, search for it
         if (!mbid && artistName) {
-            const mbResults = await musicBrainzService.searchArtist(
-                artistName,
-                1
-            );
-            if (mbResults.length > 0) {
-                mbid = mbResults[0].id;
-                artistName = mbResults[0].name;
+            const found = await resolveArtistMbid(artistName, undefined, {
+                interactive: true,
+            });
+            if (found.kind === "answered") {
+                mbid = found.value.mbid;
+                artistName = found.value.name;
+            } else if (found.kind === "absent") {
+                logger.debug(
+                    `[Discovery] no artist named ${artistName} on MusicBrainz`
+                );
+            } else {
+                // A failed search is not "no such artist": serve the page
+                // without the MBID-backed data and say so in the log.
+                complete = false;
+                logger.debug(
+                    `[Discovery] MB artist search ${found.kind} for ${artistName}: ${failureCause(found)}`
+                );
             }
         }
 
-        // If we have MBID but no name, get it from MusicBrainz.
-        //
-        // A well-formed id MusicBrainz does not recognise is not a server fault. It is the
-        // common case here rather than a malformed request: the ids reach us from Last.fm's
-        // similar-artist data, which is full of MBIDs for artists that have since been
-        // merged or deleted, and the "Fans Also Like" tiles navigate straight back into this
-        // handler. Letting the throw escape answered 500 for an ordinary click.
+        // With an MBID but no name, ask MusicBrainz. Similar-artist tiles link MBIDs
+        // of merged or deleted artists, so `absent` (and a failed call) answer 404.
         if (mbid && !artistName) {
-            try {
-                const mbArtist = await musicBrainzService.getArtist(mbid);
-                artistName = mbArtist.name;
-            } catch (error: any) {
-                const upstreamStatus = error.response?.status;
-                if (!(upstreamStatus >= 400 && upstreamStatus < 500)) throw error;
-                // Fall through: artistName stays empty and the 404 below answers.
+            const mbArtist = await musicBrainzService.getArtist(mbid, undefined, {
+                interactive: true,
+            });
+            if (mbArtist.kind === "answered") {
+                artistName = mbArtist.value.name;
+            } else if (mbArtist.kind === "absent") {
                 logger.debug(`MusicBrainz does not know artist ${mbid}`);
+            } else {
+                complete = false;
+                logger.debug(
+                    `MusicBrainz artist lookup ${mbArtist.kind} for ${mbid}: ${failureCause(mbArtist)}`
+                );
             }
         }
 
@@ -169,110 +147,58 @@ router.get("/discover/:nameOrMbid", async (req, res) => {
             return res.status(404).json({ error: "Artist not found" });
         }
 
-        // Get artist info from Last.fm
-        const lastFmInfo = await lastFmService.getArtistInfo(
-            artistName,
-            mbid || undefined
-        );
-
-        // Filter out generic "multiple artists" biographies from Last.fm
-        // These occur when Last.fm groups artists with the same name
-        let bio = lastFmInfo?.bio?.summary || null;
-        if (bio) {
-            const lowerBio = bio.toLowerCase();
-            if (
-                (lowerBio.includes("there are") &&
-                    (lowerBio.includes("artist") ||
-                        lowerBio.includes("band")) &&
-                    lowerBio.includes("with the name")) ||
-                lowerBio.includes("there is more than one artist") ||
-                lowerBio.includes("multiple artists")
-            ) {
-                // This is a disambiguation page - don't show it
-                logger.debug(
-                    `  Filtered out disambiguation biography for ${artistName}`
-                );
-                bio = null;
-            }
-        }
-
-        // Get top tracks from Last.fm
-        let topTracks: any[] = [];
-        if (mbid || artistName) {
-            try {
-                topTracks = await lastFmService.getArtistTopTracks(
-                    mbid || "",
-                    artistName,
-                    10
-                );
-            } catch (error) {
-                logger.debug(`Failed to get top tracks for ${artistName}`);
-            }
-        }
-
-        // Get artist image
-        let image = null;
-
-        // Try Fanart.tv first (if we have MBID)
-        if (mbid) {
-            try {
-                image = await fanartService.getArtistImage(mbid);
-                logger.debug(`Fanart.tv image for ${artistName}`);
-            } catch (error) {
-                logger.debug(
-                    `✗ Failed to get Fanart.tv image for ${artistName}`
-                );
-            }
-        }
-
-        // Fallback to Deezer
-        if (!image) {
-            try {
-                image = await deezerService.getArtistImage(artistName);
-                if (image) {
-                    logger.debug(`Deezer image for ${artistName}`);
-                }
-            } catch (error) {
-                logger.debug(` Failed to get Deezer image for ${artistName}`);
-            }
-        }
-
-        // Fallback to Last.fm (but filter placeholders)
-        // NORMALIZATION: lastFmInfo.image could be a single object or array
-        if (!image && lastFmInfo?.image) {
-            const images = normalizeToArray(lastFmInfo.image);
-            const lastFmImage = lastFmService.getBestImage(images);
-            // Filter out Last.fm placeholder
-            if (
-                lastFmImage &&
-                !lastFmImage.includes("2a96cbd8b46e442fc41c2b86b821562f")
-            ) {
-                image = lastFmImage;
-                logger.debug(`Last.fm image for ${artistName}`);
-            } else {
-                logger.debug(` Last.fm returned placeholder for ${artistName}`);
-            }
-        }
-
-        // Get discography from MusicBrainz
         let albums: any[] = [];
-        if (mbid) {
-            try {
-                const releaseGroups = await musicBrainzService.getReleaseGroups(
-                    mbid
-                );
 
+        // Bio: Wikidata first, Wikipedia abstract via the MB sitelink
+        // second — both live inside wikidataService.getArtistInfo.
+        const wdInfo = mbid
+            ? await withTimeout(
+                  (await import("../services/wikidata")).wikidataService.getArtistInfo(
+                      artistName,
+                      mbid,
+                      { interactive: true }
+                  ),
+                  8000,
+                  "Wikidata getArtistInfo timed out"
+              ).catch(() => null)
+            : { summary: null, heroUrl: null };
+        const bio = wdInfo?.summary || null;
+
+        // Artist artwork (parallel)
+        const artworkPromise = findArtistArtwork({
+            name: artistName,
+            mbid: mbid || undefined,
+            interactive: true,
+        })
+            .then((r) => r?.url ?? null)
+            .catch(() => null);
+
+        // Discography from MusicBrainz (parallel)
+        const discographyPromise = (async (): Promise<any[]> => {
+            if (!mbid) return [];
+            const rgs = await musicBrainzService.getReleaseGroups(mbid, undefined, undefined, {
+                interactive: true,
+            });
+            if (rgs.kind !== "answered") {
+                if (rgs.kind !== "absent") complete = false;
+                logger.debug(
+                    `[Discovery] discography for ${artistName}: ${
+                        rgs.kind === "absent"
+                            ? "MusicBrainz has no release-groups"
+                            : failureCause(rgs)
+                    }`
+                );
+                return [];
+            }
+            try {
                 // Filter albums - only show studio albums and EPs
-                // Exclude live albums, compilations, soundtracks, remixes, etc.
-                const filteredReleaseGroups = releaseGroups.filter(
+                const filteredReleaseGroups = rgs.value.filter(
                     (rg: any) => {
-                        // Must be Album or EP
                         const isPrimaryType =
                             rg["primary-type"] === "Album" ||
                             rg["primary-type"] === "EP";
                         if (!isPrimaryType) return false;
 
-                        // Exclude secondary types (live, compilation, soundtrack, remix, etc.)
                         const secondaryTypes = rg["secondary-types"] || [];
                         const hasExcludedType = secondaryTypes.some(
                             (type: string) =>
@@ -290,170 +216,200 @@ router.get("/discover/:nameOrMbid", async (req, res) => {
                     }
                 );
 
-                // Process albums with Deezer fallback
-                albums = await Promise.all(
-                    filteredReleaseGroups.map(async (rg: any) => {
-                        // Default to Cover Art Archive URL
-                        let coverUrl = `https://coverartarchive.org/release-group/${rg.id}/front-500`;
+                const candidates = filteredReleaseGroups.map((rg: any) => ({
+                    id: rg.id,
+                    rgMbid: rg.id,
+                    mbid: rg.id,
+                    title: rg.title,
+                    type: rg["primary-type"],
+                    year: rg["first-release-date"]
+                        ? parseInt(rg["first-release-date"].substring(0, 4))
+                        : null,
+                    releaseDate: rg["first-release-date"] || null,
+                    coverUrl: null as string | null,
+                    owned: false,
+                }));
 
-                        // For first 10 albums, try Deezer as fallback if Cover Art Archive doesn't have it
-                        // (to avoid too many requests)
-                        const index = filteredReleaseGroups.indexOf(rg);
-                        if (index < 10) {
-                            try {
-                                const response = await fetch(coverUrl, {
-                                    method: "HEAD",
-                                    signal: AbortSignal.timeout(2000),
-                                });
-                                if (!response.ok) {
-                                    // Cover Art Archive doesn't have it, try Deezer
-                                    const deezerCover =
-                                        await deezerService.getAlbumCover(
-                                            artistName,
-                                            rg.title
-                                        );
-                                    if (deezerCover) {
-                                        coverUrl = deezerCover;
-                                    }
-                                }
-                            } catch (error) {
-                                // Silently fail and keep Cover Art Archive URL
-                            }
-                        }
-
-                        return {
-                            id: rg.id, // MBID - used for linking
-                            rgMbid: rg.id, // Release group MBID - used for downloads
-                            mbid: rg.id, // Fallback MBID
-                            title: rg.title,
-                            type: rg["primary-type"],
-                            year: rg["first-release-date"]
-                                ? parseInt(
-                                      rg["first-release-date"].substring(0, 4)
-                                  )
-                                : null,
-                            releaseDate: rg["first-release-date"] || null,
-                            coverUrl,
-                            owned: false, // Discovery albums are never owned
-                        };
-                    })
+                const enriched = await withAlbumArtwork(
+                    candidates,
+                    (a: any) => ({
+                        rgMbid: a.rgMbid,
+                        artistName,
+                        albumTitle: a.title,
+                    }),
+                    (a: any, coverUrl: string | null) => ({ ...a, coverUrl }),
                 );
 
-                // Sort albums
-                albums.sort((a: any, b: any) => {
-                    // Sort by year descending (newest first)
+                enriched.sort((a: any, b: any) => {
                     if (a.year && b.year) return b.year - a.year;
                     if (a.year) return -1;
                     if (b.year) return 1;
                     return 0;
                 });
+                return enriched;
             } catch (error) {
                 logger.error(
                     `Failed to get discography for ${artistName}:`,
                     error
                 );
             }
+            return [];
+        })();
+
+        const [image, discAlbums] = await Promise.all([
+            artworkPromise,
+            discographyPromise,
+        ]);
+
+        if (discAlbums.length > 0) {
+            albums = discAlbums;
         }
 
-        // Get similar artists from Last.fm and fetch images
-        // NORMALIZATION: lastFmInfo.similar.artist could be a single object or array
-        const similarArtistsRaw = normalizeToArray(lastFmInfo?.similar?.artist);
+        // Similar artists: ListenBrainz, then Deezer, nudged by the library's matching;
+        // images through the artwork cascade (Fanart, Deezer).
+        const similarList = await getSimilarArtists(
+            mbid || "",
+            artistName,
+            10,
+            { interactive: true }
+        );
         const similarArtists = await Promise.all(
-            similarArtistsRaw.slice(0, 10).map(async (artist: any) => {
-                // NORMALIZATION: artist.image could be a single object or array
-                const images = normalizeToArray(artist.image);
-                const similarImage = images.find(
-                    (img: any) => img.size === "large"
-                )?.[" #text"];
-
-                let image = null;
-
-                // Try Fanart.tv first (if we have MBID)
-                if (artist.mbid) {
-                    try {
-                        image = await fanartService.getArtistImage(artist.mbid);
-                    } catch (error) {
-                        // Silently fail
-                    }
-                }
-
-                // Fallback to Deezer
-                if (!image) {
-                    try {
-                        const deezerImage = await deezerService.getArtistImage(
-                            artist.name
-                        );
-                        if (deezerImage) {
-                            image = deezerImage;
-                        }
-                    } catch (error) {
-                        // Silently fail
-                    }
-                }
-
-                // Last fallback to Last.fm (but filter placeholders)
-                if (
-                    !image &&
-                    similarImage &&
-                    !similarImage.includes("2a96cbd8b46e442fc41c2b86b821562f")
-                ) {
-                    image = similarImage;
-                }
+            similarList.map(async (s) => {
+                const image =
+                    (
+                        await findArtistArtwork({
+                            name: s.name,
+                            mbid: s.mbid || undefined,
+                            interactive: true,
+                        })
+                    )?.url ?? null;
 
                 return {
-                    id: artist.mbid || artist.name,
-                    name: artist.name,
-                    mbid: artist.mbid || null,
-                    url: artist.url,
+                    id: s.mbid || s.name,
+                    name: s.name,
+                    mbid: s.mbid || null,
+                    url: s.url,
                     image,
                 };
             })
         );
 
-        // NORMALIZATION: lastFmInfo.tags.tag could be a single object or array
-        const tags = normalizeToArray(lastFmInfo?.tags?.tag)
-            .map((t: any) => t?.name)
-            .filter(Boolean);
+        // Genres from the MusicBrainz artist record.
+        let tags: string[] = [];
+        if (mbid) {
+            const mbArtist = await musicBrainzService.getArtist(mbid, [
+                "genres",
+            ], { interactive: true });
+            if (mbArtist.kind === "answered") {
+                tags = (mbArtist.value.genres || [])
+                    .sort((a: any, b: any) => (b.count || 0) - (a.count || 0))
+                    .slice(0, 5)
+                    .map((g: any) => g.name)
+                    .filter(Boolean);
+            } else if (mbArtist.kind !== "absent") {
+                logger.debug(
+                    `MB genres ${mbArtist.kind} for ${artistName}: ${failureCause(mbArtist)}`
+                );
+            }
+        }
+
+        // Popular tracks: global popularity, not the local echo. Same tiers
+        // as the library artist page (LB sitewide top recordings, then Deezer),
+        // but with no owned library to join against, every row is unowned and
+        // previewable.
+        let topTracks: any[] = [];
+        {
+            if (mbid) {
+                try {
+                    topTracks = (
+                        await listenBrainzService.getTopRecordingsForArtist(mbid, req.user!.id, 10)
+                    ).map((r) => ({
+                        id: r.recordingMbid,
+                        title: r.title,
+                        duration: Math.round(r.lengthMs / 1000) || 0,
+                        playCount: r.playCount,
+                        listeners: r.listeners,
+                        userPlayCount: 0,
+                        popularitySource: "listenbrainz",
+                        album: {
+                            id: null,
+                            title: r.releaseName || "Unknown Album",
+                        },
+                    }));
+                } catch (lbError) {
+                    logger.debug(
+                        `[Discovery] LB top recordings failed for ${artistName}:`,
+                        lbError
+                    );
+                }
+            }
+            if (topTracks.length === 0) {
+                try {
+                    topTracks = (await deezerService.getArtistTopTracks(artistName, 10)).map(
+                        (r) => ({
+                            id: `dz:${r.title.toLowerCase()}`,
+                            title: r.title,
+                            duration: Math.round(r.durationMs / 1000) || 0,
+                            playCount: r.rank,
+                            listeners: 0,
+                            userPlayCount: 0,
+                            popularitySource: "deezer",
+                            previewUrl: r.previewUrl,
+                            album: {
+                                id: null,
+                                title: r.album || "Unknown Album",
+                                coverUrl: r.coverUrl,
+                                coverArt: r.coverUrl,
+                            },
+                        })
+                    );
+                } catch (dzError) {
+                    logger.debug(
+                        `[Discovery] Deezer top tracks failed for ${artistName}:`,
+                        dzError
+                    );
+                }
+            }
+        }
 
         const response = {
             mbid,
             name: artistName,
             image,
-            bio, // Use filtered bio instead of raw Last.fm bio
+            bio, // Wikidata/Wikipedia abstract
             summary: bio, // Alias for consistency
             tags,
             genres: tags, // Alias for consistency
-            listeners: parseInt(lastFmInfo?.stats?.listeners || "0"),
-            playcount: parseInt(lastFmInfo?.stats?.playcount || "0"),
-            url: lastFmInfo?.url || null,
-            albums: albums.map((album) => ({ ...album, owned: false })), // Mark all as not owned
-            topTracks: topTracks.map((track) => ({
-                id: `lastfm-${mbid || artistName}-${track.name}`,
-                title: track.name,
-                playCount: parseInt(track.playcount || "0"),
-                listeners: parseInt(track.listeners || "0"),
-                duration: parseInt(track.duration || "0"),
-                url: track.url,
-                album: { title: track.album?.["#text"] || "Unknown Album" },
-            })),
+            listeners: 0,
+            playcount: 0,
+            url: mbid ? `https://musicbrainz.org/artist/${mbid}` : null,
+            albums: albums.map((album: any) => ({ ...album, owned: false })), // Mark all as not owned
+            // Global popularity tiers above (LB sitewide, then Deezer); empty
+            // only when both clouds were unavailable.
+            topTracks,
             similarArtists,
         };
 
         // Cache discovery response for 24 hours
-        try {
-            await redisClient.setex(
-                cacheKey,
-                DISCOVERY_CACHE_TTL,
-                JSON.stringify(response)
-            );
-            logger.debug(`[Discovery] Cached artist: ${artistName}`);
-        } catch (err) {
-            // Redis errors are non-critical
+        if (complete) {
+            try {
+                await redisClient.setex(
+                    cacheKey,
+                    DISCOVERY_CACHE_TTL,
+                    JSON.stringify(response)
+                );
+                logger.debug(`[Discovery] Cached artist: ${artistName}`);
+            } catch {
+                // A failed cache write only means the next request looks it up again.
+            }
         }
 
         res.json(response);
     } catch (error) {
         safeError(res, "Artist discovery", error);
+    } finally {
+        const elapsed = Date.now() - start;
+        logger.info(`GET /artists/discover completed in ${elapsed}ms`);
     }
 });
 
@@ -462,17 +418,8 @@ router.get("/album/:mbid", async (req, res) => {
     try {
         const { mbid } = req.params;
 
-        // This identifier goes to MusicBrainz, which only ever issues UUIDs. Anything
-        // else -- a stale link, a typo, a library id pasted into a discovery URL -- is a
-        // request for an album that cannot exist, so answer that directly.
-        //
-        // Without this the id was forwarded upstream anyway, MusicBrainz rejected it with
-        // a 400, the handler below only knew how to recover from a 404, and the rethrow
-        // came out of the bottom of the route as "500 Internal server error" -- telling
-        // the caller that the server broke when in fact the id was simply wrong. It also
-        // spent a rate-limited upstream request to learn nothing.
-        const MBID_PATTERN =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        // MusicBrainz ids are UUIDs; anything else cannot exist, so answer 404
+        // without spending a rate-limited request.
         if (!MBID_PATTERN.test(mbid)) {
             return res.status(404).json({ error: "Album not found" });
         }
@@ -485,59 +432,74 @@ router.get("/album/:mbid", async (req, res) => {
                 logger.debug(`[Discovery] Cache hit for album: ${mbid}`);
                 return res.json(JSON.parse(cached));
             }
-        } catch (err) {
-            // Redis errors are non-critical
+        } catch {
+            // A failed cache read falls through to a fresh lookup.
         }
 
         let releaseGroup: any = null;
         let release: any = null;
         let releaseGroupId: string = mbid;
+        // A page built while MusicBrainz failed is served but not cached.
+        let complete = true;
 
-        // Try as release-group first, then as release
-        try {
-            releaseGroup = await musicBrainzService.getReleaseGroup(mbid);
-        } catch (error: any) {
-            // Any "you asked for something that isn't there" answer means this is not a
-            // release-group, so try it as a release. Only a 404 was handled before, which
-            // left every other client-side rejection to escape as a 500.
-            const upstreamStatus = error.response?.status;
-            if (upstreamStatus >= 400 && upstreamStatus < 500) {
-                logger.debug(
-                    `${mbid} is not a release-group, trying as release...`
-                );
-                try {
-                    release = await musicBrainzService.getRelease(mbid);
-                } catch (releaseError: any) {
-                    // A well-formed id that MusicBrainz knows nothing about as either a
-                    // release-group or a release is simply an album that does not exist.
-                    // Letting this escape reported it as a server fault.
-                    const releaseStatus = releaseError.response?.status;
-                    if (releaseStatus >= 400 && releaseStatus < 500) {
-                        return res.status(404).json({ error: "Album not found" });
-                    }
-                    throw releaseError;
-                }
-                releaseGroupId = release["release-group"]?.id || mbid;
-
-                // Now get the release group to get the type and first-release-date
-                if (releaseGroupId) {
-                    try {
-                        releaseGroup = await musicBrainzService.getReleaseGroup(
-                            releaseGroupId
-                        );
-                    } catch (err) {
-                        logger.error(
-                            `Failed to get release-group ${releaseGroupId}`
-                        );
-                    }
-                }
+        // Try as release-group first, then as release.
+        const rgOutcome = await musicBrainzService.getReleaseGroup(mbid);
+        if (rgOutcome.kind === "answered") {
+            releaseGroup = rgOutcome.value;
+        } else if (
+            rgOutcome.kind === "absent" ||
+            rgOutcome.kind === "permanent"
+        ) {
+            // Any "you asked for something that isn't there" answer means
+            // this is not a release-group, so try it as a release.
+            logger.debug(`${mbid} is not a release-group, trying as release...`);
+            const relOutcome = await musicBrainzService.getRelease(mbid);
+            if (relOutcome.kind === "answered") {
+                release = relOutcome.value;
+            } else if (relOutcome.kind === "absent") {
+                // A well-formed id that MusicBrainz knows nothing about as
+                // either a release-group or a release is simply an album
+                // that does not exist.
+                return res.status(404).json({ error: "Album not found" });
             } else {
-                throw error;
+                // A failed call is not "album not found": the page cannot
+                // be built honestly without the data, so say what happened.
+                logger.debug(
+                    `MB release lookup ${relOutcome.kind} for ${mbid}: ${failureCause(relOutcome)}`
+                );
+                return res
+                    .status(503)
+                    .json({ error: "MusicBrainz is not answering" });
             }
-        }
+            releaseGroupId = release["release-group"]?.id || mbid;
 
-        if (!releaseGroup && !release) {
-            return res.status(404).json({ error: "Album not found" });
+            // Now get the release group to get the type and first-release-date
+            if (releaseGroupId) {
+                const rg2 = await musicBrainzService.getReleaseGroup(
+                    releaseGroupId
+                );
+                if (rg2.kind === "answered") {
+                    releaseGroup = rg2.value;
+                } else {
+                    if (rg2.kind !== "absent") complete = false;
+                    logger.debug(
+                        `Failed to get release-group ${releaseGroupId}: ${
+                            rg2.kind === "absent"
+                                ? "no such release-group"
+                                : failureCause(rg2)
+                        }`
+                    );
+                }
+            }
+        } else {
+            // Neither answer nor "not there" — the lookup itself failed;
+            // that is a server-side problem, not a missing album.
+            logger.debug(
+                `MB release-group lookup ${rgOutcome.kind} for ${mbid}: ${failureCause(rgOutcome)}`
+            );
+            return res
+                .status(503)
+                .json({ error: "MusicBrainz is not answering" });
         }
 
         // Get the artist name and MBID from either release-group or release
@@ -547,82 +509,40 @@ router.get("/album/:mbid", async (req, res) => {
         const artistMbid = artistCredit?.[0]?.artist?.id;
         const albumTitle = releaseGroup?.title || release?.title;
 
-        // Get album info from Last.fm
-        let lastFmInfo = null;
-        try {
-            lastFmInfo = await lastFmService.getAlbumInfo(
-                artistName,
-                albumTitle
-            );
-        } catch (error) {
-            logger.debug(`Failed to get Last.fm info for ${albumTitle}`);
-        }
-
-        // Get tracks - if we have release, use it directly; otherwise get first release from group
+        // Tracks come from the release if we have one, else the group's first release.
         let tracks: any[] = [];
         if (release) {
             tracks = release.media?.[0]?.tracks || [];
         } else if (releaseGroup?.releases && releaseGroup.releases.length > 0) {
             const firstRelease = releaseGroup.releases[0];
-            try {
-                const releaseDetails = await musicBrainzService.getRelease(
-                    firstRelease.id
-                );
-                tracks = releaseDetails.media?.[0]?.tracks || [];
-            } catch (error) {
-                logger.error(
-                    `Failed to get tracks for release ${firstRelease.id}`
-                );
-            }
-        }
-
-        // Get album cover art - try Cover Art Archive first
-        let coverUrl = null;
-        let coverArtUrl = `https://coverartarchive.org/release/${mbid}/front-500`;
-        if (!release) {
-            coverArtUrl = `https://coverartarchive.org/release-group/${releaseGroupId}/front-500`;
-        }
-
-        // Check if Cover Art Archive actually has the image
-        try {
-            const response = await fetch(coverArtUrl, {
-                method: "HEAD",
-                signal: AbortSignal.timeout(2000),
-            });
-            if (response.ok) {
-                coverUrl = coverArtUrl;
-                logger.debug(`Cover Art Archive has cover for ${albumTitle}`);
-            } else {
-                logger.debug(
-                    `✗ Cover Art Archive 404 for ${albumTitle}, trying Deezer...`
-                );
-            }
-        } catch (error) {
-            logger.debug(
-                `✗ Cover Art Archive check failed for ${albumTitle}, trying Deezer...`
+            const releaseDetails = await musicBrainzService.getRelease(
+                firstRelease.id
             );
-        }
-
-        // Fallback to Deezer if Cover Art Archive doesn't have it
-        if (!coverUrl) {
-            try {
-                const deezerCover = await deezerService.getAlbumCover(
-                    artistName,
-                    albumTitle
+            if (releaseDetails.kind === "answered") {
+                tracks = releaseDetails.value.media?.[0]?.tracks || [];
+            } else {
+                if (releaseDetails.kind !== "absent") complete = false;
+                logger.error(
+                    `Failed to get tracks for release ${firstRelease.id}: ${
+                        releaseDetails.kind === "absent"
+                            ? "no data on MusicBrainz"
+                            : failureCause(releaseDetails)
+                    }`
                 );
-                if (deezerCover) {
-                    coverUrl = deezerCover;
-                    logger.debug(`Deezer has cover for ${albumTitle}`);
-                } else {
-                    // Final fallback to Cover Art Archive URL (might 404, but better than nothing)
-                    coverUrl = coverArtUrl;
-                }
-            } catch (error) {
-                logger.debug(` Deezer lookup failed for ${albumTitle}`);
-                // Final fallback to Cover Art Archive URL
-                coverUrl = coverArtUrl;
             }
         }
+
+        // Album cover art: ask the artwork cascade and accept null. A URL
+        // that was never verified renders a broken box the browser eats
+        // silently, and the failure never reaches this server.
+        const coverUrl =
+            (
+                await findAlbumArtwork({
+                    rgMbid: releaseGroupId || mbid,
+                    artistName,
+                    albumTitle,
+                })
+            )?.url ?? null;
 
         // Format response
         const releaseMbid = release?.id || null;
@@ -646,11 +566,14 @@ router.get("/album/:mbid", async (req, res) => {
             type: releaseGroup?.["primary-type"] || "Album",
             coverUrl,
             coverArt: coverUrl, // Alias for compatibility
-            bio: lastFmInfo?.wiki?.summary || null,
-            // NORMALIZATION: lastFmInfo.tags.tag could be a single object or array
-            tags: normalizeToArray(lastFmInfo?.tags?.tag)
+            bio:
+                (releaseGroup as any)?.annotation ||
+                (release as any)?.annotation ||
+                null,
+            tags: ((releaseGroup as any)?.tags || [])
                 .map((t: any) => t?.name)
-                .filter(Boolean),
+                .filter(Boolean)
+                .slice(0, 5),
             tracks: tracks.map((track: any, index: number) => ({
                 id: `mb-${releaseGroupId}-${track.id || index}`,
                 title: track.title,
@@ -660,21 +583,22 @@ router.get("/album/:mbid", async (req, res) => {
                 duration: track.length ? Math.floor(track.length / 1000) : 0,
                 artist: { name: artistName },
             })),
-            similarAlbums: [], // Similar album recommendations not yet implemented
             owned: false,
             source: "discovery",
         };
 
         // Cache discovery response for 24 hours
-        try {
-            await redisClient.setex(
-                cacheKey,
-                DISCOVERY_CACHE_TTL,
-                JSON.stringify(response)
-            );
-            logger.debug(`[Discovery] Cached album: ${albumTitle}`);
-        } catch (err) {
-            // Redis errors are non-critical
+        if (complete) {
+            try {
+                await redisClient.setex(
+                    cacheKey,
+                    DISCOVERY_CACHE_TTL,
+                    JSON.stringify(response)
+                );
+                logger.debug(`[Discovery] Cached album: ${albumTitle}`);
+            } catch {
+                // A failed cache write only means the next request looks it up again.
+            }
         }
 
         res.json(response);

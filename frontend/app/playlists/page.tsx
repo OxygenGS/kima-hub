@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { usePlaylistsQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
-import { useMusicPermissions } from "@/lib/auth-context";
 import { useAudioControls } from "@/lib/audio-context";
 import {
     Play,
@@ -19,14 +17,19 @@ import {
     Link2,
     FileMusic,
     Compass,
-    Loader2,
     X,
     Check,
 } from "lucide-react";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { api } from "@/lib/api";
-import { cn } from "@/utils/cn";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { cn } from "@/lib/cn";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { plural } from "@/lib/format";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { mosaicCovers } from "@/features/playlist/coverMosaic";
 
 type ActionPanel = "create" | "importUrl" | "importFile" | null;
 
@@ -51,87 +54,9 @@ interface Playlist {
     };
 }
 
-function PlaylistMosaic({
-    items,
-    size = 4,
-    greyed = false,
-}: {
-    items?: PlaylistItem[];
-    size?: number;
-    greyed?: boolean;
-}) {
-    const coverUrls = useMemo(() => {
-        if (!items || items.length === 0) return [];
-
-        const tracksWithCovers = items.filter(
-            (item) => item.track?.album?.coverUrl
-        );
-        if (tracksWithCovers.length === 0) return [];
-
-        const coverCounts = new Map<string, number>();
-        for (const item of tracksWithCovers) {
-            const cover = item.track.album!.coverUrl!;
-            coverCounts.set(cover, (coverCounts.get(cover) || 0) + 1);
-        }
-        const uniqueCovers = Array.from(coverCounts.entries())
-            .sort((a, b) => b[1] - a[1])
-            .map(([cover]) => cover);
-
-        const urls = uniqueCovers.map((cover) => api.getCoverArtUrl(cover, 200));
-
-        if (urls.length >= size) return urls.slice(0, size);
-        if (urls.length <= 1) return urls;
-
-        if (urls.length === 2) return [urls[0], urls[1], urls[1], urls[0]];
-        return [urls[0], urls[1], urls[2], urls[0]];
-    }, [items, size]);
-
-    if (coverUrls.length === 0) {
-        return (
-            <div
-                className={cn(
-                    "w-full h-full flex items-center justify-center bg-[var(--bg-primary)]",
-                    greyed && "opacity-50"
-                )}
-            >
-                <Music className="w-10 h-10 text-white/10" />
-            </div>
-        );
-    }
-
-    if (coverUrls.length === 1) {
-        return (
-            <Image
-                src={coverUrls[0]}
-                alt=""
-                fill
-                className={cn("object-cover", greyed && "opacity-50 grayscale")}
-                sizes="200px"
-                unoptimized
-            />
-        );
-    }
-
-    return (
-        <div
-            className={cn(
-                "grid grid-cols-2 w-full h-full",
-                greyed && "opacity-50 grayscale"
-            )}
-        >
-            {coverUrls.slice(0, 4).map((url, index) => (
-                <div key={index} className="relative">
-                    <Image
-                        src={url}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="100px"
-                        unoptimized
-                    />
-                </div>
-            ))}
-        </div>
+function mosaicUrls(items: PlaylistItem[] | undefined): string[] {
+    return mosaicCovers((items ?? []).map((item) => item.track?.album?.coverUrl)).map(
+        (cover) => api.getCoverArtUrl(cover, 200),
     );
 }
 
@@ -148,9 +73,9 @@ function PlaylistCard({
     onToggleHide: (playlistId: string, hide: boolean) => void;
     isHiddenView?: boolean;
 }) {
-    const { t, locale } = useLanguage();
     const isShared = playlist.isOwner === false;
     const [isHiding, setIsHiding] = useState(false);
+    const imageUrl = useMemo(() => mosaicUrls(playlist.items), [playlist.items]);
 
     const handleToggleHide = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -164,96 +89,57 @@ function PlaylistCard({
     };
 
     return (
-        <Link href={`/playlist/${playlist.id}`}>
-            <div
-                className={cn(
-                    "group cursor-pointer p-3 rounded-lg transition-all border border-transparent hover:bg-white/[0.03] hover:border-white/5",
-                    isHiddenView && "opacity-60 hover:opacity-100"
-                )}
-                data-tv-card
-                data-tv-card-index={index}
-                tabIndex={0}
-            >
-                {/* Cover Image */}
-                <div className="relative aspect-square mb-3 rounded-lg overflow-hidden bg-[var(--bg-primary)] border border-white/10">
-                    <PlaylistMosaic
-                        items={playlist.items}
-                        greyed={isHiddenView}
-                    />
-
-                    {isShared && (
-                        <button
-                            onClick={handleToggleHide}
-                            disabled={isHiding}
-                            className={cn(
-"absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center",
-"bg-black/60 transition-all duration-200",
-                                "opacity-0 group-hover:opacity-100",
-                                playlist.isHidden
-                                    ? "text-green-400"
-                                    : "text-[var(--text-muted)]",
-                                isHiding && "opacity-50 cursor-not-allowed"
-                            )}
-                            title={
-                                playlist.isHidden
-                                    ? t("Show playlist")
-                                    : t("Hide playlist")
-                            }
-                        >
-                            {playlist.isHidden ? (
-                                <Eye className="w-3.5 h-3.5" />
-                            ) : (
-                                <EyeOff className="w-3.5 h-3.5" />
-                            )}
-                        </button>
-                    )}
-
+        <MediaCard
+            href={`/playlist/${playlist.id}`}
+            title={playlist.name}
+            subtitle={`${isShared && playlist.user?.username ? `${playlist.user.username} · ` : ""}${plural(playlist.trackCount || 0, "song")}`}
+            imageUrl={imageUrl}
+            fallbackIcon={Music}
+            type="track"
+            index={index}
+            className={cn(isHiddenView && "opacity-60 hover:opacity-100")}
+            action={{ icon: Play, label: "Play", onClick: () => onPlay(playlist.id) }}
+            corner={
+                isShared && (
                     <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onPlay(playlist.id);
-                        }}
+                        type="button"
+                        onClick={handleToggleHide}
+                        disabled={isHiding}
+                        aria-label={playlist.isHidden ? "Show playlist" : "Hide playlist"}
+                        title={playlist.isHidden ? "show playlist" : "hide playlist"}
                         className={cn(
-"absolute bottom-2 right-2 w-10 h-10 rounded-lg flex items-center justify-center",
-"bg-brand transition-all duration-200",
-"hover:bg-[#f97316] hover:scale-105",
-    "opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0"
+                            "w-8 h-8 rounded-lg flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150",
+                            playlist.isHidden ? "text-success" : "text-[var(--text-muted)]",
+                            isHiding && "opacity-50 cursor-not-allowed",
                         )}
-                        title={t("Play playlist")}
                     >
-                        <Play className="w-4 h-4 fill-current ml-0.5 text-black" />
+                        {playlist.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                     </button>
-
-                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-brand to-[#f97316] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150 origin-left" />
-                </div>
-
-                <h3
-                    className={cn(
-                        "text-sm font-bold truncate tracking-tight",
-                        isHiddenView ? "text-[var(--text-muted)]" : "text-white"
-                    )}
-                >
-                    {playlist.name}
-                </h3>
-                <p className="text-xs tabular-nums text-[var(--text-muted)] mt-0.5 truncate">
-                    {isShared && playlist.user?.username ? (
-                        <span>
-                            {playlist.user.username} | {" "}
-                        </span>
-                    ) : null}
-                    {(playlist.trackCount || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}{" "}
-                    {t(playlist.trackCount === 1 ? "song" : "songs")}
-                </p>
-            </div>
-        </Link>
+                )
+            }
+        />
     );
 }
 
 // --- Inline action panels ---
 
+const PANEL_INPUT =
+    "px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30";
+
+function PanelCloseButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
+        >
+            <X className="w-4 h-4" />
+        </button>
+    );
+}
+
 function CreatePanel({ onClose }: { onClose: () => void }) {
-    const { t } = useLanguage();
     const router = useRouter();
     const queryClient = useQueryClient();
     const [name, setName] = useState("");
@@ -281,7 +167,7 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                 router.push(`/playlist/${result.id}`);
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : t("Failed to create playlist"));
+            setError(err instanceof Error ? err.message : "Failed to create playlist");
             setIsSubmitting(false);
         }
     };
@@ -293,8 +179,8 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={t("Playlist name...")}
-                className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
+                placeholder="Playlist name..."
+                className={cn("flex-1 min-w-[180px]", PANEL_INPUT)}
                 disabled={isSubmitting}
             />
             <button
@@ -307,32 +193,27 @@ function CreatePanel({ onClose }: { onClose: () => void }) {
                         : "bg-white/5 border-white/10 text-[var(--text-muted)] hover:text-white/60"
                 )}
             >
-                {isPublic ? t("Public") : t("Private")}
+                {isPublic ? "Public" : "Private"}
             </button>
-            <button
+            <Button
+                variant="primary"
+                size="sm"
                 type="submit"
-                disabled={!name.trim() || isSubmitting}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={!name.trim()}
+                isLoading={isSubmitting}
             >
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                {t("Create")}
-            </button>
-            <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
-            >
-                <X className="w-4 h-4" />
-            </button>
+                {!isSubmitting && <Check className="w-3.5 h-3.5" />}
+                Create
+            </Button>
+            <PanelCloseButton onClick={onClose} />
             {error && (
-                <p className="w-full text-xs tabular-nums text-red-400 mt-1">{error}</p>
+                <p className="w-full text-xs tabular-nums text-danger-light mt-1">{error}</p>
             )}
         </form>
     );
 }
 
 function ImportUrlPanel({ onClose }: { onClose: () => void }) {
-    const { t } = useLanguage();
     const [url, setUrl] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -350,13 +231,13 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
         try {
             new URL(trimmed);
         } catch {
-            setError(t("Enter a valid URL"));
+            setError("Enter a valid URL");
             return;
         }
 
-        const supportedDomains = ["spotify.com", "deezer.com", "youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "mixcloud.com"];
+        const supportedDomains = ["spotify.com", "deezer.com", "youtube.com", "youtu.be", "soundcloud.com", "bandcamp.com", "mixcloud.com"];
         if (!supportedDomains.some(domain => trimmed.includes(domain))) {
-            setError(t("Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud"));
+            setError("Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud");
             return;
         }
 
@@ -364,12 +245,9 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
         setError(null);
         try {
             await api.post<{ jobId: string }>("/spotify/import/quick", { url: trimmed });
-            window.dispatchEvent(new CustomEvent("import-status-change", {
-                detail: { status: "started", playlistName: null }
-            }));
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : t("Failed to start import"));
+            setError(err instanceof Error ? err.message : "Failed to start import");
         } finally {
             setIsSubmitting(false);
         }
@@ -382,35 +260,29 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={url}
                 onChange={(e) => { setUrl(e.target.value); setError(null); }}
-                placeholder={t("Paste a playlist URL (Spotify, YouTube, SoundCloud...)")}
-                className="flex-1 min-w-[220px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
+                placeholder="Paste a playlist URL (Spotify, YouTube, SoundCloud...)"
+                className={cn("flex-1 min-w-[220px]", PANEL_INPUT)}
                 disabled={isSubmitting}
             />
-            <button
+            <Button
+                variant="primary"
+                size="sm"
                 type="submit"
-                disabled={!url.trim() || isSubmitting}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={!url.trim()}
+                isLoading={isSubmitting}
             >
-                {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                {t("Import")}
-            </button>
-            <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
-            >
-                <X className="w-4 h-4" />
-            </button>
+                {!isSubmitting && <Link2 className="w-3.5 h-3.5" />}
+                Import
+            </Button>
+            <PanelCloseButton onClick={onClose} disabled={isSubmitting} />
             {error && (
-                <p className="w-full text-xs tabular-nums text-red-400 mt-1">{error}</p>
+                <p className="w-full text-xs tabular-nums text-danger-light mt-1">{error}</p>
             )}
         </form>
     );
 }
 
 function ImportM3UPanel({ onClose }: { onClose: () => void }) {
-    const { t, locale } = useLanguage();
     const queryClient = useQueryClient();
     const [file, setFile] = useState<File | null>(null);
     const [playlistName, setPlaylistName] = useState("");
@@ -452,7 +324,7 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
             setResult({ playlistId: res.playlistId, matched: res.matched, total: res.total });
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (err) {
-            setError(err instanceof Error ? err.message : t("M3U import failed"));
+            setError(err instanceof Error ? err.message : "M3U import failed");
             setIsSubmitting(false);
         }
     };
@@ -461,24 +333,18 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
         return (
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 text-sm text-white">
-                    <Check className="w-4 h-4 text-green-400 shrink-0" />
+                    <Check className="w-4 h-4 text-success shrink-0" />
                     <span>
-                        {t("Created")} &ldquo;{playlistName}&rdquo; {t("with")} {result.matched.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("of")} {result.total.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("tracks")} {t("matched")}.
+                        Created &ldquo;{playlistName}&rdquo; with {result.matched} of {result.total} tracks matched.
                     </span>
                 </div>
                 <Link
                     href={`/playlist/${result.playlistId}`}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-brand-hover transition-colors"
                 >
-                    {t("View Playlist")}
+                    View Playlist
                 </Link>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
-                >
-                    <X className="w-4 h-4" />
-                </button>
+                <PanelCloseButton onClick={onClose} />
             </div>
         );
     }
@@ -503,27 +369,23 @@ function ImportM3UPanel({ onClose }: { onClose: () => void }) {
                         type="text"
                         value={playlistName}
                         onChange={(e) => setPlaylistName(e.target.value)}
-                        placeholder={t("Playlist name...")}
-                        className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30"
+                        placeholder="Playlist name..."
+                        className={cn("flex-1 min-w-[180px]", PANEL_INPUT)}
                         disabled={isSubmitting}
                     />
-                    <button
+                    <Button
+                        variant="primary"
+                        size="sm"
                         type="submit"
-                        disabled={!playlistName.trim() || isSubmitting}
-                className="px-4 py-2 rounded-lg text-xs font-semibold bg-brand text-black hover:bg-[#f97316] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                        disabled={!playlistName.trim()}
+                        isLoading={isSubmitting}
                     >
-                        {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        {t("Create Playlist")}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+                        {!isSubmitting && <Check className="w-3.5 h-3.5" />}
+                        Create Playlist
+                    </Button>
+                    <PanelCloseButton onClick={onClose} />
                     {error && (
-                        <p className="w-full text-xs tabular-nums text-red-400 mt-1">{error}</p>
+                        <p className="w-full text-xs tabular-nums text-danger-light mt-1">{error}</p>
                     )}
                 </form>
             )}
@@ -554,7 +416,7 @@ function ActionButton({
                 primary
                     ? active
                         ? "bg-brand text-black ring-2 ring-brand/40"
-                        : "bg-brand text-black hover:bg-[#f97316]"
+                        : "bg-brand text-black hover:bg-brand-hover"
                     : active
                         ? "bg-white/10 text-white border border-white/20"
                         : "text-[var(--text-secondary)] hover:bg-white/5 border border-white/10 hover:text-white/70 hover:border-white/20"
@@ -566,121 +428,95 @@ function ActionButton({
     );
 }
 
-// --- Empty state ---
+// --- Getting started ---
 
-function EmptyState({
-    showHiddenTab,
-    activeAction,
-    setActiveAction,
-    canImportPlaylist,
+function ActionRow({
+    icon: Icon,
+    title,
+    subtitle,
+    brand = false,
+    onClick,
+    children,
 }: {
-    showHiddenTab: boolean;
-    activeAction: ActionPanel;
-    setActiveAction: (a: ActionPanel) => void;
-    canImportPlaylist: boolean;
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    subtitle: string;
+    brand?: boolean;
+    onClick: () => void;
+    children?: React.ReactNode;
 }) {
-    const { t } = useLanguage();
-    if (showHiddenTab) {
-        return (
-        <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-12">
-                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-brand to-[#f97316]" />
-                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
-                    <div className="w-2 h-2 bg-brand" />
-                    <span className="text-xs text-[var(--text-secondary)]">
-                        {t("No Hidden Playlists")}
-                    </span>
+    return (
+        <div className="space-y-3">
+            <button onClick={onClick} className="flex items-center gap-3 text-left group">
+                <div
+                    className={cn(
+                        "w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 transition-colors",
+                        brand
+                            ? "bg-brand/10 border-brand/20 group-hover:bg-brand/20"
+                            : "bg-white/5 border-white/10 group-hover:bg-white/10"
+                    )}
+                >
+                    <Icon className={cn("w-5 h-5", brand ? "text-brand" : "text-[var(--text-muted)]")} />
                 </div>
-                <div className="flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-6">
-                        <ListMusic className="w-8 h-8 text-white/10" />
-                    </div>
-                    <h2 className="text-2xl font-bold tracking-tight text-white mb-2">
-                        {t("No hidden playlists")}
-                    </h2>
-                    <p className="text-xs text-[var(--text-muted)] max-w-sm leading-relaxed">
-                        {t("You haven't hidden any playlists")}
-                    </p>
+                <div>
+                    <h3 className="text-sm font-bold tracking-tight text-white">{title}</h3>
+                    <p className="text-xs text-[var(--text-muted)]">{subtitle}</p>
                 </div>
-            </div>
-        );
-    }
+            </button>
+            {children && <div className="pl-[52px]">{children}</div>}
+        </div>
+    );
+}
 
+function GettingStarted({
+    activeAction,
+    toggle,
+    close,
+}: {
+    activeAction: ActionPanel;
+    toggle: (a: ActionPanel) => void;
+    close: () => void;
+}) {
     return (
         <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-8 md:p-12">
-            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-brand to-[#f97316]" />
+            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-brand to-brand-dark" />
 
             <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                 <div className="w-2 h-2 bg-brand" />
                 <span className="text-xs text-[var(--text-secondary)]">
-                    {t("Getting Started")}
+                    Getting Started
                 </span>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-                {/* Create */}
-                <div className="space-y-3">
-                    <button
-                        onClick={() => setActiveAction(activeAction === "create" ? null : "create")}
-                        className="flex items-center gap-3 text-left group"
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center shrink-0 group-hover:bg-brand/20 transition-colors">
-                            <Plus className="w-5 h-5 text-brand" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Create your first playlist")}</h3>
-                            <p className="text-xs text-[var(--text-muted)]">{t("Start from scratch")}</p>
-                        </div>
-                    </button>
-                    {activeAction === "create" && (
-                        <div className="pl-[52px]">
-                            <CreatePanel onClose={() => setActiveAction(null)} />
-                        </div>
-                    )}
-                </div>
+                <ActionRow
+                    icon={Plus}
+                    title="Create your first playlist"
+                    subtitle="Start from scratch"
+                    brand
+                    onClick={() => toggle("create")}
+                >
+                    {activeAction === "create" && <CreatePanel onClose={close} />}
+                </ActionRow>
 
-                {/* Import URL (requires both album and track rights) */}
-                {canImportPlaylist && <div className="space-y-3">
-                    <button
-                        onClick={() => setActiveAction(activeAction === "importUrl" ? null : "importUrl")}
-                        className="flex items-center gap-3 text-left group"
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/10 transition-colors">
-                            <Link2 className="w-5 h-5 text-[var(--text-muted)]" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Import from Spotify or Deezer")}</h3>
-                            <p className="text-xs text-[var(--text-muted)]">{t("Paste a playlist URL")}</p>
-                        </div>
-                    </button>
-                    {activeAction === "importUrl" && (
-                        <div className="pl-[52px]">
-                            <ImportUrlPanel onClose={() => setActiveAction(null)} />
-                        </div>
-                    )}
-                </div>}
+                <ActionRow
+                    icon={Link2}
+                    title="Import from Spotify or Deezer"
+                    subtitle="Paste a playlist URL"
+                    onClick={() => toggle("importUrl")}
+                >
+                    {activeAction === "importUrl" && <ImportUrlPanel onClose={close} />}
+                </ActionRow>
 
-                {/* Import M3U */}
-                <div className="space-y-3">
-                    <button
-                        onClick={() => setActiveAction(activeAction === "importFile" ? null : "importFile")}
-                        className="flex items-center gap-3 text-left group"
-                    >
-                        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/10 transition-colors">
-                            <FileMusic className="w-5 h-5 text-[var(--text-muted)]" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Import from M3U file")}</h3>
-                            <p className="text-xs tabular-nums text-[var(--text-muted)]">{t("Upload .m3u or .m3u8")}</p>
-                        </div>
-                    </button>
-                    {activeAction === "importFile" && (
-                        <div className="pl-[52px]">
-                            <ImportM3UPanel onClose={() => setActiveAction(null)} />
-                        </div>
-                    )}
-                </div>
+                <ActionRow
+                    icon={FileMusic}
+                    title="Import from M3U file"
+                    subtitle="Upload .m3u or .m3u8"
+                    onClick={() => toggle("importFile")}
+                >
+                    {activeAction === "importFile" && <ImportM3UPanel onClose={close} />}
+                </ActionRow>
 
-                {/* Browse */}
                 <div>
                     <Link
                         href="/browse/playlists"
@@ -690,8 +526,8 @@ function EmptyState({
                             <Compass className="w-5 h-5 text-[var(--text-muted)]" />
                         </div>
                         <div>
-                            <h3 className="text-sm font-bold tracking-tight text-white">{t("Browse public playlists")}</h3>
-                            <p className="text-xs text-[var(--text-muted)]">{t("Discover shared music")}</p>
+                            <h3 className="text-sm font-bold tracking-tight text-white">Browse public playlists</h3>
+                            <p className="text-xs text-[var(--text-muted)]">Discover shared music</p>
                         </div>
                     </Link>
                 </div>
@@ -703,10 +539,6 @@ function EmptyState({
 // --- Main page ---
 
 export default function PlaylistsPage() {
-    useRouter();
-    const { t, locale } = useLanguage();
-    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
     const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
@@ -784,172 +616,132 @@ export default function PlaylistsPage() {
     };
 
     const toggleAction = (action: ActionPanel) => {
-        if (action === "importUrl" && !canImportPlaylist) return;
         setActiveAction((prev) => (prev === action ? null : action));
     };
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     const displayedPlaylists = showHiddenTab
         ? hiddenPlaylists
         : visiblePlaylists;
+    const emptyStateHasForms = displayedPlaylists.length === 0 && !showHiddenTab;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
-            {/* Editorial Header */}
-            <div className="relative px-4 md:px-8 pt-8 pb-6">
-                <div className="max-w-[1800px] mx-auto">
-                    {/* System status */}
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="w-1.5 h-1.5 bg-brand rounded-full" />
-                        <span className="t-eyebrow">
-                            {t("Your Library")}
-                        </span>
-                    </div>
-
-                    <div className="flex items-end justify-between gap-4">
-                        <div>
-                            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none">
-                                {t("Playlists")}
-                            </h1>
-                            <div className="flex items-center gap-3 mt-3 text-xs tabular-nums text-[var(--text-muted)]">
-                                <span className="font-bold text-white text-sm normal-case tracking-tight">
-                                    {visiblePlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(visiblePlaylists.length === 1 ? "playlist" : "playlists")}
-                                </span>
-                                {hiddenPlaylists.length > 0 && (
-                                    <>
-                                        <span className="text-[var(--text-muted)]">|</span>
-                                        <span>{hiddenPlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t("hidden")}</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                            {hiddenPlaylists.length > 0 && (
-                                <button
-                                    onClick={() => setShowHiddenTab(!showHiddenTab)}
-                                    className={cn(
-                                        "px-4 py-2 rounded-lg text-xs tabular-nums transition-all",
-                                        showHiddenTab
-                                            ? "bg-white/10 text-white border border-white/20"
-                                            : "bg-white/5 border border-white/10 text-[var(--text-muted)] hover:text-white/70 hover:border-white/20"
-                                    )}
-                                >
-                                    {showHiddenTab
-                                        ? t("Show All")
-                                        : `${t("Hidden")} (${hiddenPlaylists.length.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")})`}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-wrap items-center gap-2 mt-5">
-                        <ActionButton
-                            icon={Plus}
-                            label={t("Create")}
-                            active={activeAction === "create"}
-                            onClick={() => toggleAction("create")}
-                            primary
-                        />
-                        {canImportPlaylist && <ActionButton
-                            icon={Link2}
-                            label={t("Import URL")}
-                            active={activeAction === "importUrl"}
-                            onClick={() => toggleAction("importUrl")}
-                        />}
-                        <ActionButton
-                            icon={FileMusic}
-                            label={t("Import File")}
-                            active={activeAction === "importFile"}
-                            onClick={() => toggleAction("importFile")}
-                        />
-                        <Link
-                            href="/browse/playlists"
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:bg-white/5 border border-white/10 hover:text-white/70 hover:border-white/20 transition-all"
+            <PageHeader
+                eyebrow="Your library"
+                title="Playlists"
+                description={
+                    `${visiblePlaylists.length} ${visiblePlaylists.length === 1 ? "playlist" : "playlists"}` +
+                    (hiddenPlaylists.length > 0 ? ` · ${hiddenPlaylists.length} hidden` : "")
+                }
+                actions={
+                    hiddenPlaylists.length > 0 && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            aria-pressed={showHiddenTab}
+                            onClick={() => setShowHiddenTab(!showHiddenTab)}
                         >
-                            <Compass className="w-4 h-4" />
-                            <span className="hidden sm:inline">{t("Browse")}</span>
-                        </Link>
+                            {showHiddenTab ? "Show all" : `Hidden (${hiddenPlaylists.length})`}
+                        </Button>
+                    )
+                }
+            >
+                <div className="flex flex-wrap items-center gap-2 mt-5">
+                    <ActionButton
+                        icon={Plus}
+                        label="Create"
+                        active={activeAction === "create"}
+                        onClick={() => toggleAction("create")}
+                        primary
+                    />
+                    <ActionButton
+                        icon={Link2}
+                        label="Import URL"
+                        active={activeAction === "importUrl"}
+                        onClick={() => toggleAction("importUrl")}
+                    />
+                    <ActionButton
+                        icon={FileMusic}
+                        label="Import File"
+                        active={activeAction === "importFile"}
+                        onClick={() => toggleAction("importFile")}
+                    />
+                    <Link
+                        href="/browse/playlists"
+                        aria-label="browse playlists"
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[var(--text-secondary)] hover:bg-white/5 border border-white/10 hover:text-white/70 hover:border-white/20 transition-all"
+                    >
+                        <Compass className="w-4 h-4" />
+                        <span className="hidden sm:inline">Browse</span>
+                    </Link>
+                </div>
+
+                {/* Inline action panel; with no playlists the empty state below shows the same forms */}
+                {activeAction && !emptyStateHasForms && (
+                    <div className="mt-4 p-4 rounded-lg bg-white/[0.02] border border-white/10">
+                        {activeAction === "create" && (
+                            <CreatePanel onClose={() => setActiveAction(null)} />
+                        )}
+                        {activeAction === "importUrl" && (
+                            <ImportUrlPanel onClose={() => setActiveAction(null)} />
+                        )}
+                        {activeAction === "importFile" && (
+                            <ImportM3UPanel onClose={() => setActiveAction(null)} />
+                        )}
                     </div>
+                )}
+            </PageHeader>
 
-                    {/* Inline action panel */}
-                    {activeAction && (
-                        <div className="mt-4 p-4 rounded-lg bg-white/[0.02] border border-white/10">
-                            {activeAction === "create" && (
-                                <CreatePanel onClose={() => setActiveAction(null)} />
-                            )}
-                            {canImportPlaylist && activeAction === "importUrl" && (
-                                <ImportUrlPanel onClose={() => setActiveAction(null)} />
-                            )}
-                            {activeAction === "importFile" && (
-                                <ImportM3UPanel onClose={() => setActiveAction(null)} />
+            <div className="relative page-shell pb-24 animate-rise">
+                {showHiddenTab && (
+                    <div className="mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10">
+                        <p className="text-xs text-[var(--text-muted)]">
+                            Unhide with the eye button.
+                        </p>
+                    </div>
+                )}
+
+                {displayedPlaylists.length > 0 ? (
+                    <div>
+                        <SectionHeader type="track" title={showHiddenTab ? "Hidden" : "All Playlists"} count={displayedPlaylists.length} />
+
+                        <div
+                            data-tv-section="playlists"
+                            className="grid-media"
+                        >
+                            {displayedPlaylists.map(
+                                (playlist: Playlist, index: number) => (
+                                    <PlaylistCard
+                                        key={playlist.id}
+                                        playlist={playlist}
+                                        index={index}
+                                        onPlay={handlePlayPlaylist}
+                                        onToggleHide={handleToggleHide}
+                                        isHiddenView={showHiddenTab}
+                                    />
+                                )
                             )}
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Content */}
-            <div className="relative px-4 md:px-8 pb-24 animate-rise">
-                <div className="max-w-[1800px] mx-auto">
-                    {/* Hidden playlists notice */}
-                    {showHiddenTab && (
-                        <div className="mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10">
-                            <p className="text-xs text-[var(--text-muted)]">
-                                {t("Hidden playlists won't appear in your library. Hover and click the eye icon to restore.")}
-                            </p>
-                        </div>
-                    )}
-
-                    {displayedPlaylists.length > 0 ? (
-                        <div>
-                            {/* Section header */}
-                            <div className="flex items-center gap-3 mb-6">
-                                <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full shrink-0" />
-                                <h2 className="text-2xl font-bold tracking-tight">
-                                    {showHiddenTab ? t("Hidden") : t("All Playlists")}
-                                </h2>
-                                <span className="text-xs tabular-nums text-brand">
-                                    {displayedPlaylists.length}
-                                </span>
-                                <span className="flex-1 border-t border-white/10" />
-                            </div>
-
-                            <div
-                                data-tv-section="playlists"
-                                className="grid-media"
-                            >
-                                {displayedPlaylists.map(
-                                    (playlist: Playlist, index: number) => (
-                                        <PlaylistCard
-                                            key={playlist.id}
-                                            playlist={playlist}
-                                            index={index}
-                                            onPlay={handlePlayPlaylist}
-                                            onToggleHide={handleToggleHide}
-                                            isHiddenView={showHiddenTab}
-                                        />
-                                    )
-                                )}
-                            </div>
-                        </div>
-                    ) : (
+                    </div>
+                ) : (
+                    showHiddenTab ? (
                         <EmptyState
-                            showHiddenTab={showHiddenTab}
-                            activeAction={activeAction}
-                            setActiveAction={setActiveAction}
-                            canImportPlaylist={canImportPlaylist}
+                            icon={<ListMusic className="w-12 h-12" />}
+                            title="No hidden playlists"
+                            description="You haven't hidden any playlists"
                         />
-                    )}
-                </div>
+                    ) : (
+                        <GettingStarted
+                            activeAction={activeAction}
+                            toggle={toggleAction}
+                            close={() => setActiveAction(null)}
+                        />
+                    )
+                )}
             </div>
         </div>
     );

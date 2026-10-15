@@ -3,18 +3,17 @@
 import { useState, useEffect } from "react";
 import { SettingsSection, SettingsRow, SettingsInput } from "../ui";
 import { useAuth } from "@/lib/auth-context";
-import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
 import { useTwoFactor } from "../../hooks/useTwoFactor";
 import { Modal } from "@/components/ui/Modal";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
-import Image from "next/image";
+import { Button } from "@/components/ui/Button";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { copyText } from "@/lib/clipboard";
 
 export function AccountSection() {
     const { user } = useAuth();
-    const { t } = useLanguage();
 
-    // Password change state
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,7 +22,6 @@ export function AccountSection() {
     const [passwordStatus, setPasswordStatus] = useState<StatusType>("idle");
     const [passwordMessage, setPasswordMessage] = useState("");
 
-    // 2FA state
     const {
         twoFactorEnabled,
         settingUpTwoFactor,
@@ -53,36 +51,38 @@ export function AccountSection() {
     const handleChangePassword = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage(t("All fields required"));
+            setPasswordMessage("All fields required");
             return;
         }
         if (newPassword.length < 6) {
             setPasswordStatus("error");
-            setPasswordMessage(t("Min 6 characters"));
+            setPasswordMessage("Min 6 characters");
             return;
         }
         if (newPassword !== confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage(t("Passwords don't match"));
+            setPasswordMessage("Passwords don't match");
             return;
         }
 
         setChangingPassword(true);
         setPasswordStatus("loading");
         try {
-            await api.post("/auth/change-password", {
-                currentPassword,
-                newPassword,
-            });
+            const changed = await api.post<{ token: string; refreshToken: string }>(
+                "/auth/change-password",
+                { currentPassword, newPassword },
+            );
+            // The change signs out every other device; this one keeps going on the new tokens.
+            api.setToken(changed.token, changed.refreshToken);
             setPasswordStatus("success");
-            setPasswordMessage(t("Changed"));
+            setPasswordMessage("Changed. Other devices are signed out");
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
             setTimeout(() => setShowPasswordForm(false), 1500);
         } catch (error: unknown) {
             setPasswordStatus("error");
-            setPasswordMessage(error instanceof Error ? error.message : t("Failed"));
+            setPasswordMessage(error instanceof Error ? error.message : "Failed");
         } finally {
             setChangingPassword(false);
         }
@@ -93,11 +93,11 @@ export function AccountSection() {
         try {
             await enable2FA(twoFactorToken);
             setTfaStatus("success");
-            setTfaMessage(t("Enabled"));
+            setTfaMessage("Enabled");
             setTwoFactorToken("");
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : t("Invalid code"));
+            setTfaMessage(error instanceof Error ? error.message : "Invalid code");
         }
     };
 
@@ -106,42 +106,40 @@ export function AccountSection() {
         try {
             await disable2FA(disablePassword, disableToken);
             setTfaStatus("success");
-            setTfaMessage(t("Disabled"));
+            setTfaMessage("Disabled");
             setDisablePassword("");
             setDisableToken("");
             setShowDisableFlow(false);
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : t("Failed"));
+            setTfaMessage(error instanceof Error ? error.message : "Failed");
         }
     };
 
     return (
         <>
-            <SettingsSection id="account" title={t("Account")}>
-                {/* Username Display */}
-                <SettingsRow label={t("Username")} description={`${t("Logged in as")} ${user?.username}`}>
-                    <span className="text-xs tabular-nums text-[var(--text-muted)]">{user?.role}</span>
+            <SettingsSection id="account" title="Account">
+                <SettingsRow label="Signed in as" description={user?.role === "admin" ? "Administrator" : "Member"}>
+                    <span className="text-sm text-white">{user?.username}</span>
                 </SettingsRow>
 
-                {/* Change Password */}
                 <SettingsRow
-                    label={t("Password")}
-                    description={t("Change your account password")}
+                    label="Password"
+                    description="Change your account password"
                 >
                     {!showPasswordForm ? (
                         <button
                             onClick={() => setShowPasswordForm(true)}
-                            className="text-xs text-brand hover:text-[#f97316] transition-colors"
+                            className="text-xs text-brand hover:text-brand-hover transition-colors"
                         >
-                            {t("Change")}
+                            Change
                         </button>
                     ) : (
                         <button
                             onClick={() => setShowPasswordForm(false)}
                             className="text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                         >
-                            {t("Cancel")}
+                            Cancel
                         </button>
                     )}
                 </SettingsRow>
@@ -152,29 +150,29 @@ export function AccountSection() {
                             type="password"
                             value={currentPassword}
                             onChange={setCurrentPassword}
-                            placeholder={t("Current password")}
+                            placeholder="Current password"
                         />
                         <SettingsInput
                             type="password"
                             value={newPassword}
                             onChange={setNewPassword}
-                            placeholder={t("New password (min 6 characters)")}
+                            placeholder="New password (min 6 characters)"
                         />
                         <SettingsInput
                             type="password"
                             value={confirmPassword}
                             onChange={setConfirmPassword}
-                            placeholder={t("Confirm new password")}
+                            placeholder="Confirm new password"
                         />
                         <div className="inline-flex items-center gap-3">
-                            <button
+                            <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={handleChangePassword}
                                 disabled={changingPassword || !currentPassword || !newPassword || newPassword !== confirmPassword}
-                                className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
-                                    hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                {changingPassword ? t("Changing...") : t("Change Password")}
-                            </button>
+                                {changingPassword ? "Changing..." : "Change Password"}
+                            </Button>
                             <InlineStatus
                                 status={passwordStatus}
                                 message={passwordMessage}
@@ -184,48 +182,46 @@ export function AccountSection() {
                     </div>
                 )}
 
-                {/* Two-Factor Authentication */}
                 <SettingsRow
-                    label={t("Two-factor authentication")}
-                    description={twoFactorEnabled ? t("Enabled") : t("Add extra security to your account")}
+                    label="Two-factor authentication"
+                    description={twoFactorEnabled ? "Enabled" : "Add extra security to your account"}
                 >
                     {!settingUpTwoFactor && !showDisableFlow && (
                         twoFactorEnabled ? (
                             <button
                                 onClick={() => setShowDisableFlow(true)}
-                                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                                className="text-xs text-danger-light hover:brightness-125 transition-colors"
                             >
-                                {t("Disable")}
+                                Disable
                             </button>
                         ) : (
                             <button
                                 onClick={setup2FA}
-                            className="text-xs text-brand hover:text-[#f97316] transition-colors"
+                            className="text-xs text-brand hover:text-brand-hover transition-colors"
                             >
-                                {t("Enable")}
+                                Enable
                             </button>
                         )
                     )}
                 </SettingsRow>
 
-                {/* 2FA Setup Flow */}
                 {settingUpTwoFactor && (
                     <div className="py-4 space-y-4 border-t border-b border-white/5">
                         <p className="text-xs text-[var(--text-muted)]">
-                            {t("Scan the QR code with your authenticator app, then enter the code below.")}
+                            Scan the QR code with your authenticator app, then enter the code below.
                         </p>
 
                         {twoFactorQR && (
                             <div className="flex justify-center">
                                 <div className="bg-white p-3 rounded-lg">
-                                    <Image src={twoFactorQR} alt={t("2FA QR Code")} width={160} height={160} className="w-40 h-40" unoptimized />
+                                    <CachedImage src={twoFactorQR} alt="2FA QR Code" width={160} height={160} className="w-40 h-40" />
                                 </div>
                             </div>
                         )}
 
                         {twoFactorSecret && (
                             <div className="text-center">
-                                <p className="text-xs text-[var(--text-muted)] mb-1">{t("Manual entry code")}</p>
+                                <p className="text-xs text-[var(--text-muted)] mb-1">Manual entry code</p>
                                 <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-1 rounded-lg font-mono">
                                     {twoFactorSecret}
                                 </code>
@@ -236,24 +232,25 @@ export function AccountSection() {
                             type="text"
                             value={twoFactorToken}
                             onChange={(v) => setTwoFactorToken(v.replace(/\D/g, "").slice(0, 6))}
-                            placeholder={t("Enter 6-digit code")}
+                            placeholder="Enter 6-digit code"
                         />
 
                         <div className="inline-flex items-center gap-3">
-                            <button
+                            <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={handleVerify2FA}
                                 disabled={twoFactorToken.length !== 6}
-                                className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
-                                    hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                {t("Verify")}
-                            </button>
-                            <button
+                                Verify
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => { cancel2FASetup(); setTwoFactorToken(""); }}
-                                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                             >
-                                {t("Cancel")}
-                            </button>
+                                Cancel
+                            </Button>
                             <InlineStatus
                                 status={tfaStatus}
                                 message={tfaMessage}
@@ -263,39 +260,39 @@ export function AccountSection() {
                     </div>
                 )}
 
-                {/* 2FA Disable Flow */}
                 {showDisableFlow && (
                     <div className="py-4 space-y-3 border-t border-b border-white/5">
-                        <p className="text-xs tabular-nums text-[#f59e0b]">
-                            {t("Enter your password and current code to disable 2FA.")}
+                        <p className="text-xs tabular-nums text-warning">
+                            Enter your password and current code to disable 2FA.
                         </p>
                         <SettingsInput
                             type="password"
                             value={disablePassword}
                             onChange={setDisablePassword}
-                            placeholder={t("Password")}
+                            placeholder="Password"
                         />
                         <SettingsInput
                             type="text"
                             value={disableToken}
                             onChange={(v) => setDisableToken(v.replace(/\D/g, "").slice(0, 6))}
-                            placeholder={t("6-digit code")}
+                            placeholder="6-digit code"
                         />
                         <div className="inline-flex items-center gap-3">
-                            <button
+                            <Button
+                                variant="danger"
+                                size="sm"
                                 onClick={handleDisable2FA}
                                 disabled={!disablePassword || disableToken.length !== 6}
-                                className="px-4 py-2 bg-red-500 text-white text-xs font-semibold rounded-lg
-                                    hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                {t("Disable 2FA")}
-                            </button>
-                            <button
+                                Disable 2FA
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => { setShowDisableFlow(false); setDisablePassword(""); setDisableToken(""); }}
-                                className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                             >
-                                {t("Cancel")}
-                            </button>
+                                Cancel
+                            </Button>
                             <InlineStatus
                                 status={tfaStatus}
                                 message={tfaMessage}
@@ -306,12 +303,11 @@ export function AccountSection() {
                 )}
             </SettingsSection>
 
-            {/* Recovery Codes Modal */}
-            <Modal isOpen={showRecoveryCodes} onClose={closeRecoveryCodes} title={t("Recovery Codes")}>
+            <Modal isOpen={showRecoveryCodes} onClose={closeRecoveryCodes} title="Recovery Codes">
                 <div className="space-y-4">
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                        <p className="text-xs text-red-300">
-                            {t("Save these codes! You\'ll need them if you lose your authenticator.")}
+                    <div className="bg-danger/10 border border-danger/30 rounded-lg p-3">
+                        <p className="text-xs text-danger-light">
+                            Save these codes! You&apos;ll need them if you lose your authenticator.
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -322,18 +318,20 @@ export function AccountSection() {
                         ))}
                     </div>
                     <div className="flex gap-2">
-                        <button
-                            onClick={() => navigator.clipboard.writeText(recoveryCodes.join("\n"))}
-                            className="px-4 py-2 bg-white/5 border border-white/10 text-white text-xs rounded-lg hover:bg-white/10 transition-colors"
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void copyText(recoveryCodes.join("\n"))}
                         >
                             Copy
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="sm"
                             onClick={closeRecoveryCodes}
-                            className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg hover:bg-[#f97316] transition-colors"
                         >
                             Done
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </Modal>

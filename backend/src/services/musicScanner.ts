@@ -2,22 +2,98 @@ import * as fs from "fs";
 import { logger } from "../utils/logger";
 import * as path from "path";
 import { parseFile } from "music-metadata";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import PQueue from "p-queue";
 import { CoverArtExtractor } from "./coverArtExtractor";
-import { deezerService } from "./deezer";
+import { findAlbumArtwork } from "./artwork";
 import {
-    normalizeArtistName,
     canonicalizeVariousArtists,
-    parseArtistFromPath,
     extractArtistFromRelativePath,
     extractAlbumFromRelativePath,
     sanitizeTagString,
 } from "../utils/artistNormalization";
-import { parseCredit, resolveArtist } from "./artistIdentity";
+import { isMbid, parseCredit, resolveArtist, type ParsedCredit } from "./artistIdentity";
+import { normalizeIsrc } from "./recordingMatch";
 import { resolveAlbum } from "./albumIdentity";
 import { backfillAllArtistCounts } from "./artistCountsService";
-import { checkLocalArtistImage } from "./imageStorage";
+import { findLocalArtistImage } from "./imageStorage";
+import { LIBRARY_LOCATION } from "./libraryFilters";
+import { closeStagesForMissingTracks } from "./missingFileStages";
+
+/**
+ * The MusicBrainz id of a credit's primary artist, from the same tag the name came
+ * from. A tag's ids follow the credit's order, so the first is the primary's only
+ * when there is one id per credited name; a joint name with several ids gets none.
+ */
+function primaryArtistMbid(ids: readonly string[] | undefined, credit: ParsedCredit): string | undefined {
+    if (!ids || ids.length === 0) return undefined;
+    return ids.length === 1 + credit.featured.length ? ids[0] : undefined;
+}
+
+/**
+ * A replaced file reopens its stage records as `pending` with evidence "file
+ * changed". `blocked` records (a human decision) stay. A `working` record reopens
+ * too: the job on the old file then holds a stale claim, and its answer is dropped.
+ */
+async function reopenStagesForChangedFile(trackId: string): Promise<void> {
+    const reopened = await prisma.$executeRaw`
+        UPDATE "TrackStage"
+           SET status = 'pending',
+               failures = 0,
+               redelivered = 0,
+               "nextRetryAt" = NULL,
+               "startedAt" = NULL,
+               "finishedAt" = NULL,
+               "decidedAt" = NULL,
+               "decidedBy" = NULL,
+               "lastErrorCode" = NULL,
+               "lastErrorMessage" = NULL,
+               "failureClass" = NULL,
+               retryable = true,
+               evidence = jsonb_build_object('reason', 'file changed')
+         WHERE "trackId" = ${trackId}
+           AND status IN ('done', 'failed', 'pending', 'working')`;
+    if (reopened > 0) {
+        logger.debug(
+            `[Scanner] Re-opened ${reopened} stage record(s) for ${trackId}: file changed`
+        );
+    }
+}
+
+/**
+ * Reopen the FILE_MISSING records of a returned file at attempt 0. Records
+ * closed for other reasons, or re-decided by a human, stay as they are.
+ */
+async function reopenStagesForReturnedTracks(
+    client: Pick<Prisma.TransactionClient, "$executeRaw">,
+    trackIds: string[]
+): Promise<void> {
+    if (trackIds.length === 0) return;
+    const reopened = await client.$executeRaw`
+        UPDATE "TrackStage"
+           SET status = 'pending',
+               failures = 0,
+               redelivered = 0,
+               "nextRetryAt" = NULL,
+               "startedAt" = NULL,
+               "finishedAt" = NULL,
+               "lastErrorCode" = NULL,
+               "lastErrorMessage" = NULL,
+               "failureClass" = NULL,
+               retryable = true,
+               evidence = jsonb_build_object('reason', 'file returned')
+         WHERE "trackId" = ANY(${trackIds}::text[])
+           AND status = 'failed'
+           AND NOT retryable
+           AND "failureClass" = 'FILE_MISSING'
+           AND "decidedAt" IS NULL`;
+    if (reopened > 0) {
+        logger.debug(
+            `[Scanner] Re-opened ${reopened} stage record(s): files returned`
+        );
+    }
+}
 
 // Supported audio formats
 const AUDIO_EXTENSIONS = new Set([
@@ -43,7 +119,8 @@ interface ScanProgress {
 interface ScanResult {
     tracksAdded: number;
     tracksUpdated: number;
-    tracksRemoved: number;
+    /** Tracks newly flagged missing this scan (file gone from disk). Never deletions. */
+    tracksMissing: number;
     tracksCorrupt: number;
     errors: Array<{ file: string; error: string }>;
     duration: number;
@@ -53,6 +130,7 @@ export class MusicScannerService {
     private scanQueue = new PQueue({ concurrency: 10 });
     private progressCallback?: (progress: ScanProgress) => void;
     private coverArtExtractor?: CoverArtExtractor;
+    private coverCachePath?: string;
 
     constructor(
         progressCallback?: (progress: ScanProgress) => void,
@@ -60,6 +138,7 @@ export class MusicScannerService {
     ) {
         this.progressCallback = progressCallback;
         if (coverCachePath) {
+            this.coverCachePath = coverCachePath;
             this.coverArtExtractor = new CoverArtExtractor(coverCachePath);
         }
     }
@@ -72,7 +151,7 @@ export class MusicScannerService {
         const result: ScanResult = {
             tracksAdded: 0,
             tracksUpdated: 0,
-            tracksRemoved: 0,
+            tracksMissing: 0,
             tracksCorrupt: 0,
             errors: [],
             duration: 0,
@@ -90,6 +169,7 @@ export class MusicScannerService {
                 id: true,
                 filePath: true,
                 fileModified: true,
+                missingSince: true,
             },
         });
 
@@ -117,11 +197,7 @@ export class MusicScannerService {
                     const fileModified = stats.mtime;
 
                     // Skip 0-byte files (incomplete downloads, stubs)
-                    if (stats.size === 0) {
-                        filesScanned++;
-                        progress.filesScanned = filesScanned;
-                        return;
-                    }
+                    if (stats.size === 0) return;
 
                     const existingTrack = tracksByPath.get(relativePath);
 
@@ -132,23 +208,21 @@ export class MusicScannerService {
                             existingTrack.fileModified >= fileModified
                         ) {
                             // File hasn't changed, skip
-                            filesScanned++;
-                            progress.filesScanned = filesScanned;
                             return;
                         }
-                        // File changed, will update
-                        result.tracksUpdated++;
-                    } else {
-                        // New file
-                        result.tracksAdded++;
+                        // File changed: every recorded answer was computed
+                        // from the old content, so reopen the whole stage
+                        // set before re-processing the row.
+                        await reopenStagesForChangedFile(existingTrack.id);
                     }
 
-                    // Extract metadata and update database
                     await this.processAudioFile(
                         audioFile,
                         relativePath,
                         musicPath
                     );
+                    if (existingTrack) result.tracksUpdated++;
+                    else result.tracksAdded++;
                 } catch (err: any) {
                     const error = {
                         file: audioFile,
@@ -178,19 +252,41 @@ export class MusicScannerService {
 
         await this.scanQueue.onIdle();
 
-        // Step 4: Remove tracks for files that no longer exist
+        // Missing files are flagged, never deleted: deleting the row would cascade away
+        // its plays, likes, stage records and embedding. The flag is cleared by the
+        // scan that finds the file again.
         const scannedPaths = new Set(
             audioFiles.map((f) => path.relative(musicPath, f))
         );
-        let tracksToRemove = existingTracks.filter(
+
+        // Cleared here, not in the per-file upsert: a restored mount can bring a file
+        // back with its old mtime, and the unchanged-file skip would never reach it.
+        const returned = existingTracks.filter(
+            (t) => t.missingSince !== null && scannedPaths.has(t.filePath)
+        );
+        if (returned.length > 0) {
+            const returnedIds = returned.map((t) => t.id);
+            await prisma.$transaction(async (tx) => {
+                await tx.track.updateMany({
+                    where: { id: { in: returnedIds } },
+                    data: { missingSince: null },
+                });
+                await reopenStagesForReturnedTracks(tx, returnedIds);
+            });
+            logger.debug(
+                `Cleared the missing flag on ${returned.length} track(s) whose files are back`
+            );
+        }
+
+        const pathCandidates = existingTracks.filter(
             (t) => !scannedPaths.has(t.filePath)
         );
 
-        if (tracksToRemove.length > 0) {
+        if (pathCandidates.length > 0) {
             // Safety: verify files are truly missing (guard against path normalization issues)
-            const beforeCount = tracksToRemove.length;
+            const beforeCount = pathCandidates.length;
             const existChecks = await Promise.all(
-                tracksToRemove.map(async (t) => {
+                pathCandidates.map(async (t) => {
                     const fullPath = path.join(musicPath, t.filePath);
                     try {
                         await fs.promises.access(fullPath);
@@ -200,73 +296,42 @@ export class MusicScannerService {
                     }
                 })
             );
-            tracksToRemove = existChecks.filter((c) => !c.exists).map((c) => c.track);
-            const pathMismatches = beforeCount - tracksToRemove.length;
+            const vanished = existChecks
+                .filter((c) => !c.exists)
+                .map((c) => c.track);
+            const pathMismatches = beforeCount - vanished.length;
             if (pathMismatches > 0) {
                 logger.debug(
-                    `${pathMismatches} track(s) had path mismatches but files exist on disk (skipped removal)`
+                    `${pathMismatches} track(s) had path mismatches but files exist on disk (skipped missing flag)`
                 );
             }
 
-            if (tracksToRemove.length > 0) {
-                // Convert playlist-referenced tracks to pending entries before deletion
-                const playlistItems = await prisma.playlistItem.findMany({
-                    where: { trackId: { in: tracksToRemove.map((t) => t.id) } },
-                    select: {
-                        playlistId: true,
-                        sort: true,
-                        track: {
-                            select: {
-                                title: true,
-                                album: {
-                                    select: {
-                                        title: true,
-                                        artist: { select: { name: true } },
-                                    },
-                                },
-                            },
+            // Flag and stage records change together, so no reader sees a flagged track
+            // whose questions are still owed.
+            await prisma.$transaction(async (tx) => {
+                if (vanished.length > 0) {
+                    // Only rows not already flagged change: the timestamp is when
+                    // THIS scan found the file gone, not a later one re-stamping
+                    // an old fact.
+                    const marked = await tx.track.updateMany({
+                        where: {
+                            id: { in: vanished.map((t) => t.id) },
+                            missingSince: null,
                         },
-                    },
-                });
-
-                if (playlistItems.length > 0) {
+                        data: { missingSince: new Date() },
+                    });
+                    result.tracksMissing = marked.count;
                     logger.debug(
-                        `Converting ${playlistItems.length} playlist reference(s) to pending entries (missing from disk)`
+                        `Flagged ${marked.count} track(s) missing (files not found on disk)`
                     );
-                    for (const item of playlistItems) {
-                        const artistName = item.track.album.artist.name;
-                        const trackTitle = item.track.title;
-                        await prisma.playlistPendingTrack.upsert({
-                            where: {
-                                playlistId_spotifyArtist_spotifyTitle: {
-                                    playlistId: item.playlistId,
-                                    spotifyArtist: artistName,
-                                    spotifyTitle: trackTitle,
-                                },
-                            },
-                            create: {
-                                playlistId: item.playlistId,
-                                spotifyArtist: artistName,
-                                spotifyTitle: trackTitle,
-                                spotifyAlbum: item.track.album.title,
-                                sort: item.sort,
-                                missingFromDisk: true,
-                            },
-                            update: {
-                                missingFromDisk: true,
-                                spotifyAlbum: item.track.album.title,
-                                sort: item.sort,
-                            },
-                        });
-                    }
                 }
-
-                await prisma.track.deleteMany({
-                    where: { id: { in: tracksToRemove.map((t) => t.id) } },
-                });
-                result.tracksRemoved = tracksToRemove.length;
-                logger.debug(`Removed ${tracksToRemove.length} missing tracks`);
-            }
+                const closed = await closeStagesForMissingTracks(tx);
+                if (closed > 0) {
+                    logger.debug(
+                        `[Scanner] Closed ${closed} stage record(s) for files not in the library`
+                    );
+                }
+            });
         }
 
         // Step 5: Clean up orphaned albums (albums with no tracks)
@@ -311,7 +376,7 @@ export class MusicScannerService {
 
         result.duration = Date.now() - startTime;
         logger.debug(
-            `Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved} corrupt:${result.tracksCorrupt} (${result.duration}ms)`
+            `Scan complete: +${result.tracksAdded} ~${result.tracksUpdated} missing:${result.tracksMissing} corrupt:${result.tracksCorrupt} (${result.duration}ms)`
         );
 
         // Update artist counts in background (non-blocking)
@@ -507,7 +572,7 @@ export class MusicScannerService {
                         artist: {
                             name: { equals: artistName, mode: "insensitive" },
                         },
-                        location: "LIBRARY",
+                        location: LIBRARY_LOCATION,
                     },
                 });
 
@@ -560,8 +625,63 @@ export class MusicScannerService {
     }
 
     /**
-     * Process a single audio file and update database
+     * Ensure the album has a cover: art embedded in the file first, since it is
+     * free and exact, then every artwork source. Re-extracts when the cached
+     * native file has gone missing.
      */
+    private async ensureAlbumCover(
+        album: { id: string; coverUrl: string | null; rgMbid: string | null },
+        absolutePath: string,
+        artistName: string,
+        albumTitle: string
+    ): Promise<void> {
+        if (!this.coverArtExtractor || !this.coverCachePath) return;
+
+        let needsExtraction = !album.coverUrl;
+
+        if (album.coverUrl?.startsWith("native:")) {
+            const nativePath = album.coverUrl.replace("native:", "");
+            const extractorCachePath = path.join(
+                this.coverCachePath,
+                nativePath
+            );
+            if (!fs.existsSync(extractorCachePath)) {
+                needsExtraction = true;
+            }
+        }
+
+        if (!needsExtraction) return;
+
+        const coverPath = await this.coverArtExtractor.extractCoverArt(
+            absolutePath,
+            album.id
+        );
+
+        if (coverPath) {
+            await prisma.album.update({
+                where: { id: album.id },
+                data: { coverUrl: `native:${coverPath}` },
+            });
+            return;
+        }
+
+        try {
+            const found = await findAlbumArtwork({
+                rgMbid: album.rgMbid,
+                artistName,
+                albumTitle,
+            });
+            if (found) {
+                await prisma.album.update({
+                    where: { id: album.id },
+                    data: { coverUrl: found.url },
+                });
+            }
+        } catch (error) {
+            // Cover art is optional; a scan must not fail over a picture.
+        }
+    }
+
     private async processAudioFile(
         absolutePath: string,
         relativePath: string,
@@ -588,16 +708,16 @@ export class MusicScannerService {
         const discSubtitle = sanitizeTagString(discSubtitleInput) || null;
         const duration = Math.floor(metadata.format.duration || 0);
         const mime = metadata.format.codec || "audio/mpeg";
-        const rawIsrc = metadata.common.isrc?.[0] || null;
-        const isrc = rawIsrc?.split(/[;,]/)[0]?.trim() || null;
+        // A tag that is not an ISRC (e.g. "PMEDIA") is dropped, never stored or sent.
+        const isrc = normalizeIsrc(metadata.common.isrc?.[0]?.split(/[;,]/)[0]);
 
-        // Artist and album info
-        // IMPORTANT: Prefer albumartist over artist to keep albums grouped under the primary artist
-        // This prevents featured artists from creating separate album entries
-        // e.g., "Artist A feat. Artist B" track should still be under "Artist A"'s album
-        let rawArtistName = sanitizeTagString(
-            metadata.common.albumartist || metadata.common.artist
-        );
+        // The album artist groups the album under one artist ("A feat. B" tracks stay on A's
+        // album); the track artist stands in when there is none. Each name is paired only with
+        // its own tag's MusicBrainz ids, never the other tag's.
+        const albumArtistTag = sanitizeTagString(metadata.common.albumartist);
+        const trackArtistTag = sanitizeTagString(metadata.common.artist);
+        let rawArtistName = albumArtistTag || trackArtistTag;
+        let nameTag: "albumartist" | "artist" | null = albumArtistTag ? "albumartist" : trackArtistTag ? "artist" : null;
 
         // Folder/filename fallback: If metadata is empty, try to parse from path structure
         if (!rawArtistName || rawArtistName.trim() === "") {
@@ -608,8 +728,10 @@ export class MusicScannerService {
                     `[Scanner] No metadata artist found, using path: "${relativePath}" -> "${parsedArtist}"`
                 );
                 rawArtistName = parsedArtist;
+                nameTag = null;
             } else {
                 rawArtistName = "Unknown Artist";
+                nameTag = null;
                 logger.warn(
                     `[Scanner] Unknown Artist assigned for: ${relativePath} (no metadata, path parse failed)`
                 );
@@ -629,6 +751,7 @@ export class MusicScannerService {
                     `[Scanner] Singles override: "${rawArtistName}" -> "${folderArtist}" for ${relativePath}`
                 );
                 rawArtistName = folderArtist;
+                nameTag = null;
             }
         }
 
@@ -637,22 +760,25 @@ export class MusicScannerService {
             || "Unknown Album";
         const year = metadata.common.year || null;
 
-        // Resolve the artist through the single identity path. This used to be
-        // ~170 lines of guessing: split the tag on " & "/" and "/" with "/",",
-        // look the fragment up, then a space-collapse pass, then a fuzzy pass at
-        // 95%, and only THEN consult the MusicBrainz id that was sitting in the
-        // tag the whole time. The split truncated real band names ("Dance With
-        // the Dead" -> "Dance") and the space-collapse pass could never fire
-        // because it filtered candidates on the un-collapsed name.
+        // Resolve the artist through the single identity path, which trusts a
+        // MusicBrainz id tag first and never splits band names on "&" or "and".
         const credit = parseCredit(
             rawArtistName,
-            metadata.common.artists as string[] | undefined
+            nameTag === "artist" ? (metadata.common.artists as string[] | undefined) : undefined
         );
         const artistName = credit.primary || rawArtistName;
+        const artistMbid = primaryArtistMbid(
+            nameTag === "albumartist"
+                ? metadata.common.musicbrainz_albumartistid
+                : nameTag === "artist"
+                  ? metadata.common.musicbrainz_artistid
+                  : undefined,
+            credit
+        );
 
         let artist = await resolveArtist(prisma, {
             name: artistName,
-            mbid: metadata.common.musicbrainz_artistid?.[0],
+            mbid: artistMbid,
         });
 
         // Prefer better capitalisation when the tag has it and the stored row
@@ -670,39 +796,31 @@ export class MusicScannerService {
 
         // Check for local artist image if none set yet
         if (!artist.heroUrl) {
-            const pathParts = relativePath.split(path.sep);
-            for (let i = pathParts.length - 2; i >= 0; i--) {
-                const candidateDir = pathParts.slice(0, i + 1).join(path.sep);
-                const localImage = await checkLocalArtistImage(musicPath, candidateDir, artist.id);
-                if (localImage) {
-                    const updated = await prisma.artist.updateMany({
-                        where: { id: artist.id, heroUrl: null },
-                        data: { heroUrl: localImage },
-                    });
-                    if (updated.count > 0) {
-                        artist = { ...artist, heroUrl: localImage };
-                    }
-                    break;
+            const localImage = await findLocalArtistImage(musicPath, relativePath, artist.id);
+            if (localImage) {
+                const updated = await prisma.artist.updateMany({
+                    where: { id: artist.id, heroUrl: null },
+                    data: { heroUrl: localImage },
+                });
+                if (updated.count > 0) {
+                    artist = { ...artist, heroUrl: localImage };
                 }
             }
         }
 
-        // Resolve the album through the single identity path. Lookup used to
-        // match `title` raw and un-normalised, so "Abbey Road", "abbey road" and
-        // "Abbey Road (2019 Remaster)" became three rows under one artist -- and
-        // Album models a release GROUP, so those are one album.
-        //
-        // This CALLS resolveAlbum rather than repeating it. The inline copy that
-        // lived here checked identityKey BEFORE rgMbid, so a track carrying an
-        // authoritative release-group id could attach to a same-titled album from
-        // a different release group -- the mirror of the defect the artist work
-        // removed -- and it had no unique-violation retry.
+        // Resolve the album through resolveAlbum, which checks rgMbid before the
+        // normalised title so a release-group id always wins, and retries on a unique
+        // violation.
         let isDiscoveryAlbum = false;
+
+        // Album identity comes from the file's own release-group tag only; an
+        // untagged file keeps the placeholder until the recording stage asks.
+        const taggedRgMbid = metadata.common.musicbrainz_releasegroupid?.trim();
 
         const album = await resolveAlbum(prisma, {
             artistId: artist.id,
             title: albumTitle,
-            rgMbid: metadata.common.musicbrainz_releasegroupid,
+            rgMbid: isMbid(taggedRgMbid) ? taggedRgMbid : null,
             year,
             isCompilation: Boolean(metadata.common.compilation),
             // Runs only when a row is actually created: these checks cost several
@@ -766,63 +884,7 @@ export class MusicScannerService {
             });
         }
 
-    // Extract cover art if we have an extractor
-        // Re-extract if: no cover, OR native cover file is missing
-        if (this.coverArtExtractor) {
-            let needsExtraction = !album.coverUrl;
-
-            // Check if existing native cover file is missing
-            if (album.coverUrl?.startsWith("native:")) {
-                const nativePath = album.coverUrl.replace("native:", "");
-                const coverCachePath = path.join(
-                    path.dirname(absolutePath),
-                    "..",
-                    "..",
-                    "cache",
-                    "covers",
-                    nativePath
-                );
-                // Use the extractor's cache path instead
-                const extractorCachePath = path.join(
-                    (this.coverArtExtractor as any).coverCachePath,
-                    nativePath
-                );
-                if (!fs.existsSync(extractorCachePath)) {
-                    needsExtraction = true;
-                }
-            }
-
-            if (needsExtraction) {
-                const coverPath =
-                    await this.coverArtExtractor.extractCoverArt(
-                        absolutePath,
-                        album.id
-                    );
-                if (coverPath) {
-                    await prisma.album.update({
-                        where: { id: album.id },
-                        data: { coverUrl: `native:${coverPath}` },
-                    });
-                } else {
-                    // No embedded art, try fetching from Deezer
-                    try {
-                        const deezerCover =
-                            await deezerService.getAlbumCover(
-                                artistName,
-                                albumTitle
-                            );
-                        if (deezerCover) {
-                            await prisma.album.update({
-                                where: { id: album.id },
-                                data: { coverUrl: deezerCover },
-                            });
-                        }
-                    } catch (error) {
-                        // Silently fail - cover art is optional
-                    }
-                }
-            }
-        }
+        await this.ensureAlbumCover(album, absolutePath, artistName, albumTitle);
 
         // Upsert track
         const track = await prisma.track.upsert({

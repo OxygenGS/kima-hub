@@ -1,5 +1,5 @@
 import { audiobookshelfService } from "./audiobookshelf";
-import { buildSections, resolveMetaTags } from "./audiobookSections";
+import { buildSections, resolveMetaTags, type AudioSection } from "./audiobookSections";
 import { artistSortName } from "./artistIdentity";
 import { logger } from "../utils/logger";
 import { prisma } from "../utils/db";
@@ -18,6 +18,7 @@ interface SyncResult {
     failed: number;
     skipped: number;
     errors: string[];
+    pruned?: number;
 }
 
 class AudiobookCacheService {
@@ -58,11 +59,12 @@ class AudiobookCacheService {
             synced: 0,
             failed: 0,
             skipped: 0,
+            pruned: 0,
             errors: [],
         };
 
         try {
-            logger.debug(" Starting audiobook sync from Audiobookshelf...");
+            logger.debug("[AUDIOBOOK] Starting sync from Audiobookshelf");
 
             // Try to ensure cover cache directory exists (non-fatal if it fails)
             await this.ensureCoverCacheDir();
@@ -82,7 +84,7 @@ class AudiobookCacheService {
                         const metadata = book.media?.metadata || book;
                         const title = metadata.title || book.title || "Unknown Title";
                         const author = metadata.authorName || metadata.author || book.author || "Unknown Author";
-                        logger.debug(`  Synced: ${title} by ${author}`);
+                        logger.debug(`[AUDIOBOOK] Synced: ${title} by ${author}`);
                     } else {
                         result.skipped++;
                     }
@@ -92,23 +94,38 @@ class AudiobookCacheService {
                     const title = metadata.title || book.title || "Unknown Title";
                     const errorMsg = `Failed to sync ${title}: ${error.message}`;
                     result.errors.push(errorMsg);
-                    logger.error(` ${errorMsg}`);
+                    logger.error(`[AUDIOBOOK] ${errorMsg}`);
                 }
             }
 
-            logger.debug("\nSync Summary:");
-            logger.debug(`  Synced: ${result.synced}`);
-            logger.debug(`   Failed: ${result.failed}`);
-            logger.debug(`    Skipped: ${result.skipped}`);
+            logger.debug(
+                `[AUDIOBOOK] Sync finished: ${result.synced} synced, ${result.failed} failed, ${result.skipped} skipped`
+            );
+            result.errors.forEach((err) => logger.debug(`[AUDIOBOOK] ${err}`));
 
-            if (result.errors.length > 0) {
-                logger.debug("\n[ERRORS]:");
-                result.errors.forEach((err) => logger.debug(`  - ${err}`));
+            // Prune books missing from the ABS list, but never on an empty list: that means
+            // the fetch failed, and pruning would wipe the library.
+            if (audiobooks.length === 0) {
+                logger.warn(
+                    "[AUDIOBOOK] ABS returned an empty library; skipping prune " +
+                    "(refusing to delete everything on a possibly-failed fetch)"
+                );
+            } else {
+                const liveIds = audiobooks.map((b: any) => b.id);
+                const pruned = await prisma.audiobook.deleteMany({
+                    where: { id: { notIn: liveIds } },
+                });
+                if (pruned.count > 0) {
+                    result.pruned = pruned.count;
+                    logger.info(
+                        `[AUDIOBOOK] Pruned ${pruned.count} audiobooks no longer present in Audiobookshelf`
+                    );
+                }
             }
 
             return result;
         } catch (error: any) {
-            logger.error(" Audiobook sync failed:", error);
+            logger.error("[AUDIOBOOK] Sync failed:", error);
             throw error;
         }
     }
@@ -121,22 +138,32 @@ class AudiobookCacheService {
         const title = metadata.title || book.title;
 
         if (!title) {
-            logger.warn(`  Skipping audiobook ${book.id} - missing title`);
+            logger.warn(`[AUDIOBOOK] Skipping audiobook ${book.id} - missing title`);
             return false;
         }
 
-        // Skip books whose source files are missing on disk (ABS marks them isMissing).
+        // ABS marks books whose files are gone as isMissing; delete their rows.
+        // Listening progress survives (audiobookshelfId is not a foreign key).
         if (book.isMissing) {
-            logger.debug(`  Skipping audiobook ${book.id} - source files missing`);
+            const deleted = await prisma.audiobook.deleteMany({
+                where: { id: book.id },
+            });
+            if (deleted.count > 0) {
+                logger.info(
+                    `[AUDIOBOOK] Pruned missing audiobook ${book.id} (${title})`
+                );
+            }
             return false;
         }
 
         const author = metadata.authorName || metadata.author || null;
         const narrator = metadata.narratorName || metadata.narrator || null;
         const description = metadata.description || null;
-        const publishedYear = metadata.publishedYear
-            ? parseInt(metadata.publishedYear)
+        // Taggers may bracket the year ("(2008)"), so take the first 4-digit run.
+        const yearMatch = metadata.publishedYear
+            ? String(metadata.publishedYear).match(/\d{4}/)
             : null;
+        const publishedYear = yearMatch ? parseInt(yearMatch[0], 10) : null;
         const publisher = metadata.publisher || null;
         const isbn = metadata.isbn || null;
         const asin = metadata.asin || null;
@@ -206,7 +233,7 @@ class AudiobookCacheService {
 
         if (series) {
             logger.debug(
-                `    [Series] "${title}" -> "${series}" #${
+                `[AUDIOBOOK] Series: "${title}" -> "${series}" #${
                     seriesSequence || "?"
                 }`
             );
@@ -236,7 +263,7 @@ class AudiobookCacheService {
 
         // Only compute sections when we have expanded data; null means "not computed yet".
         const isExpanded = rawTracks.length > 0 || rawChapters.length > 0 || rawAudioFiles.length > 0;
-        const sectionsJson: { index: number; title: string; start: number }[] | null = isExpanded
+        const sectionsJson: AudioSection[] | null = isExpanded
             ? buildSections({
                   duration: duration ?? 0,
                   chapters: rawChapters,
@@ -258,67 +285,37 @@ class AudiobookCacheService {
             }
         }
 
-        // Upsert to database
+        const data = {
+            title,
+            sortName: artistSortName(title),
+            author,
+            narrator: resolvedNarrator,
+            description,
+            publishedYear: resolvedPublishedYear,
+            publisher,
+            series,
+            seriesSequence,
+            duration,
+            numTracks,
+            size,
+            isbn,
+            asin,
+            language,
+            genres: resolvedGenres,
+            tags,
+            localCoverPath: localCoverPath || undefined,
+            coverUrl,
+            audioUrl: book.id,
+            libraryId,
+            lastSyncedAt: new Date(),
+            ...(tracksJson !== null && { tracksJson }),
+            ...(sectionsJson !== null && { sectionsJson }),
+        };
+
         await prisma.audiobook.upsert({
             where: { id: book.id },
-            create: {
-                id: book.id,
-                title,
-                // Recomputed on every sync, same as `title` itself already is
-                // (both branches set it unconditionally, not just on create) --
-                // a sort key derived from a field that keeps refreshing has to
-                // refresh with it, or it silently goes stale the first time
-                // this book's title changes upstream.
-                sortName: artistSortName(title),
-                author,
-                narrator: resolvedNarrator,
-                description,
-                publishedYear: resolvedPublishedYear,
-                publisher,
-                series,
-                seriesSequence,
-                duration,
-                numTracks,
-                size,
-                isbn,
-                asin,
-                language,
-                genres: resolvedGenres,
-                tags,
-                localCoverPath,
-                coverUrl,
-                audioUrl: book.id,
-                libraryId,
-                lastSyncedAt: new Date(),
-                ...(tracksJson !== null && { tracksJson }),
-                ...(sectionsJson !== null && { sectionsJson }),
-            },
-            update: {
-                title,
-                sortName: artistSortName(title),
-                author,
-                narrator: resolvedNarrator,
-                description,
-                publishedYear: resolvedPublishedYear,
-                publisher,
-                series,
-                seriesSequence,
-                duration,
-                numTracks,
-                size,
-                isbn,
-                asin,
-                language,
-                genres: resolvedGenres,
-                tags,
-                localCoverPath: localCoverPath || undefined,
-                coverUrl,
-                audioUrl: book.id,
-                libraryId,
-                lastSyncedAt: new Date(),
-                ...(tracksJson !== null && { tracksJson }),
-                ...(sectionsJson !== null && { sectionsJson }),
-            },
+            create: { id: book.id, ...data },
+            update: data,
         });
 
         return true;
@@ -432,13 +429,13 @@ class AudiobookCacheService {
                 });
             } catch (syncError: any) {
                 logger.warn(
-                    `  Failed to sync audiobook ${audiobookId} from Audiobookshelf:`,
+                    `[AUDIOBOOK] Failed to sync audiobook ${audiobookId} from Audiobookshelf:`,
                     syncError.message
                 );
                 // If we have stale cached data, return it anyway
                 if (audiobook) {
                     logger.debug(
-                        `   Using stale cached data for ${audiobookId}`
+                        `[AUDIOBOOK] Using stale cached data for ${audiobookId}`
                     );
                 } else {
                     // No cached data and sync failed - throw error
@@ -450,45 +447,6 @@ class AudiobookCacheService {
         }
 
         return audiobook;
-    }
-
-    /**
-     * Clean up old cached covers that are no longer in database
-     */
-    async cleanupOrphanedCovers(): Promise<number> {
-        // Ensure cache directory is available
-        const available = await this.ensureCoverCacheDir();
-        if (!available) {
-            logger.warn("[AUDIOBOOK] Cannot cleanup covers - cache directory unavailable");
-            return 0;
-        }
-
-        const audiobooks = await prisma.audiobook.findMany({
-            select: { localCoverPath: true },
-        });
-
-        const validCoverPaths = new Set(
-            audiobooks
-                .filter((a) => a.localCoverPath)
-                .map((a) => path.basename(a.localCoverPath!))
-        );
-
-        let deleted = 0;
-        try {
-            const files = await fs.readdir(this.coverCacheDir);
-
-            for (const file of files) {
-                if (!validCoverPaths.has(file)) {
-                    await fs.unlink(path.join(this.coverCacheDir, file));
-                    deleted++;
-                    logger.debug(`  [DELETE] Deleted orphaned cover: ${file}`);
-                }
-            }
-        } catch (error: any) {
-            logger.warn(`[AUDIOBOOK] Failed to read cover cache directory: ${error.message}`);
-        }
-
-        return deleted;
     }
 }
 

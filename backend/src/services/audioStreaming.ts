@@ -25,7 +25,11 @@ const QUALITY_SETTINGS = {
 
 export type Quality = keyof typeof QUALITY_SETTINGS;
 
-// 120s hard kill -- must be shorter than the 240s queue-wait cap (1.3)
+export function isQuality(value: unknown): value is Quality {
+    return typeof value === "string" && Object.prototype.hasOwnProperty.call(QUALITY_SETTINGS, value);
+}
+
+// 120s hard kill -- must be shorter than the 240s queue-wait cap
 const TRANSCODE_TIMEOUT_MS = 120_000;
 
 interface StreamFileInfo {
@@ -367,6 +371,7 @@ export class AudioStreamingService {
                         );
                 }, TRANSCODE_TIMEOUT_MS);
             } catch (err: any) {
+                logger.warn(`[STREAM] Transcode could not start: ${err.message}`);
                 reject(
                     new AppError(
                         ErrorCode.FFMPEG_NOT_FOUND,
@@ -383,11 +388,10 @@ export class AudioStreamingService {
      * Get total cache size in GB
      */
     async getCacheSize(): Promise<number> {
-        const cached = await prisma.transcodedFile.findMany({
-            select: { cacheSize: true },
+        const sum = await prisma.transcodedFile.aggregate({
+            _sum: { cacheSize: true },
         });
-        const totalBytes = cached.reduce((sum, f) => sum + Number(f.cacheSize), 0);
-        return totalBytes / (1024 * 1024 * 1024);
+        return Number(sum._sum.cacheSize ?? 0n) / (1024 * 1024 * 1024);
     }
 
     /**
@@ -456,9 +460,8 @@ export class AudioStreamingService {
     }
 
     /**
-     * Stream file with proper HTTP Range support (fixes Firefox FLAC issue #42/#17)
-     * Manually handles Range requests to ensure compatibility with Firefox's strict
-     * Content-Range header validation for large FLAC files.
+     * Stream file with manual HTTP Range handling, for Firefox's strict
+     * Content-Range header validation on large FLAC files.
      */
     async streamFileWithRangeSupport(
         req: Request,

@@ -1,40 +1,15 @@
 /**
- * Album identity — the sibling of artistIdentity, for albums.
- *
- * SCOPE NOTE: this fixes duplicate albums. It deliberately does NOT retire the
- * `temp-<ts>-<random>` sentinel on `rgMbid`, even though that is the same
- * defect retired on Artist.mbid. `OwnedAlbum` and `DiscoveryAlbum` reference
- * albums by the rgMbid STRING VALUE rather than by a foreign key, so nulling
- * the sentinel would silently dangle every ownership row -- which drives the
- * "owned" artist filter and the artist-protection check in cleanup-lidarr.
- * Those two tables must move to an albumId FK first; the sentinel goes with
- * that change, not this one.
- *
- * `Album` models a MusicBrainz RELEASE GROUP (`rgMbid`), not an individual
- * release. That distinction decides the rules below: only true duplicates merge.
- * "Il Pozzo D'Amor" = "Il Pozzo d'Amor" (merge); "Playing the Angel (Deluxe)"
- * ≠ "Playing the Angel" (separate); "Random Access Memories" ≠ "Random Access
- * Memories (Drum & Bass Remix)" (separate).
- *
- * The defects this replaces:
- *
- *   - Lookup matched `title` raw and un-normalised, so "Abbey Road",
- *     "abbey road" and "Abbey Road (2019 Remaster)" became three rows under one
- *     artist. The identity key now preserves edition markers, so "Abbey Road" and
- *     "Abbey Road (2019 Remaster)" are distinct albums.
- *   - `rgMbid` was the only UNIQUE column and was NOT NULL, so the scanner
- *     invented `temp-<ts>-<random>` when MusicBrainz gave nothing -- a
- *     guaranteed-unique value on the only unique column, which meant the
- *     database could never reject a duplicate. Same shape as the artist bug.
- *   - A cross-artist fallback matched on `title + year` across EVERY artist to
- *     keep compilations together. Its only guards were the literal strings
- *     "Unknown Album"/"Unknown" and a non-null year, so one artist's 1995
- *     "Greatest Hits" would absorb a different artist's 1995 "Greatest Hits".
+ * Album identity, the sibling of artistIdentity. An Album is a MusicBrainz
+ * release group, and only true duplicates merge: "Il Pozzo D'Amor" and "Il
+ * Pozzo d'Amor" merge; "Playing the Angel (Deluxe)" stays separate.
  */
 
 import { Prisma } from "@prisma/client";
 import { foldIdentityText, artistSortName } from "./artistIdentity";
 import { pgCollapseSpace, pgLower, pgTrim, stripNonAlnum } from "./pgTextRules";
+import { LIBRARY_LOCATION } from "./libraryFilters";
+import { musicBrainzService } from "./musicbrainz";
+import { stripAlbumEdition } from "../utils/artistNormalization";
 
 /**
  * Titles too generic to identify a release group on their own. A cross-artist
@@ -61,15 +36,9 @@ const GENERIC_TITLES = new Set([
 ]);
 
 /**
- * The dedupe key for an album title, scoped to its artist.
- *
- * Only case/punctuation/accent/unicode-variant duplicates merge. Edition
- * markers (remaster, deluxe, anniversary, remix, live, etc.) are NOT stripped:
- * an album whose title differs by any such marker stays its own row.
- *
- *   "Il Pozzo D'Amor" | "il pozzo d'amor"        -> "ilpozzodamor"
- *   "Playing the Angel (Deluxe)"                  -> "playingtheangel(deluxe)"
- *   "( )"                                          -> "" (see below)
+ * The album's dedupe key within its artist: case, punctuation, accents and
+ * unicode variants fold; edition markers stay. "Il Pozzo D'Amor" -> "ilpozzodamor",
+ * "Playing the Angel (Deluxe)" -> "playingtheangel(deluxe)".
  */
 export function albumIdentityKey(title: string | null | undefined): string {
     if (title == null) return "";
@@ -77,11 +46,18 @@ export function albumIdentityKey(title: string | null | undefined): string {
 }
 
 /**
- * Is this title too generic to be matched across artists?
- *
- * Compared on the casefolded form so "The Best Of" is caught alongside
- * "best of". Edition markers are kept so "Best Of (Deluxe)" and "Best Of"
- * are treated as distinct titles.
+ * The key that decides whether owning one title covers another: edition markers
+ * drop, so "Antics (Deluxe)" covers "Antics". Compare whole keys, never
+ * substrings: owning "Trance" must not cover "Trust In Trance".
+ */
+export function editionlessKey(title: string | null | undefined): string {
+    return albumIdentityKey(stripAlbumEdition(title ?? ""));
+}
+
+/**
+ * Is this title too generic to be matched across artists? Compared casefolded, so
+ * "The Best Of" is caught alongside "best of"; edition markers are kept, so
+ * "Best Of (Deluxe)" and "Best Of" are distinct titles.
  */
 export function isGenericAlbumTitle(title: string | null | undefined): boolean {
     if (title == null) return true;
@@ -135,16 +111,13 @@ export async function resolveAlbum(
     input: ResolveAlbumInput
 ) {
     const title = String(input.title ?? "").trim() || "Unknown Album";
-    // Sentinel retained until OwnedAlbum/DiscoveryAlbum stop keying on this
-    // string value -- see the scope note at the top of this file.
+    // rgMbid is required and unique, so an album with no release-group id gets a throwaway one.
     const rgMbid =
         input.rgMbid?.trim() || `temp-${Date.now()}-${Math.random()}`;
     const identityKey = albumIdentityKey(title) || `untitled-${input.artistId}`;
 
-    if (rgMbid) {
-        const byMbid = await db.album.findUnique({ where: { rgMbid } });
-        if (byMbid) return byMbid;
-    }
+    const byMbid = await db.album.findUnique({ where: { rgMbid } });
+    if (byMbid) return byMbid;
 
     const existing = await db.album.findUnique({
         where: {
@@ -165,17 +138,15 @@ export async function resolveAlbum(
         return existing;
     }
 
-    // Cross-artist reuse, for compilations ONLY. This keeps a VA release
-    // together when albumartist tags disagree between its files. It previously
-    // ran for EVERY album with a known year, which is how unrelated albums
-    // sharing a title got merged.
+    // Cross-artist reuse for compilations only, keeping a VA release together
+    // when its files' albumartist tags disagree.
     if (
         input.isCompilation &&
         input.year != null &&
         !isGenericAlbumTitle(title)
     ) {
         const shared = await db.album.findFirst({
-            where: { identityKey, year: input.year, location: "LIBRARY" },
+            where: { identityKey, year: input.year, location: LIBRARY_LOCATION },
         });
         if (shared) return shared;
     }
@@ -192,13 +163,7 @@ export async function resolveAlbum(
                 artistId: input.artistId,
                 title,
                 identityKey,
-                // No displayTitle exists yet at creation time -- this is the
-                // canonical title only, same as identityKey above. A later
-                // override keeps sortName in sync itself (routes/enrichment.ts).
-                // artistSortName is text-generic (fold/lower/collapse/strip
-                // leading article), not artist-specific despite the name --
-                // reused here rather than duplicated, same as kima_sort_name
-                // is shared on the SQL side.
+                // The canonical title; a later display override updates sortName itself.
                 sortName: artistSortName(title),
                 rgMbid,
                 year: input.year ?? null,
@@ -220,4 +185,34 @@ export async function resolveAlbum(
         }
         throw error;
     }
+}
+
+/**
+ * Whether two album titles name the same record: exact, punctuation-insensitive,
+ * then without edition markers. Checks candidates only; it never renames, so
+ * "Playing the Angel (Deluxe)" stays distinct locally.
+ */
+export function titlesAgree(a: string, b: string): boolean {
+    const bare = (t: string) => foldTitle(musicBrainzService.normalizeForSearch(t));
+    if (!a || !b) return false;
+    // Identical text is the same title even when nothing survives the fold
+    // (an album called "!!!"); the empty-fold guard below is for DIFFERENT text.
+    const exact = (t: string) => t.normalize("NFKC").toLowerCase().trim();
+    if (exact(a) !== "" && exact(a) === exact(b)) return true;
+    const same = (x: string, y: string) => x !== "" && x === y;
+    return same(foldTitle(a), foldTitle(b)) || same(bare(a), bare(b));
+}
+
+/**
+ * Keep the letters, numbers and combining marks of any script (marks change
+ * words in Devanagari, Thai, Japanese), dropping only Latin accents so "Café"
+ * matches "Cafe". An empty fold never agrees with anything.
+ */
+function foldTitle(t: string): string {
+    return t
+        .normalize("NFKD")
+        .replace(/(\p{Script=Latin})\p{M}+/gu, "$1")
+        .normalize("NFKC")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{M}\p{N}]/gu, "");
 }

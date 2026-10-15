@@ -2,26 +2,24 @@
 
 import React, { useState, lazy, Suspense } from "react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { useLanguage } from "@/lib/i18n/language-context";
 import { RefreshCw, AudioWaveform } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
 import { HomeHero } from "@/features/home/components/HomeHero";
-import { SectionHeader } from "@/features/home/components/SectionHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ContinueListening } from "@/features/home/components/ContinueListening";
-import { ArtistsGrid } from "@/features/home/components/ArtistsGrid";
+import { ArtistsGrid, PopularArtistsGrid } from "@/features/home/components/ArtistsGrid";
 import { MixesGrid } from "@/features/home/components/MixesGrid";
-import { PopularArtistsGrid } from "@/features/home/components/PopularArtistsGrid";
 import { PodcastsGrid } from "@/features/home/components/PodcastsGrid";
 import { AudiobooksGrid } from "@/features/home/components/AudiobooksGrid";
 import { FeaturedPlaylistsGrid, FeaturedPlaylistsSkeleton } from "@/features/home/components/FeaturedPlaylistsGrid";
 import { LibraryRadioStations } from "@/features/home/components/LibraryRadioStations";
+import { Button } from "@/components/ui/Button";
 
 const MoodMixer = lazy(() => import("@/components/MoodMixer").then(mod => ({ default: mod.MoodMixer })));
 
 export default function HomePage() {
     const [showMoodMixer, setShowMoodMixer] = useState(false);
-    const { t } = useLanguage();
     const {
         recentlyListened,
         recentlyAdded,
@@ -42,57 +40,54 @@ export default function HomePage() {
     }
 
     return (
-        <div className="min-h-screen relative bg-gradient-to-b from-[#0a0a0a] to-black">
-            {/* Static gradient overlay */}
-            <div className="fixed inset-0 pointer-events-none opacity-50">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent" />
-            </div>
-
+        <div className="min-h-screen">
             <div className="relative">
                 <HomeHero />
 
-                <div className="section-stack relative max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 pb-32 pt-8">
+                <div className="section-stack relative page-shell pb-32 pt-2">
                 {/* Sections rise in staggered order on mount. Only the first 8 visible sections animate;
                     items 9+ render immediately. Animation is mount-only (CSS animation-fill-mode: both). */}
                 {(() => {
                     const sections: Array<{ key: string; visible: boolean; content: React.ReactNode }> = [
                         { key: "library-radio", visible: true, content: (
                             <section data-tv-section="library-radio">
-                                <SectionHeader title={t("Library Radio")} showAllHref="/radio" color="featured" />
+                                <SectionHeader title="Library Radio" showAllHref="/radio" type="featured" />
                                 <LibraryRadioStations />
                             </section>
                         )},
                         { key: "continue-listening", visible: recentlyListened.length > 0, content: (
                             <section data-tv-section="continue-listening">
-                                <SectionHeader title={t("Continue Listening")} showAllHref="/collection?tab=artists" color="featured" />
+                                <SectionHeader title="Continue Listening" showAllHref="/collection?tab=artists" type="featured" />
                                 <ContinueListening items={recentlyListened} />
                             </section>
                         )},
                         { key: "recently-added", visible: recentlyAdded.length > 0, content: (
                             <section data-tv-section="recently-added">
-                                <SectionHeader title={t("Recently Added")} showAllHref="/collection?tab=artists" color="artists" />
+                                <SectionHeader title="Recently Added" showAllHref="/collection?tab=artists" type="artist" />
                                 <ArtistsGrid artists={recentlyAdded} />
                             </section>
                         )},
                         { key: "made-for-you", visible: mixes.length > 0, content: (
                             <section data-tv-section="made-for-you">
                                 <SectionHeader
-                                    title={t("Made For You")}
-                                    color="discover"
-                                    rightAction={
+                                    title="Made For You"
+                                    type="track"
+                                    action={
                                         <div className="flex items-center gap-2">
-                                            <button
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
                                                 onClick={() => setShowMoodMixer(true)}
-                                                className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-black bg-brand hover:bg-[#f97316] rounded-lg transition-colors"
                                             >
                                                 <AudioWaveform className="w-3.5 h-3.5" />
-                                                <span className="hidden sm:inline">{t("Mood Mixer")}</span>
-                                            </button>
-                                            <button
+                                                <span className="hidden sm:inline">Mood Mixer</span>
+                                            </Button>
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
                                                 onClick={handleRefreshMixes}
                                                 disabled={isRefreshingMixes}
-                                                aria-label={t("Refresh mixes")}
-                                                className="flex items-center gap-2 px-4 py-2 text-xs tabular-nums text-[var(--text-secondary)] hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 hover:border-white/20"
+                                                aria-label="Refresh mixes"
                                             >
                                                 {isRefreshingMixes ? (
                                                     <GradientSpinner size="sm" />
@@ -100,9 +95,9 @@ export default function HomePage() {
                                                     <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-150" />
                                                 )}
                                                 <span className="hidden sm:inline">
-                                                    {isRefreshingMixes ? t("Refreshing...") : t("Refresh")}
+                                                    {isRefreshingMixes ? "Refreshing..." : "Refresh"}
                                                 </span>
-                                            </button>
+                                            </Button>
                                         </div>
                                     }
                                 />
@@ -111,19 +106,19 @@ export default function HomePage() {
                         )},
                         { key: "recommended", visible: recommended.length > 0, content: (
                             <section data-tv-section="recommended">
-                                <SectionHeader title={t("Recommended")} showAllHref="/discover" badge="Last.FM" color="artists" />
+                                <SectionHeader title="Recommended" showAllHref="/discover" badge="Local Engine" type="artist" />
                                 <ArtistsGrid artists={recommended} />
                             </section>
                         )},
                         { key: "popular-artists", visible: popularArtists.length > 0, content: (
                             <section data-tv-section="popular-artists">
-                                <SectionHeader title={t("Popular Artists")} badge="Last.FM" color="artists" />
+                                <SectionHeader title="Popular Artists" badge="ListenBrainz" type="artist" />
                                 <PopularArtistsGrid artists={popularArtists} />
                             </section>
                         )},
                         { key: "featured-playlists", visible: isBrowseLoading || featuredPlaylists.length > 0, content: (
                             <section data-tv-section="featured-playlists">
-                                <SectionHeader title={t("Featured Playlists")} showAllHref="/browse/playlists" badge="Deezer" color="tracks" />
+                                <SectionHeader title="Featured Playlists" showAllHref="/browse/playlists" badge="Deezer" type="track" />
                                 {isBrowseLoading && featuredPlaylists.length === 0 ? (
                                     <FeaturedPlaylistsSkeleton />
                                 ) : (
@@ -133,13 +128,13 @@ export default function HomePage() {
                         )},
                         { key: "popular-podcasts", visible: recentPodcasts.length > 0, content: (
                             <section data-tv-section="popular-podcasts">
-                                <SectionHeader title={t("Popular Podcasts")} showAllHref="/podcasts" color="podcasts" />
+                                <SectionHeader title="Popular Podcasts" showAllHref="/podcasts" type="podcast" />
                                 <PodcastsGrid podcasts={recentPodcasts} />
                             </section>
                         )},
                         { key: "audiobooks", visible: recentAudiobooks.length > 0, content: (
                             <section data-tv-section="audiobooks">
-                                <SectionHeader title={t("Audiobooks")} showAllHref="/audiobooks" color="audiobooks" />
+                                <SectionHeader title="Audiobooks" showAllHref="/audiobooks" type="audiobook" />
                                 <AudiobooksGrid audiobooks={recentAudiobooks} />
                             </section>
                         )},
@@ -165,7 +160,6 @@ export default function HomePage() {
                 </div>
             </div>
 
-            {/* Mood Mixer Modal - Lazy loaded */}
             {showMoodMixer && (
                 <Suspense fallback={null}>
                     <MoodMixer isOpen={showMoodMixer} onClose={() => setShowMoodMixer(false)} />

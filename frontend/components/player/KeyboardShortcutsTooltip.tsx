@@ -2,12 +2,9 @@
 
 import { Info } from "lucide-react";
 import { useState } from "react";
-import { useLanguage } from "@/lib/i18n/language-context";
-import type { TranslationKey } from "@/lib/i18n/translations";
 
 export function KeyboardShortcutsTooltip() {
     const [isVisible, setIsVisible] = useState(false);
-    const { t } = useLanguage();
 
     const shortcuts = [
         { key: "Space", action: "Play / Pause" },
@@ -28,19 +25,18 @@ export function KeyboardShortcutsTooltip() {
                 onMouseLeave={() => setIsVisible(false)}
                 onClick={() => setIsVisible(!isVisible)}
                 className="p-1.5 rounded transition-colors text-[var(--text-secondary)] hover:text-white"
-                title={t("Keyboard shortcuts")}
+                title="keyboard shortcuts"
             >
                 <Info className="w-3.5 h-3.5" />
             </button>
 
             {isVisible && (
-                <div className={`${isVisible ? "animate-panel-up" : "animate-panel-down"} absolute bottom-full right-0 mb-2 w-64 bg-[var(--bg-hover)] border border-white/10 rounded-lg p-4 z-(--z-dropdown) backdrop-blur-xl`}>
-                    {/* Pointer arrow */}
+                <div className="animate-panel-up absolute bottom-full right-0 mb-2 w-64 bg-[var(--bg-hover)] border border-white/10 rounded-lg p-4 z-(--z-dropdown) backdrop-blur-xl">
                     <div className="absolute -bottom-1 right-3 w-2 h-2 bg-[var(--bg-hover)] border-r border-b border-white/10 rotate-45" />
 
                     <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
                         <Info className="w-4 h-4" />
-                        {t("Keyboard Shortcuts")}
+                        Keyboard Shortcuts
                     </h3>
 
                     <div className="space-y-2">
@@ -50,7 +46,7 @@ export function KeyboardShortcutsTooltip() {
                                 className="flex items-center justify-between text-xs"
                             >
                                 <span className="text-[var(--text-secondary)]">
-                                    {t(shortcut.action as TranslationKey)}
+                                    {shortcut.action}
                                 </span>
                                 <kbd className="px-2 py-1 bg-white/5 border border-white/10 rounded text-white tabular-nums text-xs min-w-[40px] text-center">
                                     {shortcut.key}
@@ -61,7 +57,7 @@ export function KeyboardShortcutsTooltip() {
 
                     <div className="mt-3 pt-3 border-t border-white/10">
                         <p className="text-micro text-[var(--text-muted)] leading-relaxed">
-                            {t("Shortcuts work anywhere except when typing in text fields.")}
+                            Shortcuts work anywhere except when typing in text fields.
                         </p>
                     </div>
                 </div>

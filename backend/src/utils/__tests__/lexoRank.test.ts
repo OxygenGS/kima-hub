@@ -1,11 +1,6 @@
 /**
- * Fractional rank keys.
- *
- * These replace the integer `sort` column whose collisions scrambled imported
- * playlists. The properties below are the ones the playlist ordering depends
- * on, so they are asserted against randomised sequences rather than a handful
- * of hand-picked pairs -- an ordering bug that only shows up after 200 inserts
- * is exactly the kind that shipped last time.
+ * Fractional rank keys for playlist order, checked against randomised insert
+ * sequences.
  */
 
 import {
@@ -93,19 +88,20 @@ describe("rankBetween — randomised insertion", () => {
     it("throws rather than silently emitting a duplicate when depth runs out", () => {
         let lo = "A";
         let hi = "B";
-        let threw = false;
         for (let n = 0; n < 500; n += 1) {
+            let mid: string;
             try {
-                hi = rankBetween(lo, hi);
+                mid = rankBetween(lo, hi);
             } catch (e: any) {
+                // Refusing loudly is the other allowed outcome.
                 expect(e.message).toMatch(/max depth/);
-                threw = true;
-                break;
+                return;
             }
+            // Every key handed back was strictly between its bounds.
+            expect(mid > lo).toBe(true);
+            expect(mid < hi).toBe(true);
+            hi = mid;
         }
-        // Either it stayed within depth for 500 splits, or it refused loudly.
-        // What it must never do is return a key that is not strictly between.
-        expect(typeof threw).toBe("boolean");
     });
 
     it("appending stays ordered over 500 appends", () => {
@@ -144,8 +140,7 @@ describe("rankBetween — randomised insertion", () => {
         // deep prepending must subdivide and the keys grow. Ordering and
         // uniqueness are the invariants; short keys are not.
         const list: string[] = [];
-        // rankBetween("", x) is how moveItem inserts before the first item;
-        // rankBefore was a second spelling of it with no callers.
+        // rankBetween("", x) is how moveItem inserts before the first item.
         let first = "";
         let inserted = 0;
         for (let n = 0; n < 500; n += 1) {
@@ -204,17 +199,9 @@ describe("rankSequence — seeding a list", () => {
 
 describe("collation assumption", () => {
     /**
-     * The ranks are compared BOTH in Postgres (ORDER BY rank, rank > $x) and in
-     * JavaScript (the merge of items with pending tracks). Those two comparisons
-     * must agree.
-     *
-     * They did not: under the database's default locale collation Postgres
-     * ordered 'F' < 'j' < 'U' while JavaScript orders 'F' < 'U' < 'j', so the
-     * displayed order and the order the service computed against were different.
-     * The rank columns are now declared COLLATE "C" (byte order) to match.
-     *
-     * This test pins the JavaScript half. If it ever fails, the alphabet changed
-     * and the column collation has to be revisited with it.
+     * Ranks are compared in Postgres and in JavaScript, so the columns use
+     * COLLATE "C" (byte order). If this fails, the alphabet changed and the
+     * collation must be revisited.
      */
     it("orders by byte value, which is what COLLATE \"C\" gives Postgres", () => {
         expect(["F", "U", "j"].sort()).toEqual(["F", "U", "j"]);

@@ -26,19 +26,25 @@ interface LyricsSyncState {
 export function useLyricsSync(): LyricsSyncState {
     const { currentTime } = useAudioPlayback();
     const { currentTrack } = useAudioState();
-    const [result, setResult] = useState<LyricsResult | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
 
     const trackId = currentTrack?.id ?? null;
 
-    // Render-time reset when track changes (follows useImageColor pattern)
-    const [prevTrackId, setPrevTrackId] = useState(trackId);
-    if (trackId !== prevTrackId) {
-        setPrevTrackId(trackId);
-        setIsLoading(!!trackId);
-    }
+    // Loading starts true when there is a track, so the first render shows a
+    // spinner rather than flashing "No lyrics available".
+    const [result, setResult] = useState<LyricsResult | null>(null);
+    const [isLoading, setIsLoading] = useState(() => trackId != null);
 
-    // Fetch lyrics when track changes
+    // Reset loading + result when the track changes (or clears).
+    // The useEffect fires post-render, so the *next* render (triggered
+    // by setIsLoading(true)) already shows loading=true — no flash.
+    useEffect(() => {
+        if (trackId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setIsLoading(true);
+            setResult(null);
+        }
+    }, [trackId]);
+
     useEffect(() => {
         if (!trackId) return;
 
