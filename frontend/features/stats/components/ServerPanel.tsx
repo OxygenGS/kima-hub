@@ -9,28 +9,32 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { bytes, uptime } from "../format";
 import type { SystemStats } from "../types";
 
 export function ServerPanel({ system }: { system: SystemStats }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     return (
         <div className="flex flex-col gap-7">
             <div className="grid gap-x-10 gap-y-5 grid-cols-2 sm:grid-cols-4">
-                <Probe label="database" ms={system.db} />
-                <Probe label="redis" ms={system.redis} />
-                <Reading label="uptime" value={uptime(system.uptimeSeconds)} />
-                <Reading label="version" value={system.version} mono />
+                <Probe label={t("database")} ms={system.db} />
+                <Probe label={t("redis")} ms={system.redis} />
+                <Reading label={t("uptime")} value={uptime(system.uptimeSeconds)} />
+                <Reading label={t("version")} value={system.version} mono />
             </div>
 
             <div className="grid gap-x-10 gap-y-5 grid-cols-2 sm:grid-cols-4">
-                <Reading label="tracks" value={system.library.tracks.toLocaleString()} />
-                <Reading label="library size" value={bytes(system.library.bytes)} />
+                <Reading label={t("tracks")} value={system.library.tracks.toLocaleString()} />
+                <Reading label={t("library size")} value={bytes(system.library.bytes)} />
                 <Reading
-                    label="cache size"
+                    label={t("cache size")}
                     value={bytes((system.cache.downloadedMb + system.cache.transcodedMb) * 1048576)}
                 />
                 <Reading
-                    label="failed tracks"
+                    label={t("failed tracks")}
                     value={(system.corruptTracks + system.enrichmentFailures).toLocaleString()}
                     tone={system.corruptTracks + system.enrichmentFailures > 0 ? "brand" : undefined}
                 />
@@ -38,14 +42,14 @@ export function ServerPanel({ system }: { system: SystemStats }) {
 
             {system.jobs.length > 0 && (
                 <div className="flex flex-col gap-3">
-                    <h3 className="t-label text-[var(--text-secondary)]">download jobs</h3>
+                    <h3 className="t-label text-[var(--text-secondary)]">{t("download jobs")}</h3>
                     <div className="flex flex-wrap gap-x-8 gap-y-3">
                         {system.jobs.map((job) => (
                             <p key={job.status} className="flex items-baseline gap-2">
                                 <span className="t-figure text-[length:var(--stat-lead)]">
                                     {job.count.toLocaleString()}
                                 </span>
-                                <span className="t-meta">{job.status.toLowerCase()}</span>
+                                <span className="t-meta">{t(job.status.toLowerCase())}</span>
                             </p>
                         ))}
                     </div>
@@ -54,21 +58,21 @@ export function ServerPanel({ system }: { system: SystemStats }) {
 
             <div className="flex flex-wrap gap-2 pt-1">
                 <Action<ClearCachesResult>
-                    label="clear cache"
-                    confirmLabel="clear cache?"
+                    label={t("clear cache")}
+                    confirmLabel={t("clear cache?")}
                     path="/system-settings/clear-caches"
-                    done={(r) => `cleared ${(r.clearedKeys ?? 0).toLocaleString()} cache ${(r.clearedKeys ?? 0) === 1 ? "entry" : "entries"}`}
+                    done={(r) => `${(r.clearedKeys ?? 0).toLocaleString()} ${t((r.clearedKeys ?? 0) === 1 ? "cache entry" : "cache entries")} ${t("cleared")}`}
                 />
                 <Action<CleanupJobsResult>
-                    label="clear finished jobs"
-                    confirmLabel="clear jobs?"
+                    label={t("clear finished jobs")}
+                    confirmLabel={t("clear jobs?")}
                     path="/settings/cleanup-stale-jobs"
-                    done={(r) => `cleared ${(r.totalCleaned ?? 0).toLocaleString()} ${(r.totalCleaned ?? 0) === 1 ? "job" : "jobs"}`}
+                    done={(r) => `${(r.totalCleaned ?? 0).toLocaleString()} ${t((r.totalCleaned ?? 0) === 1 ? "job" : "jobs")} ${t("cleared")}`}
                 />
                 <Action<RetryFailedResult>
-                    label="retry failed analysis"
+                    label={t("retry failed analysis")}
                     path="/analysis/retry-failed"
-                    done={(r) => `requeued ${(r.reset ?? 0).toLocaleString()} ${(r.reset ?? 0) === 1 ? "track" : "tracks"}`}
+                    done={(r) => `${(r.reset ?? 0).toLocaleString()} ${t((r.reset ?? 0) === 1 ? "track" : "tracks")} ${t("requeued")}`}
                 />
             </div>
         </div>
@@ -77,6 +81,7 @@ export function ServerPanel({ system }: { system: SystemStats }) {
 
 /** A live check. Amber when it answered, red when it did not. */
 function Probe({ label, ms }: { label: string; ms: number | null }) {
+    const { locale } = useLanguage();
     const ok = ms != null;
     return (
         <div className="flex flex-col gap-1.5">
@@ -89,7 +94,7 @@ function Probe({ label, ms }: { label: string; ms: number | null }) {
                 <span
                     className={`t-figure text-[length:var(--stat-lead)] ${ok ? "" : "text-danger-light"}`}
                 >
-                    {ok ? `${ms < 1 ? ms.toFixed(1) : Math.round(ms)}ms` : "down"}
+                    {ok ? `${ms < 1 ? ms.toFixed(1) : Math.round(ms)}ms` : translate(locale, "down (service)")}
                 </span>
             </span>
         </div>
@@ -139,6 +144,7 @@ function Action<TResult extends object>({
     path: string;
     done: (result: TResult) => string;
 }) {
+    const { locale } = useLanguage();
     const [asking, setAsking] = useState(false);
     const [busy, setBusy] = useState(false);
     const [result, setResult] = useState<string | null>(null);
@@ -154,7 +160,7 @@ function Action<TResult extends object>({
         try {
             setResult(done((await api.post<TResult>(path, {})) ?? ({} as TResult)));
         } catch {
-            setResult("failed · nothing changed");
+            setResult(translate(locale, "failed · nothing changed"));
         } finally {
             setBusy(false);
         }

@@ -6,6 +6,8 @@
  */
 
 import { useReveal } from "../useReveal";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { KeyWheel } from "./KeyWheel";
 import { EnergyCurve } from "./EnergyCurve";
 import type { Signature as Sig } from "../types";
@@ -25,6 +27,8 @@ export function SignatureSound({ signature: s, period }: { signature: Sig; perio
 
 /** Shelf (grey) and listening (amber) marked on one shared track, so the gap is seen. */
 export function OwnedAgainstPlayed({ signature: s }: { signature: Sig }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { ref, shown } = useReveal<HTMLDivElement>({ threshold: 0.2 });
     if (s.ownedVsPlayed.length === 0) return null;
 
@@ -36,7 +40,7 @@ export function OwnedAgainstPlayed({ signature: s }: { signature: Sig }) {
 
     return (
         <div ref={ref} className="flex flex-col gap-5">
-            <p className="t-meta">grey = library average · amber = played average</p>
+            <p className="t-meta">{t("grey = library average · amber = played average")}</p>
 
             <dl className="flex flex-col gap-4">
                 {s.ownedVsPlayed.map((row, i) => {
@@ -48,7 +52,7 @@ export function OwnedAgainstPlayed({ signature: s }: { signature: Sig }) {
                     return (
                         <div key={row.label} className="flex flex-col gap-1.5">
                             <div className="flex items-baseline justify-between gap-4">
-                                <dt className="t-meta text-[var(--text-secondary)]">{row.label}</dt>
+                                <dt className="t-meta text-[var(--text-secondary)]">{t(row.label)}</dt>
                                 <dd className="t-meta tabular-nums">
                                     <span className="text-[var(--text-muted)]">{fmt(row.owned)}</span>
                                     <span className="text-[var(--text-muted)]"> → </span>
@@ -79,8 +83,8 @@ export function OwnedAgainstPlayed({ signature: s }: { signature: Sig }) {
                 nothing twice. */}
             {above > 3 && (
                 <p className="t-body max-w-[38ch]">
-                        played energy:{" "}
-                        <span className="t-figure text-sm">{above}%</span> above library average
+                        {t("played energy:")}{" "}
+                        <span className="t-figure text-sm">{above}%</span> {t("above library average")}
                 </p>
             )}
         </div>

@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("covers v1.11 Listening Clock, server maintenance and decade descriptions", () => {
+        expect(translate("nl", "busiest hours")).toBe("drukste uren");
+        expect(translate("nl", "friday")).toBe("vrijdag");
+        expect(translate("nl", "fri")).toBe("vr");
+        expect(translate("nl", "clear finished jobs")).toBe("afgeronde taken wissen");
+        expect(translate("nl", "down (service)")).toBe("niet bereikbaar");
+        expect(translate("nl", "size = albums owned · fill = albums played")).toContain("afgespeelde albums");
+        expect(translate("nl", "played energy:")).toBe("energie van afgespeelde nummers:");
+        expect(translate("en", "busiest hours")).toBe("busiest hours");
+    });
+
     it("covers newly integrated Stats listening, sources, and spoken-word labels", () => {
         expect(translate("nl", "subsonic apps")).toBe("Subsonic-apps");
         expect(translate("nl", "all plays from")).toBe("alle afspeelbeurten via");

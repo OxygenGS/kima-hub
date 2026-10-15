@@ -8,6 +8,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useReveal } from "../useReveal";
 import { hourLabel, whenLabel } from "../format";
 import type { ListeningStats } from "../types";
@@ -15,6 +17,7 @@ import type { ListeningStats } from "../types";
 /** Backend rows are Sunday-first; read them out Monday-first. */
 const ROWS = [1, 2, 3, 4, 5, 6, 0];
 const ROW_LABELS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const LONG_DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const HOUR_TICKS = [0, 6, 12, 18];
 
 interface HourDetail {
@@ -27,6 +30,12 @@ interface HourDetail {
 }
 
 export function ListeningClock({ listening, period }: { listening: ListeningStats; period?: string }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
+    const when = (dow: number, hour: number) => locale === "nl"
+        ? `${t(LONG_DAYS[dow])} ${String(hour).padStart(2, "0")}:00`
+        : whenLabel(dow, hour);
+    const clockTime = (hour: number) => locale === "nl" ? `${String(hour).padStart(2, "0")}:00` : hourLabel(hour);
     const { clock, peak, plays } = listening;
     const [at, setAt] = useState<{ dow: number; hour: number } | null>(null);
     const [open, setOpen] = useState<{ dow: number; hour: number } | null>(null);
@@ -76,7 +85,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
     }, [open]);
 
     if (max === 0) {
-        return <p className="t-body max-w-[46ch]">no plays yet</p>;
+        return <p className="t-body max-w-[46ch]">{t("no plays yet")}</p>;
     }
 
     // The three loudest cells, which is what a finger actually wants to reach.
@@ -126,7 +135,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
             <div
                 ref={gridRef}
                 role="grid"
-                aria-label="plays by day and hour. arrow keys move, enter opens an hour"
+                aria-label={t("plays by day and hour. arrow keys move, enter opens an hour")}
                 className="flex flex-col gap-[3px]"
                 onMouseLeave={() => setAt(null)}
             >
@@ -137,7 +146,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                                 shown?.dow === dow ? "text-[var(--text-primary)]" : ""
                             }`}
                         >
-                            {ROW_LABELS[rowIndex]}
+                            {t(ROW_LABELS[rowIndex])}
                         </span>
                         <div className="grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[3px]">
                             {clock[dow].map((n, hour) => {
@@ -152,8 +161,8 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                                         onKeyDown={(e) => steer(e, dow, hour)}
                                         aria-label={
                                             n === 0
-                                                ? `${whenLabel(dow, hour)}: no plays`
-                                                : `${whenLabel(dow, hour)}: ${n} ${n === 1 ? "play" : "plays"}`
+                                                ? `${when(dow, hour)}: ${t("no plays")}`
+                                                : `${when(dow, hour)}: ${n} ${t(n === 1 ? "play count" : "plays")}`
                                         }
                                         aria-pressed={opened}
                                         onMouseEnter={() => { if (!open) setAt({ dow, hour }); }}
@@ -195,7 +204,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                     <div className="grid grid-cols-[repeat(24,minmax(0,1fr))] gap-[3px]">
                         {Array.from({ length: 24 }, (_, hour) => (
                             <span key={hour} className="t-meta leading-none whitespace-nowrap">
-                                {HOUR_TICKS.includes(hour) ? hourLabel(hour) : ""}
+                                {HOUR_TICKS.includes(hour) ? clockTime(hour) : ""}
                             </span>
                         ))}
                     </div>
@@ -207,7 +216,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                 would cost the only thing the grid is for — the busiest hours get
                 their own full-width rows underneath, and the grid stays a grid. */}
             <div className="sm:hidden flex flex-col gap-1 -mt-1 short:[&>button:nth-of-type(n+3)]:hidden">
-                <h3 className="t-label mb-1">busiest hours</h3>
+                <h3 className="t-label mb-1">{t("busiest hours")}</h3>
                 {busiest.map(({ dow, hour, n }) => {
                     const opened = open?.dow === dow && open?.hour === hour;
                     return (
@@ -225,9 +234,9 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                             ].join(" ")}
                         >
                             <span className="text-sm text-[var(--text-primary)]">
-                                {whenLabel(dow, hour)}
+                                {when(dow, hour)}
                             </span>
-                            <span className="t-meta shrink-0">{n} {n === 1 ? "play" : "plays"}</span>
+                            <span className="t-meta shrink-0">{n} {t(n === 1 ? "play count" : "plays")}</span>
                         </button>
                     );
                 })}
@@ -240,19 +249,19 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                     {shown && (
                         <>
                             <p className="t-figure text-[length:var(--stat-lead)] leading-tight">
-                                {whenLabel(shown.dow, shown.hour)}
+                                {when(shown.dow, shown.hour)}
                             </p>
                             <p className="t-meta">
                                 {shownCount === 0
-                                    ? "no plays"
-                                    : `${shownCount.toLocaleString()} ${shownCount === 1 ? "play" : "plays"} · ${(
+                                    ? t("no plays")
+                                    : `${shownCount.toLocaleString()} ${t(shownCount === 1 ? "play count" : "plays")} · ${(
                                           (shownCount / plays) * 100
-                                      ).toFixed(1)}% of all plays`}
-                                {isPeak && !open && " · busiest"}
+                                      ).toFixed(1)}% ${t("of all plays")}`}
+                                {isPeak && !open && ` · ${t("busiest")}`}
                                 {shownCount > 0 && !open && (
-                                    <span className="hidden sm:inline"> · click for tracks</span>
+                                    <span className="hidden sm:inline"> · {t("click for tracks")}</span>
                                 )}
-                                {open && <span className="hidden sm:inline"> · click again to close</span>}
+                                {open && <span className="hidden sm:inline"> · {t("click again to close")}</span>}
                             </p>
                         </>
                     )}
@@ -275,6 +284,8 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
 
 /** What was playing in one hour. Two columns, because both questions get asked. */
 function HourPanel({ detail, loading }: { detail: HourDetail | null; loading: boolean }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     if (loading && !detail) {
         return (
             <div className="pt-1 flex flex-col gap-2" aria-busy="true">
@@ -293,7 +304,7 @@ function HourPanel({ detail, loading }: { detail: HourDetail | null; loading: bo
     return (
         <div className="pt-1 grid gap-x-14 gap-y-7 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] animate-rise">
             <div className="flex flex-col gap-3">
-                <h3 className="t-label text-[var(--text-secondary)]">tracks</h3>
+                <h3 className="t-label text-[var(--text-secondary)]">{t("tracks")}</h3>
                 <ol className="flex flex-col gap-2.5">
                     {detail.tracks.map((t, i) => (
                         <li
@@ -316,7 +327,7 @@ function HourPanel({ detail, loading }: { detail: HourDetail | null; loading: bo
             </div>
 
             <div className="flex flex-col gap-3">
-                <h3 className="t-label text-[var(--text-secondary)]">artists</h3>
+                <h3 className="t-label text-[var(--text-secondary)]">{t("artists")}</h3>
                 <ul className="flex flex-col gap-2.5">
                     {detail.artists.map((a, i) => (
                         <li

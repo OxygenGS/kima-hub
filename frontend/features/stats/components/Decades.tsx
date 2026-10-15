@@ -7,8 +7,12 @@
 
 import type { ShelfStats } from "../types";
 import { useReveal } from "../useReveal";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function Decades({ decades }: { decades: ShelfStats["decades"] }) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { ref, shown } = useReveal<HTMLElement>({ threshold: 0.35 });
     if (decades.length < 2) return null;
 
@@ -46,7 +50,7 @@ export function Decades({ decades }: { decades: ShelfStats["decades"] }) {
         <figure ref={ref} className="m-0 grid items-center gap-x-12 gap-y-8 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="flex flex-col gap-2">
                 <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
-                     aria-label={`albums by decade · most from the ${String(biggest.decade).slice(2)}s`}>
+                     aria-label={`${t("albums by decade · most from the")} ${String(biggest.decade).slice(2)}s`}>
                     <line x1="0" y1={H / 2} x2={W} y2={H / 2} stroke="var(--chart-ink-rule)" strokeWidth="0.3" />
                     {decades.map((d, i) => {
                         const cx = at(i);
@@ -82,7 +86,7 @@ export function Decades({ decades }: { decades: ShelfStats["decades"] }) {
                                         transitionDelay: `${i * 70 + 110}ms`,
                                     }}
                                 />
-                                <title>{`${d.decade}s: ${d.heard} of ${d.albums} ${d.albums === 1 ? "album" : "albums"} played`}</title>
+                                <title>{`${d.decade}s: ${d.heard} ${t("of")} ${d.albums} ${t(d.albums === 1 ? "album" : "albums")} ${t("played (adjective)")}`}</title>
                             </g>
                         );
                     })}
@@ -104,18 +108,18 @@ export function Decades({ decades }: { decades: ShelfStats["decades"] }) {
 
             <figcaption className="flex flex-col gap-2 max-w-[30ch]">
                 <p className="t-body">
-                    most albums:{" "}
+                    {t("most albums:")}{" "}
                     <span className="t-figure text-sm">{String(biggest.decade).slice(2)}s</span>
                     {coldest && coldest.decade !== biggest.decade && (
                         <>
-                            {" · least played: "}
+                            {" · "}{t("least played:")}{" "}
                             <span className="t-figure text-sm">
                                 {String(coldest.decade).slice(2)}s
                             </span>
                         </>
                     )}
                 </p>
-                <p className="t-meta">size = albums owned · fill = albums played</p>
+                <p className="t-meta">{t("size = albums owned · fill = albums played")}</p>
             </figcaption>
         </figure>
     );
