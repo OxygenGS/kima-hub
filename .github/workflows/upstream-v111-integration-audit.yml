@@ -176,6 +176,7 @@ jobs:
       - name: Inventory transitional backend TypeScript mismatches
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           mkdir -p audit
           (cd backend && npm run typecheck) > audit/v111-backend-typecheck.txt 2>&1
@@ -189,6 +190,8 @@ jobs:
             echo "The upstream schema and migrations are staged, but v1.11 backend APIs still need merging." >> "$GITHUB_STEP_SUMMARY"
             echo "This diagnostic alone does not approve a release." >> "$GITHUB_STEP_SUMMARY"
             tail -n 70 audit/v111-backend-typecheck.txt >> "$GITHUB_STEP_SUMMARY"
+            echo "--- Backend TypeScript diagnostics (first 45) ---"
+            grep 'error TS' audit/v111-backend-typecheck.txt | head -n 45 || true
           fi
           exit 0
       - name: Save backend diagnostic
