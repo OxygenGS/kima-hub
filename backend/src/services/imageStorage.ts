@@ -44,6 +44,24 @@ function resolveInCoversDir(relativePath: string): string | null {
 }
 
 /**
+ * Read-only cover paths must stay inside the physical covers directory, not
+ * merely inside it lexically. A symlink can otherwise make a native: URL or
+ * cached resized filename open a private file outside that directory.
+ * Unlike resolveInCoversDir, this helper requires an existing regular file.
+ */
+export function getCanonicalCoverFilePath(filePath: string): string | null {
+    try {
+        const root = fs.realpathSync(getCoversBasePath());
+        const actual = fs.realpathSync(filePath);
+        if (!actual.startsWith(root + path.sep)) return null;
+        if (!fs.statSync(actual).isFile()) return null;
+        return actual;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Download an image from URL and save locally
  * Returns the native path (e.g., "native:artists/artistId.jpg") or null on failure
  */
@@ -104,7 +122,7 @@ export function getLocalImagePath(nativePath: string): string | null {
     if (!nativePath.startsWith("native:")) return null;
 
     const fullPath = resolveInCoversDir(nativePath.replace("native:", ""));
-    return fullPath && fs.existsSync(fullPath) ? fullPath : null;
+    return fullPath ? getCanonicalCoverFilePath(fullPath) : null;
 }
 
 /** Whether a native image path points to an existing file on disk. */
