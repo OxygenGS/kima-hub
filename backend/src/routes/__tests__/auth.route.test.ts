@@ -396,6 +396,8 @@ describe('DELETE /auth/account', () => {
             async (fn: (tx: unknown) => Promise<unknown>) =>
                 fn({
                     user: { count: jest.fn().mockResolvedValue(2), delete: prisma.user.delete },
+                    userMoodMix: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+                    discoveryBatch: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
                 })
         );
 
