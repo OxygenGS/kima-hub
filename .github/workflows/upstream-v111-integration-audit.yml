@@ -287,3 +287,28 @@ jobs:
           END
           $upgrade$;
           SQL
+
+  provisional-full-source-merge:
+    name: Temporary v1.11 full-source merge and compile gap report
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Preview all conflict-free upstream changes, keep fork for 141 conflicts
+        shell: bash
+        run: bash .github/ci/v111-provisional-merge-check.sh
+      - name: Upload temporary compile gap report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-provisional-source-compile-gaps
+          path: audit/
+          if-no-files-found: warn
+          retention-days: 14
