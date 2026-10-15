@@ -198,6 +198,62 @@ test.describe("Interface language", () => {
     });
 
 
+    test("localizes real release consent controls without answering or clearing anything", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "release-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/whats-new/pending") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        releases: [{
+                            version: "1.11.0", title: "CI Release Title",
+                            summary: "Original release copy", date: "2026-10-15",
+                            items: [{
+                                kind: "choice", key: "ci.release.choice",
+                                title: "CI Original Choice Title",
+                                summary: "CI Original Choice Summary",
+                                body: "CI Original Body Text",
+                                discloses: "CI Original Disclosure",
+                                defaultValue: false,
+                            }],
+                        }],
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        const destructiveCalls: string[] = [];
+        page.on("request", (request) => {
+            if (/\/api\/whats-new\/.*\/(?:dismiss|choice)|\/api\/enrichment\/wipe/.test(request.url())
+                && request.method() !== "GET") destructiveCalls.push(request.url());
+        });
+
+        await page.goto("/");
+        const modal = page.getByRole("dialog", { name: "CI Release Title" });
+        await expect(modal).toBeVisible();
+        await expect(modal.getByRole("heading", { name: "Nieuw in 1.11" })).toBeVisible();
+        await expect(modal.getByText("CI Original Choice Title", { exact: true })).toBeVisible();
+        await modal.locator('[data-item="ci.release.choice"]').click();
+        await expect(modal.getByRole("button", { name: "Inschakelen" })).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Nee, bedankt" })).toBeVisible();
+        await expect(modal.getByText("Wat je server verlaat:")).toBeVisible();
+        await expect(modal.getByText("CI Original Disclosure", { exact: true })).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(modal.getByRole("button", { name: "Turn it on" })).toBeVisible();
+        expect(destructiveCalls).toEqual([]);
+    });
+
     test("keeps TV remote navigation stable while labels and branding follow the UI", async ({ page }) => {
         await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         await page.route("**/api/**", async (route) => {
