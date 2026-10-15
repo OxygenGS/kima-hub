@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useReveal } from "../useReveal";
 import { FitPanel } from "./FitPanel";
 import { Shortcuts } from "./Shortcuts";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export interface Chapter {
     id: string;
@@ -19,6 +21,7 @@ export interface Chapter {
  * page scrolls vertically. `aside` sits at the end of the tab row on compact screens.
  */
 export function Chapters({ chapters, aside }: { chapters: Chapter[]; aside?: React.ReactNode }) {
+    const { locale } = useLanguage();
     const track = useRef<HTMLDivElement>(null);
     const tabRow = useRef<HTMLDivElement>(null);
     const [active, setActive] = useState(chapters[0]?.id ?? "");
@@ -125,7 +128,7 @@ export function Chapters({ chapters, aside }: { chapters: Chapter[]; aside?: Rea
                 <div
                     ref={tabRow}
                     role="tablist"
-                    aria-label="stats sections"
+                    aria-label={translate(locale, "stats sections")}
                     onKeyDown={onTabKey}
                     className="-mb-px flex min-w-0 flex-1 gap-5 overflow-x-auto scrollbar-hide sm:gap-6"
                 >

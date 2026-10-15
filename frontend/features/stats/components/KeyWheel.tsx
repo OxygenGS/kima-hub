@@ -9,6 +9,8 @@
 import { useMemo, useState } from "react";
 import { useReveal } from "../useReveal";
 import { usePlaySlice } from "../usePlaySlice";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import type { Signature } from "../types";
 
 /** Clockwise from the top. Neighbours differ by one sharp or flat. */
@@ -43,6 +45,10 @@ function sector(from: number, to: number, rInner: number, rOuter: number): strin
 }
 
 export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>; period?: string }) {
+    const { locale } = useLanguage();
+    const tr = (label: string) => translate(locale, label);
+    // The played key identifier remains English/technical: only UI text changes.
+    const displayKey = (name: string) => name.replace(/ (major|minor)$/i, (_m, scale: string) => ` ${tr(scale.toLowerCase() === "major" ? "major (scale)" : "minor (scale)")}`);
     const { ref, shown } = useReveal<HTMLElement>({ threshold: 0.3 });
     const { play, busy } = usePlaySlice();
     const [hover, setHover] = useState<{ name: string; plays: number } | null>(null);
@@ -88,7 +94,7 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
                     but never taller than the panel leaves room for. */
                 className="w-full aspect-square max-w-[calc(var(--fit-h)*0.4)] lg:max-w-[min(19rem,calc(var(--fit-h)-12rem))]"
                 role="img"
-                aria-label={`key wheel · top key: ${busiest.name.toLowerCase()} · ${Math.round(keys.minorPct)}% minor`}
+                aria-label={`${tr("key wheel · top key:")} ${displayKey(busiest.name.toLowerCase())} · ${Math.round(keys.minorPct)}% ${tr("minor (scale)")}`}
             >
                 {ring.map((r) => {
                     const wedge = (
@@ -109,7 +115,7 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
                                 strokeWidth="0.7"
                                 role={dead ? undefined : "button"}
                                 tabIndex={dead ? undefined : 0}
-                                aria-label={dead ? undefined : `play ${label.toLowerCase()}, ${plays} ${plays === 1 ? "play" : "plays"}`}
+                                aria-label={dead ? undefined : `${tr("play (command)")} ${displayKey(label.toLowerCase())}, ${plays} ${tr(plays === 1 ? "play count" : "plays")}`}
                                 onPointerEnter={() => setHover({ name: label, plays })}
                                 onPointerLeave={() => setHover(null)}
                                 onFocus={() => setHover({ name: label, plays })}
@@ -188,7 +194,7 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
                     x={CX} y={CY + 6} textAnchor="middle" dominantBaseline="central"
                     fontSize="4" fill="#858585" pointerEvents="none" style={{ letterSpacing: "0.06em" }}
                 >
-                    minor
+                    {tr("minor (scale)")}
                 </text>
             </svg>
 
@@ -196,9 +202,9 @@ export function KeyWheel({ keys, period }: { keys: NonNullable<Signature["key"]>
             <figcaption className="t-meta min-h-[2.5rem] max-w-[30ch]">
                 {hover
                     ? hover.plays > 0
-                        ? `${hover.name.toLowerCase()}: ${hover.plays.toLocaleString()} ${hover.plays === 1 ? "play" : "plays"}`
-                        : `${hover.name.toLowerCase()}: no plays`
-                    : `outer: major · inner: minor · ${total.toLocaleString()} ${total === 1 ? "play" : "plays"}`}
+                        ? `${displayKey(hover.name.toLowerCase())}: ${hover.plays.toLocaleString()} ${tr(hover.plays === 1 ? "play count" : "plays")}`
+                        : `${displayKey(hover.name.toLowerCase())}: ${tr("no plays")}`
+                    : `${tr("outer: major · inner: minor")} · ${total.toLocaleString()} ${tr(total === 1 ? "play count" : "plays")}`}
             </figcaption>
         </figure>
     );

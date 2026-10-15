@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("keeps history cleanup warnings and key-wheel labels understandable in Dutch", () => {
+        expect(translate("nl", "remove deletes the skipped plays and cannot be undone")).toContain("definitief");
+        expect(translate("nl", "ignore keeps all plays and stops flagging the track · music files are never touched")).toContain("muziekbestanden");
+        expect(translate("nl", "scan play history")).toBe("luistergeschiedenis controleren");
+        expect(translate("nl", "minor (scale)")).toBe("mineur");
+        expect(translate("nl", "major (scale)")).toBe("majeur");
+        expect(translate("nl", "stats sections")).toBe("statistiekonderdelen");
+        expect(translate("nl", "D major")).toBe("D major");
+    });
+
     it("covers v1.11 Listening Clock, server maintenance and decade descriptions", () => {
         expect(translate("nl", "busiest hours")).toBe("drukste uren");
         expect(translate("nl", "friday")).toBe("vrijdag");

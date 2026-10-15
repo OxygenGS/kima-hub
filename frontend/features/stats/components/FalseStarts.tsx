@@ -11,6 +11,8 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface FalseStartTrack {
     trackId: string;
@@ -50,6 +52,8 @@ const clock = (n: number) => {
 };
 
 export function FalseStarts() {
+    const { locale } = useLanguage();
+    const tr = (label: string) => translate(locale, label);
     const [audit, setAudit] = useState<Audit | null>(null);
     const [picked, setPicked] = useState<Set<string>>(new Set());
     const [busy, setBusy] = useState(false);
@@ -105,18 +109,18 @@ export function FalseStarts() {
         return (
             <div className="flex flex-col gap-4 items-start">
                 <p className="t-body max-w-[76ch] text-pretty">
-                    finds plays logged for tracks you skipped, recorded before version 1.10.1
+                    {tr("finds plays logged for tracks you skipped, recorded before version 1.10.1")}
                 </p>
                 <Button onClick={load} isLoading={busy}>
-                    scan play history
+                    {tr("scan play history")}
                 </Button>
                 {busy && (
                     <p className="t-meta" aria-live="polite">
-                        scanning
+                        {tr("scanning")}
                         {elapsed >= 3 && ` · ${elapsed}s`}
                     </p>
                 )}
-                {error && <p className="t-meta text-danger-light">{error}</p>}
+                {error && <p className="t-meta text-danger-light">{tr(error)}</p>}
             </div>
         );
     }
@@ -143,15 +147,15 @@ export function FalseStarts() {
     return (
         <div className="flex h-full min-h-0 flex-col gap-6">
             <div className="flex flex-wrap items-end gap-x-12 gap-y-4">
-                <Figure n={audit.skipped} label="skipped (removable)" tone="brand" />
-                <Figure n={audit.heard} label="confirmed" />
-                <Figure n={audit.unclear} label="unclear (kept)" />
+                <Figure n={audit.skipped} label={tr("skipped (removable)")} tone="brand" />
+                <Figure n={audit.heard} label={tr("confirmed")} />
+                <Figure n={audit.unclear} label={tr("unclear (kept)")} />
                 {/* Listed whenever there are any: the figures add up to the total, and
                     leaving this bucket out breaks that sum. */}
                 {audit.tooShort > 0 && (
-                    <Figure n={audit.tooShort} label="track too short to count" />
+                    <Figure n={audit.tooShort} label={tr("track too short to count")} />
                 )}
-                <Figure n={audit.totalListens} label="total plays" />
+                <Figure n={audit.totalListens} label={tr("total plays")} />
             </div>
 
             {audit.collapsibleRows > 0 && (
@@ -183,7 +187,7 @@ export function FalseStarts() {
 
             {audit.tracks.length === 0 && !showIgnored && (
                 <p className="t-body max-w-[52ch]">
-                    nothing to review
+                    {tr("nothing to review")}
                     {audit.ignored.length > 0 && (
                         <>
                             {" "}
@@ -191,7 +195,7 @@ export function FalseStarts() {
                                 onClick={toggleIgnored}
                                 className="t-control text-[var(--text-secondary)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                             >
-                                show {audit.ignored.length} ignored
+                                {tr("show")} {audit.ignored.length} {tr("ignored")}
                             </button>
                         </>
                     )}
@@ -203,7 +207,7 @@ export function FalseStarts() {
                     <div className="flex items-center justify-between gap-4 pb-3 border-b border-white/[0.08]">
                         {showIgnored ? (
                             <span className="t-meta">
-                                {audit.ignored.length} ignored
+                                {audit.ignored.length} {tr("ignored")}
                             </span>
                         ) : (
                             <>
@@ -211,7 +215,7 @@ export function FalseStarts() {
                                     onClick={() => setPicked(allPicked ? new Set() : new Set(all.slice(0, MAX_PER_ACTION)))}
                                     className="t-control text-[var(--text-secondary)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
                                 >
-                                    {allPicked ? "select none" : `select all ${selectable.toLocaleString()}`}
+                                    {allPicked ? tr("select none") : `${tr("select all")} ${selectable.toLocaleString()}`}
                                 </button>
                                 <span className="t-meta truncate">
                                     {picked.size > 0
@@ -234,11 +238,11 @@ export function FalseStarts() {
                                             <span className="block truncate t-meta">{t.artist}</span>
                                         </span>
                                         <button
-                                            onClick={() => act("restore", [t.trackId], () => "restored")}
+                                            onClick={() => act("restore", [t.trackId], () => tr("restored"))}
                                             disabled={busy}
                                             className="shrink-0 h-9 px-3 rounded-lg t-control text-[var(--text-secondary)] hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                                         >
-                                            restore
+                                            {tr("restore")}
                                         </button>
                                     </li>
                                 ))
@@ -295,8 +299,8 @@ export function FalseStarts() {
                                 className="h-9 t-control text-[var(--text-muted)] hover:text-white transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                             >
                                 {showIgnored
-                                    ? "back to results"
-                                    : `show ${audit.ignored.length} ignored`}
+                                    ? tr("back to results")
+                                    : `${tr("show")} ${audit.ignored.length} ${tr("ignored")}`}
                             </button>
                         ) : <span />}
                         {pages > 1 && (
@@ -304,10 +308,10 @@ export function FalseStarts() {
                                 <span className="t-meta mr-2">
                                     {(from + 1).toLocaleString()}–{Math.min(from + rows, listing).toLocaleString()} of {listing.toLocaleString()}
                                 </span>
-                                <PageButton label="previous page" disabled={at === 0} onClick={() => setPage(at - 1)}>
+                                <PageButton label={tr("previous page")} disabled={at === 0} onClick={() => setPage(at - 1)}>
                                     <ChevronLeft className="w-4 h-4" />
                                 </PageButton>
-                                <PageButton label="next page" disabled={at >= pages - 1} onClick={() => setPage(at + 1)}>
+                                <PageButton label={tr("next page")} disabled={at >= pages - 1} onClick={() => setPage(at + 1)}>
                                     <ChevronRight className="w-4 h-4" />
                                 </PageButton>
                             </div>
@@ -321,8 +325,8 @@ export function FalseStarts() {
             {picked.size > 0 && !showIgnored && (
                 <div className="flex flex-col gap-3">
                     <p className="t-body max-w-[62ch]">
-                        <span className="text-[var(--text-primary)]">remove deletes the skipped plays and can&apos;t be undone</span>
-                        {" · ignore keeps all plays and stops flagging the track · music files are never touched"}
+                        <span className="text-[var(--text-primary)]">{tr("remove deletes the skipped plays and cannot be undone")}</span>
+                        {" · "}{tr("ignore keeps all plays and stops flagging the track · music files are never touched")}
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
                         <Button
@@ -340,8 +344,8 @@ export function FalseStarts() {
                             isLoading={busy}
                         >
                             {arming
-                                ? `delete ${pickedStarts.toLocaleString()} ${pickedStarts === 1 ? "play" : "plays"}?`
-                                : `remove skipped plays (${picked.size} ${picked.size === 1 ? "track" : "tracks"})`}
+                                ? `${tr("delete")} ${pickedStarts.toLocaleString()} ${tr(pickedStarts === 1 ? "play count" : "plays")}?`
+                                : `${tr("remove skipped plays")} (${picked.size} ${tr(picked.size === 1 ? "track" : "tracks")})`}
                         </Button>
 
                         <Button
@@ -353,13 +357,13 @@ export function FalseStarts() {
                             }
                             disabled={busy}
                         >
-                            ignore
+                            {tr("ignore")}
                         </Button>
                     </div>
                 </div>
             )}
 
-            {error && <p className="t-meta text-danger-light">{error}</p>}
+            {error && <p className="t-meta text-danger-light">{tr(error)}</p>}
         </div>
     );
 }
