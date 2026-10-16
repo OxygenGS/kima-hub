@@ -9,7 +9,7 @@ import os
 from typing import Optional
 
 import numpy as np
-from transformers.audio_utils import mel_filter_bank, spectrogram, window_function
+from audio_features_numpy import mel_filter_bank, spectrogram, window_function
 
 # Defaults = laion/clap-htsat-unfused preprocessor_config.json @ 8fa0f1c6
 # (sha256 9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753).
