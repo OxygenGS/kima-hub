@@ -6,7 +6,7 @@ import { LanguageProvider } from "@/lib/i18n/language-context";
 import { AudioErrorBoundary } from "@/components/providers/AudioErrorBoundary";
 
 const error = new Error("intentional isolated audio test error");
-function BrokenAudio() { throw error; }
+function BrokenAudio(): React.ReactElement { throw error; }
 let host: HTMLDivElement;
 let root: Root;
 let errorSpy: ReturnType<typeof vi.spyOn>;
