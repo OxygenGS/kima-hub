@@ -19,7 +19,7 @@ export function KeyboardShortcutsTooltip() {
         { key: "N", action: "Next track" },
         { key: "P", action: "Previous track" },
         { key: "S", action: "Toggle shuffle" },
-    ];
+    ] as const;
 
     return (
         <div className="relative">
