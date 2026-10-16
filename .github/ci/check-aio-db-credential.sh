@@ -16,5 +16,11 @@ test "$(stat -c %a /data/secrets/database_password)" = 600
 password="$(cat /data/secrets/database_password)"
 [[ "$password" =~ ^[0-9a-f]{64}$ ]]
 PGPASSWORD="$password" psql -h 127.0.0.1 -U kima -d kima -Atc "SELECT 1" | grep -qx 1
+# The previously shipped default must not authenticate over TCP anymore.
+if PGPASSWORD=kima psql -h 127.0.0.1 -U kima -d kima -Atc "SELECT 1" >/dev/null 2>&1; then
+    echo "FATAL: legacy database password still grants TCP access" >&2
+    exit 1
+fi
+gosu postgres psql -d postgres -Atc "SELECT left(rolpassword,13) FROM pg_authid WHERE rolname = '\''kima'\''" | grep -qx SCRAM-SHA-256
 '
 echo "Disposable AIO has a persistent random credential accepted by PostgreSQL: PASS"
