@@ -64,4 +64,7 @@ require_text Dockerfile 'pg_ctl -D /data/postgres -o "-c listen_addresses=localh
 require_text .github/ci/v111-aio-runtime-smoke.sh 'check-aio-service-boundaries.sh' "Fresh and restarted AIO runs real service boundary checks"
 require_text .github/ci/aio-real-image-rehearsal.sh 'check-aio-service-boundaries.sh' "v1.10 upgrade checks backend, Redis, Postgres and Next runtime"
 require_text .github/ci/aio-v111-real-image-rehearsal.sh 'check-aio-service-boundaries.sh' "v1.11 upgrade checks backend, Redis, Postgres and Next runtime"
+require_text Dockerfile 'LICENSE.huggingface-transformers-apache-2.0 /app/audio-analyzer-clap/' "Runtime must contain vendored NumPy Apache license"
+require_text services/audio-analyzer-clap/audio_features_numpy.py 'SPDX-License-Identifier: Apache-2.0' "Vendored CLAP code carries SPDX origin"
+test -s services/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0 || { echo "Vendored Apache-2.0 license missing" >&2; exit 1; }
 echo "Structural guard PASS; runtime authorization and all additional endpoints still require review."
