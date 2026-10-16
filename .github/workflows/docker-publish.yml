@@ -114,23 +114,29 @@ jobs:
                   version: v0.74.0
                   cache: true
 
-            - name: Block fixable HIGH/CRITICAL image vulnerabilities before GHCR publication
+            # Use the exact same unfiltered vulnerability evaluator as Draft #7.
+            # Never let the generic .trivyignore suppress OS CVE release blockers.
+            - name: Scan actual AMD64 image and fail on patchable HIGH/CRITICAL
               run: |
-                  {
-                    echo '### Image scan — HIGH/CRITICAL with a fix available'
-                    echo ''
-                    echo '```'
-                    trivy image \
-                      --scanners vuln,secret \
-                      --severity HIGH,CRITICAL \
-                      --ignore-unfixed \
-                      --ignorefile .trivyignore \
-                      --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
-                      --exit-code 1 \
-                      --format table \
-                      kima:scan 2>&1
-                    echo '```'
-                  } >> "$GITHUB_STEP_SUMMARY"
+                  trivy image \
+                    --scanners vuln \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 0 \
+                    --format json \
+                    --output "$RUNNER_TEMP/stable-image-vulnerabilities.json" \
+                    kima:scan
+                  python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+                  python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/stable-image-vulnerabilities.json" amd64
+
+            - name: Scan assembled AMD64 image for embedded secrets
+              run: |
+                  trivy image \
+                    --scanners secret \
+                    --ignorefile .trivyignore \
+                    --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+                    --exit-code 1 \
+                    --format table \
+                    kima:scan
 
             - name: Build and push
               uses: docker/build-push-action@v5
