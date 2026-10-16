@@ -683,6 +683,8 @@ cat > /app/backend/.env << ENVEOF
 NODE_ENV=production
 DATABASE_URL=postgresql://kima:kima@localhost:5432/kima
 REDIS_URL=redis://localhost:6379
+# The AIO frontend proxies API requests to loopback; do not expose the backend on container networks.
+HOST=127.0.0.1
 PORT=3006
 MUSIC_PATH=/music
 TRANSCODE_CACHE_PATH=/data/cache/transcodes
