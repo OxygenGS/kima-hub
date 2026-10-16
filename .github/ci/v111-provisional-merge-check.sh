@@ -22,13 +22,19 @@ git diff --name-only --diff-filter=U > audit/provisional-conflicts.txt
 number="$(wc -l < audit/provisional-conflicts.txt | tr -d ' ')"
 while IFS= read -r file; do
   test -z "$file" && continue
-  if [ "$strategy" = theirs ] && ! git ls-files --stage -- "$file" | grep -q '^[^[:space:]]\+ [0-9a-f]\+ 3[[:space:]]'; then
-    # Upstream deliberately deleted this file: respect its deletion in the
-    # upstream-first diagnostic (the fork-first keeps the original file).
-    git rm -f -- "$file" >/dev/null
+  # A deletion is a valid resolution on either side. The old preview
+  # handled upstream ("theirs") deletions, but failed when the fork ("ours")
+  # intentionally removed an obsolete upstream-only file.
+  if [ "$strategy" = ours ]; then
+    selected_stage=2
   else
+    selected_stage=3
+  fi
+  if git ls-files --stage -- "$file" | awk -v stage="$selected_stage" '$3 == stage { found=1 } END { exit !found }'; then
     git checkout --"$strategy" -- "$file"
     git add -- "$file"
+  else
+    git rm -f --ignore-unmatch -- "$file" >/dev/null
   fi
 done < audit/provisional-conflicts.txt
 test -z "$(git diff --name-only --diff-filter=U)"
