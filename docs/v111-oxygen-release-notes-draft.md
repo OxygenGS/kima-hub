@@ -10,6 +10,13 @@
 - Media titles, artist and author names, user-entered library data, file paths, API parameters, playback state and source identifiers are preserved when switching language.
 - Original fork's server-enforced music-acquisition permissions and publisher safety controls retained. Merely switching language must never trigger playback, download, or server-side writes.
 
+## Security hardening under review
+
+- The OxygenGS AIO backend now binds its internal API to container localhost by default, instead of advertising port 3006 to the Docker network.
+- AIO PostgreSQL uses a persistent, unique per-installation credential with SCRAM localhost authentication. On a first fork upgrade, the database role is re-keyed while preserving the original music library and user data. **Back up the entire original `/data` volume, including `/data/secrets`.**
+- The shipped CLAP ONNX runtime no longer installs the vulnerable `transformers==4.57.6` package. It uses pinned RoBERTa tokenizers and separately licensed NumPy audio helpers; offline audio/text validation and native AMD64/ARM64 smoke checks passed in disposable CI.
+- Actual assembled-image security scans revealed outstanding Debian-system-library vulnerabilities, including eight CRITICAL records on each architecture. See [image risk review](v111-image-security-review.md). These remain under manual release review; do **not** interpret green CI as security sign-off.
+
 ## Upgrade impact
 
 - This is a database-aware upgrade. Make a **cold backup of the complete original /data volume** and the Compose configuration before any approved upgrade. Never reuse an upgraded volume with an older image; restore the unmodified pre-upgrade backup into a different volume if rollback is required.
@@ -19,7 +26,7 @@
 
 ## Automated evidence, not release approval
 
-[GitHub Actions #38891763823](https://github.com/OxygenGS/kima-hub/actions/runs/38891763823), commit `680a8e0`: 523/523 frontend tests (47 suites), 1,921/1,921 backend tests (236 suites), 16/16 EN/NL public browser tests, 161/161 targeted HTTP permission tests, native AMD64/ARM64 AIO image tests, disposable live-user smoke, original v1.10 and v1.11 upgrades plus independent rollback. This is a historical passing checkpoint: repeat the complete checks on the final candidate source/image.
+[GitHub Actions #38946015055](https://github.com/OxygenGS/kima-hub/actions/runs/38946015055), commit `d42a966`: 9/9 jobs passed including full frontend/backend suites, EN/NL browser switching, HTTP rights, Trivy dependency/secret scan, and native AMD64/ARM64 AIO build/smoke. Disposable original-image v1.10/v1.11 copy-upgrades and independent rollbacks succeeded. Trivy assembled-image reports were also generated and reviewed; **eight CRITICAL Debian-package findings per architecture remain open**. This is a historical passing implementation checkpoint, not a release decision; the new fail-on-fixable-image gate and eventual release commit must be revalidated.
 
 ## Release blockers remaining
 
