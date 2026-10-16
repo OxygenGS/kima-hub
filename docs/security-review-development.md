@@ -12,6 +12,18 @@ Scope: `feature/user-permissions`, initial static review on 2026-10-13. Not a pe
 4. **CI security coverage gap.** `.github/workflows/security.yml`: Trivy dependency/secret scan runs on PRs targeting `main`, but Trivy config findings are report-only and Playwright security E2E runs weekly/on demand, not on every PR. Verify that these security jobs actually ran on the development PR and explicitly run them before release sign-off.
 5. **Positive controls observed.** Middleware rejects refresh tokens as general auth, restricts stream-scoped tokens to stream paths, derives role from the current user record (cached up to 30 seconds), and checks music permissions against the database. The isolated AIO test compose binds host port 3130 to `127.0.0.1` by default. Persistent session/encryption secrets are generated with cryptographic randomness and newly created files receive mode 600.
 
+## Follow-up static inspection — 16 October 2026, v1.11 draft
+
+Inspected the current combined Draft #7 root `Dockerfile` and `.github/workflows/security.yml`. This is **source-only evidence**, not a runtime penetration test, a complete repository secret search, or a release sign-off.
+
+- **PostgreSQL network boundary:** Fresh AIO initialization appends `listen_addresses='localhost'` and SCRAM localhost rules (`Dockerfile`, around lines 554–563). This limits the *newly initialized* PostgreSQL listener, but **existing persistent `/data/postgres/postgresql.conf` is not rewritten by this conditional block**. Inspect the effective listener and `pg_hba.conf` in both fresh and upgraded disposable containers; do not declare database exposure resolved from source alone.
+- **Credential boundary:** The `kima` role retains a fixed internal password and multiple local database URLs in AIO startup/supervisor configuration (`Dockerfile`, around lines 471–484, 575–596, 681–716). This is a **confirmed design concern**, though remote exploitability is not established. Any change must preserve upgrades and test both original upstream v1.10/v1.11 recovery.
+- **Execution identities:** Supervisor is configured as root; PostgreSQL and Redis explicitly set their own users, but backend, frontend and both analyzers have no `user=` directive (`Dockerfile`, around lines 406–485). Treat unprivileged app execution as open hardening work, not a proven direct exploit.
+- **Internal API secret finding needs revalidation:** The historical claim that the Dockerfile *writes* `INTERNAL_API_SECRET=kima-internal-aio` was **not confirmed in the inspected v1.11 Dockerfile**. Do not continue presenting that specific claim as a current fact; examine backend consumers, effective runtime environment and other files before classifying it.
+- **Security workflow coverage:** `security.yml` triggers the dependency/secret scan for PRs targeting `main`, but the stacked PR #7 targets #6. The image-based security E2E is explicitly disabled on PR events and runs only weekly/manual. Passing the v1.11 implementation workflow **does not demonstrate this separate security workflow passed on the exact head**. Keep explicit security execution and human findings review open.
+
+**Decision:** Security gate OPEN. No merge/tag/push or real-installation change is authorized by this inspection.
+
 ## Required follow-up validation
 
 - Enumerate all administration and download/request APIs, including aliases, import endpoints and job creation; verify regular-user denial server-side.
