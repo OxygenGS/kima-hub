@@ -204,6 +204,8 @@ WORKDIR /app/audio-analyzer-clap
 COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/onnx_backend.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/clap_mel.py services/audio-analyzer-clap/audio_features_numpy.py /app/audio-analyzer-clap/
+# Preserve the upstream Apache-2.0 license alongside shipped vendored code.
+COPY services/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0 /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/verify_runtime.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/gpu_runtime.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/gpu_env.sh /app/audio-analyzer-clap/
