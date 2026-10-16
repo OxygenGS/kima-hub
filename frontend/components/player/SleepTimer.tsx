@@ -4,12 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import { Timer } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useSleepTimer } from "@/hooks/useSleepTimer";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 
 const PRESETS = [15, 30, 45, 60, 90, 120] as const;
 
-function formatPreset(mins: number): string {
-    if (mins >= 60) return `${mins / 60} hour${mins > 60 ? "s" : ""}`;
-    return `${mins} minutes`;
+function formatPreset(mins: number, locale: Locale): string {
+    if (mins >= 60) return `${(mins / 60).toLocaleString(locale)} ${translate(locale, mins === 60 ? "hour" : "hours")}`;
+    return `${mins.toLocaleString(locale)} ${translate(locale, mins === 1 ? "minute" : "minutes")}`;
 }
 
 interface SleepTimerProps {
@@ -17,6 +19,7 @@ interface SleepTimerProps {
 }
 
 export function SleepTimer({ size = "md" }: SleepTimerProps) {
+    const { t, locale } = useLanguage();
     const { isActive, remainingSeconds, displayRemaining, setTimer, clearTimer } = useSleepTimer();
     const [isOpen, setIsOpen] = useState(false);
     const [customMinutes, setCustomMinutes] = useState("");
@@ -74,10 +77,10 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                         ? "text-brand hover:text-brand-hover"
                         : "text-[var(--text-secondary)] hover:text-white"
                 )}
-                aria-label={isActive ? `Sleep timer: ${displayRemaining} remaining` : "Sleep timer"}
+                aria-label={isActive ? `${t("Sleep timer")}: ${displayRemaining} ${t("remaining")}` : t("Sleep timer")}
                 aria-expanded={isOpen}
                 aria-haspopup="dialog"
-                title={isActive ? `Sleep timer: ${displayRemaining} remaining`.toLowerCase() : "sleep timer"}
+                title={isActive ? `${t("Sleep timer")}: ${displayRemaining} ${t("remaining")}`.toLowerCase() : t("Sleep timer").toLowerCase()}
             >
                 <Timer className={iconSize} />
                 {isActive && remainingSeconds !== null && (
@@ -91,10 +94,10 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                 <div
                     ref={popoverRef}
                     role="dialog"
-                    aria-label="Sleep timer options"
+                    aria-label={t("Sleep timer options")}
                     className="animate-panel-up absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-[var(--bg-hover)] border border-white/10 rounded-lg overflow-hidden z-(--z-dropdown)">
                     <div className="px-3 py-2 border-b border-white/[0.06]">
-                        <span className="text-xs text-[var(--text-secondary)] font-medium">Sleep Timer</span>
+                        <span className="text-xs text-[var(--text-secondary)] font-medium">{t("Sleep Timer")}</span>
                     </div>
 
                     <div className="p-1.5">
@@ -104,7 +107,7 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                                 onClick={() => handlePreset(mins)}
                                 className="w-full text-left px-3 py-1.5 rounded text-sm transition-colors text-[var(--text-primary)] hover:bg-white/[0.06] hover:text-white"
                             >
-                                {formatPreset(mins)}
+                                {formatPreset(mins, locale)}
                             </button>
                         ))}
                     </div>
@@ -116,11 +119,11 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                                 value={customMinutes}
                                 onChange={(e) => setCustomMinutes(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleCustom()}
-                                placeholder="Custom"
+                                placeholder={t("Custom")}
                                 min={1}
                                 max={480}
                                 step={1}
-                                aria-label="Custom minutes"
+                                aria-label={t("Custom minutes")}
                                 className="flex-1 bg-white/[0.06] border border-white/10 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand/50 w-0"
                             />
                             <span className="text-xs text-[var(--text-muted)]">min</span>
@@ -136,7 +139,7 @@ export function SleepTimer({ size = "md" }: SleepTimerProps) {
                                 }}
                                 className="w-full text-center text-sm text-danger-light hover:brightness-125 py-1 transition-colors"
                             >
-                                Cancel Timer
+                                {t("Cancel Timer")}
                             </button>
                         </div>
                     )}
