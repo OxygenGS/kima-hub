@@ -184,8 +184,16 @@ class OnnxTextCLAPBackend:
         self._out_name = self._sess.get_outputs()[0].name
         # Tokenizer: laion_clap's RobertaTokenizer('roberta-base'), not the
         # laion/clap-htsat-unfused fast tokenizer (vocab differs).
-        from transformers import RobertaTokenizer
-        self._tok = RobertaTokenizer.from_pretrained('roberta-base')
+        # Use the checked, offline roberta-base tokenizer.json, not the full
+        # transformers runtime (which carries fixable HIGH advisories).
+        from tokenizers import Tokenizer
+        tokenizer_path = os.getenv(
+            'CLAP_ROBERTA_TOKENIZER_JSON',
+            '/root/.cache/huggingface/hub/models--roberta-base/snapshots/'
+            'e2da8e2f811d1448a5b465c236feacd80ffbac7b/tokenizer.json',
+        )
+        self._tok = Tokenizer.from_file(tokenizer_path)
+        self._tok.enable_truncation(max_length=TEXT_MAX_LENGTH)
         logger.info(f'ONNX text backend loaded from {self.model_path}')
 
     def embed_text(self, texts: list[str]) -> np.ndarray:
@@ -197,13 +205,10 @@ class OnnxTextCLAPBackend:
         self.load_model()
         rows = []
         for text in texts:
-            ids = self._tok(
-                [text],
-                padding=False,
-                truncation=True,
-                max_length=TEXT_MAX_LENGTH,
-                return_tensors='np',
-            )['input_ids'].astype(np.int64)
+            ids = np.asarray(
+                [self._tok.encode(text, add_special_tokens=True).ids],
+                dtype=np.int64,
+            )
             rows.append(self._sess.run([self._out_name], {self._in_name: ids})[0][0])
         out = np.stack(rows)
         norm = np.linalg.norm(out, axis=1, keepdims=True)
