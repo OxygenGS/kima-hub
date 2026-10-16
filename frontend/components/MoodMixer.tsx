@@ -17,6 +17,8 @@ import {
     Flame,
 } from "lucide-react";
 import { notify } from "@/lib/notify";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface MoodMixerProps {
     isOpen: boolean;
@@ -75,6 +77,7 @@ const MOOD_CONFIG: Record<
 const MOOD_ORDER: BucketMood[] = ["happy", "party", "chill", "sad", "aggressive"];
 
 export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
+    const { t, locale } = useLanguage();
     const { playTracks } = useAudioControls();
     const queryClient = useQueryClient();
     const [presets, setPresets] = useState<PresetWithPending[]>([]);
@@ -87,11 +90,11 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
             const data = await api.getMoodBucketPresets();
             setPresets(data);
         } catch {
-            notify.error("Failed to load mood presets");
+            notify.error(t("Failed to load mood presets"));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         if (isOpen) {
@@ -114,11 +117,11 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
                     id: t.id,
                     title: t.title,
                     artist: {
-                        name: t.album?.artist?.name || "Unknown Artist",
+                        name: t.album?.artist?.name || translate(locale, "Unknown Artist"),
                         id: t.album?.artist?.id,
                     },
                     album: {
-                        title: t.album?.title || "Unknown Album",
+                        title: t.album?.title || translate(locale, "Unknown Album"),
                         coverArt: t.album?.coverUrl,
                         id: t.albumId,
                     },
@@ -138,12 +141,12 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
 
                 onClose();
             } else {
-                notify.error("Not enough tracks for this mood", {
-                    message: "Analyse more music or choose a different mood.",
+                notify.error(t("Not enough tracks for this mood"), {
+                    message: t("Analyse more music or choose a different mood."),
                 });
             }
         } catch (error: unknown) {
-            notify.error("Failed to generate mix", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Failed to generate mix"), { message: error instanceof Error ? error.message : undefined });
         } finally {
             setGenerating(null);
         }
@@ -157,6 +160,7 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
 
     // Tracks whose moods are not analysed yet (e.g. while a library re-analysis runs)
     const pendingTracks = presets[0]?.pendingTracks ?? 0;
+    const pendingTrackLabel = `${pendingTracks.toLocaleString(locale)} ${t(pendingTracks === 1 ? "track" : "tracks")}`;
 
     if (!isVisible && !isOpen) return null;
 
@@ -167,6 +171,10 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
         >
             <div
                 className="bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-hidden border border-white/10 animate-pop"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mood-mixer-title"
+                aria-describedby="mood-mixer-subtitle"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="p-6 border-b border-white/10 flex items-center justify-between">
@@ -175,16 +183,17 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
                             <AudioWaveform className="w-5 h-5 text-black" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white">
-                                Mood Mixer
+                            <h2 id="mood-mixer-title" className="text-xl font-bold text-white">
+                                {t("Mood Mixer")}
                             </h2>
-                            <p className="text-sm text-[var(--text-secondary)]">
-                                Pick your vibe
+                            <p id="mood-mixer-subtitle" className="text-sm text-[var(--text-secondary)]">
+                                {t("Pick your vibe")}
                             </p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
+                        aria-label={t("Close")}
                         className="p-2 rounded-full hover:bg-white/10 transition-colors"
                     >
                         <X className="w-5 h-5 text-[var(--text-secondary)]" />
@@ -193,7 +202,7 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
 
                 <div className="p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
                     {loading ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-12" role="status" aria-label={t("Loading...")}>
                             <Loader2 className="w-8 h-8 animate-spin text-brand" />
                         </div>
                     ) : (
@@ -225,9 +234,9 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
                                         title={
                                             isDisabled
                                                 ? pendingTracks > 0
-                                                    ? `Not analysed yet — ${pendingTracks.toLocaleString()} tracks still being analysed`.toLowerCase()
-                                                    : `Need at least 8 tracks (have ${trackCount})`.toLowerCase()
-                                                : config.description
+                                                    ? `${t("Not analysed yet")} — ${pendingTrackLabel} ${t("still being analysed")}`
+                                                    : `${t("Need at least 8 tracks")} (${trackCount.toLocaleString(locale)} ${t("available")})`
+                                                : translate(locale, config.description)
                                         }
                                         style={{ "--i": i } as CSSProperties}
                                     >
@@ -240,11 +249,11 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
                                         </div>
 
                                         <span className="relative z-(--z-raised) text-sm font-semibold text-white">
-                                            {config.label}
+                                            {translate(locale, config.label)}
                                         </span>
 
                                         <span className="absolute top-2 right-2 text-micro font-medium text-[var(--text-secondary)] bg-black/30 px-1.5 py-0.5 rounded-full">
-                                            {trackCount}
+                                            {trackCount.toLocaleString(locale)}
                                         </span>
 
                                         {/* Hover overlay with play icon */}
@@ -266,8 +275,8 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
 
                     <p className="text-center text-xs text-[var(--text-muted)] mt-4">
                         {pendingTracks > 0
-                            ? `Moods not analysed yet for ${pendingTracks.toLocaleString()} tracks — mixes fill in as analysis finishes`
-                            : "Moods are based on audio analysis of your library"}
+                            ? `${t("Mood analysis is still pending for")} ${pendingTrackLabel} — ${t("mixes fill in as analysis finishes")}`
+                            : t("Moods are based on audio analysis of your library")}
                     </p>
                 </div>
             </div>
