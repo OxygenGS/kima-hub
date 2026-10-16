@@ -1,23 +1,29 @@
-# Install and update
+# Install and update the OxygenGS Kima Hub fork
 
-This page covers every way to run Kima, how to update it, and how to pick between stable and pre-release images. The short version is in the [README](../README.md#quick-start).
+This guide covers the **OxygenGS fork** and its published container image. It is not the installation guide for the original upstream project. Source development, public image publishing and each person's own deployment are independent activities. No personal host name, hypervisor container ID, network address or volume location belongs in the fork's release metadata.
 
-## Which setup
+## Published version versus development
 
-Kima ships as one Docker image that holds the web app, the API server, Postgres, Redis and the two audio analyzers. That image is what most people want. The other Compose files in the repository are variations on it.
+- **Current published OxygenGS stable:** `ghcr.io/oxygengs/kima-hub:v1.10.0`. This tag exists; it remains the default in the supplied production Compose templates until a new stable release is published.
+- **Combined Kima v1.11 + English/Dutch interface:** under development in [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7) stacked on Draft #6 and #5. Its frontend/backend package versions being 1.11.0 does **not** mean an OxygenGS v1.11 image or tag has been released.
+- **Candidate/pre-release:** only use an explicitly published OxygenGS pre-release tag after the release notes identify it. A development branch, CI image built with `no push`, or official upstream image is **not** a published OxygenGS candidate.
 
-| File | What it runs | Use it when |
-| --- | --- | --- |
-| `docker run chevron7locked/kima` | The all-in-one image | You want the simplest install |
-| `docker-compose.prod.yml` | The all-in-one image, with the options in a Compose file | You prefer Compose to a long `docker run` line |
-| `docker-compose.server.yml` | The all-in-one image plus Lidarr, Prowlarr, FlareSolverr, qBittorrent and NZBGet | You want the download tools started alongside Kima |
-| `docker-compose.services.yml` | Only those download tools, with no Kima | You want to add them next to an existing install |
-| `docker-compose.yml` | Separate backend, frontend, Postgres, Redis and analyzer containers, built from this repository, plus Lidarr, Prowlarr, FlareSolverr, qBittorrent and SABnzbd | You want to build from source or run the parts apart |
-| `docker-compose.dev.yml` | Only Postgres, Redis and the audio analyzer, for development | You are working on the code (see [development.md](development.md)) |
+## Choose a setup
 
-The image is published for `linux/amd64` and `linux/arm64`.
+| File or method | Purpose |
+| --- | --- |
+| `docker run ghcr.io/oxygengs/kima-hub:v1.10.0` | Published all-in-one fork image |
+| `docker-compose.prod.yml` | Published all-in-one fork image with configurable `VERSION` |
+| `docker-compose.server.yml` | All-in-one fork plus optional companion download services |
+| `docker-compose.services.yml` | Companion services without the Kima app |
+| `docker-compose.yml` | Separate services built from the repository for source development |
+| `docker-compose.dev.yml` | Development databases and analyzers |
 
-## The all-in-one image
+For the source build, follow [development.md](development.md). Do not substitute an upstream image for the OxygenGS fork; doing so would omit our fork-specific features.
+
+## Fresh all-in-one installation
+
+Use only a version that has actually been published in [OxygenGS releases](https://github.com/OxygenGS/kima-hub/releases).
 
 ```bash
 docker run -d \
@@ -25,102 +31,65 @@ docker run -d \
   -p 3030:3030 \
   -v /path/to/your/music:/music \
   -v kima_data:/data \
-  chevron7locked/kima:latest
+  ghcr.io/oxygengs/kima-hub:v1.10.0
 ```
 
-Open `http://localhost:3030` and create your account. The first account you create becomes the administrator.
+Open `http://localhost:3030` and create the first administrator account.
 
-Two folders matter:
+- `/music` is your library mount.
+- `/data` stores database state, application secrets and caches. Preserve this volume through updates.
+- Port 3030 is the public web interface. Database services remain internal to the all-in-one image.
 
-- `/music` is your library.
-- `/data` holds the database, the caches and the secrets Kima generates on first start. Back it up. If you lose it you lose your users, playlists and play history, and the stored credentials can no longer be read.
-
-### With Docker Compose
+### Docker Compose
 
 ```yaml
 services:
-    kima:
-        image: chevron7locked/kima:latest
-        container_name: kima
-        ports:
-            - "3030:3030"
-        volumes:
-            - /path/to/your/music:/music
-            - kima_data:/data
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-        restart: unless-stopped
+  kima:
+    image: ghcr.io/oxygengs/kima-hub:v1.10.0
+    container_name: kima
+    ports:
+      - "3030:3030"
+    volumes:
+      - /path/to/your/music:/music
+      - kima_data:/data
+    restart: unless-stopped
 
 volumes:
-    kima_data:
+  kima_data:
 ```
 
-The `extra_hosts` line lets Lidarr reach Kima on Linux. You only need it if you use Lidarr (see [integrations.md](integrations.md#lidarr)).
+The repository's `docker-compose.prod.yml` and `docker-compose.server.yml` already default to the published fork tag. Their `VERSION` variable lets you pin a different **existing, verified** release later; do not point it to an unpublished tag.
 
-### Bind-mounting `/data` on Linux
-
-A named volume is simpler. If you bind-mount `/data` instead, create the folders the database and Redis use before the first start:
+If you bind-mount `/data` on Linux instead of using a named volume, check permissions and create the required directories before startup:
 
 ```bash
 mkdir -p /path/to/kima-data/postgres /path/to/kima-data/redis
 ```
 
-If the startup log reports a permission error, change the owner of the host folder to the user and group ID that the log names.
+## Safe updates and independent rollback
 
-### What runs inside
+Database migrations can be irreversible. Before changing a running installation:
 
-A process supervisor starts Postgres, Redis, the API server, the web app and the two analyzers. Only port 3030 is exposed. The API server listens on 3006 and Postgres and Redis on their usual ports, all inside the container.
+1. Identify the actual container image and Compose project, the mounted `/data` location and the music mount. Treat these as **private deployment facts**, not repository build settings.
+2. Take a **cold backup of the complete original `/data` volume and Compose configuration**. Verify that the backup can be restored to a **separate test volume**.
+3. Choose a tested **published OxygenGS tag or digest**, never a floating `:latest` tag for a controlled update.
+4. Test the candidate in a disposable environment with synthetic or separately copied data before applying any upgrade to real data.
+5. Only after an explicit deployment decision, update the pinned image and start the stack. Check login, users, media library, playback, integrations and permissions.
 
-## Updating
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-With plain `docker run`, pull the image, remove the container and run the same command again. Your data stays in `/data`.
-
-Every update runs any new database migrations when the container starts. Migrations do not roll back, so take a copy of the `/data` volume before a major update if you might want to go back.
+For exact commands and the non-destructive rollback procedure see [safe-aio-updates.md](safe-aio-updates.md). **Never run `docker compose down -v` when preserving data. Never start an old image on a database that a newer image has migrated.** Rollback requires the complete pre-upgrade snapshot restored to an independent volume.
 
 ## Release channels
 
-### Stable
-
-Stable releases are published to Docker Hub and to GitHub's container registry when a version tag is pushed.
+**Stable:** use the versioned image referenced in [OxygenGS releases](https://github.com/OxygenGS/kima-hub/releases). The existing stable version is:
 
 ```bash
-docker pull chevron7locked/kima:latest
-# or one version
-docker pull chevron7locked/kima:v1.11.0
+docker pull ghcr.io/oxygengs/kima-hub:v1.10.0
 ```
 
-### Pre-release
+**Pre-release:** the fork's manual publishing workflow can produce a separately tagged GHCR pre-release after explicit approval. A pre-release is **not** automatically published when PR CI passes and should not be used with the current real-data volume. Only pull a pre-release when the fork's release notes confirm its actual tag and digest. Stable publishing must not promote it silently to `:latest`.
 
-A pre-release is an unreleased build that the maintainer publishes on purpose. It goes to GitHub's container registry only; Docker Hub carries stable releases.
+**Upstream comparison:** official `chevron7locked/kima` images are used in isolated migration/rollback **test fixtures** only. They are not the default installation image of the OxygenGS fork.
 
-```bash
-docker pull ghcr.io/chevron7locked/kima:prerelease
-```
+## Mobile devices and TV
 
-`:prerelease` always points at the newest one. Each build also has a tag with its commit, such as `:prerelease-a1b2c3d`, for pinning a build or naming it in a bug report. A running pre-release shows its version with `-prerelease` after it, so you can tell which channel it came from.
-
-In Compose the registry prefix is required. Docker assumes Docker Hub when there is none, and the pre-release is not there:
-
-```yaml
-services:
-    kima:
-        image: ghcr.io/chevron7locked/kima:prerelease
-```
-
-Pre-releases can be unstable. A pre-release applies new database migrations on its first start, and an older image cannot read a database after that. Point it at a fresh data volume and a different port to run it beside your real instance, or back up first.
-
-The old `nightly` image is no longer built. If you still run it, move to a stable release or to the pre-release channel.
-
-## Installing on a phone
-
-Kima is a progressive web app, so a browser can install it to the home screen. It gets Kima's name and icons and opens full screen. The app also offers shortcuts to Vibe, Search and Library.
-
-- Android: open your Kima server in Chrome, open the menu, and choose Add to Home Screen or Install app.
-- iPhone and iPad: open your Kima server in Safari, tap Share, and choose Add to Home Screen.
-
-On a television, open Kima in the TV's browser. Kima detects Android TV, Fire TV and Google TV user agents and switches to a layout for a remote control. Adding `?tv=1` to the address forces that layout.
+Kima is a progressive web app. In Android Chrome use *Install app* or *Add to Home screen*. On iPhone/iPad use Safari's Share menu and *Add to Home Screen*. TV browser support depends on the device; `?tv=1` forces the dedicated TV layout. The experimental EN/NL language selector is part of the combined development branch and will be available in a published fork release only after acceptance.
