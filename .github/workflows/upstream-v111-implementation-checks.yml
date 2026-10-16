@@ -284,6 +284,16 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" amd64
+      - name: Scan assembled amd64 AIO for embedded secrets
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners secret \
+            --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 \
+            --format table \
+            kima-hub:aio-ci-smoke
       - name: Inventory amd64 critical Debian packages and direct consumers
         run: |
           python3 .github/ci/inventory-critical-image-packages.py --self-test
@@ -359,6 +369,16 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" arm64
+      - name: Scan assembled arm64 AIO for embedded secrets
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners secret \
+            --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 \
+            --format table \
+            kima-hub:aio-ci-smoke
       - name: Inventory arm64 critical Debian packages and direct consumers
         run: |
           python3 .github/ci/inventory-critical-image-packages.py --self-test
