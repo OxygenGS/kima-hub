@@ -19,7 +19,7 @@ Last reviewed: **2026-10-16**. This is the **current** release checklist for the
 
 - The combined update is being developed in three chained **Draft** PRs: [#7](https://github.com/OxygenGS/kima-hub/pull/7) → [#6](https://github.com/OxygenGS/kima-hub/pull/6) → [#5](https://github.com/OxygenGS/kima-hub/pull/5) → main. Do not release any one PR in isolation and assume it contains all v1.11/UI/localization changes.
 - Experimental `35b5e5a` passed [eight/eight GitHub Actions jobs](https://github.com/OxygenGS/kima-hub/actions/runs/38875081664), including both locally built no-push AIO architectures, actual official upstream v1.10.0/v1.11.0 upgrade/independent rollback, full backend tests, and public EN/NL browser switching.
-- Latest experimental `f9858e3` extends localized media cards; [its own CI](https://github.com/OxygenGS/kima-hub/actions/runs/38878982120) is separate. **Do not reuse green evidence from an earlier commit when deciding release readiness.**
+- The later combined Draft PR #7 checkpoint `680a8e0` passed [8/8 GitHub Actions jobs](https://github.com/OxygenGS/kima-hub/actions/runs/38891763823), including original upstream v1.10 and v1.11 independent recovery, real disposable admin/listener EN/NL scenarios, and both image architectures. **Any newer commit requires its own CI; this is not release approval.**
 - Latest official upstream release checked: **v1.11.0**, dated 12 October 2026; no fork candidate image, stable tag or new Docker/Compose version has been published.
 - The **remaining manual and publication gates** are defined in [the v1.11 acceptance matrix](v111-release-acceptance.md). Individual production installations are outside this source-code validation.
 

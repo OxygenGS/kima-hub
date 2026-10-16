@@ -23,6 +23,40 @@ test.describe("Interface language", () => {
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
     });
 
+    test("changes the login language with only keyboard controls without submitting credentials", async ({ page }) => {
+        await page.goto("/login");
+
+        // The username field is auto-focused by the real login form.
+        const username = page.locator("#username");
+        const password = page.locator("#password");
+        const language = page.locator("#login-language");
+        await expect(username).toBeFocused();
+
+        await username.fill("synthetic-keyboard-user");
+        await password.fill("synthetic-keyboard-password");
+        await page.keyboard.press("Shift+Tab");
+        await expect(username).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(language).toBeFocused();
+
+        // Changing the native select using keyboard events must change only UI labels.
+        await page.keyboard.press("ArrowDown");
+        await expect(language).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(language).toHaveAttribute("aria-label", "Taal");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(username).toHaveValue("synthetic-keyboard-user");
+        await expect(password).toHaveValue("synthetic-keyboard-password");
+
+        await page.keyboard.press("ArrowUp");
+        await expect(language).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(language).toHaveAttribute("aria-label", "Language");
+        await expect(username).toHaveValue("synthetic-keyboard-user");
+        await expect(password).toHaveValue("synthetic-keyboard-password");
+        await expect(page).toHaveURL(/\/login$/);
+    });
+
     test("can switch Dutch in a storage-blocked browser for the current tab", async ({ page }) => {
         await page.addInitScript(() => {
             Object.defineProperty(window, "localStorage", {
