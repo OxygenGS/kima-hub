@@ -30,6 +30,17 @@
 
 FFmpeg and corresponding `libav*` packages account for numerous HIGH findings; their use on media files deserves particular scrutiny. These scanner labels are **report observations**, not independent exploit verification.
 
+## Debian dependency-chain evidence (new audit)
+
+The latest fully completed combined test [#38963824375](https://github.com/OxygenGS/kima-hub/actions/runs/38963824375) passed 9/9, including actual image Trivy and secret scans. Its downloadable Debian dependency inventories from both native CPU architectures agree on the critical package versions and direct consumers:
+
+- `libmbedcrypto7 2.28.3-1` is a direct dependency of `librist4`; [Debian's bookworm `libavformat59` package explicitly depends on `librist4`](https://packages.debian.org/bookworm/libs/libavformat59). `ffmpeg` depends on `libavformat59`. **Removing `libmbedcrypto7` or `librist4` without replacing this package chain may break FFmpeg.** It has three CRITICAL advisories according to the scanned Debian metadata.
+- `libaom3 3.6.0-1+deb12u3` is used by `libavcodec59`; FFmpeg also requires that library. Do not remove the AOM codec library until audio/video compatibility and the actual dependency chain are proven.
+- `libxml2` is also required by `postgresql-16` and `libavformat59`, so simply removing it is not an acceptable shortcut. `libsqlite3-0` has direct consumers in `gpg` and `libpython3.11-stdlib`; `zlib1g` has many direct consumers.
+- These are installed-package relationships, **not proof that a particular vulnerable function is reachable by a user's music file**. The scope of FFmpeg file/stream decoding, available codec/protocol functions, and the exact upstream patched package availability need separate expert review.
+- The CI inventory script now records the transitive installed-package paths from priority vulnerable packages to FFmpeg on *both* CPU architectures, allowing any attempted mitigation to be compared with the original image.
+- **Mitigation decision remains open:** compare a supported base with patched packages, or build/minimize only the required FFmpeg features in an isolated disposable test image. Neither a partial cross-distribution package upgrade nor unconditional `apt purge` is approved. Any alternative must pass ARM64/AMD64 builds, library/audio parity, authentication, and original-image copy-upgrade with independent rollback before considering candidate publication.
+
 ## Security gate and next actions
 
 - The development CI now runs a source-level fixable HIGH/CRITICAL + secrets scan. The AIO-image jobs also produce the full vulnerability JSON for both architectures.
