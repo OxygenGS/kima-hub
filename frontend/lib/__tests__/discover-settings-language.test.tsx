@@ -68,6 +68,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     vi.restoreAllMocks();
+    Reflect.deleteProperty(window, "confirm");
     act(() => root.unmount());
     host.remove();
 });
@@ -83,7 +84,8 @@ describe("Discover settings consent-safe localization", () => {
 
     it("changes settings and warning labels while canceling without any deletion", async () => {
         localStorage.setItem("kima-hub-language", "nl");
-        const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+        const confirm = vi.fn().mockReturnValue(false);
+        Object.defineProperty(window, "confirm", { configurable: true, writable: true, value: confirm });
         await render();
         expect(host.textContent).toContain("Grootte van afspeellijst");
         expect(host.textContent).toContain("Downloadbuffer");
@@ -105,7 +107,7 @@ describe("Discover settings consent-safe localization", () => {
 
     it("runs exactly one existing API operation after explicit confirmation", async () => {
         localStorage.setItem("kima-hub-language", "nl");
-        vi.spyOn(window, "confirm").mockReturnValue(true);
+        Object.defineProperty(window, "confirm", { configurable: true, writable: true, value: vi.fn().mockReturnValue(true) });
         calls.clear.mockResolvedValue({ likedMoved: 2, activeDeleted: 3 });
         await render();
         await act(async () => byText("Afspeellijst wissen").click());
