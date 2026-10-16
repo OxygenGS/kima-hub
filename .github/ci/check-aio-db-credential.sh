@@ -6,7 +6,7 @@ if [ "${GITHUB_ACTIONS:-}" != true ] || [ "${GITHUB_REPOSITORY:-}" != "OxygenGS/
     exit 1
 fi
 case "$1" in
-    kima-ci-v111-aio|kima-ci-v111-upgraded) ;;
+    kima-ci-v111-aio|kima-ci-v111-upgraded|kima-ci-real-upgraded) ;;
     *) echo "Unexpected disposable AIO name" >&2; exit 1 ;;
 esac
 docker exec "$1" bash -c '
