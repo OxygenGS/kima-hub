@@ -42,4 +42,13 @@ require_text frontend/app/layout.tsx '<LanguageProvider>' "EN/NL browser languag
 require_text frontend/app/layout.tsx '<BrandingProvider>' "Instance branding provider mounted"
 require_text backend/src/index.ts 'app.listen(config.port, config.host, async () => {' "Backend must honor configured listen HOST"
 require_text Dockerfile 'HOST=127.0.0.1' "AIO backend must default to container loopback"
+require_text Dockerfile 'DB_PASSWORD="$(cat /data/secrets/database_password)"' "AIO database uses persisted unique secret"
+require_text Dockerfile "ALTER ROLE kima WITH PASSWORD" "Legacy AIO role credential is rotated"
+require_text Dockerfile 'host all all 127.0.0.1/32 scram-sha-256' "Postgres loopback TCP uses SCRAM"
+require_text Dockerfile 'host all all 0.0.0.0/0 reject' "Non-loopback PostgreSQL access denied"
+require_text .github/workflows/upstream-v111-implementation-checks.yml 'dependency-security:' "Combined PR must run dependency and secret scan"
+if grep -Fq -- 'postgresql://kima:kima@' Dockerfile; then
+  echo "SECURITY CHECK FAILED: old hardcoded PostgreSQL credential in AIO Dockerfile" >&2
+  exit 1
+fi
 echo "Structural guard PASS; runtime authorization and all additional endpoints still require review."
