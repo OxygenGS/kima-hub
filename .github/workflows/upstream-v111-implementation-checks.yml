@@ -223,7 +223,7 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety, dependency-security]
+    needs: [frontend, backend, fork-safety]
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples (do not deploy)
@@ -268,7 +268,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety, dependency-security]
+    needs: [frontend, backend, fork-safety]
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples
