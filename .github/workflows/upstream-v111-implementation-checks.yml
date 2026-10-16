@@ -57,8 +57,7 @@ jobs:
         run: |
           python3 .github/ci/check-release-metadata.py --self-test
           python3 .github/ci/check-release-metadata.py --candidate
-          grep -Fq 'check-release-metadata.py --tag' .github/workflows/docker-publish.yml
-          grep -Fq -- '--exit-code 1' .github/workflows/docker-publish.yml
+          python3 .github/ci/check-publisher-guards.py
 
   frontend:
     name: Updated v1.11 frontend typecheck lint and unit tests
