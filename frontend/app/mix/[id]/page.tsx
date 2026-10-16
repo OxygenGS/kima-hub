@@ -13,6 +13,7 @@ import { shuffleArray } from "@/utils/shuffle";
 import { useToast } from "@/lib/toast-context";
 import { useMixQuery } from "@/hooks/useQueries";
 import { useDoubleTapList } from "@/hooks/useDoubleTap";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface MixTrack {
     id: string;
@@ -31,6 +32,7 @@ interface MixTrack {
 
 export default function MixPage() {
     const { toast } = useToast();
+    const { locale, t } = useLanguage();
     const params = useParams();
     const router = useRouter();
     const mixId = params.id as string;
@@ -42,19 +44,19 @@ export default function MixPage() {
     const { data: mix, isLoading } = useMixQuery(mixId);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Calculate total duration
-    const totalDuration = useMemo(() => {
-        if (!mix?.tracks) return 0;
-        return mix.tracks.reduce((sum: number, track: MixTrack) => sum + (track.duration || 0), 0);
-    }, [mix?.tracks]);
+    // The source query can return a fresh tracks array. This inexpensive
+    // calculation does not need compiler-sensitive manual memoization.
+    const totalDuration = mix?.tracks?.reduce(
+        (sum: number, track: MixTrack) => sum + (track.duration || 0), 0
+    ) ?? 0;
 
     const formatTotalDuration = (seconds: number) => {
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         if (hours > 0) {
-            return `about ${hours} hr ${mins} min`;
+            return `${t("about")} ${hours} ${t("hr")} ${mins} ${t("min")}`;
         }
-        return `${mins} min`;
+        return `${mins} ${t("min")}`;
     };
 
 
@@ -133,7 +135,7 @@ export default function MixPage() {
             duration: track.duration,
         };
         addToQueue(formattedTrack);
-        toast.success(`Added ${track.title} to queue`);
+        toast.success(`${t("Added to queue:")} ${track.title}`);
     };
 
     const handleSaveAsPlaylist = async () => {
@@ -142,7 +144,7 @@ export default function MixPage() {
         setIsSaving(true);
         try {
             const result = await api.saveMixAsPlaylist(mixId);
-            toast.success(`Saved as "${result.name}" playlist!`);
+            toast.success(`${t("Saved as playlist:")} ${result.name}`);
             window.dispatchEvent(new Event("playlist-created"));
             setTimeout(() => {
                 router.push(`/playlist/${result.id}`);
@@ -151,7 +153,7 @@ export default function MixPage() {
             console.error("Failed to save mix as playlist:", error);
             const err = error as { status?: number; data?: { playlistId?: string } };
             if (err?.status === 409) {
-                toast.info("You've already saved this mix as a playlist.");
+                toast.info(t("You've already saved this mix as a playlist."));
                 if (err?.data?.playlistId) {
                     setTimeout(() => {
                         router.push(`/playlist/${err.data!.playlistId}`);
@@ -160,7 +162,7 @@ export default function MixPage() {
             } else if (error instanceof Error) {
                 toast.error(error.message);
             } else {
-                toast.error("Failed to save mix as playlist");
+                toast.error(t("Failed to save mix as playlist"));
             }
         } finally {
             setIsSaving(false);
@@ -178,12 +180,12 @@ export default function MixPage() {
     if (!mix) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-                <p className="text-[var(--text-muted)]">Mix not found</p>
+                <p className="text-[var(--text-muted)]">{t("Mix not found")}</p>
                 <button
                     onClick={() => router.push("/")}
                     className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all"
                 >
-                    Back to Mixes
+                    {t("Back to Mixes")}
                 </button>
             </div>
         );
@@ -235,7 +237,7 @@ export default function MixPage() {
 
                         {/* Mix Info - Bottom Aligned */}
                         <div className="flex-1 min-w-0 pb-1">
-                            <p className="text-xs font-medium text-[var(--text-primary)] mb-1">Mix</p>
+                            <p className="text-xs font-medium text-[var(--text-primary)] mb-1">{t("Mix")}</p>
                             <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
                                 {mix.name}
                             </h1>
@@ -245,7 +247,7 @@ export default function MixPage() {
                                 </p>
                             )}
                             <div className="flex items-center gap-1 text-sm text-[var(--text-secondary)]">
-                                <span>{mix.trackCount || mix.tracks?.length || 0} songs</span>
+                                <span>{(mix.trackCount || mix.tracks?.length || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {(mix.trackCount || mix.tracks?.length || 0) === 1 ? t("song") : t("songs")}</span>
                                 {totalDuration > 0 && (
                                     <span>, {formatTotalDuration(totalDuration)}</span>
                                 )}
@@ -261,7 +263,7 @@ export default function MixPage() {
                     {mix.tracks && mix.tracks.length > 0 && (
                         <button
                             onClick={handlePlayMix}
-                            aria-label={isThisMixPlaying && isPlaying ? `Pause ${mix.name}` : `Play ${mix.name}`}
+                            aria-label={`${isThisMixPlaying && isPlaying ? t("Pause") : t("Play")} ${mix.name}`}
                             className="h-12 w-12 rounded-full bg-brand hover:bg-[#d4a000] hover:scale-105 flex items-center justify-center transition-all"
                         >
                             {isThisMixPlaying && isPlaying ? (
@@ -276,7 +278,7 @@ export default function MixPage() {
                     {mix.tracks && mix.tracks.length > 1 && (
                         <button
                             onClick={handleShuffle}
-                            aria-label={`Shuffle play ${mix.name}`}
+                            aria-label={`${t("Shuffle play")} ${mix.name}`}
                             className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
                         >
                             <Shuffle className="w-5 h-5" />
@@ -291,7 +293,7 @@ export default function MixPage() {
                     >
                         <Save className="w-4 h-4" />
                         <span className="hidden sm:inline">
-                            {isSaving ? "Saving..." : "Save as Playlist"}
+                            {isSaving ? t("Saving...") : t("Save as Playlist")}
                         </span>
                     </button>
                 </div>
@@ -304,9 +306,9 @@ export default function MixPage() {
                         {/* Table Header */}
                         <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 text-xs text-[var(--text-secondary)] border-b border-white/10 mb-2">
                             <span className="text-center">#</span>
-                            <span>Title</span>
-                            <span>Album</span>
-                            <span className="text-right">Duration</span>
+                            <span>{t("Title")}</span>
+                            <span>{t("Album")}</span>
+                            <span className="text-right">{t("Duration")}</span>
                         </div>
 
                         {/* Track Rows */}
@@ -332,7 +334,7 @@ export default function MixPage() {
                                                     handlePlayTrack(index);
                                                 }}
                                                 className="min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                                aria-label={isCurrentlyPlaying && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                                                aria-label={`${isCurrentlyPlaying && isPlaying ? t("Pause") : t("Play")} ${track.title}`}
                                             >
                                                 <span
                                                     className={cn(
@@ -396,7 +398,7 @@ export default function MixPage() {
                                                     e.stopPropagation();
                                                     handleAddToQueue(track);
                                                 }}
-                                                aria-label={`Add ${track.title} to queue`}
+                                                aria-label={`${t("Add to queue:")} ${track.title}`}
                                             >
                                                 <ListPlus className="w-4 h-4" />
                                             </button>
@@ -414,13 +416,13 @@ export default function MixPage() {
                         <div className="w-20 h-20 bg-[#282828] rounded-full flex items-center justify-center mb-4">
                             <Music className="w-10 h-10 text-[var(--text-muted)]" />
                         </div>
-                        <h3 className="text-lg font-medium text-white mb-1">No tracks</h3>
-                        <p className="text-sm text-[var(--text-muted)] mb-4">This mix is empty</p>
+                        <h3 className="text-lg font-medium text-white mb-1">{t("No tracks")}</h3>
+                        <p className="text-sm text-[var(--text-muted)] mb-4">{t("This mix is empty")}</p>
                         <button
                             onClick={() => router.push("/")}
                             className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all"
                         >
-                            Back to Mixes
+                            {t("Back to Mixes")}
                         </button>
                     </div>
                 )}

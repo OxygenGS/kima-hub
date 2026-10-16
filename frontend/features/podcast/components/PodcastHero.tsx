@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { ColorPalette } from "@/hooks/useImageColor";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PodcastHeroProps {
     title: string;
@@ -35,6 +36,7 @@ export function PodcastHero({
     inProgressCount,
     children,
 }: PodcastHeroProps) {
+    const { t } = useLanguage();
     const router = useRouter();
 
     return (
@@ -83,14 +85,14 @@ export function PodcastHero({
                         className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" />
-                        Podcasts
+                        {t("Podcasts")}
                     </button>
 
                     {/* System status */}
                     <div className="flex items-center gap-2 mb-4">
                         <div className="w-1.5 h-1.5 bg-[#3b82f6] rounded-full" />
                         <span className="t-eyebrow">
-                            Podcast
+                            {t("Podcast")}
                         </span>
                     </div>
 

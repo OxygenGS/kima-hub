@@ -10,6 +10,8 @@ import { useAudio } from "@/lib/audio-context";
 import { api } from "@/lib/api";
 import { DPAD_KEYS } from "@/lib/tv-utils";
 import { useTVNavigation } from "@/hooks/useTVNavigation";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { formatTime, clampTime, formatTimeRemaining } from "@/utils/formatTime";
 import { RefreshCw, SkipBack, SkipForward, Shuffle, Repeat } from "lucide-react";
 
@@ -26,6 +28,7 @@ const tvNavigation = [
 export function TVLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { branding } = useBranding();
+    const { t } = useLanguage();
     const router = useRouter();
     // Start with nav focused and first tab selected for immediate D-pad usability
     const [focusedTabIndex, setFocusedTabIndex] = useState(0);
@@ -200,15 +203,16 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
         }
     }, [focusedTabIndex, isNavFocused]);
 
-    // On initial mount and pathname change, set the correct focused tab
-    useEffect(() => {
+    // Synchronize D-pad focus when navigation changes, without a cascading
+    // effect. The guarded update only runs when the pathname actually differs.
+    const [focusPathname, setFocusPathname] = useState(pathname);
+    if (focusPathname !== pathname) {
+        setFocusPathname(pathname);
         const currentIndex = tvNavigation.findIndex(n =>
             n.href === pathname || (n.href !== "/" && pathname.startsWith(n.href))
         );
-        if (currentIndex >= 0) {
-            setFocusedTabIndex(currentIndex);
-        }
-    }, [pathname]);
+        if (currentIndex >= 0) setFocusedTabIndex(currentIndex);
+    }
 
     return (
         <>
@@ -236,7 +240,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                                     setFocusedTabIndex(index);
                                 }}
                             >
-                                {item.name}
+                                {t(item.name as TranslationKey)}
                             </Link>
                         );
                     })}
@@ -250,7 +254,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     onClick={handleSync}
                     disabled={isSyncing}
                     className="tv-sync-btn"
-                    title="Sync Library"
+                    title={t("Sync Library")}
                 >
                     <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
                 </button>
@@ -280,13 +284,13 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={toggleShuffle}
                         className={cn("tv-np-ctrl", isShuffle && "active")}
-                        title="Shuffle"
+                        title={t("Shuffle")}
                     >
                         <Shuffle className="w-4 h-4" />
                     </button>
 
                     {/* Previous */}
-                    <button onClick={previous} className="tv-np-ctrl" title="Previous">
+                    <button onClick={previous} className="tv-np-ctrl" title={t("Previous")}>
                         <SkipBack className="w-4 h-4" />
                     </button>
 
@@ -305,7 +309,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     </button>
 
                     {/* Next */}
-                    <button onClick={next} className="tv-np-ctrl" title="Next">
+                    <button onClick={next} className="tv-np-ctrl" title={t("Next")}>
                         <SkipForward className="w-4 h-4" />
                     </button>
 
@@ -313,7 +317,7 @@ export function TVLayout({ children }: { children: React.ReactNode }) {
                     <button
                         onClick={toggleRepeat}
                         className={cn("tv-np-ctrl", repeatMode !== "off" && "active")}
-                        title={repeatMode === "one" ? "Repeat One" : repeatMode === "all" ? "Repeat All" : "Repeat Off"}
+                        title={repeatMode === "one" ? t("Repeat One") : repeatMode === "all" ? t("Repeat All") : t("Repeat Off")}
                     >
                         <Repeat className="w-4 h-4" />
                         {repeatMode === "one" && <span className="tv-np-repeat-one">1</span>}

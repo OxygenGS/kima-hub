@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { LibraryFilter, SortOption } from "@/hooks/useQueries";
 import { Tab } from "../types";
 
@@ -57,6 +59,7 @@ export function RefinePanel({
     onSortChange,
     onItemsPerPageChange,
 }: RefinePanelProps) {
+    const { t } = useLanguage();
     const [open, setOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -113,7 +116,7 @@ export function RefinePanel({
                 type="button"
                 aria-expanded={open}
                 aria-controls="refine-panel"
-                aria-label="Refine: filter, sort, and per-page options"
+                aria-label={t("Refine: filter, sort, and per-page options")}
                 onClick={() => setOpen((prev) => !prev)}
                 className={cn(
                     // Matches the segmented control beside it: sentence case,
@@ -129,11 +132,11 @@ export function RefinePanel({
                 )}
             >
                 <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Refine</span>
+                <span>{t("Refine")}</span>
                 {/* Active-state dot */}
                 {hasRefinements && !open && (
                     <span
-                        aria-label="Refinements active"
+                        aria-label={t("Refinements active")}
                         className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand)] flex-shrink-0"
                     />
                 )}
@@ -145,7 +148,7 @@ export function RefinePanel({
                     id="refine-panel"
                     ref={panelRef}
                     role="dialog"
-                    aria-label="Refine options"
+                    aria-label={t("Refine options")}
                     // Anchored to the button's LEFT edge, not its right. The
                     // trigger is the first thing in the toolbar at every
                     // width, so right-0 hung the panel off the start of the
@@ -154,10 +157,10 @@ export function RefinePanel({
                 >
                     {/* Panel header */}
                     <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-white">Refine</span>
+                        <span className="text-sm font-medium text-white">{t("Refine")}</span>
                         <button
                             type="button"
-                            aria-label="Close refine panel"
+                            aria-label={t("Close refine panel")}
                             onClick={() => {
                                 setOpen(false);
                                 buttonRef.current?.focus();
@@ -195,10 +198,10 @@ export function RefinePanel({
                                                 isActive ? "text-[var(--color-brand)]" : "text-white",
                                             )}
                                         >
-                                            {opt.label}
+                                            {t(opt.label as TranslationKey)}
                                         </span>
                                         <span className="text-xs text-[var(--text-muted)] mt-0.5">
-                                            {opt.description}
+                                            {t(opt.description as TranslationKey)}
                                         </span>
                                     </button>
                                 );
@@ -225,7 +228,7 @@ export function RefinePanel({
                                             : "border-white/5 bg-white/3 text-[var(--text-secondary)] hover:bg-white/8 hover:border-white/15 hover:text-white",
                                     )}
                                 >
-                                    {opt.label}
+                                    {t(opt.label as TranslationKey)}
                                 </button>
                             ))}
                         </div>

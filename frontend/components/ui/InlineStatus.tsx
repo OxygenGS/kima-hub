@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export type StatusType = "idle" | "loading" | "success" | "error";
 
@@ -29,6 +31,7 @@ export function InlineStatus({
     clearDelay = 3000,
     onClear,
 }: InlineStatusProps) {
+    const { locale } = useLanguage();
     const [visible, setVisible] = useState(status !== "idle");
 
     // Sync visibility with status changes during render
@@ -69,7 +72,7 @@ export function InlineStatus({
                     {status === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
                 </>
             )}
-            {message && <span>{message}</span>}
+            {message && <span>{translate(locale, message)}</span>}
         </span>
     );
 }
@@ -128,6 +131,7 @@ export function ConnectionTestButton({
     className,
     disabled,
 }: ConnectionTestButtonProps) {
+    const { t, locale } = useLanguage();
     const { status, setSuccess, setError, setLoading, props } = useInlineStatus();
 
     const handleTest = async () => {
@@ -158,7 +162,7 @@ export function ConnectionTestButton({
                     className
                 )}
             >
-                {status === "loading" ? "Testing..." : label}
+                {status === "loading" ? t("Testing...") : translate(locale, label)}
             </button>
             <InlineStatus {...props} showIcon={true} />
         </div>
@@ -181,6 +185,7 @@ export function SaveButton({
     className,
     disabled,
 }: SaveButtonProps) {
+    const { t, locale } = useLanguage();
     const { status, setSuccess, setError, setLoading, props } = useInlineStatus();
 
     const handleSave = async () => {
@@ -205,7 +210,7 @@ export function SaveButton({
                     className
                 )}
             >
-                {status === "loading" ? "Saving..." : label}
+                {status === "loading" ? t("Saving...") : translate(locale, label)}
             </button>
             <InlineStatus {...props} showIcon={true} autoClear={true} />
         </div>

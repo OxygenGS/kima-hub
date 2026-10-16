@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Search, Waypoints, Blend, X } from "lucide-react";
 import type { VibeMode } from "./types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface VibeToolbarProps {
     mode: VibeMode;
@@ -13,6 +14,7 @@ interface VibeToolbarProps {
 }
 
 export function VibeToolbar({ mode, onSearch, onPathMode, onAlchemyMode, onReset }: VibeToolbarProps) {
+    const { t } = useLanguage();
     const [query, setQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -42,12 +44,12 @@ export function VibeToolbar({ mode, onSearch, onPathMode, onAlchemyMode, onReset
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search tracks or artists..."
+                    placeholder={t("Search tracks or artists...")}
                     className="w-full max-w-64 md:max-w-80 pl-9 pr-8 py-2 bg-white/10 backdrop-blur-md border border-white/10 rounded-lg text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/30"
-                    aria-label="Search tracks or artists"
+                    aria-label={t("Search tracks or artists")}
                 />
                 {query && (
-                    <button type="button" onClick={handleClear} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white/70" aria-label="Clear search">
+                    <button type="button" onClick={handleClear} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white/70" aria-label={t("Clear search")}>
                         <X className="w-4 h-4" />
                     </button>
                 )}
@@ -60,11 +62,11 @@ export function VibeToolbar({ mode, onSearch, onPathMode, onAlchemyMode, onReset
                         ? "bg-white/20 border-white/30 text-white"
                         : "bg-white/10 border-white/10 text-[var(--text-secondary)] hover:text-white hover:bg-white/15"
                 }`}
-                title="Song Path -- build a queue that glides from one track to another"
-                aria-label="Song Path -- build a queue that glides from one track to another"
+                title={t("Song Path -- build a queue that glides from one track to another")}
+                aria-label={t("Song Path -- build a queue that glides from one track to another")}
             >
                 <Waypoints className="w-4 h-4" />
-                <span className="hidden md:inline">Song Path</span>
+                <span className="hidden md:inline">{t("Song Path")}</span>
             </button>
 
             <button
@@ -74,18 +76,18 @@ export function VibeToolbar({ mode, onSearch, onPathMode, onAlchemyMode, onReset
                         ? "bg-white/20 border-white/30 text-white"
                         : "bg-white/10 border-white/10 text-[var(--text-secondary)] hover:text-white hover:bg-white/15"
                 }`}
-                title="Blend -- combine tracks into a new playlist of similar vibes"
-                aria-label="Blend -- combine tracks into a new playlist of similar vibes"
+                title={t("Blend -- combine tracks into a new playlist of similar vibes")}
+                aria-label={t("Blend -- combine tracks into a new playlist of similar vibes")}
             >
                 <Blend className="w-4 h-4" />
-                <span className="hidden md:inline">Blend</span>
+                <span className="hidden md:inline">{t("Blend")}</span>
             </button>
 
             {mode !== "idle" && (
                 <button
                     onClick={onReset}
                     className="p-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/10 text-[var(--text-secondary)] hover:text-white hover:bg-white/15 text-sm"
-                    title="Reset"
+                    title={t("Reset")}
                 >
                     <X className="w-4 h-4" />
                 </button>

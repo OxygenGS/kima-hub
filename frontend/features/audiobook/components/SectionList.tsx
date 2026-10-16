@@ -1,6 +1,7 @@
 "use client";
 
 import type { AudiobookSection } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SectionListProps {
     sections: AudiobookSection[];
@@ -13,6 +14,7 @@ export function SectionList({
     onSeekToSection,
     formatTime,
 }: SectionListProps) {
+    const { t } = useLanguage();
     if (!sections || sections.length === 0 || sections.length > 50) {
         return null;
     }
@@ -21,7 +23,7 @@ export function SectionList({
         <section>
             <div className="flex items-center gap-3 mb-6">
                 <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Chapters</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t("Chapters")}</h2>
                 <span className="text-xs tabular-nums text-[#f59e0b]">
                     {sections.length}
                 </span>

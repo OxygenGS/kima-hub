@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { SettingsSection, SettingsRow, SettingsInput } from "../ui";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
 import { useTwoFactor } from "../../hooks/useTwoFactor";
 import { Modal } from "@/components/ui/Modal";
@@ -11,6 +12,7 @@ import Image from "next/image";
 
 export function AccountSection() {
     const { user } = useAuth();
+    const { t } = useLanguage();
 
     // Password change state
     const [currentPassword, setCurrentPassword] = useState("");
@@ -51,17 +53,17 @@ export function AccountSection() {
     const handleChangePassword = async () => {
         if (!currentPassword || !newPassword || !confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage("All fields required");
+            setPasswordMessage(t("All fields required"));
             return;
         }
         if (newPassword.length < 6) {
             setPasswordStatus("error");
-            setPasswordMessage("Min 6 characters");
+            setPasswordMessage(t("Min 6 characters"));
             return;
         }
         if (newPassword !== confirmPassword) {
             setPasswordStatus("error");
-            setPasswordMessage("Passwords don't match");
+            setPasswordMessage(t("Passwords don't match"));
             return;
         }
 
@@ -73,14 +75,14 @@ export function AccountSection() {
                 newPassword,
             });
             setPasswordStatus("success");
-            setPasswordMessage("Changed");
+            setPasswordMessage(t("Changed"));
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
             setTimeout(() => setShowPasswordForm(false), 1500);
         } catch (error: unknown) {
             setPasswordStatus("error");
-            setPasswordMessage(error instanceof Error ? error.message : "Failed");
+            setPasswordMessage(error instanceof Error ? error.message : t("Failed"));
         } finally {
             setChangingPassword(false);
         }
@@ -91,11 +93,11 @@ export function AccountSection() {
         try {
             await enable2FA(twoFactorToken);
             setTfaStatus("success");
-            setTfaMessage("Enabled");
+            setTfaMessage(t("Enabled"));
             setTwoFactorToken("");
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : "Invalid code");
+            setTfaMessage(error instanceof Error ? error.message : t("Invalid code"));
         }
     };
 
@@ -104,42 +106,42 @@ export function AccountSection() {
         try {
             await disable2FA(disablePassword, disableToken);
             setTfaStatus("success");
-            setTfaMessage("Disabled");
+            setTfaMessage(t("Disabled"));
             setDisablePassword("");
             setDisableToken("");
             setShowDisableFlow(false);
         } catch (error: unknown) {
             setTfaStatus("error");
-            setTfaMessage(error instanceof Error ? error.message : "Failed");
+            setTfaMessage(error instanceof Error ? error.message : t("Failed"));
         }
     };
 
     return (
         <>
-            <SettingsSection id="account" title="Account">
+            <SettingsSection id="account" title={t("Account")}>
                 {/* Username Display */}
-                <SettingsRow label="Username" description={`Logged in as ${user?.username}`}>
+                <SettingsRow label={t("Username")} description={`${t("Logged in as")} ${user?.username}`}>
                     <span className="text-xs tabular-nums text-[var(--text-muted)]">{user?.role}</span>
                 </SettingsRow>
 
                 {/* Change Password */}
                 <SettingsRow
-                    label="Password"
-                    description="Change your account password"
+                    label={t("Password")}
+                    description={t("Change your account password")}
                 >
                     {!showPasswordForm ? (
                         <button
                             onClick={() => setShowPasswordForm(true)}
                             className="text-xs text-brand hover:text-[#f97316] transition-colors"
                         >
-                            Change
+                            {t("Change")}
                         </button>
                     ) : (
                         <button
                             onClick={() => setShowPasswordForm(false)}
                             className="text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                         >
-                            Cancel
+                            {t("Cancel")}
                         </button>
                     )}
                 </SettingsRow>
@@ -150,19 +152,19 @@ export function AccountSection() {
                             type="password"
                             value={currentPassword}
                             onChange={setCurrentPassword}
-                            placeholder="Current password"
+                            placeholder={t("Current password")}
                         />
                         <SettingsInput
                             type="password"
                             value={newPassword}
                             onChange={setNewPassword}
-                            placeholder="New password (min 6 characters)"
+                            placeholder={t("New password (min 6 characters)")}
                         />
                         <SettingsInput
                             type="password"
                             value={confirmPassword}
                             onChange={setConfirmPassword}
-                            placeholder="Confirm new password"
+                            placeholder={t("Confirm new password")}
                         />
                         <div className="inline-flex items-center gap-3">
                             <button
@@ -171,7 +173,7 @@ export function AccountSection() {
                                 className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
                                     hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                {changingPassword ? "Changing..." : "Change Password"}
+                                {changingPassword ? t("Changing...") : t("Change Password")}
                             </button>
                             <InlineStatus
                                 status={passwordStatus}
@@ -184,8 +186,8 @@ export function AccountSection() {
 
                 {/* Two-Factor Authentication */}
                 <SettingsRow
-                    label="Two-factor authentication"
-                    description={twoFactorEnabled ? "Enabled" : "Add extra security to your account"}
+                    label={t("Two-factor authentication")}
+                    description={twoFactorEnabled ? t("Enabled") : t("Add extra security to your account")}
                 >
                     {!settingUpTwoFactor && !showDisableFlow && (
                         twoFactorEnabled ? (
@@ -193,14 +195,14 @@ export function AccountSection() {
                                 onClick={() => setShowDisableFlow(true)}
                                 className="text-xs text-red-400 hover:text-red-300 transition-colors"
                             >
-                                Disable
+                                {t("Disable")}
                             </button>
                         ) : (
                             <button
                                 onClick={setup2FA}
                             className="text-xs text-brand hover:text-[#f97316] transition-colors"
                             >
-                                Enable
+                                {t("Enable")}
                             </button>
                         )
                     )}
@@ -210,20 +212,20 @@ export function AccountSection() {
                 {settingUpTwoFactor && (
                     <div className="py-4 space-y-4 border-t border-b border-white/5">
                         <p className="text-xs text-[var(--text-muted)]">
-                            Scan the QR code with your authenticator app, then enter the code below.
+                            {t("Scan the QR code with your authenticator app, then enter the code below.")}
                         </p>
 
                         {twoFactorQR && (
                             <div className="flex justify-center">
                                 <div className="bg-white p-3 rounded-lg">
-                                    <Image src={twoFactorQR} alt="2FA QR Code" width={160} height={160} className="w-40 h-40" unoptimized />
+                                    <Image src={twoFactorQR} alt={t("2FA QR Code")} width={160} height={160} className="w-40 h-40" unoptimized />
                                 </div>
                             </div>
                         )}
 
                         {twoFactorSecret && (
                             <div className="text-center">
-                                <p className="text-xs text-[var(--text-muted)] mb-1">Manual entry code</p>
+                                <p className="text-xs text-[var(--text-muted)] mb-1">{t("Manual entry code")}</p>
                                 <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-1 rounded-lg font-mono">
                                     {twoFactorSecret}
                                 </code>
@@ -234,7 +236,7 @@ export function AccountSection() {
                             type="text"
                             value={twoFactorToken}
                             onChange={(v) => setTwoFactorToken(v.replace(/\D/g, "").slice(0, 6))}
-                            placeholder="Enter 6-digit code"
+                            placeholder={t("Enter 6-digit code")}
                         />
 
                         <div className="inline-flex items-center gap-3">
@@ -244,13 +246,13 @@ export function AccountSection() {
                                 className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
                                     hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                Verify
+                                {t("Verify")}
                             </button>
                             <button
                                 onClick={() => { cancel2FASetup(); setTwoFactorToken(""); }}
                                 className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                             >
-                                Cancel
+                                {t("Cancel")}
                             </button>
                             <InlineStatus
                                 status={tfaStatus}
@@ -265,19 +267,19 @@ export function AccountSection() {
                 {showDisableFlow && (
                     <div className="py-4 space-y-3 border-t border-b border-white/5">
                         <p className="text-xs tabular-nums text-[#f59e0b]">
-                            Enter your password and current code to disable 2FA.
+                            {t("Enter your password and current code to disable 2FA.")}
                         </p>
                         <SettingsInput
                             type="password"
                             value={disablePassword}
                             onChange={setDisablePassword}
-                            placeholder="Password"
+                            placeholder={t("Password")}
                         />
                         <SettingsInput
                             type="text"
                             value={disableToken}
                             onChange={(v) => setDisableToken(v.replace(/\D/g, "").slice(0, 6))}
-                            placeholder="6-digit code"
+                            placeholder={t("6-digit code")}
                         />
                         <div className="inline-flex items-center gap-3">
                             <button
@@ -286,13 +288,13 @@ export function AccountSection() {
                                 className="px-4 py-2 bg-red-500 text-white text-xs font-semibold rounded-lg
                                     hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
-                                Disable 2FA
+                                {t("Disable 2FA")}
                             </button>
                             <button
                                 onClick={() => { setShowDisableFlow(false); setDisablePassword(""); setDisableToken(""); }}
                                 className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
                             >
-                                Cancel
+                                {t("Cancel")}
                             </button>
                             <InlineStatus
                                 status={tfaStatus}
@@ -305,11 +307,11 @@ export function AccountSection() {
             </SettingsSection>
 
             {/* Recovery Codes Modal */}
-            <Modal isOpen={showRecoveryCodes} onClose={closeRecoveryCodes} title="Recovery Codes">
+            <Modal isOpen={showRecoveryCodes} onClose={closeRecoveryCodes} title={t("Recovery Codes")}>
                 <div className="space-y-4">
                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                         <p className="text-xs text-red-300">
-                            Save these codes! You&apos;ll need them if you lose your authenticator.
+                            {t("Save these codes! You\'ll need them if you lose your authenticator.")}
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">

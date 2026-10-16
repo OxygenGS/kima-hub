@@ -20,6 +20,8 @@ import { api } from "@/lib/api";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/lib/toast-context";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { mergeImportProgress, isTerminalImportStatus } from "@/lib/import-progress";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Types for Spotify Import
 interface SpotifyTrack {
@@ -110,6 +112,8 @@ function ImportPlaylistPageContent() {
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const { t, locale } = useLanguage();
+    const number = (n: number) => n.toLocaleString(locale === "nl" ? "nl-NL" : "en-US");
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
     // Import can acquire both albums and tracks; backend requires both rights.
     const canImportPlaylist = canRequestAlbums && canDownloadTracks;
@@ -207,22 +211,35 @@ function ImportPlaylistPageContent() {
         refetchOnWindowFocus: false,
     });
 
-    // React to SSE-driven preview completion
-    useEffect(() => {
-        if (!ssePreviewStatus || step !== "previewing") return;
+    // A terminal SSE result adjusts this component's state once, during
+    // render, as recommended for state derived from changed query data.
+    // Do not replay an event on unrelated renders (e.g. a typed playlist name).
+    const [handledPreviewStatus, setHandledPreviewStatus] = useState<PreviewStatus | null>(null);
+    if (ssePreviewStatus && step === "previewing" && handledPreviewStatus !== ssePreviewStatus) {
         if (ssePreviewStatus.status === "completed" && ssePreviewStatus.preview) {
             const result = ssePreviewStatus.preview;
+            setHandledPreviewStatus(ssePreviewStatus);
             setPreview(result);
             setPlaylistName(result.playlist.name);
             const downloadableAlbumIds = result.albumsToDownload.map((_a, i) => String(i));
             setSelectedAlbums(new Set(downloadableAlbumIds));
             setStep("preview");
         } else if (ssePreviewStatus.status === "failed") {
-            toast.error(ssePreviewStatus.error || "Failed to generate preview");
+            setHandledPreviewStatus(ssePreviewStatus);
             setStep("input");
             setPreviewJobId(null);
         }
-    }, [ssePreviewStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
+
+    // Notifications are side effects, so keep them in an effect, separately
+    // from the pure render-time state adjustment. Guard against Strict Mode.
+    const notifiedPreviewFailureRef = useRef<PreviewStatus | null>(null);
+    useEffect(() => {
+        if (handledPreviewStatus?.status !== "failed" ||
+            notifiedPreviewFailureRef.current === handledPreviewStatus) return;
+        notifiedPreviewFailureRef.current = handledPreviewStatus;
+        toast.error(handledPreviewStatus.error || t("Failed to generate preview"));
+    }, [handledPreviewStatus, toast, t]);
 
     // Import status: SSE populates cache, HTTP polls as fallback (mirrors preview-status pattern)
     const { data: sseImportStatus } = useQuery<(ImportJob & { jobId?: string }) | null>({
@@ -243,28 +260,23 @@ function ImportPlaylistPageContent() {
         refetchOnWindowFocus: false,
     });
 
-    // React to SSE-driven import status changes
-    useEffect(() => {
-        if (!sseImportStatus || !importJob) return;
-
-        const updated: ImportJob = {
-            ...importJob,
-            status: sseImportStatus.status,
-            progress: sseImportStatus.progress ?? importJob.progress,
-            albumsTotal: sseImportStatus.albumsTotal ?? importJob.albumsTotal,
-            albumsCompleted: sseImportStatus.albumsCompleted ?? importJob.albumsCompleted,
-            tracksMatched: sseImportStatus.tracksMatched ?? importJob.tracksMatched,
-            createdPlaylistId: sseImportStatus.createdPlaylistId ?? importJob.createdPlaylistId,
-            error: sseImportStatus.error ?? importJob.error,
-        };
-        setImportJob(updated);
-
-        if (updated.status === "completed" || updated.status === "cancelled") {
-            setStep("complete");
-        } else if (updated.status === "failed") {
+    // Reconcile each observed SSE / poll response at most once. The render
+    // guard avoids mirroring query data in a cascading useEffect, and terminal
+    // results cannot replace a user-initiated cancellation or new import.
+    const [handledImportStatus, setHandledImportStatus] = useState<
+        (ImportJob & { jobId?: string }) | null
+    >(null);
+    if (step === "importing" && sseImportStatus && importJob &&
+        handledImportStatus !== sseImportStatus) {
+        setHandledImportStatus(sseImportStatus);
+        const activeJobId = importJob.id;
+        setImportJob((current) => current?.id === activeJobId
+            ? mergeImportProgress(current, sseImportStatus)
+            : current);
+        if (isTerminalImportStatus(sseImportStatus.status)) {
             setStep("complete");
         }
-    }, [sseImportStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
 
     // Handle URL paste/change
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,7 +286,7 @@ function ImportPlaylistPageContent() {
     // Fetch preview (async — returns job ID, completion arrives via SSE)
     const handleFetchPreview = async () => {
         if (!url.trim()) {
-            toast.error("Please enter a playlist URL");
+            toast.error(t("Please enter a playlist URL"));
             return;
         }
 
@@ -288,7 +300,7 @@ function ImportPlaylistPageContent() {
             setStep("previewing");
         } catch (err) {
             const message =
-                err instanceof Error ? err.message : "Failed to start preview";
+                err instanceof Error ? err.message : t("Failed to start preview");
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -299,7 +311,7 @@ function ImportPlaylistPageContent() {
     const handleQuickImport = async () => {
         if (!canImportPlaylist) return;
         if (!url.trim()) {
-            toast.error("Please enter a playlist URL");
+            toast.error(t("Please enter a playlist URL"));
             return;
         }
 
@@ -325,7 +337,7 @@ function ImportPlaylistPageContent() {
             setStep("importing");
         } catch (err) {
             const message =
-                err instanceof Error ? err.message : "Failed to start import";
+                err instanceof Error ? err.message : t("Failed to start import");
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -373,7 +385,7 @@ function ImportPlaylistPageContent() {
             setStep("importing");
         } catch (err) {
             const message =
-                err instanceof Error ? err.message : "Failed to start import";
+                err instanceof Error ? err.message : t("Failed to start import");
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -436,7 +448,7 @@ function ImportPlaylistPageContent() {
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
         } catch (err) {
             const message =
-                err instanceof Error ? err.message : "Failed to cancel import";
+                err instanceof Error ? err.message : t("Failed to cancel import");
             toast.error(message);
         } finally {
             setIsCancelling(false);
@@ -453,16 +465,16 @@ function ImportPlaylistPageContent() {
                     <button
                         onClick={() => router.back()}
                         className="p-2 hover:bg-white/5 rounded-full transition-colors"
-                        aria-label="Back"
+                        aria-label={t("Back")}
                     >
                         <ArrowLeft className="w-5 h-5 text-[var(--text-secondary)]" />
                     </button>
                     <div>
                         <h1 className="text-2xl font-bold text-white">
-                            Import Playlist
+                            {t("Import Playlist")}
                         </h1>
                         <p className="text-sm text-[var(--text-secondary)]">
-                            Import from Spotify or Deezer
+                            {t("Import from Spotify or Deezer")}
                         </p>
                     </div>
                 </div>
@@ -476,7 +488,7 @@ function ImportPlaylistPageContent() {
                                 href="/browse/playlists"
                                 className="text-brand hover:underline font-medium"
                             >
-                                Browse Deezer playlists & radio stations →
+                                {t("Browse Deezer playlists & radio stations →")}
                             </Link>
                         </p>
                     </div>
@@ -487,25 +499,25 @@ function ImportPlaylistPageContent() {
                     <div className="space-y-4">
                         <div>
                             <label htmlFor="playlist-url" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Playlist URL
+                                {t("Playlist URL")}
                             </label>
                             <input
                                 id="playlist-url"
                                 type="text"
                                 value={url}
                                 onChange={handleUrlChange}
-                                placeholder="https://www.deezer.com/playlist/... or https://open.spotify.com/playlist/..."
+                                placeholder={t("https://www.deezer.com/playlist/... or https://open.spotify.com/playlist/...")}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/50 focus:border-[var(--color-brand)] transition-colors"
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && handleFetchPreview()
                                 }
                             />
                             <p className="text-xs text-[var(--text-muted)] mt-2">
-                                Paste a public{" "}
+                                {t("Paste a public")}{" "}
                                 <span className="text-[#AD47FF]">Deezer</span>{" "}
-                                or{" "}
+                                {t("or")}{" "}
                                 <span className="text-[#1DB954]">Spotify</span>{" "}
-                                playlist URL
+                                {t("playlist URL")}
                             </p>
                         </div>
                         <div className="flex gap-3">
@@ -517,10 +529,10 @@ function ImportPlaylistPageContent() {
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        Loading...
+                                        {t("Loading...")}
                                     </>
                                 ) : (
-                                    "Preview First"
+                                    t("Preview First")
                                 )}
                             </button>
                             {canImportPlaylist && <button
@@ -531,19 +543,19 @@ function ImportPlaylistPageContent() {
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        Loading...
+                                        {t("Loading...")}
                                     </>
                                 ) : (
                                     <>
                                         <Zap className="w-4 h-4" />
-                                        Import Now
+                                        {t("Import Now")}
                                     </>
                                 )}
                             </button>}
                         </div>
                         {!canImportPlaylist && (
                             <p className="text-sm text-[var(--text-muted)]">
-                                Playlist importing requires both album request and track download permissions. You can still preview the playlist.
+                                {t("Playlist importing requires both album request and track download permissions. You can still preview the playlist.")}
                             </p>
                         )}
                     </div>
@@ -553,9 +565,9 @@ function ImportPlaylistPageContent() {
                 {step === "previewing" && (
                     <div className="text-center py-12">
                         <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
-                        <h2 className="text-lg font-bold text-white mb-1">Analysing Playlist</h2>
+                        <h2 className="text-lg font-bold text-white mb-1">{t("Analysing Playlist")}</h2>
                         <p className="text-[var(--text-secondary)] text-sm">
-                            {ssePreviewStatus?.message || "Matching tracks to your library..."}
+                            {ssePreviewStatus?.message || t("Matching tracks to your library...")}
                         </p>
                     </div>
                 )}
@@ -592,7 +604,7 @@ function ImportPlaylistPageContent() {
                                 </h2>
                                 <p className="text-sm text-[var(--text-secondary)]">
                                     {preview.playlist.owner} ·{" "}
-                                    {preview.playlist.trackCount} songs
+                                    {number(preview.playlist.trackCount)} {t(preview.playlist.trackCount === 1 ? "song" : "songs")}
                                 </p>
                                 {preview.playlist.description && (
                                     <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-1">
@@ -620,7 +632,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.total}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    Total
+                                    {t("Total")}
                                 </div>
                             </div>
                             <div className="animate-rise text-center py-3 bg-green-500/10 rounded-lg" style={{ "--i": 1 } as CSSProperties}>
@@ -628,7 +640,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.inLibrary}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    In Library
+                                    {t("In Library")}
                                 </div>
                             </div>
                             <div className="animate-rise text-center py-3 bg-[#1DB954]/10 rounded-lg" style={{ "--i": 2 } as CSSProperties}>
@@ -636,7 +648,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.downloadable}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    To Download
+                                    {t("To Download")}
                                 </div>
                             </div>
                             {preview.summary.notFound > 0 ? (
@@ -645,7 +657,7 @@ function ImportPlaylistPageContent() {
                                         {preview.summary.notFound}
                                     </div>
                                     <div className="text-xs text-[var(--text-muted)]">
-                                        Not Found
+                                        {t("Not Found")}
                                     </div>
                                 </div>
                             ) : (
@@ -654,7 +666,7 @@ function ImportPlaylistPageContent() {
                                         ✓
                                     </div>
                                     <div className="text-xs text-[var(--text-muted)]">
-                                        All Matched
+                                        {t("All Matched")}
                                     </div>
                                 </div>
                             )}
@@ -676,8 +688,7 @@ function ImportPlaylistPageContent() {
                                     <div className="flex items-center gap-2">
                                         <Check className="w-4 h-4 text-green-400" />
                                         <span className="text-sm font-medium text-white">
-                                            {preview.summary.inLibrary} songs in
-                                            your library
+                                            {number(preview.summary.inLibrary)} {t("songs in your library")}
                                         </span>
                                     </div>
                                     {expandedSection === "matched" ? (
@@ -755,7 +766,7 @@ function ImportPlaylistPageContent() {
                                                             "Unknown Album"
                                                 ).length
                                             }{" "}
-                                            albums to download
+                                            {t("albums to download")}
                                         </span>
                                     </div>
                                     {expandedSection === "download" ? (
@@ -773,11 +784,11 @@ function ImportPlaylistPageContent() {
                                             >
                                                 {selectedAlbums.size ===
                                                 preview.albumsToDownload.length
-                                                    ? "Deselect All"
-                                                    : "Select All"}
+                                                    ? t("Deselect All")
+                                                     : t("Select All")}
                                             </button>
                                             <span className="text-xs text-[var(--text-muted)]">
-                                                {selectedAlbums.size} selected
+                                                {number(selectedAlbums.size)} {t("selected")}
                                             </span>
                                         </div>
                                         <div className="max-h-48 overflow-y-auto">
@@ -828,7 +839,7 @@ function ImportPlaylistPageContent() {
                                                                     {
                                                                         album.trackCount
                                                                     }{" "}
-                                                                    songs
+                                                                    {t("songs")}
                                                                 </div>
                                                             </div>
                                                         </label>
@@ -857,8 +868,7 @@ function ImportPlaylistPageContent() {
                                     <div className="flex items-center gap-2">
                                         <X className="w-4 h-4 text-red-400" />
                                         <span className="text-sm font-medium text-white">
-                                            {preview.summary.notFound} songs not
-                                            found
+                                            {number(preview.summary.notFound)} {t("songs not found")}
                                         </span>
                                     </div>
                                     {expandedSection === "notfound" ? (
@@ -903,7 +913,7 @@ function ImportPlaylistPageContent() {
                         {/* Playlist name input */}
                         <div>
                             <label htmlFor="playlist-name" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Playlist Name
+                                {t("Playlist Name")}
                             </label>
                             <input
                                 id="playlist-name"
@@ -912,7 +922,7 @@ function ImportPlaylistPageContent() {
                                 onChange={(e) =>
                                     setPlaylistName(e.target.value)
                                 }
-                                placeholder="Enter playlist name"
+                                placeholder={t("Enter playlist name")}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[#1DB954]/50 focus:border-[#1DB954] transition-colors"
                             />
                         </div>
@@ -926,7 +936,7 @@ function ImportPlaylistPageContent() {
                                 }}
                                 className="px-6 py-3 rounded-full text-sm font-medium text-[var(--text-primary)] hover:text-white hover:bg-white/5 transition-colors"
                             >
-                                Back
+                                {t("Back")}
                             </button>
                             {canImportPlaylist && <button
                                 onClick={handleStartImport}
@@ -940,17 +950,17 @@ function ImportPlaylistPageContent() {
                                 {isLoading ? (
                                     <>
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        Starting...
+                                        {t("Starting...")}
                                     </>
                                 ) : preview.summary.inLibrary > 0 &&
                                   selectedAlbums.size > 0 ? (
-                                    `Import ${preview.summary.inLibrary} songs + Download ${selectedAlbums.size} albums`
+                                    `${t("Import")} ${number(preview.summary.inLibrary)} ${t("songs")} + ${t("Download")} ${number(selectedAlbums.size)} ${t("albums")}`
                                 ) : preview.summary.inLibrary > 0 ? (
-                                    `Import ${preview.summary.inLibrary} songs`
+                                    `${t("Import")} ${number(preview.summary.inLibrary)} ${t("songs")}`
                                 ) : selectedAlbums.size > 0 ? (
-                                    `Download ${selectedAlbums.size} albums`
+                                    `${t("Download")} ${number(selectedAlbums.size)} ${t("albums")}`
                                 ) : (
-                                    "Select albums to download"
+                                    t("Select albums to download")
                                 )}
                             </button>}
                         </div>
@@ -963,41 +973,40 @@ function ImportPlaylistPageContent() {
                         <Loader2 className="w-10 h-10 text-[#1DB954] animate-spin mx-auto mb-4" />
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "fetching"
-                                ? "Fetching Playlist"
+                                ? t("Fetching Playlist")
                                 : importJob.status === "downloading"
-                                ? "Queueing Album Downloads"
+                                ? t("Queueing Album Downloads")
                                 : importJob.status === "scanning"
-                                ? "Scanning Library"
+                                ? t("Scanning Library")
                                 : importJob.status === "creating_playlist" ||
                                   importJob.status === "matching_tracks"
-                                ? "Creating Playlist"
+                                ? t("Creating Playlist")
                                 : importJob.status === "pending"
-                                ? "Starting Import"
-                                : "Starting Import"}
+                                ? t("Starting Import")
+                                : t("Starting Import")}
                         </h2>
                         <p className="text-sm text-[var(--text-secondary)] mb-6">
                             {importJob.status === "fetching" && (
-                                <>Fetching tracks and matching to your library...</>
+                                <>{t("Fetching tracks and matching to your library...")}</>
                             )}
                             {importJob.status === "downloading" && (
                                 <>
-                                    Queued {importJob.albumsCompleted} of{" "}
-                                    {importJob.albumsTotal} albums
+                                    {t("Queued")} {number(importJob.albumsCompleted)} {t("of")}{" "}{number(importJob.albumsTotal)} {t("albums")}
                                 </>
                             )}
                             {importJob.status === "pending" && (
                                 <>
                                     {importJob.albumsTotal > 0
-                                        ? `Waiting for ${importJob.albumsTotal - importJob.albumsCompleted} downloads to complete`
-                                        : "Preparing import..."}
+                                        ? `${t("Waiting for")} ${number(importJob.albumsTotal - importJob.albumsCompleted)} ${t("downloads to complete")}`
+                                        : t("Preparing import...")}
                                 </>
                             )}
                             {importJob.status === "scanning" && (
-                                <>Importing downloaded files into library</>
+                                <>{t("Importing downloaded files into library")}</>
                             )}
                             {(importJob.status === "creating_playlist" ||
                                 importJob.status === "matching_tracks") && (
-                                <>Adding {importJob.tracksMatched} songs</>
+                                <>{t("Adding")} {number(importJob.tracksMatched)} {t("songs")}</>
                             )}
                         </p>
                         <div className="w-full max-w-xs mx-auto bg-white/10 rounded-full h-1.5">
@@ -1007,8 +1016,7 @@ function ImportPlaylistPageContent() {
                             />
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mt-3">
-                            {importJob.progress}% complete • downloads continue
-                            in the background
+                            {number(importJob.progress)}% {t("complete • downloads continue in the background")}
                         </p>
                         {/* Cancel button */}
                         <button
@@ -1019,15 +1027,14 @@ function ImportPlaylistPageContent() {
                             {isCancelling ? (
                                 <>
                                     <Loader2 className="w-3 h-3 animate-spin inline mr-2" />
-                                    Cancelling...
+                                    {t("Cancelling...")}
                                 </>
                             ) : (
                                 "Cancel Import"
                             )}
                         </button>
                         <p className="text-xs text-[var(--text-muted)] mt-2">
-                            Playlist will be created with tracks downloaded so
-                            far
+                            {t("Playlist will be created with tracks downloaded so far")}
                         </p>
                     </div>
                 )}
@@ -1054,35 +1061,33 @@ function ImportPlaylistPageContent() {
 
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "failed"
-                                ? "Import Failed"
+                                ? t("Import Failed")
                                 : importJob.status === "cancelled"
-                                ? "Import Cancelled"
-                                : "Import Complete"}
+                                ? t("Import Cancelled")
+                                : t("Import Complete")}
                         </h2>
 
                         {importJob.status === "failed" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
-                                {importJob.error ||
-                                    "Something went wrong while importing."}
+                                {importJob.error || t("Something went wrong while importing.")}
                             </p>
                         ) : importJob.status === "cancelled" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.createdPlaylistId
-                                    ? `Import cancelled. A playlist was created with ${importJob.tracksMatched} matched track${importJob.tracksMatched === 1 ? "" : "s"}.`
-                                    : "Import cancelled. No tracks had been matched yet."}
+                                    ? `${t("Import cancelled. A playlist was created with")} ${number(importJob.tracksMatched)} ${t("matched")} ${t(importJob.tracksMatched === 1 ? "track" : "tracks")}.`
+                                    : t("Import cancelled. No tracks had been matched yet.")}
                             </p>
                         ) : (
                             <>
                                 <p className="text-sm text-[var(--text-secondary)]">
                                     {importJob.tracksMatched > 0
-                                        ? `Added ${importJob.tracksMatched} songs to your playlist`
-                                        : "Playlist created (songs still downloading)"}
+                                        ? `${t("Added")} ${number(importJob.tracksMatched)} ${t("songs to your playlist")}`
+                                        : t("Playlist created (songs still downloading)")}
                                 </p>
                                 {importJob.tracksDownloadable > 0 &&
                                     importJob.tracksMatched < importJob.tracksTotal && (
                                         <p className="text-sm text-amber-400 mt-2">
-                                            {importJob.tracksDownloadable} songs still
-                                            downloading
+                                            {number(importJob.tracksDownloadable)} {t("songs still downloading")}
                                         </p>
                                     )}
                             </>
@@ -1098,7 +1103,7 @@ function ImportPlaylistPageContent() {
                                 }}
                                 className="px-5 py-2.5 rounded-full text-sm font-medium text-[var(--text-primary)] hover:text-white hover:bg-white/5 transition-colors"
                             >
-                                Import Another
+                                {t("Import Another")}
                             </button>
                             {importJob.tracksDownloadable > 0 &&
                                 importJob.tracksMatched <
@@ -1117,7 +1122,7 @@ function ImportPlaylistPageContent() {
                                                 );
                                                 if (result.added > 0) {
                                                     setRefreshStatusMessage(
-                                                        `Added ${result.added} new song(s).`
+                                                        `${t("Added")} ${number(result.added)} ${t("new song(s).")}`
                                                     );
                                                     setImportJob((prev) =>
                                                         prev
@@ -1130,12 +1135,12 @@ function ImportPlaylistPageContent() {
                                                     );
                                                 } else {
                                                     setRefreshStatusMessage(
-                                                        "Albums still downloading. Try again later."
+                                                        t("Albums still downloading. Try again later.")
                                                     );
                                                 }
                                             } catch {
                                                 setRefreshStatusMessage(
-                                                    "Failed to refresh."
+                                                    t("Failed to refresh.")
                                                 );
                                             } finally {
                                                 setIsLoading(false);
@@ -1145,8 +1150,8 @@ function ImportPlaylistPageContent() {
                                         className="px-5 py-2.5 rounded-full text-sm font-medium bg-[var(--bg-primary)] text-white hover:bg-white/20 disabled:opacity-50 transition-colors"
                                     >
                                         {isLoading
-                                            ? "Refreshing..."
-                                            : "Refresh"}
+                                            ? t("Refreshing...")
+                                            : t("Refresh")}
                                     </button>
                                 )}
                             {refreshStatusMessage && (
@@ -1163,7 +1168,7 @@ function ImportPlaylistPageContent() {
                                     }
                                     className="px-5 py-2.5 rounded-full text-sm font-medium bg-[#1DB954] text-black hover:brightness-110 transition-all"
                                 >
-                                    View Playlist
+                                    {t("View Playlist")}
                                 </button>
                             )}
                         </div>

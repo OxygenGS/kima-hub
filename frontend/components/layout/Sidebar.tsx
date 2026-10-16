@@ -8,6 +8,8 @@ import { cn } from "@/utils/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { useAudioState } from "@/lib/audio-state-context";
@@ -42,6 +44,7 @@ export function Sidebar() {
     const queryClient = useQueryClient();
     const { isAuthenticated } = useAuth();
     const { branding } = useBranding();
+    const { t } = useLanguage();
     const { toast } = useToast();
     const { currentTrack, currentAudiobook, currentPodcast, playbackType } =
         useAudioState();
@@ -74,7 +77,7 @@ export function Sidebar() {
             await api.scanLibrary();
         } catch (error) {
             console.error("Failed to trigger library scan:", error);
-            toast.error("Failed to start scan. Please try again.");
+            toast.error(t("Failed to start scan. Please try again."));
         } finally {
             syncTimeoutRef.current = setTimeout(
                 () => setIsSyncing(false),
@@ -89,10 +92,13 @@ export function Sidebar() {
         };
     }, []);
 
-    // Close mobile menu when route changes
-    useEffect(() => {
+    // Keep mobile navigation closed after a route change. React allows this
+    // guarded same-component state adjustment during render (no effect loop).
+    const [menuPathname, setMenuPathname] = useState(pathname);
+    if (menuPathname !== pathname) {
+        setMenuPathname(pathname);
         setIsMobileMenuOpen(false);
-    }, [pathname]);
+    }
 
     // Close mobile menu on escape key
     useEffect(() => {
@@ -150,7 +156,7 @@ export function Sidebar() {
             router.push(`/playlist/${result.id}`);
         } catch (error) {
             console.error("Failed to create playlist:", error);
-            toast.error("Failed to create playlist");
+            toast.error(t("Failed to create playlist"));
         } finally {
             setIsCreating(false);
         }
@@ -230,9 +236,9 @@ export function Sidebar() {
                                 :   "bg-white/10 text-white hover:bg-white/15 active:scale-95",
                             )}
                             aria-label={
-                                isSyncing ? "Syncing library" : "Sync library"
+                                isSyncing ? t("Syncing library") : t("Sync library")
                             }
-                            title={isSyncing ? "Syncing..." : "Sync Library"}
+                            title={isSyncing ? t("Syncing...") : t("Sync Library")}
                         >
                             <RefreshCw
                                 className={cn(
@@ -250,8 +256,8 @@ export function Sidebar() {
                                     "bg-white text-black"
                                 :   "bg-white/10 text-[var(--text-secondary)] hover:text-white hover:bg-white/15 active:scale-95",
                             )}
-                            aria-label="Settings"
-                            title="Settings"
+                            aria-label={t("Settings")}
+                            title={t("Settings")}
                         >
                             <Settings className="w-4 h-4" />
                         </Link>
@@ -263,12 +269,12 @@ export function Sidebar() {
             <nav
                 className={cn("pt-6", isMobileOrTablet ? "px-4" : "px-3")}
                 role="navigation"
-                aria-label="Main navigation"
+                aria-label={t("Main navigation")}
             >
                 <div className="mb-3 flex items-center gap-2 px-2 animate-rise">
                     <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                     <span className="t-eyebrow">
-                        Navigation Index
+                        {t("Navigation Index")}
                     </span>
                 </div>
                 <div className="space-y-0.5">
@@ -279,7 +285,7 @@ export function Sidebar() {
 
                         return (
                             <Link
-                                key={item.name}
+                                key={t(item.name as TranslationKey)}
                                 href={item.href}
                                 prefetch={false}
                                 aria-current={isActive ? "page" : undefined}
@@ -348,7 +354,7 @@ export function Sidebar() {
                             className="group/link"
                         >
                             <span className="text-xs font-medium text-[var(--text-muted)] group-hover/link:text-brand transition-colors">
-                                Playlist Stack
+                                {t("Playlist Stack")}
                             </span>
                         </Link>
                     </div>
@@ -359,8 +365,8 @@ export function Sidebar() {
                                 setNewPlaylistName("");
                             }}
                             className="w-6 h-6 flex items-center justify-center bg-[var(--bg-primary)] border-2 border-white/10 text-[var(--text-muted)] hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-all duration-200"
-                            aria-label="Create playlist"
-                            title="Create Playlist"
+                            aria-label={t("Create Playlist")}
+                            title={t("Create Playlist")}
                         >
                             <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -380,7 +386,7 @@ export function Sidebar() {
                                             setNewPlaylistName("");
                                         }
                                     }}
-                                    placeholder="Playlist name"
+                                    placeholder={t("Playlist name")}
                                     autoFocus
                                     className="w-full bg-[var(--bg-primary)] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors"
                                 />
@@ -391,7 +397,7 @@ export function Sidebar() {
                                     }
                                     className="mt-2 w-full py-1.5 bg-brand hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed text-brand-contrast text-xs font-semibold rounded transition-colors"
                                 >
-                                    {isCreating ? "Creating..." : "Create"}
+                                    {isCreating ? t("Creating...") : t("Create")}
                                 </button>
                             </div>
                         )}
@@ -461,7 +467,7 @@ export function Sidebar() {
                                                 {isShared && (
                                                     <span
                                                         className="shrink-0 w-1 h-1 rounded-full bg-brand"
-                                                        title={`Shared by ${
+                                                        title={`${t("Shared by")} ${
                                                             playlist.user
                                                                 ?.username ||
                                                             "someone"

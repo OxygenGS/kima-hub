@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
+
 const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -8,7 +11,8 @@ const getGreeting = () => {
 };
 
 export function HomeHero() {
-    const greeting = getGreeting();
+    const { t } = useLanguage();
+    const greeting = t(getGreeting() as TranslationKey);
 
     return (
         <div className="relative bg-gradient-to-b from-[#0a0a0a] via-[#0f0f0f] to-transparent pt-6 pb-8 px-4 sm:px-6 md:px-8 border-b border-white/5">
@@ -17,7 +21,7 @@ export function HomeHero() {
                 <div className="flex items-center gap-2 mb-6">
                     <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                     <span className="t-eyebrow">
-                        System Online
+                        {t("System Online")}
                     </span>
                 </div>
 
@@ -28,7 +32,7 @@ export function HomeHero() {
                             {greeting}
                         </h1>
                         <p className="text-sm text-[var(--text-muted)]">
-                            Personal streaming hub / Your library at a glance
+                            {t("Personal streaming hub / Your library at a glance")}
                         </p>
                     </div>
                 </div>

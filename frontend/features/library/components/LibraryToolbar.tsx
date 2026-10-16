@@ -1,6 +1,7 @@
 "use client";
 
 import { Shuffle } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { LibraryFilter, SortOption } from "@/hooks/useQueries";
 import { Tab } from "../types";
 import { RefinePanel } from "./RefinePanel";
@@ -26,6 +27,7 @@ export function LibraryToolbar({
     onItemsPerPageChange,
     onShuffleLibrary,
 }: LibraryToolbarProps) {
+    const { t } = useLanguage();
     return (
         <div className="flex items-center gap-3 pb-4 border-b border-white/5">
             <RefinePanel
@@ -42,7 +44,7 @@ export function LibraryToolbar({
             <button
                 type="button"
                 onClick={onShuffleLibrary}
-                aria-label="Shuffle entire library"
+                aria-label={t("Shuffle entire library")}
                 className="ml-auto p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] text-black transition-all hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-brand)]"
             >
                 <Shuffle className="w-4 h-4" />

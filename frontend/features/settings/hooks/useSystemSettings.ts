@@ -40,6 +40,20 @@ const defaultSystemSettings: SystemSettings = {
     publicUrl: "",
 };
 
+// Keep API values unchanged except nullable text fields required by inputs.
+function sanitizeSettings(settings: Record<string, unknown>): SystemSettings {
+    const sanitized: Record<string, unknown> = {};
+    for (const key in settings) {
+        const value = settings[key];
+        if (value === null && typeof defaultSystemSettings[key as keyof SystemSettings] === "string") {
+            sanitized[key] = "";
+        } else {
+            sanitized[key] = value;
+        }
+    }
+    return sanitized as unknown as SystemSettings;
+}
+
 export function useSystemSettings() {
     const { isAuthenticated, user } = useAuth();
     const [systemSettings, setSystemSettings] = useState<SystemSettings>(
@@ -51,9 +65,24 @@ export function useSystemSettings() {
     const isAdmin = user?.role === "admin";
 
     useEffect(() => {
-        if (isAuthenticated && isAdmin) {
-            loadSystemSettings();
-        }
+        if (!isAuthenticated || !isAdmin) return;
+        let active = true;
+        // The first load resolves asynchronously and preserves API field names.
+        void Promise.all([api.getSystemSettings(), api.getSettings()])
+            .then(([sysData, userData]) => {
+                if (!active) return;
+                setSystemSettings({
+                    ...sanitizeSettings(sysData),
+                    maxCacheSizeMb: userData.maxCacheSizeMb,
+                });
+            })
+            .catch((error) => {
+                console.error("Failed to load system settings:", error);
+            })
+            .finally(() => {
+                if (active) setIsLoading(false);
+            });
+        return () => { active = false; };
     }, [isAuthenticated, isAdmin]);
 
     const loadSystemSettings = async () => {
@@ -63,21 +92,6 @@ export function useSystemSettings() {
                 api.getSystemSettings(),
                 api.getSettings(),
             ]);
-
-            // Sanitize null values to empty strings for controlled inputs
-            const sanitizeSettings = (settings: Record<string, unknown>): SystemSettings => {
-                const sanitized: Record<string, unknown> = {};
-                for (const key in settings) {
-                    const value = settings[key];
-                    // Convert null to empty string for string fields
-                    if (value === null && typeof defaultSystemSettings[key as keyof SystemSettings] === 'string') {
-                        sanitized[key] = '';
-                    } else {
-                        sanitized[key] = value;
-                    }
-                }
-                return sanitized as unknown as SystemSettings;
-            };
 
             const combinedSettings = {
                 ...sanitizeSettings(sysData),

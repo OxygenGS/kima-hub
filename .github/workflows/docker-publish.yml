@@ -4,15 +4,58 @@ on:
     push:
         tags:
             - "v*"
-    workflow_dispatch:
-        inputs:
-            version:
-                description: "Version tag (e.g., v1.0.0)"
-                required: true
-                type: string
+
+# One explicitly created stable version tag triggers the publishing workflow.
+# Reruns for the same tag are serialized; protect version tags in repository settings.
+concurrency:
+    group: stable-publish-${{ github.ref }}
+    cancel-in-progress: false
 
 jobs:
+    validate-release:
+        name: Validate stable release version and branch
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+        steps:
+            - name: Checkout branch history for stable-tag verification
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Require stable SemVer and trusted release context
+              id: version
+              shell: bash
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  REF_NAME: ${{ github.ref_name }}
+                  REF_TYPE: ${{ github.ref_type }}
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  set -euo pipefail
+                  if [ "$EVENT_NAME" != "push" ] || [ "$REF_TYPE" != "tag" ]; then
+                      echo "Stable publishing only runs on an explicitly created tag." >&2
+                      exit 1
+                  fi
+                  VERSION="$REF_NAME"
+
+                  # Never tag pre-release builds as :latest.
+                  if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+                      echo "Not a stable version: $VERSION" >&2
+                      echo "Use the separate prerelease workflow for candidates." >&2
+                      exit 1
+                  fi
+                  # A tag on an unmerged feature branch must never ship as stable.
+                  if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+                      echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
+                      exit 1
+                  fi
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
     build:
+        needs: [validate-release]
         runs-on: ubuntu-latest
         permissions:
             contents: read
@@ -45,15 +88,6 @@ jobs:
                   registry: ghcr.io
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
 
             # ---- Image scan (reports, does not block) --------------------
             # Build the Intel image on its own first and scan it before anything
@@ -89,7 +123,7 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: false
                   load: true
                   tags: kima:scan
@@ -128,17 +162,17 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: true
                   tags: |
-                      ${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.version }}
+                      ${{ env.GHCR_IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}
                       ${{ env.GHCR_IMAGE_NAME }}:latest
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
                   platforms: linux/amd64,linux/arm64
 
     create-release:
-        needs: [build]
+        needs: [build, validate-release]
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -146,20 +180,11 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
-
             - name: Create Release
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: ${{ steps.version.outputs.version }}
-                  name: Kima ${{ steps.version.outputs.version }}
+                  tag_name: ${{ needs.validate-release.outputs.version }}
+                  name: Kima ${{ needs.validate-release.outputs.version }}
                   body: |
                       ## Quick Start
 
@@ -169,7 +194,7 @@ jobs:
                         -p 3030:3030 \
                         -v /path/to/your/music:/music \
                         -v kima_data:/data \
-                        ghcr.io/oxygengs/kima-hub:${{ steps.version.outputs.version }}
+                        ghcr.io/oxygengs/kima-hub:${{ needs.validate-release.outputs.version }}
                       ```
 
                       Then open http://localhost:3030 and create your account!

@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PaginationProps {
     currentPage: number;
@@ -45,6 +46,7 @@ export function Pagination({
     label,
     className,
 }: PaginationProps) {
+    const { t } = useLanguage();
     if (totalPages <= 1) {
         return null;
     }
@@ -54,7 +56,7 @@ export function Pagination({
 
     return (
         <nav
-            aria-label={`${label} pagination`}
+            aria-label={`${label} ${t("pagination")}`}
             className={cn(
                 "flex items-center justify-center gap-2 pt-6 mt-12 border-t border-white/5",
                 className,
@@ -64,7 +66,7 @@ export function Pagination({
                 type="button"
                 onClick={() => onPageChange(1)}
                 disabled={disabled || atFirst}
-                aria-label="First page"
+                aria-label={t("First page")}
                 className={CONTROL}
             >
                 <ChevronsLeft className="w-4 h-4" aria-hidden="true" />
@@ -73,7 +75,7 @@ export function Pagination({
                 type="button"
                 onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                 disabled={disabled || atFirst}
-                aria-label="Previous page"
+                aria-label={t("Previous page")}
                 className={CONTROL}
             >
                 <ChevronLeft className="w-4 h-4" aria-hidden="true" />
@@ -85,7 +87,7 @@ export function Pagination({
                 aria-atomic="true"
                 className="px-3 text-sm text-[var(--text-secondary)] tabular-nums whitespace-nowrap"
             >
-                Page <span className="text-white font-medium">{currentPage}</span> of{" "}
+                {t("Page")} <span className="text-white font-medium">{currentPage}</span> {t("of")}{" "}
                 <span className="text-white font-medium">{totalPages}</span>
             </p>
 
@@ -93,7 +95,7 @@ export function Pagination({
                 type="button"
                 onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
                 disabled={disabled || atLast}
-                aria-label="Next page"
+                aria-label={t("Next page")}
                 className={CONTROL}
             >
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
@@ -102,7 +104,7 @@ export function Pagination({
                 type="button"
                 onClick={() => onPageChange(totalPages)}
                 disabled={disabled || atLast}
-                aria-label="Last page"
+                aria-label={t("Last page")}
                 className={CONTROL}
             >
                 <ChevronsRight className="w-4 h-4" aria-hidden="true" />

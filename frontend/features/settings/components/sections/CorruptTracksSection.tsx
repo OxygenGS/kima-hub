@@ -6,8 +6,10 @@ import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export function CorruptTracksSection() {
+    const { t, locale } = useLanguage();
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -31,19 +33,19 @@ export function CorruptTracksSection() {
     return (
         <SettingsSection
             id="corrupt-tracks"
-            title="Corrupt Tracks"
-            description="Tracks that could not be read or decoded during library scan"
+            title={t("Corrupt Tracks")}
+            description={t("Tracks that could not be read or decoded during library scan")}
         >
             <SettingsRow
-                label="Corrupt files detected"
-                description="These files failed audio analysis and may be incomplete or damaged"
+                label={t("Corrupt files detected")}
+                description={t("These files failed audio analysis and may be incomplete or damaged")}
             >
                 <div className="flex items-center gap-3">
                     {isLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" />
                     ) : (
                         <span className={`text-sm tabular-nums ${count > 0 ? "text-amber-400": "text-[var(--text-muted)]"}`}>
-                            {count} file{count !== 1 ? "s" : ""}
+                            {count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t(count === 1 ? "file" : "files")}
                         </span>
                     )}
                 </div>
@@ -61,7 +63,7 @@ export function CorruptTracksSection() {
                             ) : (
                                 <ChevronDown className="w-3 h-3" />
                             )}
-                            {expanded ? "Hide" : "Show"} details
+                            {expanded ? t("Hide") : t("Show")} {t("details")}
                         </button>
 
                         {expanded && (
@@ -100,7 +102,7 @@ export function CorruptTracksSection() {
                             ) : (
                                 <Trash2 className="w-3.5 h-3.5" />
                             )}
-                            Remove all corrupt tracks
+                            {t("Remove all corrupt tracks")}
                         </button>
                     </div>
                 </>
@@ -110,9 +112,9 @@ export function CorruptTracksSection() {
                 isOpen={showConfirm}
                 onClose={() => setShowConfirm(false)}
                 onConfirm={() => deleteMutation.mutate()}
-                title="Remove corrupt tracks"
-                message={`This will permanently remove ${count} corrupt track${count !== 1 ? "s" : ""} from your database. The files on disk will not be deleted.`}
-                confirmText="Remove All"
+                title={t("Remove corrupt tracks")}
+                message={`${t("This will permanently remove")} ${count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t("corrupt")} ${t(count === 1 ? "track" : "tracks")} ${t("from your database. The files on disk will not be deleted.")}`}
+                confirmText={t("Remove All")}
                 variant="danger"
             />
         </SettingsSection>

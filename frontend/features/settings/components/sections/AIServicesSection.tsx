@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle } from "../ui";
 import { SystemSettings } from "../../types";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AIServicesSectionProps {
     settings: SystemSettings;
@@ -13,6 +14,7 @@ interface AIServicesSectionProps {
 }
 
 export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIServicesSectionProps) {
+    const { t } = useLanguage();
     const [fanartTestStatus, setFanartTestStatus] = useState<StatusType>("idle");
     const [fanartTestMessage, setFanartTestMessage] = useState("");
     const [lastfmTestStatus, setLastfmTestStatus] = useState<StatusType>("idle");
@@ -20,11 +22,11 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
 
     const handleFanartTest = async () => {
         setFanartTestStatus("loading");
-        setFanartTestMessage("Testing...");
+        setFanartTestMessage(t("Testing..."));
         const result = await onTest("fanart");
         if (result.success) {
             setFanartTestStatus("success");
-            setFanartTestMessage("Connected");
+            setFanartTestMessage(t("Connected"));
         } else {
             setFanartTestStatus("error");
             setFanartTestMessage(result.error || "Failed");
@@ -33,11 +35,11 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
 
     const handleLastfmTest = async () => {
         setLastfmTestStatus("loading");
-        setLastfmTestMessage("Testing...");
+        setLastfmTestMessage(t("Testing..."));
         const result = await onTest("lastfm");
         if (result.success) {
             setLastfmTestStatus("success");
-            setLastfmTestMessage("Connected");
+            setLastfmTestMessage(t("Connected"));
         } else {
             setLastfmTestStatus("error");
             setLastfmTestMessage(result.error || "Failed");
@@ -47,13 +49,13 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
     return (
         <SettingsSection
             id="ai-services"
-            title="AI & Artwork"
-            description="Enhance your library with high-quality artwork"
+            title={t("AI & Artwork")}
+            description={t("Enhance your library with high-quality artwork")}
         >
             {/* Fanart.tv */}
             <SettingsRow
-                label="Enable Fanart.tv"
-                description="Enhanced artist and album artwork"
+                label={t("Enable Fanart.tv")}
+                description={t("Enhanced artist and album artwork")}
                 htmlFor="fanart-enabled"
             >
                 <SettingsToggle
@@ -65,12 +67,12 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
 
             {settings.fanartEnabled && (
                 <>
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.fanartApiKey}
                             onChange={(v) => onUpdate({ fanartApiKey: v })}
-                            placeholder="Enter Fanart.tv API key"
+                            placeholder={t("Enter Fanart.tv API key")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -83,7 +85,7 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
                                 className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
                                     hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
-                                {fanartTestStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {fanartTestStatus === "loading" ? "Testing..." : t("Test Connection")}
                             </button>
                             <InlineStatus
                                 status={fanartTestStatus}
@@ -99,16 +101,16 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
                     <p className="text-xs text-[var(--text-muted)]">
-                        Last.fm is pre-configured with a default key. Add your own for higher rate limits.
+                        {t("Last.fm is pre-configured with a default key. Add your own for higher rate limits.")}
                     </p>
                 </div>
 
-                <SettingsRow label="Last.fm API Key (Optional)">
+                <SettingsRow label={t("Last.fm API Key (Optional)")}>
                     <SettingsInput
                         type="password"
                         value={settings.lastfmApiKey || ""}
                         onChange={(v) => onUpdate({ lastfmApiKey: v })}
-                        placeholder="Optional: Your Last.fm API key"
+                        placeholder={t("Optional: Your Last.fm API key")}
                         className="w-64"
                     />
                 </SettingsRow>
@@ -122,7 +124,7 @@ export function AIServicesSection({ settings, onUpdate, onTest, isTesting }: AIS
                                 className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
                                     hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
-                                {lastfmTestStatus === "loading" ? "Testing..." : "Test Connection"}
+                                {lastfmTestStatus === "loading" ? "Testing..." : t("Test Connection")}
                             </button>
                             <InlineStatus
                                 status={lastfmTestStatus}

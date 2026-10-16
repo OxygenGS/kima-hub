@@ -11,6 +11,25 @@ on:
         types: [opened, synchronize, reopened]
 
 jobs:
+    naming-audit:
+        name: No Legacy Project Naming
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Check tracked files and filenames
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  if git grep -nI -i -E 'chill[-_[:space:]]*verse' -- .; then
+                      echo "Legacy project name found in tracked content."
+                      exit 1
+                  fi
+                  if git ls-files | grep -E -i 'chill[-_[:space:]]*verse'; then
+                      echo "Legacy project name found in tracked filenames."
+                      exit 1
+                  fi
+                  echo "No legacy project naming remains in the checkout."
+
     lint-frontend:
         name: Frontend Lint & Unit Tests
         runs-on: ubuntu-latest
@@ -27,16 +46,15 @@ jobs:
               working-directory: frontend
               run: npm ci
 
-            - name: Run ESLint
-              working-directory: frontend
-              run: npm run lint
-
-            # These 303 tests existed for months without ever running in CI --
-            # nothing in any workflow referenced vitest. They take under a
-            # second and this job has already paid for `npm ci`.
+            # Run the unit suite before lint so pre-existing lint errors do not
+            # prevent tests from executing. ESLint still fails this job.
             - name: Run frontend unit tests
               working-directory: frontend
               run: npm run test:unit
+
+            - name: Run ESLint
+              working-directory: frontend
+              run: npm run lint
 
     typecheck:
         name: TypeScript Typecheck
@@ -129,6 +147,9 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
+            - name: Validate fork Compose installation and update examples
+              run: bash .github/ci/check-fork-compose.sh
+
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
 
@@ -172,9 +193,16 @@ jobs:
                   build-args: |
                       NEXT_PUBLIC_BUILD_TYPE=ci-smoke
 
+            # Node is needed by the real-account Playwright smoke on this runner.
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
             - name: Boot a fresh isolated AIO instance and check endpoints
               shell: bash
-              timeout-minutes: 15
+              timeout-minutes: 35
               run: |
                   set -euo pipefail
 
@@ -256,6 +284,10 @@ jobs:
                   # volume. Synthetic 440Hz WAV only; no real user media.
                   bash .github/ci/aio-audio-smoke.sh "$name" "http://127.0.0.1:3130"
 
+                  # Real login and Settings/Search locale checks on the same
+                  # throwaway AIO, as both the synthetic admin and listener.
+                  bash .github/ci/aio-auth-locale-smoke.sh "http://127.0.0.1:3130"
+
             # Reuse the just-loaded AIO image to test the real start.sh
             # against an OLD PostgreSQL data directory. No second big image
             # build or pushed registry image is necessary.
@@ -279,6 +311,15 @@ jobs:
               shell: bash
               timeout-minutes: 25
               run: bash .github/ci/aio-volume-upgrade.sh
+
+            # Pull the real published upstream v1.10.0 AIO image, create
+            # synthetic accounts/media, upgrade a copied /data with this
+            # candidate, and independently restore upstream using old data.
+            # No registry push, no production endpoints or mounts.
+            - name: Real upstream AIO image upgrade and rollback rehearsal
+              shell: bash
+              timeout-minutes: 35
+              run: bash .github/ci/aio-real-image-rehearsal.sh
 
     db-upgrade:
         name: Existing Kima Database Upgrade & Restore

@@ -5,6 +5,7 @@ import { SimilarArtist } from "../types";
 import { Music, Library } from "lucide-react";
 import { api } from "@/lib/api";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SimilarArtistsProps {
     similarArtists: SimilarArtist[];
@@ -15,13 +16,14 @@ export function SimilarArtists({
     similarArtists,
     onNavigate,
 }: SimilarArtistsProps) {
+    const { t } = useLanguage();
     if (!similarArtists || similarArtists.length === 0) {
         return null;
     }
 
     return (
         <section>
-            <SectionHeader color="artists" title="Fans Also Like" />
+            <SectionHeader color="artists" title={t("Fans Also Like")} />
             <div
                 data-tv-section="similar-artists"
                 className="grid-media"
@@ -75,7 +77,7 @@ export function SimilarArtists({
                                 {artist.inLibrary && (
                                     <div
                                         className="absolute bottom-1 right-1 bg-brand rounded-full p-1"
-                                        title="In your library"
+                                        title={t("In your library")}
                                     >
                                         <Library className="w-3 h-3 text-black" />
                                     </div>

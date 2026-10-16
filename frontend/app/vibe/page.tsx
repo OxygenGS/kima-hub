@@ -17,12 +17,19 @@ import { api } from "@/lib/api";
 import type { Track, VibeOperation } from "@/lib/audio-state-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { Loader2, X } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 type VibeView = "map" | "galaxy";
 
 const GalacticMap = dynamic(
     () => import("@/features/vibe/scenes/GravityGridScene").then(m => ({ default: m.GravityGridScene })),
     { ssr: false },
 );
+
+function LocalizedVibeLabel({ label }: { label: "Map rendering failed" | "Retry" }) {
+    const { t } = useLanguage();
+    return <>{t(label)}</>;
+}
 
 class VibeMapErrorBoundary extends React.Component<
     { children: React.ReactNode },
@@ -42,13 +49,13 @@ class VibeMapErrorBoundary extends React.Component<
             return (
                 <div className="w-full h-full vibe-map-bg flex items-center justify-center">
                     <div className="text-center">
-                        <p className="text-[var(--text-muted)] text-sm">Map rendering failed</p>
+                        <p className="text-[var(--text-muted)] text-sm"><LocalizedVibeLabel label="Map rendering failed" /></p>
                         <p className="text-[var(--text-muted)] text-xs mt-1">{this.state.error}</p>
                         <button
                             onClick={() => this.setState({ hasError: false, error: null })}
                             className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/15 rounded text-xs text-[var(--text-secondary)] hover:text-white"
                         >
-                            Retry
+                            <LocalizedVibeLabel label="Retry" />
                         </button>
                     </div>
                 </div>
@@ -59,6 +66,7 @@ class VibeMapErrorBoundary extends React.Component<
 }
 
 export default function VibePage() {
+    const { t, locale } = useLanguage();
     const {
         mapData,
         isLoading,
@@ -273,7 +281,7 @@ export default function VibePage() {
             <div className="w-full h-full vibe-map-bg flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-6 h-6 text-purple-500 animate-spin mx-auto mb-3 opacity-60" />
-                    <p className="text-[var(--text-muted)] text-sm tracking-wide">Computing music map</p>
+                    <p className="text-[var(--text-muted)] text-sm tracking-wide">{t("Computing music map")}</p>
                 </div>
             </div>
         );
@@ -283,13 +291,13 @@ export default function VibePage() {
         return (
             <div className="w-full h-full vibe-map-bg flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-[var(--text-muted)] text-sm">Failed to load music map</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-1">{error instanceof Error ? error.message : "Unknown error"}</p>
+                    <p className="text-[var(--text-muted)] text-sm">{t("Failed to load music map")}</p>
+                    <p className="text-[var(--text-muted)] text-xs mt-1">{translate(locale, error instanceof Error ? error.message : "Unknown error")}</p>
                     <button
                         onClick={() => refetch()}
                         className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/15 rounded text-xs text-[var(--text-secondary)] hover:text-white"
                     >
-                        Retry
+                        {t("Retry")}
                     </button>
                 </div>
             </div>
@@ -300,8 +308,8 @@ export default function VibePage() {
         return (
             <div className="w-full h-full vibe-map-bg flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-[var(--text-muted)] text-sm">No tracks with vibe analysis yet</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-1">Run enrichment to generate embeddings</p>
+                    <p className="text-[var(--text-muted)] text-sm">{t("No tracks with vibe analysis yet")}</p>
+                    <p className="text-[var(--text-muted)] text-xs mt-1">{t("Run enrichment to generate embeddings")}</p>
                 </div>
             </div>
         );
@@ -454,7 +462,7 @@ export default function VibePage() {
                             </div>
                             <button
                                 onClick={dismissOnboarding}
-                                aria-label="Dismiss"
+                                aria-label={t("Dismiss")}
                                 className="shrink-0 text-[var(--text-muted)] hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded"
                             >
                                 <X className="w-4 h-4" />

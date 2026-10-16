@@ -3,6 +3,7 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { SettingsSidebar, SidebarItem } from "./SettingsSidebar";
 import { Settings } from "lucide-react";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SettingsLayoutProps {
     children: ReactNode;
@@ -11,6 +12,7 @@ interface SettingsLayoutProps {
 }
 
 export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayoutProps) {
+    const { t } = useLanguage();
     const [activeSection, setActiveSection] = useState(sidebarItems[0]?.id || "");
     const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -93,7 +95,7 @@ export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayo
                     <div className="flex items-center gap-2 mb-4">
                         <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                         <span className="t-eyebrow">
-                            System Configuration
+                            {t("System Configuration")}
                         </span>
                     </div>
 
@@ -103,7 +105,7 @@ export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayo
                         </div>
                         <div>
                             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-none">
-                                Settings
+                                {t("Settings")}
                             </h1>
                         </div>
                     </div>

@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import Image from "next/image";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface MobileSidebarProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const queryClient = useQueryClient();
     const { logout } = useAuth();
     const { branding } = useBranding();
+    const { t } = useLanguage();
     const { toast } = useToast();
     const [isSyncing, setIsSyncing] = useState(false);
     const isFirstRender = useRef(true);
@@ -122,12 +124,12 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 <nav
                     className="flex-1 overflow-y-auto py-4"
                     role="navigation"
-                    aria-label="Mobile menu"
+                    aria-label={t("Mobile menu")}
                 >
                     {/* Quick Links Section */}
                     <div className="px-3 mb-6">
                         <div className="text-xs font-semibold text-[var(--text-muted)] px-3 mb-2">
-                            Quick Links
+                            {t("Quick Links")}
                         </div>
 
                         <Link
@@ -145,7 +147,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         >
                             <Compass className="w-5 h-5" />
                             <span className="text-sm font-medium">
-                                Discover
+                                {t("Discover")}
                             </span>
                         </Link>
 
@@ -172,7 +174,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     {/* Actions Section */}
                     <div className="px-3">
                         <div className="text-xs font-semibold text-[var(--text-muted)] px-3 mb-2">
-                            Actions
+                            {t("Actions")}
                         </div>
 
                         <button
@@ -192,7 +194,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 )}
                             />
                             <span className="text-sm font-medium">
-                                {isSyncing ? "Syncing..." : "Sync Library"}
+                                {isSyncing ? t("Syncing...") : t("Sync Library")}
                             </span>
                         </button>
 
@@ -210,7 +212,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         >
                             <Settings className="w-5 h-5" />
                             <span className="text-sm font-medium">
-                                Settings
+                                {t("Settings")}
                             </span>
                         </Link>
                     </div>
@@ -223,7 +225,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors duration-200"
                     >
                         <LogOut className="w-5 h-5" />
-                        <span className="text-sm font-medium">Logout</span>
+                        <span className="text-sm font-medium">{t("Logout")}</span>
                     </button>
                 </div>
             </div>

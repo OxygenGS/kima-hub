@@ -7,13 +7,14 @@
 #   - High-quality audio streaming
 #
 # Usage:
-#   1. Edit the MUSIC_PATH below
+#   1. Set MUSIC_PATH to your actual music directory (and VERSION when upgrading)
 #   2. Run: docker compose -f docker-compose.prod.yml up -d
 #   3. Open http://localhost:3030
 
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:${VERSION:-latest}
+    # Pin to an existing fork release by default. Set VERSION explicitly for upgrades.
+    image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.10.0}
     container_name: kima
     ports:
       - "${PORT:-3030}:3030"
@@ -38,9 +39,8 @@ services:
     # 6g is enough for frontend + backend + embeddings + Redis + Postgres.
     mem_limit: 6g
     memswap_limit: 8g
-    # Fix Redis memory overcommit warning
-    sysctls:
-      - vm.overcommit_memory=1
+    # vm.overcommit_memory is a HOST sysctl, not supported by Docker's
+    # container sysctls. Configure it on the host only if an admin approves.
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "/app/healthcheck.js"]

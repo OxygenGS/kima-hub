@@ -7,6 +7,7 @@ import { Album, AlbumSource } from "../types";
 import { ReactNode, lazy, Suspense } from "react";
 import { useAlbumDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Lazy load MetadataEditor - modal component opened on user action
 const MetadataEditor = lazy(() => import("@/components/MetadataEditor").then(mod => ({ default: mod.MetadataEditor })));
@@ -29,14 +30,15 @@ export function AlbumHero({
     children,
 }: AlbumHeroProps) {
     const displayData = useAlbumDisplayData(album);
+    const { t, locale } = useLanguage();
     const formatDuration = (seconds?: number) => {
         if (!seconds) return "";
         const hours = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         if (hours > 0) {
-            return `${hours} hr ${mins} min`;
+            return `${hours} ${t("hr")} ${mins} ${t("min")}`;
         }
-        return `${mins} min`;
+        return `${mins} ${t("min")}`;
     };
 
     const totalDuration = formatDuration(album.duration);
@@ -104,7 +106,7 @@ export function AlbumHero({
                     {/* Album Info - Bottom Aligned */}
                     <div className="flex-1 min-w-0 pb-1">
                         <p className="text-xs font-medium text-[var(--text-secondary)] mb-1">
-                            Album
+                            {t("Album")}
                         </p>
                         <div className="flex items-center gap-2 group mb-2">
                             <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight line-clamp-2">
@@ -112,7 +114,7 @@ export function AlbumHero({
                             </h1>
                             {displayData.hasUserOverrides && (
                                 <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded-full border border-amber-500/30 shrink-0">
-                                    Edited
+                                    {t("Edited")}
                                 </span>
                             )}
                             {source === "library" && (
@@ -158,7 +160,7 @@ export function AlbumHero({
                             {album.trackCount && album.trackCount > 0 && (
                                 <>
                                     <span className="mx-1">•</span>
-                                    <span>{album.trackCount} songs</span>
+                                    <span>{album.trackCount.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {album.trackCount === 1 ? t("song") : t("songs")}</span>
                                 </>
                             )}
                             {totalDuration && <span>, {totalDuration}</span>}

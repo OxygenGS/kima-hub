@@ -4,6 +4,7 @@ import { Play, Pause } from "lucide-react";
 import { Podcast, Episode } from "../types";
 import { formatDuration } from "@/utils/formatTime";
 import { formatDate } from "../utils";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ContinueListeningProps {
     podcast: Podcast;
@@ -24,6 +25,7 @@ export function ContinueListening({
     onPlayEpisode,
     onPlayPause,
 }: ContinueListeningProps) {
+    const { t } = useLanguage();
     if (inProgressEpisodes.length === 0) {
         return null;
     }
@@ -50,7 +52,7 @@ export function ContinueListening({
         <section>
             <div className="flex items-center gap-3 mb-6">
                 <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Continue Listening</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t("Continue Listening")}</h2>
                 <span className="flex-1 border-t border-white/10" />
             </div>
 
@@ -69,7 +71,7 @@ export function ContinueListening({
                             <h3 className="font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
                                 {previousEpisode.title}
                             </h3>
-                            <p className="text-xs text-[var(--text-muted)]">Previous episode</p>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Previous episode")}</p>
                         </div>
                     </div>
                 )}
@@ -136,7 +138,7 @@ export function ContinueListening({
                             <h3 className="font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
                                 {nextEpisode.title}
                             </h3>
-                            <p className="text-xs text-[var(--text-muted)]">Next episode</p>
+                            <p className="text-xs text-[var(--text-muted)]">{t("Next episode")}</p>
                         </div>
                     </div>
                 )}

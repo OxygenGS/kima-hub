@@ -7,10 +7,9 @@ name: Pre-release Image
 # then failed eleven nights running without anyone noticing, because nothing
 # watched it and it opened no issue.
 #
-# Two ways in: push the branch named `prerelease`, or press Run workflow on the
-# Actions tab. Either way the image goes ONLY to this repository's GitHub
-# Container Registry. Docker Hub is the public release channel and stays
-# using version tags -- see docker-publish.yml.
+# Run intentionally from the Actions tab with an explicit approval. No branch
+# push may publish pre-release images. Both stable and pre-release images use
+# the fork-owned GitHub Container Registry; only stable version tags update latest.
 #
 # It builds BOTH architectures deliberately. The ARM leg is the fragile one: it
 # compiles PyTorch from source whenever a prebuilt wheel is missing, and that is
@@ -18,8 +17,6 @@ name: Pre-release Image
 # ARM here, before you tag, is the whole reason this workflow exists.
 
 on:
-    push:
-        branches: [prerelease]
     workflow_dispatch:
         inputs:
             tag_suffix:
@@ -77,10 +74,19 @@ jobs:
 
             - name: Compose tag list
               id: tags
+              shell: bash
+              env:
+                  TAG_SUFFIX: ${{ inputs.tag_suffix }}
               run: |
+                  set -euo pipefail
+                  # GitHub inputs belong in the environment, never raw shell source.
+                  if [ -n "$TAG_SUFFIX" ] && ! [[ "$TAG_SUFFIX" =~ ^[a-z0-9][a-z0-9.-]{0,31}$ ]]; then
+                    echo "Invalid optional tag suffix. Use lowercase letters, digits, dots or hyphens (max 32 chars)." >&2
+                    exit 1
+                  fi
                   TAGS="${GHCR_IMAGE}:prerelease"$'\n'"${GHCR_IMAGE}:prerelease-${{ steps.sha.outputs.short }}"
-                  if [ -n "${{ inputs.tag_suffix }}" ]; then
-                    TAGS="${TAGS}"$'\n'"${GHCR_IMAGE}:prerelease-${{ inputs.tag_suffix }}"
+                  if [ -n "$TAG_SUFFIX" ]; then
+                    TAGS="${TAGS}"$'\n'"${GHCR_IMAGE}:prerelease-${TAG_SUFFIX}"
                   fi
                   {
                     echo 'list<<TAGS_EOF'

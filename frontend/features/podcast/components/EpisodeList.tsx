@@ -7,6 +7,7 @@ import { cn } from "@/utils/cn";
 import { Podcast, Episode } from "../types";
 import { formatDuration } from "@/utils/formatTime";
 import { formatDate } from "../utils";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface EpisodeListProps {
     podcast: Podcast;
@@ -37,6 +38,7 @@ function EpisodeRow({
     onPlay: (episode: Episode) => void;
     onMarkComplete?: (episodeId: string, duration: number) => void;
 }) {
+    const { t } = useLanguage();
     const lastTapRef = useRef<{ time: number; index: number }>({ time: 0, index: -1 });
     const [expanded, setExpanded] = useState(false);
     const isInProgress =
@@ -175,7 +177,7 @@ function EpisodeRow({
                         {episode.progress?.isFinished && (
                             <>
                                 <span className="text-[var(--text-muted)]">|</span>
-                                <span className="text-green-400">Finished</span>
+                                <span className="text-green-400">{t("Finished")}</span>
                             </>
                         )}
                         {isInProgress && episode.progress && (
@@ -219,7 +221,7 @@ function EpisodeRow({
                             onMarkComplete(episode.id, episode.duration);
                         }}
                         className="opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-1 transition-[opacity,transform] duration-150 p-1.5 rounded-lg hover:bg-white/10"
-                        title="Mark as complete"
+                        title={t("Mark as complete")}
                     >
                         <CheckCircle className="w-4 h-4 text-[var(--text-muted)] hover:text-green-400 transition-colors" />
                     </button>
@@ -252,11 +254,12 @@ export function EpisodeList({
     onPlay,
     onMarkComplete,
 }: EpisodeListProps) {
+    const { t } = useLanguage();
     return (
         <section>
             <div className="flex items-center gap-3 mb-6">
                 <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">All Episodes</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t("All Episodes")}</h2>
                 <span className="text-xs tabular-nums text-[#3b82f6]">
                     {episodes.length}
                 </span>

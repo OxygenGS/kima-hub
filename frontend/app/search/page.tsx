@@ -19,10 +19,12 @@ import { UnifiedSongsList } from "@/features/search/components/UnifiedSongsList"
 import { SoulseekBrowser } from "@/features/search/components/SoulseekBrowser";
 import { TVSearchInput } from "@/features/search/components/TVSearchInput";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { FilterTab } from "@/features/search/types";
 
 export default function SearchPage() {
     const searchParams = useSearchParams();
+    const { t } = useLanguage();
     const router = useRouter();
     const { canDownloadTracks } = useMusicPermissions();
     const [filterTab, setFilterTab] = useState<FilterTab>("all");
@@ -97,15 +99,14 @@ export default function SearchPage() {
                     <div className="mb-12 text-center animate-rise">
                         <div className="inline-flex items-center gap-3 mb-4 text-[#eab308]">
                             <span className="text-sm font-semibold">
-                                Discovery Engine
+                                {t("Discovery Engine")}
                             </span>
                         </div>
                         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-white leading-tight">
-                            Find Your Sound
+                            {t("Find Your Sound")}
                         </h1>
                         <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-                            Search your library, discover new artists, or tap
-                            into the P2P network for rare tracks
+                            {t("Search your library, discover new artists, or tap into the P2P network for rare tracks")}
                         </p>
                     </div>
                 )}
@@ -122,7 +123,7 @@ export default function SearchPage() {
                                     <div className="flex items-center gap-2 text-sm text-[#eab308]">
                                         <div className="w-1 h-1 rounded-full bg-[#eab308] animate-ping" />
                                         <span className="font-medium">
-                                            Searching across sources...
+                                            {t("Searching across sources...")}
                                         </span>
                                     </div>
                                 )}
@@ -161,7 +162,7 @@ export default function SearchPage() {
                                 <div className="absolute inset-0 bg-gradient-to-r from-[#eab308] to-[#a855f7] opacity-20 blur-xl animate-pulse" />
                             </div>
                             <p className="text-[var(--text-secondary)] text-sm animate-pulse">
-                                Scanning library and network...
+                                {t("Scanning library and network...")}
                             </p>
                         </div>
                     )}
@@ -191,7 +192,7 @@ export default function SearchPage() {
                                 <div className="space-y-4">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
                                         <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full" />
-                                        Top Match
+                                        {t("Top Match")}
                                     </h2>
                                     <TopResult
                                         libraryArtist={
@@ -205,7 +206,7 @@ export default function SearchPage() {
                                 <div className="space-y-4">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3">
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
-                                        Tracks
+                                        {t("Tracks")}
                                     </h2>
                                     {activeFilterTab === "all" ?
                                         <UnifiedSongsList
@@ -232,7 +233,7 @@ export default function SearchPage() {
                                         <section className="animate-fade-soft">
                                             <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                                 <span className="w-1 h-8 bg-gradient-to-b from-brand to-[#f97316] rounded-full" />
-                                                Top Match
+                                                {t("Top Match")}
                                             </h2>
                                             <TopResult
                                                 libraryArtist={
@@ -247,7 +248,7 @@ export default function SearchPage() {
                                     <section className="animate-fade-soft">
                                         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                             <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full" />
-                                            Tracks
+                                            {t("Tracks")}
                                         </h2>
                                         {activeFilterTab === "all" ?
                                             <UnifiedSongsList
@@ -281,7 +282,7 @@ export default function SearchPage() {
                                 <section className="animate-fade-soft">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#22c55e] to-[#16a34a] rounded-full" />
-                                        Albums
+                                        {t("Albums")}
                                     </h2>
                                     <LibraryAlbumsGrid
                                         albums={libraryResults!.albums!}
@@ -296,7 +297,7 @@ export default function SearchPage() {
                                 <section className="animate-fade-soft">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full" />
-                                        Podcasts
+                                        {t("Podcasts")}
                                     </h2>
                                     <LibraryPodcastsGrid
                                         podcasts={libraryResults!.podcasts!}
@@ -311,7 +312,7 @@ export default function SearchPage() {
                                 <section className="animate-fade-soft">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full" />
-                                        Audiobooks
+                                        {t("Audiobooks")}
                                     </h2>
                                     <LibraryAudiobooksGrid
                                         audiobooks={libraryResults!.audiobooks!}
@@ -326,7 +327,7 @@ export default function SearchPage() {
                                 <section className="animate-fade-soft">
                                     <h2 className="text-2xl font-bold tracking-tight flex items-center gap-3 mb-6">
                                         <span className="w-1 h-8 bg-gradient-to-b from-[#fca200] to-[#d48c00] rounded-full" />
-                                        Related Artists
+                                        {t("Related Artists")}
                                     </h2>
                                     <SimilarArtistsGrid
                                         similarArtists={similarArtists}
@@ -354,14 +355,13 @@ export default function SearchPage() {
                                 <div className="absolute inset-0 bg-gradient-to-br from-[#eab308]/20 to-[#a855f7]/20 blur-2xl" />
                             </div>
                             <h3 className="text-2xl font-bold text-white mb-3">
-                                No matches found
+                                {t("No matches found")}
                             </h3>
                             <p className="text-[var(--text-secondary)] mb-2">
-                                Try a different search term or check your
-                                spelling
+                                {t("Try a different search term or check your spelling")}
                             </p>
                             <p className="text-sm text-[var(--text-muted)]">
-                                Tip: Enable Soulseek to search the P2P network
+                                {t("Tip: Enable Soulseek to search the P2P network")}
                             </p>
                         </div>
                     )}

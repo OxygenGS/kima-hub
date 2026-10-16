@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { QRCodeSVG } from "qrcode.react";
 import { Card } from "@/components/ui/Card";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -38,6 +39,7 @@ export default function DeviceLinkPage() {
     const { isAuthenticated, isLoading: authLoading } = useAuth();
     const { branding } = useBranding();
     const { toast } = useToast();
+    const { t, locale } = useLanguage();
     const [linkCode, setLinkCode] = useState<DeviceLinkCode | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(0);
@@ -61,17 +63,29 @@ export default function DeviceLinkPage() {
             setDevices(response);
         } catch (err) {
             console.error("Failed to load devices:", err);
-            toast.error("Failed to load linked devices");
+            toast.error(t("Failed to load linked devices"));
         } finally {
             setIsLoadingDevices(false);
         }
-    }, [toast]);
+    }, [toast, t]);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadDevices();
-        }
-    }, [isAuthenticated, loadDevices]);
+        if (!isAuthenticated) return;
+        let cancelled = false;
+        // Initial request resolves asynchronously; manual refresh uses loadDevices.
+        void api.request<LinkedDevice[]>("/device-link/devices")
+            .then((response) => {
+                if (!cancelled) setDevices(response);
+            })
+            .catch((err) => {
+                console.error("Failed to load devices:", err);
+                if (!cancelled) toast.error(t("Failed to load linked devices"));
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoadingDevices(false);
+            });
+        return () => { cancelled = true; };
+    }, [isAuthenticated, toast, t]);
 
     // Generate a new link code
     const generateCode = async () => {
@@ -86,7 +100,7 @@ export default function DeviceLinkPage() {
             setLinkCode(response);
             setTimeRemaining(response.expiresIn);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to generate code");
+            setError(err instanceof Error ? err.message : t("Failed to generate code"));
         } finally {
             setIsGenerating(false);
         }
@@ -185,10 +199,10 @@ export default function DeviceLinkPage() {
                 {/* Title */}
                 <div className="mb-8">
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-2">
-                        Link Mobile Device
+                        {t("Link Mobile Device")}
                     </h1>
                     <p className="text-[var(--text-secondary)]">
-                        Scan the QR code or enter the code in the {branding.name} app to link your device
+                        {t("Scan the QR code or enter the code in the")} {branding.name}{t("app to link your device")}
                     </p>
                 </div>
 
@@ -197,7 +211,7 @@ export default function DeviceLinkPage() {
                     <Card className="p-6 bg-white/[0.03] border border-white/5">
                         <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                             <Smartphone className="w-5 h-5" />
-                            Device Link Code
+                            {t("Device Link Code")}
                         </h2>
 
                         {error && (
@@ -210,13 +224,13 @@ export default function DeviceLinkPage() {
                         {!linkCode && !isGenerating && (
                             <div className="text-center py-8">
                                 <p className="text-[var(--text-secondary)] mb-4">
-                                    Generate a one-time code to link your mobile device
+                                    {t("Generate a one-time code to link your mobile device")}
                                 </p>
                                 <button
                                     onClick={generateCode}
                                     className="px-6 py-3 bg-brand hover:bg-[#d4a000] text-black font-medium rounded-full transition-all hover:scale-105"
                                 >
-                                    Generate Code
+                                    {t("Generate Code")}
                                 </button>
                             </div>
                         )}
@@ -235,16 +249,16 @@ export default function DeviceLinkPage() {
                                             <Check className="w-8 h-8 text-green-400" />
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">
-                                            Device Linked!
+                                            {t("Device Linked!")}
                                         </h3>
                                         <p className="text-[var(--text-secondary)] mb-4">
-                                            Your device has been successfully connected
+                                            {t("Your device has been successfully connected")}
                                         </p>
                                         <button
                                             onClick={generateCode}
                                             className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all text-sm"
                                         >
-                                            Link Another Device
+                                            {t("Link Another Device")}
                                         </button>
                                     </div>
                                 ) : timeRemaining <= 0 ? (
@@ -253,17 +267,17 @@ export default function DeviceLinkPage() {
                                             <Clock className="w-8 h-8 text-red-400" />
                                         </div>
                                         <h3 className="text-xl font-bold text-white mb-2">
-                                            Code Expired
+                                            {t("Code Expired")}
                                         </h3>
                                         <p className="text-[var(--text-secondary)] mb-4">
-                                            Generate a new code to continue
+                                            {t("Generate a new code to continue")}
                                         </p>
                                         <button
                                             onClick={generateCode}
                                             className="px-4 py-2 bg-brand hover:bg-[#d4a000] text-black font-medium rounded-full transition-all"
                                         >
                                             <RefreshCw className="w-4 h-4 inline mr-2" />
-                                            Generate New Code
+                                            {t("Generate New Code")}
                                         </button>
                                     </div>
                                 ) : (
@@ -281,7 +295,7 @@ export default function DeviceLinkPage() {
                                         {/* Code Display */}
                                         <div className="mb-4" aria-live="polite">
                                             <p className="text-[var(--text-secondary)] text-sm mb-2">
-                                                Or enter this code manually:
+                                                {t("Or enter this code manually:")}
                                             </p>
                                             <div className="flex items-center justify-center gap-2">
                                                 <code className="text-3xl font-mono font-bold text-white tracking-widest bg-white/10 px-4 py-2 rounded-lg">
@@ -295,7 +309,7 @@ export default function DeviceLinkPage() {
                                                             ? "bg-green-500/20 text-green-400"
                                                             : "bg-white/10 hover:bg-white/20 text-[var(--text-secondary)]"
                                                     )}
-                                                    aria-label={copied ? "Code copied" : "Copy code"}
+                                                    aria-label={copied ? t("Code copied") : t("Copy code")}
                                                 >
                                                     {copied ? (
                                                         <Check className="w-5 h-5" />
@@ -310,7 +324,7 @@ export default function DeviceLinkPage() {
                                         <div className="flex items-center justify-center gap-2 text-[var(--text-secondary)]">
                                             <Clock className="w-4 h-4" />
                                             <span>
-                                                Expires in {formatTime(timeRemaining)}
+                                                {t("Expires in")} {formatTime(timeRemaining)}
                                             </span>
                                         </div>
                                     </>
@@ -322,7 +336,7 @@ export default function DeviceLinkPage() {
                     {/* Linked Devices Section */}
                     <Card className="p-6 bg-white/[0.03] border border-white/5">
                         <h2 className="text-xl font-bold text-white mb-4">
-                            Linked Devices
+                            {t("Linked Devices")}
                         </h2>
 
                         {isLoadingDevices ? (
@@ -332,7 +346,7 @@ export default function DeviceLinkPage() {
                         ) : devices.length === 0 ? (
                             <div className="text-center py-8 text-[var(--text-secondary)]">
                                 <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                                <p>No devices linked yet</p>
+                                <p>{t("No devices linked yet")}</p>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -350,15 +364,15 @@ export default function DeviceLinkPage() {
                                                     {device.name}
                                                 </p>
                                                 <p className="text-[var(--text-muted)] text-sm">
-                                                    Last used:{" "}
-                                                    {new Date(device.lastUsed).toLocaleDateString()}
+                                                    {t("Last used:")}{" "}
+                                                    {new Date(device.lastUsed).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US")}
                                                 </p>
                                             </div>
                                         </div>
                                         <button
                                             onClick={() => revokeDevice(device.id)}
                                             className="p-2 min-h-[44px] min-w-[44px] text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all flex items-center justify-center"
-                                            aria-label={`Revoke ${device.name}`}
+                                            aria-label={`${t("Revoke")} ${device.name}`}
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -372,32 +386,32 @@ export default function DeviceLinkPage() {
                 {/* Instructions */}
                 <Card className="mt-8 p-6 bg-white/[0.03] border border-white/5">
                     <h2 className="text-xl font-bold text-white mb-4">
-                        How to Link Your Device
+                        {t("How to Link Your Device")}
                     </h2>
                     <ol className="space-y-3 text-[var(--text-secondary)]">
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
                                 1
                             </span>
-                            <span>Open the {branding.name} app on your mobile device</span>
+                            <span>{t("Open the")} {branding.name}{t("app on your mobile device")}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
                                 2
                             </span>
-                            <span>Tap &quot;Scan QR Code&quot; or &quot;Enter Code&quot; on the login screen</span>
+                            <span>{t('Tap "Scan QR Code" or "Enter Code" on the login screen')}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
                                 3
                             </span>
-                            <span>Scan the QR code above, or manually enter the 6-digit code</span>
+                            <span>{t("Scan the QR code above, or manually enter the 6-digit code")}</span>
                         </li>
                         <li className="flex gap-3">
                             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--color-brand)]/20 text-brand text-sm font-bold flex items-center justify-center">
                                 4
                             </span>
-                            <span>Your device will be automatically logged in and linked to your account</span>
+                            <span>{t("Your device will be automatically logged in and linked to your account")}</span>
                         </li>
                     </ol>
                 </Card>

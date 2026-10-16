@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { LanguageProvider } from "@/lib/i18n/language-context";
 import { BrandingProvider } from "@/lib/branding-context";
 import { getServerBranding } from "@/lib/branding-server";
 import { FeaturesProvider } from "@/lib/features-context";
@@ -77,6 +78,7 @@ export default function RootLayout({
                 className={`${montserrat.variable} antialiased`}
                 style={{ fontFamily: "var(--font-montserrat)" }}
             >
+                <LanguageProvider>
                 <GlobalErrorBoundary>
                     <BrandingProvider>
                     <ServiceWorkerRegistration />
@@ -102,6 +104,7 @@ export default function RootLayout({
                     </AuthProvider>
                     </BrandingProvider>
                 </GlobalErrorBoundary>
+                </LanguageProvider>
             </body>
         </html>
     );

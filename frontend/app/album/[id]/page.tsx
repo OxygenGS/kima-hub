@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/hooks/useQueries";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { useDownloadContext } from "@/lib/download-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 // Custom hooks
 import { useAlbumData } from "@/features/album/hooks/useAlbumData";
@@ -32,6 +33,7 @@ interface AlbumPageProps {
 export default function AlbumPage({ params }: AlbumPageProps) {
     const { id } = use(params);
     const router = useRouter();
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
@@ -146,14 +148,14 @@ export default function AlbumPage({ params }: AlbumPageProps) {
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold mb-4">
-                        Error Loading Album
+                        {t("Error Loading Album")}
                     </h1>
-                    <p className="text-[var(--text-secondary)] mb-4">Album not found</p>
+                    <p className="text-[var(--text-secondary)] mb-4">{t("Album not found")}</p>
                     <button
                         onClick={() => router.push("/albums")}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
                     >
-                        Back to Albums
+                        {t("Back to Albums")}
                     </button>
                 </div>
             </div>

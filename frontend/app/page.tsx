@@ -2,6 +2,7 @@
 
 import React, { useState, lazy, Suspense } from "react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { RefreshCw, AudioWaveform } from "lucide-react";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { useHomeData } from "@/features/home/hooks/useHomeData";
@@ -20,6 +21,7 @@ const MoodMixer = lazy(() => import("@/components/MoodMixer").then(mod => ({ def
 
 export default function HomePage() {
     const [showMoodMixer, setShowMoodMixer] = useState(false);
+    const { t } = useLanguage();
     const {
         recentlyListened,
         recentlyAdded,
@@ -56,26 +58,26 @@ export default function HomePage() {
                     const sections: Array<{ key: string; visible: boolean; content: React.ReactNode }> = [
                         { key: "library-radio", visible: true, content: (
                             <section data-tv-section="library-radio">
-                                <SectionHeader title="Library Radio" showAllHref="/radio" color="featured" />
+                                <SectionHeader title={t("Library Radio")} showAllHref="/radio" color="featured" />
                                 <LibraryRadioStations />
                             </section>
                         )},
                         { key: "continue-listening", visible: recentlyListened.length > 0, content: (
                             <section data-tv-section="continue-listening">
-                                <SectionHeader title="Continue Listening" showAllHref="/collection?tab=artists" color="featured" />
+                                <SectionHeader title={t("Continue Listening")} showAllHref="/collection?tab=artists" color="featured" />
                                 <ContinueListening items={recentlyListened} />
                             </section>
                         )},
                         { key: "recently-added", visible: recentlyAdded.length > 0, content: (
                             <section data-tv-section="recently-added">
-                                <SectionHeader title="Recently Added" showAllHref="/collection?tab=artists" color="artists" />
+                                <SectionHeader title={t("Recently Added")} showAllHref="/collection?tab=artists" color="artists" />
                                 <ArtistsGrid artists={recentlyAdded} />
                             </section>
                         )},
                         { key: "made-for-you", visible: mixes.length > 0, content: (
                             <section data-tv-section="made-for-you">
                                 <SectionHeader
-                                    title="Made For You"
+                                    title={t("Made For You")}
                                     color="discover"
                                     rightAction={
                                         <div className="flex items-center gap-2">
@@ -84,12 +86,12 @@ export default function HomePage() {
                                                 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-black bg-brand hover:bg-[#f97316] rounded-lg transition-colors"
                                             >
                                                 <AudioWaveform className="w-3.5 h-3.5" />
-                                                <span className="hidden sm:inline">Mood Mixer</span>
+                                                <span className="hidden sm:inline">{t("Mood Mixer")}</span>
                                             </button>
                                             <button
                                                 onClick={handleRefreshMixes}
                                                 disabled={isRefreshingMixes}
-                                                aria-label="Refresh mixes"
+                                                aria-label={t("Refresh mixes")}
                                                 className="flex items-center gap-2 px-4 py-2 text-xs tabular-nums text-[var(--text-secondary)] hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed border border-white/10 hover:border-white/20"
                                             >
                                                 {isRefreshingMixes ? (
@@ -98,7 +100,7 @@ export default function HomePage() {
                                                     <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-150" />
                                                 )}
                                                 <span className="hidden sm:inline">
-                                                    {isRefreshingMixes ? "Refreshing..." : "Refresh"}
+                                                    {isRefreshingMixes ? t("Refreshing...") : t("Refresh")}
                                                 </span>
                                             </button>
                                         </div>
@@ -109,19 +111,19 @@ export default function HomePage() {
                         )},
                         { key: "recommended", visible: recommended.length > 0, content: (
                             <section data-tv-section="recommended">
-                                <SectionHeader title="Recommended" showAllHref="/discover" badge="Last.FM" color="artists" />
+                                <SectionHeader title={t("Recommended")} showAllHref="/discover" badge="Last.FM" color="artists" />
                                 <ArtistsGrid artists={recommended} />
                             </section>
                         )},
                         { key: "popular-artists", visible: popularArtists.length > 0, content: (
                             <section data-tv-section="popular-artists">
-                                <SectionHeader title="Popular Artists" badge="Last.FM" color="artists" />
+                                <SectionHeader title={t("Popular Artists")} badge="Last.FM" color="artists" />
                                 <PopularArtistsGrid artists={popularArtists} />
                             </section>
                         )},
                         { key: "featured-playlists", visible: isBrowseLoading || featuredPlaylists.length > 0, content: (
                             <section data-tv-section="featured-playlists">
-                                <SectionHeader title="Featured Playlists" showAllHref="/browse/playlists" badge="Deezer" color="tracks" />
+                                <SectionHeader title={t("Featured Playlists")} showAllHref="/browse/playlists" badge="Deezer" color="tracks" />
                                 {isBrowseLoading && featuredPlaylists.length === 0 ? (
                                     <FeaturedPlaylistsSkeleton />
                                 ) : (
@@ -131,13 +133,13 @@ export default function HomePage() {
                         )},
                         { key: "popular-podcasts", visible: recentPodcasts.length > 0, content: (
                             <section data-tv-section="popular-podcasts">
-                                <SectionHeader title="Popular Podcasts" showAllHref="/podcasts" color="podcasts" />
+                                <SectionHeader title={t("Popular Podcasts")} showAllHref="/podcasts" color="podcasts" />
                                 <PodcastsGrid podcasts={recentPodcasts} />
                             </section>
                         )},
                         { key: "audiobooks", visible: recentAudiobooks.length > 0, content: (
                             <section data-tv-section="audiobooks">
-                                <SectionHeader title="Audiobooks" showAllHref="/audiobooks" color="audiobooks" />
+                                <SectionHeader title={t("Audiobooks")} showAllHref="/audiobooks" color="audiobooks" />
                                 <AudiobooksGrid audiobooks={recentAudiobooks} />
                             </section>
                         )},

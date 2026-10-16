@@ -7,6 +7,8 @@ import { Mic2, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 
 interface Podcast {
     id: string;
@@ -28,13 +30,14 @@ const GENRE_MAP: { [key: string]: { name: string; searchTerm: string } } = {
 };
 
 export default function GenrePage() {
+    const { t } = useLanguage();
     const params = useParams();
     const router = useRouter();
     const genreId = params.genreId as string;
     const genre = GENRE_MAP[genreId];
 
     const [podcasts, setPodcasts] = useState<Podcast[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(true);
     const [offset, setOffset] = useState(0);
     const observerRef = useRef<IntersectionObserver | null>(null);
@@ -91,9 +94,25 @@ export default function GenrePage() {
     }, [loadMorePodcasts, hasMore, loading]);
 
     useEffect(() => {
-        loadMorePodcasts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: initial load should not re-trigger when loadMorePodcasts identity changes
-    }, []);
+        let cancelled = false;
+        // The first page loads asynchronously. While it is pending, the
+        // intersection observer cannot start a second request for offset 0.
+        void api.getPodcastsByGenrePaginated(parseInt(genreId, 10), LIMIT, 0)
+            .then((data) => {
+                if (cancelled) return;
+                setPodcasts(data);
+                setOffset(data.length);
+                setHasMore(data.length === LIMIT);
+            })
+            .catch((error) => {
+                console.error("Failed to load podcasts:", error);
+                if (!cancelled) setHasMore(false);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => { cancelled = true; };
+    }, [genreId]);
 
     const handlePodcastClick = (podcast: Podcast) => {
         router.push(`/podcasts/${podcast.id || podcast.itunesId}`);
@@ -102,7 +121,7 @@ export default function GenrePage() {
     if (!genre) {
         return (
             <div className="flex items-center justify-center h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">Genre not found</p>
+                <p className="text-xs text-[var(--text-muted)]">{t("Genre not found")}</p>
             </div>
         );
     }
@@ -123,18 +142,18 @@ export default function GenrePage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            Back to Podcasts
+                            {t("Back to Podcasts")}
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-1.5 h-1.5 bg-[#3b82f6] rounded-full" />
                             <span className="t-eyebrow">
-                                Genre
+                                {t("Genre")}
                             </span>
                         </div>
 
                         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-none mb-3">
-                            {genre.name}
+                            {t(genre.name as TranslationKey)}
                         </h1>
                         <p className="text-sm tabular-nums text-[var(--text-muted)]">
                             {podcasts.length} podcast{podcasts.length !== 1 ? "s" : ""} found
@@ -197,7 +216,7 @@ export default function GenrePage() {
                     {!hasMore && podcasts.length > 0 && (
                         <div className="text-center py-8">
                             <span className="text-xs text-[var(--text-muted)]">
-                                End of results
+                                {t("End of results")}
                             </span>
                         </div>
                     )}
@@ -207,7 +226,7 @@ export default function GenrePage() {
                         <div className="text-center py-20">
                             <Mic2 className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
                             <p className="text-xs text-[var(--text-muted)]">
-                                No podcasts found
+                                {t("No podcasts found")}
                             </p>
                         </div>
                     )}

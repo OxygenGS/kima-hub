@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { SimilarAlbum } from '../types';
 import type { ColorPalette } from '@/hooks/useImageColor';
 import { SectionHeader } from '@/features/home/components/SectionHeader';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 interface SimilarAlbumsProps {
   similarAlbums: SimilarAlbum[];
@@ -13,9 +14,10 @@ interface SimilarAlbumsProps {
 }
 
 export function SimilarAlbums({ similarAlbums, colors, onNavigate }: SimilarAlbumsProps) {
+  const { t } = useLanguage();
   return (
     <section>
-      <SectionHeader color="albums" title="More Like This" />
+      <SectionHeader color="albums" title={t("More Like This")} />
       <div data-tv-section="similar-albums" className="grid-media">
         {similarAlbums.map((album, index) => (
           <PlayableCard

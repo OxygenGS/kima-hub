@@ -24,12 +24,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import Image from "next/image";
 import { APP_VERSION } from "@/lib/version";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export function TopBar() {
     const pathname = usePathname();
     const router = useRouter();
     const { logout } = useAuth();
     const { branding } = useBranding();
+    const { t, locale } = useLanguage();
+    const downloadStatusText = (count: number, state: "in progress" | "starting..." | "failed") =>
+        `${count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} ${t(count === 1 ? "download" : "downloads")} ${t(state)}`;
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -61,13 +65,8 @@ export function TopBar() {
 
     const isPolling = !!scanJobId && (!scanStatus || scanStatus.status === "active");
 
-    // Handle scan completion/failure
-    useEffect(() => {
-        if (!scanStatus || !scanJobId) return;
-        if (scanStatus.status === "completed" || scanStatus.status === "failed") {
-            setScanJobId(null);
-        }
-    }, [scanStatus, scanJobId]);
+    // Terminal SSE status makes isPolling false; the next scan replaces the
+    // job ID. Clearing it in an effect caused an unnecessary render.
 
     // Track download status from context (single source of truth)
     const { pendingDownloads, downloadStatus } = useDownloadContext();
@@ -75,9 +74,23 @@ export function TopBar() {
     // pendingDownloads is optimistic local state that can become stale
     const hasActiveDownloads = downloadStatus.hasActiveDownloads;
 
+    // Freshness depends on wall-clock time, so sample it outside render and
+    // periodically update while optimistic downloads exist. No impure clock
+    // reads occur in React's render phase.
+    const [pendingClock, setPendingClock] = useState<number | null>(null);
+    useEffect(() => {
+        if (pendingDownloads.length === 0) return;
+        const updateClock = () => setPendingClock(Date.now());
+        const initial = window.setTimeout(updateClock, 0);
+        const interval = window.setInterval(updateClock, 5000);
+        return () => {
+            window.clearTimeout(initial);
+            window.clearInterval(interval);
+        };
+    }, [pendingDownloads.length]);
     const hasPendingUploads =
-        pendingDownloads.length > 0 &&
-        pendingDownloads.some((p) => Date.now() - p.timestamp < 30000); // Only count recent pending
+        pendingClock !== null &&
+        pendingDownloads.some((p) => pendingClock - p.timestamp < 30000 && pendingClock >= p.timestamp);
     const hasFailedDownloads = downloadStatus.failedDownloads.length > 0;
 
     const handleSync = async () => {
@@ -109,8 +122,8 @@ export function TopBar() {
             const refused = /403|forbidden|admin/i.test(message);
             toast.error(
                 refused
-                    ? "Only an admin can scan the library"
-                    : "Could not start the library scan"
+                    ? t("Only an admin can scan the library")
+                    : t("Could not start the library scan")
             );
         }
     };
@@ -118,10 +131,10 @@ export function TopBar() {
     const handleLogout = async () => {
         try {
             await logout();
-            toast.success("Logged out successfully");
+            toast.success(t("Logged out successfully"));
         } catch (error) {
             console.error("Logout error:", error);
-            toast.error("Failed to logout");
+            toast.error(t("Failed to logout"));
         }
     };
 
@@ -164,22 +177,16 @@ export function TopBar() {
         };
     }, [searchQuery, router, pathname]);
 
-    // Sync search query with URL on page change
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const q = params.get("q");
-
-        if (pathname === "/search" && q) {
-            // Only update if different to avoid loops
-            if (q !== searchQuery) {
-                setSearchQuery(q);
-            }
-        } else if (pathname !== "/search" && searchQuery) {
-            // Clear search when leaving search page
-            setSearchQuery("");
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]); // Only re-run when pathname changes
+    // Synchronize the search field only when changing routes, not when
+    // typing. Guarded same-component state updates avoid a cascading effect.
+    const [searchPathname, setSearchPathname] = useState(pathname);
+    if (searchPathname !== pathname) {
+        setSearchPathname(pathname);
+        const q = pathname === "/search" && typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("q")
+            : null;
+        setSearchQuery(q ?? "");
+    }
 
     // Mirror activity panel open state for aria-expanded
     useEffect(() => {
@@ -236,7 +243,7 @@ export function TopBar() {
                             );
                         }}
                         className="w-11 h-11 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-interactive)] rounded-md text-white hover:bg-[var(--bg-tertiary)] transition-colors duration-200 mr-2 flex-shrink-0"
-                        aria-label="Open menu"
+                        aria-label={t("Open menu")}
                     >
                         <Menu className="w-5 h-5" />
                     </button>
@@ -250,8 +257,8 @@ export function TopBar() {
                                 ? "bg-white text-black"
                                 : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white"
                         )}
-                        aria-label="Home"
-                        title="Home"
+                        aria-label={t("Home")}
+                        title={t("Home")}
                     >
                         <Home className="w-5 h-5" />
                     </Link>
@@ -267,8 +274,8 @@ export function TopBar() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search..."
-                                aria-label="Search"
+                                placeholder={t("Search...")}
+                                aria-label={t("Search")}
                                 autoCapitalize="none"
                                 autoCorrect="off"
                                 tabIndex={0}
@@ -287,8 +294,8 @@ export function TopBar() {
                         aria-expanded={isActivityPanelOpen}
                         aria-controls="activity-panel-mobile"
                         className="w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-colors duration-200 ml-2 flex-shrink-0 relative"
-                        aria-label="Notifications"
-                        title="Notifications"
+                        aria-label={t("Notifications")}
+                        title={t("Notifications")}
                     >
                         <Bell className="w-5 h-5" />
                     </button>
@@ -328,8 +335,8 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-white hover:scale-105"
                             )}
-                            aria-label="Home"
-                            title="Home"
+                            aria-label={t("Home")}
+                            title={t("Home")}
                         >
                             <Home className="w-6 h-6" />
                         </Link>
@@ -350,8 +357,8 @@ export function TopBar() {
                                     onChange={(e) =>
                                         setSearchQuery(e.target.value)
                                     }
-                                    placeholder="What do you want to play?"
-                                    aria-label="Search"
+                                    placeholder={t("What do you want to play?")}
+                                    aria-label={t("Search")}
                                     autoCapitalize="none"
                                     autoCorrect="off"
                                     tabIndex={0}
@@ -368,14 +375,14 @@ export function TopBar() {
                             disabled={isPolling}
                             aria-label={
                                 isPolling
-                                    ? "Library scan in progress"
+                                    ? t("Library scan in progress")
                                     : hasActiveDownloads
-                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`
+                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
                                     : hasPendingUploads
-                                    ? `${pendingDownloads.length} download(s) starting`
+                                    ? downloadStatusText(pendingDownloads.length, "starting...")
                                     : hasFailedDownloads
-                                    ? `${downloadStatus.failedDownloads.length} download(s) failed`
-                                    : "Sync library"
+                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
+                                    : t("Sync library")
                             }
                             className={cn(
                                 "flex items-center gap-2 px-3 h-11 rounded-full transition-all duration-200 text-sm font-medium",
@@ -389,14 +396,14 @@ export function TopBar() {
                             )}
                             title={
                                 isPolling
-                                    ? "Library scan in progress..."
+                                    ? t("Library scan in progress...")
                                     : hasActiveDownloads
-                                    ? `${downloadStatus.activeDownloads.length} download(s) in progress`
+                                    ? downloadStatusText(downloadStatus.activeDownloads.length, "in progress")
                                     : hasPendingUploads
-                                    ? `${pendingDownloads.length} download(s) starting...`
+                                    ? downloadStatusText(pendingDownloads.length, "starting...")
                                     : hasFailedDownloads
-                                    ? `${downloadStatus.failedDownloads.length} download(s) failed`
-                                    : "Sync Library"
+                                    ? downloadStatusText(downloadStatus.failedDownloads.length, "failed")
+                                    : t("Sync Library")
                             }
                         >
                             <RefreshCw
@@ -416,16 +423,16 @@ export function TopBar() {
                                     ? "bg-white text-black"
                                     : "text-[var(--text-secondary)] hover:text-white"
                             )}
-                            aria-label="Settings"
-                            title="Settings"
+                            aria-label={t("Settings")}
+                            title={t("Settings")}
                         >
                             <Settings className="w-5 h-5" />
                         </Link>
                         <button
                             onClick={handleLogout}
                             className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 text-red-400 hover:text-red-300"
-                            aria-label="Logout"
-                            title="Logout"
+                            aria-label={t("Logout")}
+                            title={t("Logout")}
                         >
                             <Power className="w-5 h-5" />
                         </button>

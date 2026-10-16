@@ -1,6 +1,7 @@
 import { Play, Pause, Shuffle, Download, Radio } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { Artist } from "../types";
 import type { Album } from "../types";
 import type { ArtistSource } from "../types";
@@ -36,6 +37,7 @@ export function ArtistActionBar({
     onPause,
 }: ArtistActionBarProps) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const availableAlbums = albums.filter(
         (album) => album.availability !== "unavailable"
     );
@@ -69,7 +71,7 @@ export function ArtistActionBar({
             <button
                 onClick={onShuffle}
                 className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                title="Shuffle play"
+                title={t("Shuffle play")}
             >
                 <Shuffle className="w-5 h-5" />
             </button>
@@ -79,7 +81,7 @@ export function ArtistActionBar({
                 <button
                     onClick={onStartRadio}
                     className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
-                    title="Start artist radio"
+                    title={t("Start artist radio")}
                 >
                     <Radio className="w-5 h-5" />
                 </button>
@@ -99,7 +101,7 @@ export function ArtistActionBar({
                 >
                     <Download className="w-4 h-4" />
                     <span className="hidden sm:inline">
-                        {isPendingDownload ? "Downloading..." : "Download All"}
+                        {isPendingDownload ? t("Downloading...") : t("Download All")}
                     </span>
                 </button>
             )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { DiscoverPlaylist, DiscoverConfig } from '../types';
+import { remainingDiscoverStartGrace, shouldReloadDiscoverAfterBatch } from '@/lib/discover-batch-state';
 
 interface BatchStatus {
   active: boolean;
@@ -35,7 +36,6 @@ export function useDiscoverData() {
   const batchStatus = sseBatchStatus || null;
 
   const loadData = useCallback(async () => {
-    setLoadError(false);
     try {
       const [playlistData, configData] = await Promise.all([
         api.getCurrentDiscoverWeekly(),
@@ -44,6 +44,7 @@ export function useDiscoverData() {
 
       setPlaylist(playlistData);
       setConfig(configData as DiscoverConfig | null);
+      setLoadError(false);
     } catch (error) {
       console.error('Failed to load discover data:', error);
       setLoadError(true);
@@ -77,42 +78,39 @@ export function useDiscoverData() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only
   }, []);
 
-  // React to SSE-driven batch status changes
+  // SSE confirms the optimistic generation state. This guarded same-hook
+  // adjustment happens once when the status changes, not in an effect.
+  if (batchStatus?.active && pendingGeneration) {
+    setPendingGeneration(false);
+  }
+
+  // Refresh only on the real active -> inactive transition. Refs track
+  // external status in an effect; no synchronous React state is set here.
   useEffect(() => {
     if (!batchStatus) return;
-
-    // Clear pending state once batch is confirmed active
-    if (batchStatus.active) {
-      setPendingGeneration(false);
-      generationStartTimeRef.current = null;
-    }
-
-    // Clear pending state if batch is not active (handles immediate failures)
-    // But only after 5 seconds to allow backend time to create the batch
-    if (!batchStatus.active && pendingGeneration) {
-      const timeSinceStart = generationStartTimeRef.current
-        ? Date.now() - generationStartTimeRef.current
-        : Infinity;
-
-      if (timeSinceStart > 5000) {
-        setPendingGeneration(false);
-        generationStartTimeRef.current = null;
-      }
-    }
-
-    // If batch was active and now isn't, reload data
-    if (wasActiveRef.current && !batchStatus.active) {
-      wasActiveRef.current = false;
-      setPendingGeneration(false);
-      generationStartTimeRef.current = null;
-      loadData();
-    }
-
-    // Track if batch is currently active
     if (batchStatus.active) {
       wasActiveRef.current = true;
+      generationStartTimeRef.current = null;
+    } else if (shouldReloadDiscoverAfterBatch(wasActiveRef.current, false)) {
+      wasActiveRef.current = false;
+      generationStartTimeRef.current = null;
+      void loadData();
     }
-  }, [batchStatus, loadData, pendingGeneration]);
+  }, [batchStatus, loadData]);
+
+  // Allow up to five seconds for a newly requested batch to appear on SSE.
+  // Use a real timer rather than synchronously setting state in an effect.
+  useEffect(() => {
+    if (!pendingGeneration || batchStatus?.active) return;
+    const delay = remainingDiscoverStartGrace(
+      generationStartTimeRef.current, Date.now(),
+    );
+    const timer = setTimeout(() => {
+      setPendingGeneration(false);
+      generationStartTimeRef.current = null;
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [pendingGeneration, batchStatus?.active]);
 
   // Stale batch detection - clear stuck "active" state after 5 minutes
   useEffect(() => {

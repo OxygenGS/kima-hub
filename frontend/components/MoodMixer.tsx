@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { api, MoodType, MoodBucketPreset } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { Track } from "@/lib/audio-state-context";
@@ -113,29 +113,35 @@ export function MoodMixer({ isOpen, onClose }: MoodMixerProps) {
     const [presets, setPresets] = useState<MoodBucketPreset[]>([]);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState<MoodType | null>(null);
-    const [isVisible, setIsVisible] = useState(false);
-
-    const loadPresets = useCallback(async () => {
-        try {
-            const data = await api.getMoodBucketPresets();
-            setPresets(data);
-        } catch (error) {
-            console.error("Failed to load mood presets:", error);
-            toast.error("Failed to load mood presets");
-        } finally {
-            setLoading(false);
-        }
-    }, [toast]);
+    const [isVisible, setIsVisible] = useState(isOpen);
+    const [previousOpen, setPreviousOpen] = useState(isOpen);
+    // Opening is a guarded prop transition; closing stays delayed for the
+    // existing 200ms exit animation.
+    if (previousOpen !== isOpen) {
+        setPreviousOpen(isOpen);
+        if (isOpen) setIsVisible(true);
+    }
 
     useEffect(() => {
-        if (isOpen) {
-            setIsVisible(true);
-            loadPresets();
-        } else {
+        if (!isOpen) {
             const timeout = setTimeout(() => setIsVisible(false), 200);
             return () => clearTimeout(timeout);
         }
-    }, [isOpen, loadPresets]);
+
+        let active = true;
+        void api.getMoodBucketPresets()
+            .then((data) => {
+                if (active) setPresets(data);
+            })
+            .catch((error) => {
+                console.error("Failed to load mood presets:", error);
+                if (active) toast.error("Failed to load mood presets");
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => { active = false; };
+    }, [isOpen, toast]);
 
     const generateMix = async (mood: MoodType) => {
         const config = MOOD_CONFIG[mood];

@@ -12,6 +12,7 @@ import { formatTime } from "@/utils/formatTime";
 import { api } from "@/lib/api";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface TracksListProps {
     tracks: Track[];
@@ -44,6 +45,7 @@ const TrackRow = memo(
         onShowAddToPlaylist,
         onDelete,
     }: TrackRowProps) {
+        const { t } = useLanguage();
         const doubleTapProps = useDoubleTap(onPlayTrack);
         const displayTrackNumber =
             typeof track.trackNumber === "number"
@@ -79,7 +81,7 @@ const TrackRow = memo(
                             onPlayTrack();
                         }}
                         className="w-10 h-10 flex items-center justify-center"
-                        aria-label={isCurrentlyPlaying ? "Pause" : "Play"}
+                        aria-label={isCurrentlyPlaying ? t("Pause") : t("Play")}
                     >
                         <span
                             className={cn(
@@ -141,7 +143,7 @@ const TrackRow = memo(
                             onAddToQueue(track);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="Add to Queue"
+                        title={t("Add to Queue")}
                     >
                         <ListPlus className="w-4 h-4" />
                     </button>
@@ -151,7 +153,7 @@ const TrackRow = memo(
                             onShowAddToPlaylist(track.id);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="Add to Playlist"
+                        title={t("Add to Playlist")}
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -161,7 +163,7 @@ const TrackRow = memo(
                             onDelete(track.id, track.title);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-red-500/30"
-                        title="Delete Track"
+                        title={t("Delete Track")}
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -191,6 +193,7 @@ export function TracksList({
     gridKey,
 }: TracksListProps) {
     const { currentTrack } = useAudioState();
+    const { t } = useLanguage();
     const currentTrackId = currentTrack?.id;
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
     const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
@@ -222,8 +225,8 @@ export function TracksList({
         return (
             <EmptyState
                 icon={<AudioLines className="w-12 h-12" />}
-                title="No songs yet"
-                description="Your library is empty. Sync your music to get started."
+                title={t("No songs yet")}
+                description={t("Your library is empty. Sync your music to get started.")}
             />
         );
     }
@@ -233,9 +236,9 @@ export function TracksList({
             {/* Header row - terminal style */}
             <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
                 <div className="w-8 text-center text-xs font-semibold text-[#a855f7]">#</div>
-                <div className="text-xs font-semibold text-[#a855f7]">Title</div>
-                <div className="hidden md:block text-xs font-semibold text-[#a855f7]">Album</div>
-                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[#a855f7]">Duration</div>
+                <div className="text-xs font-semibold text-[#a855f7]">{t("Title")}</div>
+                <div className="hidden md:block text-xs font-semibold text-[#a855f7]">{t("Album")}</div>
+                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[#a855f7]">{t("Duration")}</div>
             </div>
 
             <div key={gridKey} data-tv-section="library-tracks" className="space-y-1">

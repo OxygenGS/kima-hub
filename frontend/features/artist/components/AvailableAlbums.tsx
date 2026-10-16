@@ -8,6 +8,7 @@ import { Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
 import { SectionHeader } from "@/features/home/components/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AvailableAlbumsProps {
     albums: Album[];
@@ -137,6 +138,7 @@ export function AvailableAlbums({
     onDownloadAlbum,
     isPendingDownload,
 }: AvailableAlbumsProps) {
+    const { t } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -154,7 +156,7 @@ export function AvailableAlbums({
             {/* Studio Albums Section */}
             {studioAlbums.length > 0 && (
                 <section>
-                    <SectionHeader color="albums" title="Albums Available" />
+                    <SectionHeader color="albums" title={t("Albums Available")} />
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
@@ -170,7 +172,7 @@ export function AvailableAlbums({
             {/* EPs, Singles & Demos Section */}
             {epsAndSingles.length > 0 && (
                 <section>
-                    <SectionHeader color="albums" title="Singles and EPs" />
+                    <SectionHeader color="albums" title={t("Singles and EPs")} />
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}

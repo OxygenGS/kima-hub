@@ -1,3 +1,8 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
+
 import { Tab } from "../types";
 import { cn } from "@/utils/cn";
 import { Users, Disc3, ListMusic } from "lucide-react";
@@ -17,6 +22,7 @@ const tabs = [
 ];
 
 export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
+  const { t } = useLanguage();
   return (
     // A segmented control: one quiet container, one filled segment. What was
     // here before stacked five effects on a three-item filter -- a per-tab
@@ -47,7 +53,7 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
             )}
           >
             <Icon className="w-4 h-4 shrink-0" />
-            {tab.label}
+            {t(tab.label as TranslationKey)}
           </button>
         );
       })}

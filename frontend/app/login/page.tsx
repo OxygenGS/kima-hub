@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import Image from "next/image";
 import { useBranding } from "@/lib/branding-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { Locale } from "@/lib/i18n/translations";
 import { Loader2 } from "lucide-react";
 import { GalaxyBackground } from "@/components/ui/GalaxyBackground";
 
@@ -38,6 +40,7 @@ function LoginErrorHandler({
 export default function LoginPage() {
     const { login } = useAuth();
     const { branding } = useBranding();
+    const { locale, setLocale, t } = useLanguage();
     const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -162,13 +165,27 @@ export default function LoginPage() {
                         </div>
                     </div>
 
+                    <div className="mb-4 flex justify-end">
+                        <label className="sr-only" htmlFor="login-language">{t("Language")}</label>
+                        <select
+                            id="login-language"
+                            aria-label={t("Language")}
+                            value={locale}
+                            onChange={(event) => setLocale(event.target.value as Locale)}
+                            className="rounded-md border border-white/20 bg-[#111] px-3 py-1.5 text-sm text-white"
+                        >
+                            <option value="en">English</option>
+                            <option value="nl">Nederlands</option>
+                        </select>
+                    </div>
+
                     {/* Login Card */}
                     <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 animate-rise transition-shadow duration-200">
                         <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                            Welcome back
+                            {t("Welcome back")}
                         </h1>
                         <p className="text-[var(--text-secondary)] text-center mb-8">
-                            Sign in to continue to {branding.name}
+                            {t("Sign in to continue to")} {branding.name}
                         </p>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -186,7 +203,7 @@ export default function LoginPage() {
                                             htmlFor="username"
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
-                                            Username
+                                            {t("Username")}
                                         </label>
                                         <input
                                             id="username"
@@ -195,7 +212,7 @@ export default function LoginPage() {
                                             onChange={(e) =>
                                                 setUsername(e.target.value)
                                             }
-                                            placeholder="Enter your username"
+                                            placeholder={t("Enter your username")}
                                             required
                                             autoFocus
                                             autoCapitalize="none"
@@ -209,7 +226,7 @@ export default function LoginPage() {
                                             htmlFor="password"
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
-                                            Password
+                                            {t("Password")}
                                         </label>
                                         <input
                                             id="password"
@@ -218,7 +235,7 @@ export default function LoginPage() {
                                             onChange={(e) =>
                                                 setPassword(e.target.value)
                                             }
-                                            placeholder="Enter your password"
+                                            placeholder={t("Enter your password")}
                                             required
                                             autoCapitalize="none"
                                             autoCorrect="off"
@@ -233,10 +250,10 @@ export default function LoginPage() {
                                 <div className="animate-fade-in space-y-4">
                                     <div className="p-4 bg-brand/10 border border-brand/20 rounded-lg">
                                         <p className="text-[var(--text-primary)] text-sm font-semibold mb-1">
-                                            Two-Factor Authentication Required
+                                            {t("Two-Factor Authentication Required")}
                                         </p>
                                         <p className="text-[var(--text-secondary)] text-xs">
-                                            Logging in as{" "}
+                                            {t("Logging in as")}{" "}
                                             <strong>{username}</strong>
                                         </p>
                                     </div>
@@ -246,8 +263,8 @@ export default function LoginPage() {
                                             className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                         >
                                             {useRecoveryCode
-                                                ? "Recovery Code"
-                                                : "Authentication Code"}
+                                                ? t("Recovery Code")
+                                                : t("Authentication Code")}
                                         </label>
                                         <input
                                             id="twoFactorToken"
@@ -288,8 +305,8 @@ export default function LoginPage() {
                                         />
                                         <p className="text-xs text-[var(--text-secondary)] mt-2">
                                             {useRecoveryCode
-                                                ? "Enter your 8-character recovery code"
-                                                : "Enter the 6-digit code from your authenticator app"}
+                                                ? t("Enter your 8-character recovery code")
+                                                : t("Enter the 6-digit code from your authenticator app")}
                                         </p>
                                     </div>
 
@@ -307,8 +324,8 @@ export default function LoginPage() {
                                             className="text-xs text-brand hover:text-brand-light transition-colors underline"
                                         >
                                             {useRecoveryCode
-                                                ? "Use authenticator app instead"
-                                                : "Use recovery code instead"}
+                                                ? t("Use authenticator app instead")
+                                                : t("Use recovery code instead")}
                                         </button>
                                     </div>
                                 </div>
@@ -323,10 +340,10 @@ export default function LoginPage() {
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
-                                            Signing in...
+                                            {t("Signing in...")}
                                         </>
                                     ) : (
-                                        "Sign In"
+                                        t("Sign In")
                                     )}
                                 </span>
                             </button>
@@ -342,7 +359,7 @@ export default function LoginPage() {
                                     }}
                                     className="w-full text-xs text-[var(--text-secondary)] hover:text-white/80 transition-colors"
                                 >
-                                    ← Back to login
+                                    {t("← Back to login")}
                                 </button>
                             )}
                         </form>

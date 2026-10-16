@@ -11,6 +11,7 @@ import {
     TabContent,
 } from "./panel-shared";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Waypoints, Sparkles, AudioWaveform } from "lucide-react";
 
 type SnapPoint = "peek" | "half" | "full";
@@ -34,6 +35,7 @@ export function VibePanelSheet({
     onStartSongPath,
     songPathActive = false,
 }: VibePanelSheetProps) {
+    const { t } = useLanguage();
     const [snap, setSnap] = useState<SnapPoint>("peek");
     const [activeTab, setActiveTab] = useState<VibeTab>("now-playing");
     const [expandedActivity, setExpandedActivity] = useState<ActivityType | null>(null);
@@ -119,32 +121,32 @@ export function VibePanelSheet({
                     <div className="flex gap-2">
                         <button
                             onClick={() => onTrackOperation("vibe")}
-                            aria-label="Match Vibe -- build a queue of similar-sounding tracks"
+                            aria-label={t("Match Vibe -- build a queue of similar-sounding tracks")}
                             className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
                         >
                             <Sparkles className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Match Vibe</span>
+                            <span className="text-micro font-medium leading-tight text-center">{t("Match Vibe")}</span>
                         </button>
                         <button
                             onClick={() => onTrackOperation("similar")}
-                            aria-label="Similar -- highlight similar tracks on the map"
+                            aria-label={t("Similar -- highlight similar tracks on the map")}
                             className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
                         >
                             <AudioWaveform className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Similar</span>
+                            <span className="text-micro font-medium leading-tight text-center">{t("Similar")}</span>
                         </button>
                         <button
                             onClick={onStartSongPath}
-                            aria-label="Song Path -- set this track as the start of a song path, then tap the destination"
+                            aria-label={t("Song Path -- set this track as the start of a song path, then tap the destination")}
                             className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
                         >
                             <Waypoints className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Song Path</span>
+                            <span className="text-micro font-medium leading-tight text-center">{t("Song Path")}</span>
                         </button>
                     </div>
                     {songPathActive && (
                         <p className="text-micro text-purple-500/70 text-center mt-2 animate-pulse">
-                            Tap another track to complete the song path
+                            {t("Tap another track to complete the song path")}
                         </p>
                     )}
                 </div>

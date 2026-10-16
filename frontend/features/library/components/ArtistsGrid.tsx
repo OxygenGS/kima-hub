@@ -1,3 +1,7 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n/language-context";
+
 import React, { memo, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Music, Play, Trash2 } from "lucide-react";
@@ -35,6 +39,7 @@ const ArtistCardItem = memo(
         onPlay,
         onDelete,
     }: ArtistCardItemProps) {
+        const { t, locale } = useLanguage();
         const handlePlay = useCallback(
             (e: React.MouseEvent) => {
                 e.preventDefault();
@@ -100,7 +105,7 @@ const ArtistCardItem = memo(
                         <button
                             onClick={handleDelete}
                             className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-black/80 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all duration-150 border border-white/20"
-                            title="Delete artist"
+                            title={t("Delete artist")}
                         >
                             <Trash2 className="w-4 h-4 text-white" />
                         </button>
@@ -115,7 +120,7 @@ const ArtistCardItem = memo(
                             {artist.name}
                         </h3>
                         <p className="text-xs tabular-nums text-[var(--text-muted)]">
-                            {artist.albumCount || 0} albums
+                            {(artist.albumCount || 0).toLocaleString(locale === "nl" ? "nl-NL" : "en-US")} {t((artist.albumCount || 0) === 1 ? "album" : "albums")}
                         </p>
                     </div>
                 </div>
@@ -134,6 +139,7 @@ const ArtistsGrid = memo(function ArtistsGrid({
     isLoading = false,
     gridKey,
 }: ArtistsGridProps) {
+    const { t } = useLanguage();
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -146,8 +152,8 @@ const ArtistsGrid = memo(function ArtistsGrid({
         return (
             <EmptyState
                 icon={<Music className="w-12 h-12" />}
-                title="No artists yet"
-                description="Your library is empty. Sync your music to get started."
+                title={t("No artists yet")}
+                description={t("Your library is empty. Sync your music to get started.")}
             />
         );
     }

@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { X, Search, Route, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface VibeSongPathProps {
     onStartPath: (startId: string, endId: string) => void;
@@ -11,6 +12,7 @@ interface VibeSongPathProps {
 }
 
 export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
+    const { t } = useLanguage();
     const [startQuery, setStartQuery] = useState("");
     const [endQuery, setEndQuery] = useState("");
     const [startTrackId, setStartTrackId] = useState<string | null>(null);
@@ -64,16 +66,16 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-scene) w-[calc(100vw-2rem)] sm:w-96 bg-black/90 backdrop-blur-lg border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-                    <Route className="w-4 h-4" /> Song Path
+                    <Route className="w-4 h-4" /> {t("Song Path")}
                 </h3>
-                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-white" aria-label="Close song path">
+                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-white" aria-label={t("Close song path")}>
                     <X className="w-4 h-4" />
                 </button>
             </div>
 
             <div className="space-y-2">
                 <div className="relative">
-                    <label htmlFor="path-start" className="sr-only">Start track</label>
+                    <label htmlFor="path-start" className="sr-only">{t("Start track")}</label>
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
                     <input
                         id="path-start"
@@ -81,7 +83,7 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
                         value={startQuery}
                         onChange={(e) => { setStartQuery(e.target.value); setStartTrackId(null); }}
                         onFocus={() => setActiveInput("start")}
-                        placeholder="Start track..."
+                        placeholder={t("Start track...")}
                         className="w-full pl-8 pr-3 py-2 bg-white/8 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
                     />
                 </div>
@@ -91,7 +93,7 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
                 </div>
 
                 <div className="relative">
-                    <label htmlFor="path-end" className="sr-only">End track</label>
+                    <label htmlFor="path-end" className="sr-only">{t("End track")}</label>
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
                     <input
                         id="path-end"
@@ -99,7 +101,7 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
                         value={endQuery}
                         onChange={(e) => { setEndQuery(e.target.value); setEndTrackId(null); }}
                         onFocus={() => setActiveInput("end")}
-                        placeholder="End track..."
+                        placeholder={t("End track...")}
                         className="w-full pl-8 pr-3 py-2 bg-white/8 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
                     />
                 </div>
@@ -125,7 +127,7 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
                 disabled={!startTrackId || !endTrackId}
                 className="w-full mt-3 px-3 py-2 bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-white/10 rounded-lg text-sm text-[var(--text-primary)] hover:text-white flex items-center justify-center gap-2 transition-colors"
             >
-                <Route className="w-4 h-4" /> Generate Path
+                <Route className="w-4 h-4" /> {t("Generate Path")}
             </button>
         </div>
     );
