@@ -40,25 +40,23 @@ function probe(host, port) {
 })().catch(err => { console.error(err); process.exitCode = 1; });
 '
 docker exec "$name" python3 -c '
-import os
+import pwd
 from pathlib import Path
-found = []
-for proc in Path("/proc").iterdir():
-    if not proc.name.isdecimal():
-        continue
-    try:
-        cwd = os.readlink(proc / "cwd")
-        executable = os.readlink(proc / "exe")
-        status = (proc / "status").read_text()
-        if cwd != "/app/frontend" or Path(executable).name != "node":
-            continue
-        uid_line = next(line for line in status.splitlines() if line.startswith("Uid:"))
-        effective_uid = int(uid_line.split()[2])
-        found.append((proc.name, effective_uid))
-    except (OSError, StopIteration):
-        continue
-assert found, "No running Next.js frontend Node process found"
-assert all(uid != 0 for _, uid in found), f"Frontend process still root: {found}"
-print(f"Next.js runs unprivileged: {found}")
+import subprocess
+
+pid_str = subprocess.check_output(
+    ["supervisorctl", "-c", "/etc/supervisor/supervisord.conf", "pid", "frontend"],
+    text=True,
+).strip()
+assert pid_str.isdecimal() and int(pid_str) > 1, f"Supervisor frontend has no live PID: {pid_str!r}"
+status = Path("/proc") / pid_str / "status"
+uid_line = next(line for line in status.read_text().splitlines() if line.startswith("Uid:"))
+effective_uid = int(uid_line.split()[2])
+expected_uid = pwd.getpwnam("kimaweb").pw_uid
+assert effective_uid == expected_uid and effective_uid != 0, (
+    f"Frontend PID {pid_str} has effective UID {effective_uid}, expected {expected_uid}"
+)
+print(f"Supervised frontend PID {pid_str} runs as unprivileged kimaweb UID {effective_uid}: PASS")
 '
+
 echo "AIO local service and frontend privilege boundaries: PASS"
