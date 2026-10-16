@@ -3,6 +3,7 @@ import { useAudio } from "@/lib/audio-context";
 import { notify } from "@/lib/notify";
 import { api } from "@/lib/api";
 import { DiscoverTrack, DiscoverPlaylist } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 export function useDiscoverActions(
     playlist: DiscoverPlaylist | null,
@@ -14,6 +15,7 @@ export function useDiscoverActions(
     updateTrackLiked?: (albumId: string, isLiked: boolean) => void
 ) {
     const { playTracks, isPlaying, pause, resumeWithGesture } = useAudio();
+    const { t } = useLanguage();
 
     const handleGenerate = useCallback(async () => {
         if (isGenerating) {
@@ -36,16 +38,16 @@ export function useDiscoverActions(
             setPendingGeneration?.(false);
             const err = error as Error & { status?: number };
             if (err.status === 409) {
-                notify.info("A Discover playlist is already being generated");
+                notify.info(t("A Discover playlist is already being generated"));
                 // Refresh status in case UI is out of sync
                 if (refreshBatchStatus) {
                     await refreshBatchStatus();
                 }
             } else {
-                notify.error("Failed to generate Discover playlist", { message: err.message || undefined });
+                notify.error(t("Failed to generate Discover playlist"), { message: err.message || undefined });
             }
         }
-    }, [isGenerating, refreshBatchStatus, setPendingGeneration, markGenerationStart]);
+    }, [isGenerating, refreshBatchStatus, setPendingGeneration, markGenerationStart, t]);
 
     const handleLike = useCallback(
         async (track: DiscoverTrack) => {
@@ -67,10 +69,10 @@ export function useDiscoverActions(
                 console.error("Like failed:", error);
                 // Revert optimistic update on error
                 updateTrackLiked?.(track.albumId, track.isLiked);
-                notify.error("Failed to update Discover album", { message: error instanceof Error ? error.message : undefined });
+                notify.error(t("Failed to update Discover album"), { message: error instanceof Error ? error.message : undefined });
             }
         },
-        [onGenerationComplete, updateTrackLiked]
+        [onGenerationComplete, updateTrackLiked, t]
     );
 
     const formatPlaylistTracks = useCallback(() => {

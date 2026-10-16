@@ -20,11 +20,12 @@ import { DiscoverSettingsTab } from "@/components/activity/DiscoverSettingsTab";
 import { api } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Button } from "@/components/ui/Button";
-import { plural } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { openActivityPanel, setActivityPanelTab } from "@/hooks/useActivityPanel";
 
 export default function DiscoverWeeklyPage() {
     // Use split hooks to avoid re-renders from currentTime updates
+    const { t, locale } = useLanguage();
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { setSettingsContent, settingsOwner } = useActivityPanelSettings();
@@ -51,14 +52,14 @@ export default function DiscoverWeeklyPage() {
                 refreshBatchStatus();
                 setTimeout(() => reloadData(), 15000);
             } else {
-                notify.info("No albums to retry", { message: result.message });
+                notify.info(t("No albums to retry"), { message: result.message });
             }
         } catch (error) {
             console.error("Failed to retry unavailable albums:", error);
             if ((error as { status?: number })?.status === 409) {
-                notify.error("A discovery batch is already in progress");
+                notify.error(t("A discovery batch is already in progress"));
             } else {
-                notify.error("Failed to retry unavailable albums");
+                notify.error(t("Failed to retry unavailable albums"));
             }
         } finally {
             setRetryingUnavailable(false);
@@ -134,16 +135,16 @@ export default function DiscoverWeeklyPage() {
     const getProgressLabel = () => {
         if (!batchStatus?.active) return null;
         if (batchStatus.status === "scanning") {
-            return "Finding artists…";
+            return t("Finding artists…");
         }
         if (batchStatus.status === "downloading") {
             const completed = batchStatus.completed ?? 0;
             const total = batchStatus.total ?? 0;
             return total > 0
-                ? `Downloading albums (${completed} / ${total})…`
-                : "Downloading albums…";
+                ? `${t("Downloading albums")} (${completed.toLocaleString(locale)} / ${total.toLocaleString(locale)})…`
+                : `${t("Downloading albums")}…`;
         }
-        return "Working…";
+        return t("Working…");
     };
 
     if (loading) {
@@ -157,13 +158,13 @@ export default function DiscoverWeeklyPage() {
     if (loadError) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-                <p className="text-sm text-[var(--text-muted)]">Could not load discovery data.</p>
+                <p className="text-sm text-[var(--text-muted)]">{t("Could not load discovery data.")}</p>
                 <Button
                     variant="secondary"
                     onClick={reloadData}
                 >
                     <RefreshCw className="w-4 h-4" />
-                    Retry
+                    {t("Retry")}
                 </Button>
             </div>
         );
@@ -191,7 +192,7 @@ export default function DiscoverWeeklyPage() {
                     {playlist && playlist.tracks.length > 0 ? (
                             <div className="section-stack">
                                 <section>
-                                    <SectionHeader type="track" title="Playlist" count={plural(playlist?.totalCount || 0, "track")} className="mb-4" />
+                                    <SectionHeader type="track" title={t("Playlist")} count={`${(playlist?.totalCount || 0).toLocaleString(locale)} ${t(playlist?.totalCount === 1 ? "track" : "tracks")}`} className="mb-4" />
                                     <TrackList
                                         tracks={playlist.tracks}
                                         currentTrack={currentTrack}
@@ -226,55 +227,54 @@ export default function DiscoverWeeklyPage() {
                                     <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                                         <div className="w-2 h-2 bg-[var(--color-brand)]" />
                                         <span className="text-xs tabular-nums text-[var(--text-secondary)]">
-                                            {isGenerating ? "Generating" : "Ready"}
+                                            {t(isGenerating ? "Generating" : "Ready")}
                                         </span>
                                     </div>
 
                                     <h3 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4 leading-none">
-                                        This week&apos;s<br/>
-                                        <span className="text-[var(--color-brand)]">playlist</span>
+                                        {t("This week's")}<br/>
+                                        <span className="text-[var(--color-brand)]">{t("playlist")}</span>
                                     </h3>
 
                                     <p className="text-sm text-[var(--text-muted)] mb-6 leading-relaxed">
-                                        Kima finds artists similar to ones you already love, picks a representative track
-                                        from each, then builds your weekly playlist.
+                                        {t("Kima finds artists similar to ones you already love, picks a representative track from each, then builds your weekly playlist.")}
                                     </p>
 
                                     {/* What this does -- disk disclosure, visible before generating */}
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-[var(--text-muted)] mb-1">Finds</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Similar artists via ListenBrainz + local similarity, grouped by similarity tier</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">{t("Finds")}</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Similar artists via ListenBrainz + local similarity, grouped by similarity tier")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-[var(--text-muted)] mb-1">Downloads</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Full albums to <span className="text-[var(--text-muted)]">/music/discovery</span> on your server</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">{t("Downloads")}</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Full albums to")} <span className="text-[var(--text-muted)]">/music/discovery</span> {t("on your server")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02]">
-                                            <div className="text-xs text-[var(--text-muted)] mb-1">Cleans up</div>
-                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">Unliked albums are removed at week&apos;s end -- liked ones stay forever</div>
+                                            <div className="text-xs text-[var(--text-muted)] mb-1">{t("Cleans up")}</div>
+                                            <div className="text-xs text-[var(--text-secondary)] leading-snug">{t("Unliked albums are removed at week's end -- liked ones stay forever")}</div>
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-3 gap-4 mb-8">
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                                             <div className="text-2xl font-bold text-white mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">Tracks</div>
+                                            <div className="text-xs text-[var(--text-muted)]">{t("Tracks")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                                             <div className="text-2xl font-bold text-white mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">Duration</div>
+                                            <div className="text-xs text-[var(--text-muted)]">{t("Duration")}</div>
                                         </div>
                                         <div className="border border-white/10 rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                                             <div className="text-2xl font-bold text-white mb-1">--</div>
-                                            <div className="text-xs text-[var(--text-muted)]">Artists</div>
+                                            <div className="text-xs text-[var(--text-muted)]">{t("Artists")}</div>
                                         </div>
                                     </div>
 
                                     <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating}
-                                        aria-label={isGenerating ? "Playlist generation in progress" : "Build this week's playlist"}
+                                        aria-label={t(isGenerating ? "Playlist generation in progress" : "Build this week's playlist")}
                                         className={cn(
                                             "w-full py-4 px-6 border-2 rounded-lg font-bold text-sm transition-all duration-300 min-h-[52px] focus-visible:outline-2 focus-visible:outline-[var(--color-brand)] focus-visible:outline-offset-2",
                                             isGenerating
@@ -290,7 +290,7 @@ export default function DiscoverWeeklyPage() {
                                         ) : (
                                             <span className="flex items-center justify-center gap-3">
                                                 <RefreshCw className="w-4 h-4" />
-                                                Build This Week&apos;s Playlist
+                                                {t("Build This Week's Playlist")}
                                             </span>
                                         )}
                                     </button>
