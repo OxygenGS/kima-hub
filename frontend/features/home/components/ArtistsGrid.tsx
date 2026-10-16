@@ -7,6 +7,7 @@ import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCaro
 import { cascadeStyle } from "@/lib/motion";
 import { MediaCard } from "@/components/cards/MediaCard";
 import type { Artist, PopularArtist } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ArtistTile {
     key: string;
@@ -39,6 +40,7 @@ function ArtistTileGrid({ tiles }: { tiles: ArtistTile[] }) {
 }
 
 export const ArtistsGrid = memo(function ArtistsGrid({ artists }: { artists: Artist[] }) {
+    const { t } = useLanguage();
     return (
         <ArtistTileGrid
             tiles={artists.map((a) => ({
@@ -46,7 +48,7 @@ export const ArtistsGrid = memo(function ArtistsGrid({ artists }: { artists: Art
                 name: a.name,
                 href: `/artist/${a.id}`,
                 coverArt: a.coverArt,
-                subtitle: "Artist",
+                subtitle: t("Artist"),
             }))}
         />
     );
@@ -58,6 +60,7 @@ export const PopularArtistsGrid = memo(function PopularArtistsGrid({
 }: {
     artists: PopularArtist[];
 }) {
+    const { t, locale } = useLanguage();
     return (
         <ArtistTileGrid
             tiles={artists.map((a) => ({
@@ -65,7 +68,9 @@ export const PopularArtistsGrid = memo(function PopularArtistsGrid({
                 name: a.name,
                 href: `/search?q=${encodeURIComponent(a.name)}`,
                 coverArt: a.image,
-                subtitle: `${a.listeners?.toLocaleString()} listeners`,
+                subtitle: a.listeners == null
+                    ? t("listeners")
+                    : `${a.listeners.toLocaleString(locale)} ${t(a.listeners === 1 ? "listener" : "listeners")}`,
             }))}
         />
     );

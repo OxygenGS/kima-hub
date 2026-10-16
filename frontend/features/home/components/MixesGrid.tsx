@@ -3,7 +3,7 @@
 import { Music } from "lucide-react";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { api } from "@/lib/api";
-import { plural } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Mix } from "../types";
 import { memo, type CSSProperties } from "react";
 import { cn } from "@/lib/cn";
@@ -14,6 +14,7 @@ interface MixesGridProps {
 }
 
 const MixesGrid = memo(function MixesGrid({ mixes }: MixesGridProps) {
+    const { t, locale } = useLanguage();
     return (
         <div
             className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
@@ -32,7 +33,7 @@ const MixesGrid = memo(function MixesGrid({ mixes }: MixesGridProps) {
                         <MediaCard
                             href={`/mix/${mix.id}`}
                             title={mix.name}
-                            subtitle={plural(mix.trackCount, "track")}
+                            subtitle={`${mix.trackCount.toLocaleString(locale)} ${t(mix.trackCount === 1 ? "track" : "tracks")}`}
                             imageUrl={mix.coverUrls.slice(0, 4).map((url) => api.getCoverArtUrl(url, 300))}
                             fallbackIcon={Music}
                             type="track"

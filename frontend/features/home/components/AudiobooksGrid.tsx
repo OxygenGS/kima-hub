@@ -7,12 +7,14 @@ import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCaro
 import { cascadeStyle } from "@/lib/motion";
 import { memo } from "react";
 import { MediaCard } from "@/components/cards/MediaCard";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AudiobooksGridProps {
     audiobooks: Audiobook[];
 }
 
 const AudiobooksGrid = memo(function AudiobooksGrid({ audiobooks }: AudiobooksGridProps) {
+    const { t } = useLanguage();
     return (
         <HorizontalCarousel style={cascadeStyle(audiobooks.length)}>
             {audiobooks.map((audiobook, index) => (
@@ -20,7 +22,7 @@ const AudiobooksGrid = memo(function AudiobooksGrid({ audiobooks }: AudiobooksGr
                     <MediaCard
                         href={`/audiobooks/${audiobook.id}`}
                         title={audiobook.title}
-                        subtitle={audiobook.author || "Audiobook"}
+                        subtitle={audiobook.author || t("Audiobook")}
                         imageUrl={audiobook.coverUrl ? api.getCoverArtUrl(audiobook.coverUrl, 300) : null}
                         fallbackIcon={BookOpen}
                         type="audiobook"

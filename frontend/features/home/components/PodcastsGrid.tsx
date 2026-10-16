@@ -7,6 +7,7 @@ import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCaro
 import { cascadeStyle } from "@/lib/motion";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { coverArtUrl } from "@/lib/cover-art";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PodcastsGridProps {
     podcasts: Podcast[];
@@ -18,6 +19,7 @@ const podcastCover = (podcast: Podcast): string | null =>
 const PodcastsGrid = memo(function PodcastsGrid({
     podcasts,
 }: PodcastsGridProps) {
+    const { t } = useLanguage();
     return (
         <HorizontalCarousel style={cascadeStyle(podcasts.length)}>
             {podcasts.map((podcast, index) => (
@@ -25,7 +27,7 @@ const PodcastsGrid = memo(function PodcastsGrid({
                     <MediaCard
                         href={`/podcasts/${podcast.id}`}
                         title={podcast.title}
-                        subtitle={podcast.author || "Podcast"}
+                        subtitle={podcast.author || t("Podcast")}
                         imageUrl={podcastCover(podcast)}
                         fallbackIcon={Mic2}
                         type="podcast"
