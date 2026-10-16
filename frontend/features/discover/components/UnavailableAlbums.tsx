@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Play, Pause, Music, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -5,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { UnavailableAlbum } from "../types";
 import { tierColors, tierLabels } from "../constants";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface UnavailableAlbumsProps {
     unavailable: UnavailableAlbum[];
@@ -21,6 +25,7 @@ export function UnavailableAlbums({
     onRetryAll,
     isRetrying,
 }: UnavailableAlbumsProps) {
+    const { t, locale } = useLanguage();
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (!unavailable || unavailable.length === 0) {
@@ -32,11 +37,13 @@ export function UnavailableAlbums({
             <div className="p-4 flex items-center justify-between">
                 <button
                     onClick={() => setIsExpanded(!isExpanded)}
+                    aria-expanded={isExpanded}
+                    aria-controls="discover-unavailable-list"
                     className="flex items-center gap-2 hover:bg-[var(--bg-hover)] transition-colors rounded-lg flex-1"
                 >
                     <Music className="w-5 h-5 text-warning" />
                     <span className="text-sm font-medium text-[var(--text-secondary)]">
-                        {unavailable.length} album{unavailable.length !== 1 ? "s" : ""} unavailable
+                        {unavailable.length.toLocaleString(locale)} {t(unavailable.length === 1 ? "album" : "albums")} {t("unavailable")}
                     </span>
                     {isExpanded ? (
                         <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" />
@@ -53,7 +60,7 @@ export function UnavailableAlbums({
                         className="text-warning hover:text-warning hover:bg-warning/10"
                     >
                         <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
-                        Retry All
+                        {t("Retry All")}
                     </Button>
                 )}
             </div>
@@ -61,17 +68,17 @@ export function UnavailableAlbums({
                 <>
                     <div className="px-6 pb-4">
                         <p className="text-sm text-[var(--text-secondary)]">
-                            These albums were recommended but couldn&apos;t be found by your indexers.
-                            Listen to 30-second previews below!
+                            {t("These albums were recommended but couldn't be found by your indexers.")}{" "}
+                            {t("Listen to 30-second previews below!")}
                         </p>
                     </div>
-                    <div className="divide-y divide-[#1c1c1c]">
+                    <div id="discover-unavailable-list" className="divide-y divide-[#1c1c1c]">
                 {unavailable.map((album) => {
                     const isPreviewPlaying = currentPreview === album.id;
                     const attemptLabel =
                         album.attemptNumber === 0
-                            ? "Original Recommendation"
-                            : `Replacement #${album.attemptNumber}`;
+                            ? t("Original Recommendation")
+                            : `${t("Replacement #")}${album.attemptNumber}`;
 
                     return (
                         <div
@@ -92,6 +99,7 @@ export function UnavailableAlbums({
                                                 album.title
                                             )
                                         }
+                                        aria-label={`${t(isPreviewPlaying ? "Pause preview" : "Play preview")}: ${album.album}`}
                                         className="w-8 h-8 flex items-center justify-center"
                                     >
                                         {isPreviewPlaying ? (
@@ -119,7 +127,7 @@ export function UnavailableAlbums({
                                         <>
                                             <span>•</span>
                                             <span className="text-warning">
-                                                30s Preview
+                                                {t("30s Preview")}
                                             </span>
                                         </>
                                     )}
@@ -133,7 +141,7 @@ export function UnavailableAlbums({
                                         tierColors[album.tier]
                                     )}
                                 >
-                                    {tierLabels[album.tier]}
+                                    {translate(locale, tierLabels[album.tier])}
                                 </span>
                             </div>
 
