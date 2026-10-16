@@ -399,7 +399,7 @@ async function main() {
     // Check for admin password reset
     await checkPasswordReset();
 
-    const server = app.listen(config.port, "0.0.0.0", async () => {
+    const server = app.listen(config.port, config.host, async () => {
     logger.debug(
         `Kima API running on port ${config.port} (accessible on all network interfaces)`
     );
