@@ -1434,6 +1434,20 @@ export const english = {
     "downloading... seeking will be available when cached": "downloading... seeking will be available when cached",
     "release to seek": "release to seek",
     "click or drag to seek": "click or drag to seek",
+    "shuffle (music only)": "shuffle (music only)",
+    "a vibe queue plays in order": "a vibe queue plays in order",
+    "shuffle": "shuffle",
+    "rewind 30 seconds": "rewind 30 seconds",
+    "previous track": "previous track",
+    "retry playback": "retry playback",
+    "buffering...": "buffering...",
+    "next track": "next track",
+    "forward 30 seconds": "forward 30 seconds",
+    "repeat: off": "repeat: off",
+    "repeat: all (loop queue)": "repeat: all (loop queue)",
+    "repeat: one (loop this track)": "repeat: one (loop this track)",
+    "show lyrics": "show lyrics",
+    "expand to full screen": "expand to full screen",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2871,6 +2885,20 @@ export const dutch: Record<TranslationKey, string> = {
     "downloading... seeking will be available when cached": "downloaden... spoelen is mogelijk zodra het nummer in de cache staat",
     "release to seek": "loslaten om te spoelen",
     "click or drag to seek": "klik of sleep om te spoelen",
+    "shuffle (music only)": "willekeurig afspelen (alleen muziek)",
+    "a vibe queue plays in order": "een Vibe-wachtrij speelt op volgorde af",
+    "shuffle": "willekeurig afspelen",
+    "rewind 30 seconds": "30 seconden terugspoelen",
+    "previous track": "vorig nummer",
+    "retry playback": "afspelen opnieuw proberen",
+    "buffering...": "bufferen...",
+    "next track": "volgend nummer",
+    "forward 30 seconds": "30 seconden vooruitspoelen",
+    "repeat: off": "herhalen: uit",
+    "repeat: all (loop queue)": "herhalen: alles (wachtrij herhalen)",
+    "repeat: one (loop this track)": "herhalen: één (dit nummer herhalen)",
+    "show lyrics": "songteksten tonen",
+    "expand to full screen": "vergroten naar volledig scherm",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

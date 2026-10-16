@@ -31,8 +31,11 @@ import { SleepTimer } from "./SleepTimer";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
 import { VibeToggleButton } from "./VibeToggleButton";
 import { PlayerCover } from "@/components/player/PlayerCover";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function FullPlayer() {
+    const { t, locale } = useLanguage();
     const {
         currentTrack,
         playbackType,
@@ -141,7 +144,7 @@ export function FullPlayer() {
                             {vibeMatchScore !== null && (
                                 <span className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded mt-1 bg-white/[0.06] text-muted">
                                     <AudioWaveform className="w-2.5 h-2.5" />
-                                    {vibeMatchScore}% match
+                                    {vibeMatchScore}% {t("match")}
                                 </span>
                             )}
                         </div>
@@ -149,7 +152,7 @@ export function FullPlayer() {
                     </div>
 
                     <div className="flex-1 flex flex-col items-center gap-2">
-                        <div className="flex items-center gap-5" role="group" aria-label="Playback controls">
+                        <div className="flex items-center gap-5" role="group" aria-label={t("Playback controls")}>
                             <button
                                 onClick={toggleShuffle}
                                 className={cn(
@@ -159,9 +162,9 @@ export function FullPlayer() {
                                         : "text-[var(--text-secondary)] hover:text-white"
                                 )}
                                 disabled={!shuffle.enabled}
-                                aria-label="Shuffle"
+                                aria-label={t("Shuffle")}
                                 aria-pressed={isShuffle}
-                                title={shuffle.title}
+                                title={translate(locale, shuffle.title)}
                             >
                                 <Shuffle className="w-4 h-4" />
                             </button>
@@ -175,8 +178,8 @@ export function FullPlayer() {
                                         : "text-[var(--text-muted)]"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Rewind 30 seconds"
-                                title="rewind 30 seconds"
+                                aria-label={t("Rewind 30 seconds")}
+                                title={t("rewind 30 seconds")}
                             >
                                 <RotateCcw className="w-4 h-4" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -188,8 +191,8 @@ export function FullPlayer() {
                                 onClick={previous}
                                 className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 disabled={!hasMedia || playbackType !== "track"}
-                                aria-label="Previous track"
-                                title="previous track"
+                                aria-label={t("Previous track")}
+                                title={t("previous track")}
                             >
                                 <SkipBack className="w-5 h-5" />
                             </button>
@@ -207,7 +210,7 @@ export function FullPlayer() {
                                         : "bg-gray-700 text-[var(--text-muted)] cursor-not-allowed"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label={
+                                aria-label={t(
                                     audioError
                                         ? "Retry playback"
                                         : isBuffering
@@ -215,8 +218,8 @@ export function FullPlayer() {
                                         : isPlaying
                                         ? "Pause"
                                         : "Play"
-                                }
-                                title={
+                                )}
+                                title={t(
                                     audioError
                                         ? "retry playback"
                                         : isBuffering
@@ -224,7 +227,7 @@ export function FullPlayer() {
                                         : isPlaying
                                         ? "pause"
                                         : "play"
-                                }
+                                )}
                             >
                                 {hasMedia && !isBuffering && !audioError && (
                                     <div className="absolute inset-0 rounded-full bg-brand blur-md opacity-0 group-hover:opacity-50 transition-opacity duration-200" />
@@ -244,8 +247,8 @@ export function FullPlayer() {
                                 onClick={next}
                                 className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 disabled={!hasMedia || playbackType !== "track"}
-                                aria-label="Next track"
-                                title="next track"
+                                aria-label={t("Next track")}
+                                title={t("next track")}
                             >
                                 <SkipForward className="w-5 h-5" />
                             </button>
@@ -259,8 +262,8 @@ export function FullPlayer() {
                                         : "text-[var(--text-muted)]"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Forward 30 seconds"
-                                title="forward 30 seconds"
+                                aria-label={t("Forward 30 seconds")}
+                                title={t("forward 30 seconds")}
                             >
                                 <RotateCw className="w-4 h-4" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -277,21 +280,21 @@ export function FullPlayer() {
                                         : "text-[var(--text-secondary)] hover:text-white"
                                 )}
                                 disabled={!hasMedia || playbackType !== "track"}
-                                aria-label={
+                                aria-label={t(
                                     repeatMode === "off"
                                         ? "Repeat off"
                                         : repeatMode === "all"
                                         ? "Repeat all"
                                         : "Repeat one"
-                                }
+                                )}
                                 aria-pressed={repeatMode !== "off"}
-                                title={
+                                title={t(
                                     repeatMode === "off"
                                         ? "repeat: off"
                                         : repeatMode === "all"
                                         ? "repeat: all (loop queue)"
                                         : "repeat: one (loop this track)"
-                                }
+                                )}
                             >
                                 {repeatMode === "one" ? (
                                     <Repeat1 className="w-4 h-4" />
@@ -320,8 +323,8 @@ export function FullPlayer() {
                                             : "text-[var(--text-secondary)] hover:text-brand"
                                     )}
                                     disabled={!hasMedia}
-                                    aria-label="Toggle lyrics"
-                                    title="show lyrics"
+                                    aria-label={t("Toggle lyrics")}
+                                    title={t("show lyrics")}
                                 >
                                     <MicVocal className="w-4 h-4" />
                                 </button>
@@ -368,7 +371,7 @@ export function FullPlayer() {
                         <button
                             onClick={toggleMute}
                             className="text-[var(--text-secondary)] hover:text-white transition-all duration-200 hover:scale-110"
-                            aria-label={volume === 0 ? "Unmute" : "Mute"}
+                            aria-label={t(volume === 0 ? "Unmute" : "Mute")}
                         >
                             {isMuted || volume === 0 ? (
                                 <VolumeX className="w-5 h-5" />
@@ -384,11 +387,11 @@ export function FullPlayer() {
                                 max="100"
                                 value={volume * 100}
                                 onChange={handleVolumeChange}
-                                aria-label="Volume"
+                                aria-label={t("Volume")}
                                 aria-valuemin={0}
                                 aria-valuemax={100}
                                 aria-valuenow={Math.round(volume * 100)}
-                                aria-valuetext={`${Math.round(volume * 100)} percent`}
+                                aria-valuetext={`${Math.round(volume * 100)} ${t("percent")}`}
                                 style={{
                                     background: isMuted
                                         ? "rgba(255,255,255,0.15)"
@@ -409,8 +412,8 @@ export function FullPlayer() {
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
                             disabled={!hasMedia}
-                            aria-label="Expand player"
-                            title="expand to full screen"
+                            aria-label={t("Expand player")}
+                            title={t("expand to full screen")}
                         >
                             <Maximize2 className="w-4 h-4" />
                         </button>
