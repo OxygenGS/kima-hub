@@ -150,5 +150,5 @@ remains a separate operational and security review.
 3. Complete EN/NL UI and mobile/TV accessibility acceptance.
 4. Confirm latest-head CI (backend tests, browser, AIO on both architectures,
    both official-image upgrades and rollback) and obtain explicit approvals.
-5. Keep this PR Draft; no merge, release, image push or CT 101 production update
+5. Keep this PR Draft; no merge, release, image push or deployment to a real installation
    without separate authorization.

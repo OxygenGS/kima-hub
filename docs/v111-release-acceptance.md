@@ -39,7 +39,7 @@ Record explicit sign-off by a reviewer after these checks. Automated synthetic-b
 - [ ] Obtain explicit permission to publish an isolated pre-release tag/image; **do not** update \`:latest\`. Pull the published digest into an isolated test stack and repeat smoke plus copied-volume migration and independent rollback.
 - [ ] Obtain separate permission to merge/release a stable tag, and reverify the exact resulting combined commit. No production use follows automatically.
 
-## Gate D — production CT 101 (separate explicit approval)
+## Gate D — separately managed production installations (separate explicit approval)
 
 - [ ] Inventory current Compose/Dockge project name, mounted \`/data\` type/volume, \`/music\` path, upstream/fork source image, secrets, host architecture, storage capacity and rollback prerequisites. **No production inspection or action is authorized by this document.**
 - [ ] Cold backup of complete original \`/data\` and Compose configuration, write a checksum, and successfully restore the backup to a distinct nonproduction volume. Do not use \`docker compose down -v\`.
@@ -50,4 +50,4 @@ Record explicit sign-off by a reviewer after these checks. Automated synthetic-b
 
 ## Release decision
 
-**No-go until all four gates have evidence and the appropriate approvals.** Manual device accessibility and security acceptance, final-head CI, candidate-image inspection, representative independent restore and user-approved publication/production installation are still outstanding. PRs remain Draft; no registry push, merge or production CT 101 operation is implied.
+**No-go until all four gates have evidence and the appropriate approvals.** Manual device accessibility and security acceptance, final-head CI, candidate-image inspection, representative independent restore and user-approved publication/production installation are still outstanding. PRs remain Draft; no registry push, merge or production installation change is implied.

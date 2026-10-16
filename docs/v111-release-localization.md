@@ -67,4 +67,4 @@ manual security and editorial review of newly introduced choices.**
   releasable. Mobile, TV, accessibility and editorial reviews remain
   separate gates.
 - This documentation does not authorize merging, publishing images,
-  tagging releases or updating production CT 101.
+  tagging releases or changing any production installation.

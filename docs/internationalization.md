@@ -55,7 +55,7 @@ Repository CI separately runs frontend/backend tests, TypeScript, database upgra
 
 ## Authenticated release checklist — still required
 
-- [ ] Use an isolated development or test instance with **dedicated nonproduction** admin and regular-user accounts. Never point browser E2E tests at CT 101.
+- [ ] Use an isolated development or test instance with **dedicated nonproduction** admin and regular-user accounts. Never point automated browser E2E tests at real or privately managed installations.
 - [ ] Check language switching in Settings as admin and nonadmin, across navigation and a full reload, including multiple tabs.
 - [ ] Check album, artist, playback queue, search, playlist dialogs, downloads, Vibe map/Galaxy, and settings forms in both languages.
 - [ ] Check first-run onboarding, service-connection failures, error screens, 2FA feedback, mobile layout, screen-reader labels and keyboard interaction.

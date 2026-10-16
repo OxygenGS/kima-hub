@@ -1,6 +1,6 @@
 # Upstream v1.11.0 integration: isolated fork development
 
-**Scope:** [official v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) into OxygenGS fork, without losing features from the existing fork language/permissions branch. **No merge to main, no release tags, no image publication, no production CT 101.**
+**Scope:** [official v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) into the OxygenGS fork, preserving the language and permissions branches. **No merge to main, release tag, image publication or production deployment is approved.** This is development history; review Draft PR #7 for the combined implementation and current CI.
 
 ## Measured baseline (full Git trees, not capped compare-files output)
 
@@ -19,7 +19,7 @@ The experimental PR #7 implementation is now in a separate draft branch above th
 
 The fresh AIO test verified fork database migrations/permissions/branding, loopback-only PostgreSQL, real admin and standard-account authentication, generated WAV byte identity, seek, MP3 transcoding, rejected forbidden stream access and out-of-library path traversal, 3/3 English/Dutch authenticated Chromium flows per role, and secrets/records after removing and recreating the container with its original disposable volumes.
 
-**This is not an upgrade or rollback certification.** Required before any release or production deployment: (1) original official v1.10 full-image to fork AIO upgrade with independent original-volume restore/rollback; (2) same for official v1.11 full image; (3) arm64 build/runtime validation; (4) full new-screen EN/NL, TV/mobile, security and accessibility review; (5) explicit separate human approvals for merge, publication and CT 101. Do not substitute a schema-only test for either full-image rehearsal. No workflow here should deploy or push a registry image.
+**This is not an upgrade or rollback certification.** Required before any release or production deployment: (1) original official v1.10 full-image to fork AIO upgrade with independent original-volume restore/rollback; (2) same for official v1.11 full image; (3) arm64 build/runtime validation; (4) full new-screen EN/NL, TV/mobile, security and accessibility review; (5) explicit separate human approvals for merge, publication and any production installation. Do not substitute a schema-only test for either full-image rehearsal. No workflow here should deploy or push a registry image.
 
 ## Full-image upgrade verification (2026-10-15)
 
@@ -44,7 +44,7 @@ GitHub Actions [38746212125](https://github.com/OxygenGS/kima-hub/actions/runs/3
 4. Reconcile frontend screens, add missing EN/NL dictionary keys and change browser tests to cover new Stats/What's New/Vibe UI. Preserve music names and API contracts.
 5. Validate ONNX CPU behavior, optional GPU flags, ARM64/AMD64 builds and streaming/playback.
 6. Test original full-image upgrades from **both v1.10.0 and v1.11.0** and independently restored rollback volumes, with synthetic accounts and media.
-7. After all automated and manual acceptance, seek separate human approvals for draft PR merge, publishing a release candidate, stable release, and finally production CT 101.
+7. After all automated and manual acceptance, seek separate human approvals for draft PR merge, publishing a release candidate, stable release, and finally any separately managed production installation.
 
 **Incremental compatibility fixes:** the browser-auth API now tolerates blocked storage and uses memory-only credentials as a fallback. The EN/NL UI language selector likewise works temporarily without storage, and the activity panel no longer crashes during startup. All three dedicated CI checks (merge audit, frontend TypeScript/lint/auth unit tests and Chromium language flow) **passed on `9b62d12`**.
 

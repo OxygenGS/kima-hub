@@ -1,8 +1,8 @@
 # First post-v1.10.0 release — OxygenGS fork
 
-Last reviewed: **2026-10-16**. This is the **current** release checklist for PR [#5](https://github.com/OxygenGS/kima-hub/pull/5); `docs/release-readiness.md` is an archived checklist for earlier PR #1.
+Last reviewed: **2026-10-16**. This is the **current** release checklist for the combined Draft [#5](https://github.com/OxygenGS/kima-hub/pull/5) → [#6](https://github.com/OxygenGS/kima-hub/pull/6) → [#7](https://github.com/OxygenGS/kima-hub/pull/7) integration. The outdated deployment-specific checklist has been retired.
 
-**Do not merge, publish a container, create a tag/release, or update CT 101 until explicitly approved.** Production CT 101 remains at upstream v1.10.0. The OxygenGS repository already published its own `v1.10.0` tag on 13 October 2026. Pick a **new, unique version** for the combined fork features; do not reuse that tag.
+**Do not merge, publish a container, create a tag/release, or deploy to an independently operated production installation without explicit approval.** The OxygenGS repository describes the product; personal container IDs, host resources and installation details are not release metadata. The OxygenGS repository already published its own `v1.10.0` tag on 13 October 2026. Pick a **new, unique version** for the combined fork features; do not reuse that tag.
 
 ## Verified evidence
 
@@ -21,7 +21,7 @@ Last reviewed: **2026-10-16**. This is the **current** release checklist for PR 
 - Experimental `35b5e5a` passed [eight/eight GitHub Actions jobs](https://github.com/OxygenGS/kima-hub/actions/runs/38875081664), including both locally built no-push AIO architectures, actual official upstream v1.10.0/v1.11.0 upgrade/independent rollback, full backend tests, and public EN/NL browser switching.
 - Latest experimental `f9858e3` extends localized media cards; [its own CI](https://github.com/OxygenGS/kima-hub/actions/runs/38878982120) is separate. **Do not reuse green evidence from an earlier commit when deciding release readiness.**
 - Latest official upstream release checked: **v1.11.0**, dated 12 October 2026; no fork candidate image, stable tag or new Docker/Compose version has been published.
-- The **remaining manual and publication gates** are defined in [the v1.11 acceptance matrix](v111-release-acceptance.md). Actual production CT 101 remains untouched.
+- The **remaining manual and publication gates** are defined in [the v1.11 acceptance matrix](v111-release-acceptance.md). Individual production installations are outside this source-code validation.
 
 ## Open before merging or publishing anything
 
@@ -32,7 +32,7 @@ Last reviewed: **2026-10-16**. This is the **current** release checklist for PR 
 - [ ] **Review image security findings.** The publishing workflow's Trivy image report is informational, **not blocking**. Review its actionable findings before approving public images; CI dependency security gates are a separate check.
 - [ ] **Release instructions and version.** Choose a new version newer than the fork's existing `v1.10.0`; update the frontend/backend package versions and lockfile root versions **together**, the changelog, pinned Compose examples, README release-channel statements, and support/backup notes. Verify license and upstream attribution.
 - [ ] **Test the actual published candidate image** in a separate test stack with fresh and restored old data, after explicit approval to publish a pre-release. Do not push to `:latest` for candidate testing.
-- [ ] **Human sign-off** before marking PR #5 ready, merging to `main`, making a new stable tag, or publishing a registry image. A separate production CT 101 update requires its **own** approval, backup and rollback plan.
+- [ ] **Human sign-off** before marking PR #5 ready, merging to `main`, making a new stable tag, or publishing a registry image. Any later production installation upgrade requires its **own** approval, backup and rollback plan.
 
 ## Release-channel guard
 

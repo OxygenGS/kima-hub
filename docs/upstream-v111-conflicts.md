@@ -183,7 +183,7 @@ Recorded from GitHub Actions upstream merge audit (commit `1ee91f3`, 2026-10-15)
 
 ## Release status
 
-These paths are **not** merged or accepted. PR #5 remains the tested baseline; PR #6 remains a draft integration effort. `main`, GHCR releases and CT 101 remain untouched.
+This is a **historical conflict inventory**, not a list of unresolved files in the newer experimental implementation. The combined upstream v1.11 application is being validated in Draft PR #7 on top of Draft #6 and #5. A source merge, public release or production deployment has not been approved.
 
 See [upstream integration plan](upstream-v111-integration-plan.md).
  
