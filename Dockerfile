@@ -1,6 +1,8 @@
 # Kima All-in-One Docker Image (Hardened)
 # Contains: Backend, Frontend, PostgreSQL, Redis, Audio Analyzer (Essentia AI)
-# Usage: docker run -d -p 3030:3030 -v /path/to/music:/music chevron7locked/kima
+# OxygenGS fork: image is published as ghcr.io/oxygengs/kima-hub only after explicit release approval.
+# Published stable as of this Draft: ghcr.io/oxygengs/kima-hub:v1.10.0 (combined v1.11.0 remains unpublished).
+# Do not use upstream chevron7locked/kima images as a substitute for the OxygenGS fork.
 
 # ============================================================
 # CLAP ONNX BUILDER STAGE
