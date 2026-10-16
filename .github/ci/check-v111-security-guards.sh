@@ -51,4 +51,9 @@ if grep -Fq -- 'postgresql://kima:kima@' Dockerfile; then
   echo "SECURITY CHECK FAILED: old hardcoded PostgreSQL credential in AIO Dockerfile" >&2
   exit 1
 fi
+require_text Dockerfile 'PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost' "AIO worker healthchecks use persisted database password"
+if grep -Fq -- 'PGPASSWORD=kima' Dockerfile; then
+  echo "SECURITY CHECK FAILED: legacy fixed password in AIO worker readiness checks" >&2
+  exit 1
+fi
 echo "Structural guard PASS; runtime authorization and all additional endpoints still require review."
