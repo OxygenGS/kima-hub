@@ -584,6 +584,28 @@ if [[ ! "$DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
     exit 1
 fi
 
+# Enforce authenticated localhost PostgreSQL access ahead of legacy trust
+# rules, including on restored upstream volumes. Preserve original HBA rules
+# below this managed preface for diagnosis; reject all non-loopback TCP.
+if ! grep -Fq '# oxygen-aio-pg-hba-guard-v1' /data/postgres/pg_hba.conf; then
+    hba_tmp="$(mktemp /data/postgres/.pg_hba.conf.XXXXXXXX)"
+    cat > "$hba_tmp" <<'HBA'
+# oxygen-aio-pg-hba-guard-v1
+local all postgres peer
+local all all peer
+host all all 127.0.0.1/32 scram-sha-256
+host all all ::1/128 scram-sha-256
+host all all 0.0.0.0/0 reject
+host all all ::0/0 reject
+host replication all 0.0.0.0/0 reject
+host replication all ::0/0 reject
+HBA
+    cat /data/postgres/pg_hba.conf >> "$hba_tmp"
+    chown postgres:postgres "$hba_tmp"
+    chmod 600 "$hba_tmp"
+    mv "$hba_tmp" /data/postgres/pg_hba.conf
+fi
+
 # Start PostgreSQL temporarily to create database and user
 gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
 
