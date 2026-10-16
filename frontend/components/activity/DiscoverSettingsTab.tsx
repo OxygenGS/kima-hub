@@ -5,8 +5,11 @@ import { api } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { Trash2, Loader2, ArrowLeft } from "lucide-react";
 import type { DiscoverConfig } from "@/features/discover/types";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { discoverClearWarning } from "@/lib/i18n/discover-warning";
 
 interface ConfigSliderProps {
+    id: string;
     label: string;
     display: ReactNode;
     unit?: string;
@@ -18,10 +21,10 @@ interface ConfigSliderProps {
     caption: string;
 }
 
-function ConfigSlider({ label, display, unit, min, max, step, value, onChange, caption }: ConfigSliderProps) {
+function ConfigSlider({ id, label, display, unit, min, max, step, value, onChange, caption }: ConfigSliderProps) {
     return (
         <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-4">{label}</label>
+            <label htmlFor={id} className="block text-xs text-[var(--text-muted)] mb-4">{label}</label>
             <div className="border border-white/10 p-4 mb-3">
                 <div className="flex items-baseline justify-between">
                     <span className="text-4xl font-bold text-brand tabular-nums">{display}</span>
@@ -29,6 +32,8 @@ function ConfigSlider({ label, display, unit, min, max, step, value, onChange, c
                 </div>
             </div>
             <input
+                id={id}
+                aria-describedby={`${id}-description`}
                 type="range"
                 min={min}
                 max={max}
@@ -37,7 +42,7 @@ function ConfigSlider({ label, display, unit, min, max, step, value, onChange, c
                 onChange={(e) => onChange(parseFloat(e.target.value))}
                 className="w-full h-1 bg-white/10 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-brand [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-white/20 hover:[&::-webkit-slider-thumb]:bg-white"
             />
-            <p className="text-xs tabular-nums text-[var(--text-muted)] mt-3">{caption}</p>
+            <p id={`${id}-description`} className="text-xs tabular-nums text-[var(--text-muted)] mt-3">{caption}</p>
         </div>
     );
 }
@@ -55,6 +60,7 @@ export function DiscoverSettingsTab({
     onPlaylistCleared,
     onBack,
 }: DiscoverSettingsTabProps) {
+    const { t, locale } = useLanguage();
     const [isClearing, setIsClearing] = useState(false);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -79,7 +85,7 @@ export function DiscoverSettingsTab({
             try {
                 await api.updateDiscoverConfig({ [key]: value });
             } catch {
-                notify.error("Failed to save setting");
+                notify.error(t("Failed to save setting"));
             }
         }, 500);
     }
@@ -87,12 +93,7 @@ export function DiscoverSettingsTab({
     async function handleClearPlaylist() {
         if (isClearing) return;
 
-        const confirmed = window.confirm(
-            "clear discovery playlist?\n\n" +
-                "• liked albums will be moved to your library\n" +
-                "• non-liked albums will be deleted\n\n" +
-                "this action cannot be undone."
-        );
+        const confirmed = window.confirm(discoverClearWarning(locale));
 
         if (!confirmed) return;
 
@@ -100,18 +101,18 @@ export function DiscoverSettingsTab({
         try {
             const result = await api.clearDiscoverPlaylist();
 
-            const albums = (n: number) => `${n} album${n !== 1 ? "s" : ""}`;
+            const albums = (n: number) => `${n.toLocaleString(locale)} ${t(n === 1 ? "album" : "albums")}`;
             const parts = [
-                result.likedMoved > 0 && `Moved ${albums(result.likedMoved)} you liked to your library.`,
-                result.activeDeleted > 0 && `Deleted ${albums(result.activeDeleted)}.`,
+                result.likedMoved > 0 && `${t("Moved")} ${albums(result.likedMoved)} ${t("you liked to your library.")}`,
+                result.activeDeleted > 0 && `${t("Deleted")} ${albums(result.activeDeleted)}.`,
             ].filter(Boolean);
-            notify.info("Discover playlist cleared", {
-                message: parts.length > 0 ? parts.join(" ") : "There were no albums to clear.",
+            notify.info(t("Discover playlist cleared"), {
+                message: parts.length > 0 ? parts.join(" ") : t("There were no albums to clear."),
             });
 
             onPlaylistCleared?.();
         } catch {
-            notify.error("Failed to clear playlist");
+            notify.error(t("Failed to clear playlist"));
         } finally {
             setIsClearing(false);
         }
@@ -123,56 +124,60 @@ export function DiscoverSettingsTab({
                 <button
                     onClick={onBack}
                     className="border border-white/20 p-2 hover:border-brand hover:bg-white/5 transition-colors"
-                    title="back to activity"
+                    title={t("back to activity")}
+                    aria-label={t("back to activity")}
                 >
                     <ArrowLeft className="w-4 h-4 text-[var(--text-secondary)]" />
                 </button>
-                <h3 className="text-sm font-bold text-white">Settings</h3>
+                <h3 className="text-sm font-bold text-white">{t("Settings")}</h3>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-8">
                 <ConfigSlider
-                    label="Playlist Size"
+                    id="discover-playlist-size"
+                    label={t("Playlist Size")}
                     display={config?.playlistSize || 10}
-                    unit="tracks"
+                    unit={t("tracks")}
                     min={5}
                     max={50}
                     step={5}
                     value={config?.playlistSize || 10}
                     onChange={(value) => handleConfigChange("playlistSize", value)}
-                    caption="One track per album / Larger = more discovery"
+                    caption={t("One track per album / Larger = more discovery")}
                 />
 
                 <ConfigSlider
-                    label="Download Buffer"
+                    id="discover-download-buffer"
+                    label={t("Download Buffer")}
                     display={`${((config?.downloadRatio ?? 1.3) * 100 - 100).toFixed(0)}%`}
-                    unit="extra"
+                    unit={t("extra")}
                     min={1}
                     max={2}
                     step={0.1}
                     value={config?.downloadRatio ?? 1.3}
                     onChange={(value) => handleConfigChange("downloadRatio", value)}
-                    caption="Redundancy for failed downloads / Higher = more reliable"
+                    caption={t("Redundancy for failed downloads / Higher = more reliable")}
                 />
 
                 <ConfigSlider
-                    label="Album Exclusion"
+                    id="discover-album-exclusion"
+                    label={t("Album Exclusion")}
                     display={(config?.exclusionMonths ?? 6) === 0 ? "--" : config?.exclusionMonths ?? 6}
-                    unit={(config?.exclusionMonths ?? 6) !== 0 ? "months" : undefined}
+                    unit={(config?.exclusionMonths ?? 6) !== 0 ? t("months") : undefined}
                     min={0}
                     max={12}
                     step={1}
                     value={config?.exclusionMonths ?? 6}
                     onChange={(value) => handleConfigChange("exclusionMonths", value)}
-                    caption="Cooldown period for repeat recommendations / 0 = disabled"
+                    caption={t("Cooldown period for repeat recommendations / 0 = disabled")}
                 />
 
                 <div className="pt-6 border-t-2 border-white/20">
                     <label className="block text-xs text-[var(--text-muted)] mb-4">
-                        Danger Zone
+                        {t("Danger Zone")}
                     </label>
                     <p className="text-xs text-[var(--text-muted)] mb-4 leading-relaxed">
-                        Remove current playlist / Liked albums → library / Others → deleted
+                        {t("Remove current playlist / Liked albums → library / Others → deleted")}
                     </p>
                     <button
                         onClick={handleClearPlaylist}
@@ -182,12 +187,12 @@ export function DiscoverSettingsTab({
                         {isClearing ? (
                             <>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Processing
+                                {t("Processing")}
                             </>
                         ) : (
                             <>
                                 <Trash2 className="w-4 h-4" />
-                                Clear Playlist
+                                {t("Clear Playlist")}
                             </>
                         )}
                     </button>
