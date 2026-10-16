@@ -74,6 +74,40 @@ test.describe("Authenticated language walkthrough", () => {
         await expect(page.getByText("CI Generated 440Hz Tone", { exact: true }).first()).toBeVisible();
     });
 
+    test("opens real v1.11 Discover and Stats in Dutch without causing download or mutation requests", async ({ page }) => {
+        await loginAsTestUser(page);
+
+        const unexpectedWrites: string[] = [];
+        page.on("request", (request) => {
+            const pathname = new URL(request.url()).pathname;
+            if (/^\/api\/(?:discover|stats)(?:\/|$)/.test(pathname) && request.method() !== "GET") {
+                unexpectedWrites.push(request.method() + " " + pathname);
+            }
+        });
+
+        await page.goto("/settings#language");
+        await page.locator("#language-select").selectOption("nl");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await page.goto("/discover");
+        await expect(page.getByRole("heading", { name: "Wekelijkse ontdekkingen" })).toBeVisible();
+        await expect(page.getByText("Elke week een nieuwe afspeellijst op basis van je luistergedrag")).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await page.goto("/stats");
+        await expect(page.getByText("Je luistergedrag", { exact: true })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await page.goto("/settings#language");
+        await page.locator("#language-select").selectOption("en");
+        await page.goto("/discover");
+        await expect(page.getByRole("heading", { name: "Discover Weekly" })).toBeVisible();
+        await page.goto("/stats");
+        await expect(page.getByText("your listening", { exact: true })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        expect(unexpectedWrites).toEqual([]);
+    });
+
     test("makes the saved language selector usable after login on a mobile viewport", async ({ page }) => {
         await page.setViewportSize({ width: 375, height: 812 });
         await loginAsTestUser(page);
