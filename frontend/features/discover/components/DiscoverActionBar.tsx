@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PlayDisc } from "@/components/ui/MediaActionBar";
 import type { DiscoverPlaylist } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface DiscoverActionBarProps {
     playlist: DiscoverPlaylist | null;
@@ -22,6 +23,7 @@ export function DiscoverActionBar({
     isGenerating,
     onCancelGeneration,
 }: DiscoverActionBarProps) {
+    const { t } = useLanguage();
     const canPlay = !!playlist && playlist.tracks.length > 0;
     const canCancel = isGenerating && !!onCancelGeneration;
     if (!canPlay && !canCancel) return null;
@@ -36,14 +38,14 @@ export function DiscoverActionBar({
                     onClick={onPlayToggle}
                     shape="square"
                     disabled={isGenerating}
-                    label={showPause ? "pause" : "play discover weekly"}
+                    label={t(showPause ? "pause" : "play discover weekly")}
                 />
             )}
 
             {canCancel && (
                 <Button variant="secondary" onClick={onCancelGeneration} className="h-12">
                     <X className="w-4 h-4" />
-                    Cancel
+                    {t("Cancel")}
                 </Button>
             )}
         </div>
