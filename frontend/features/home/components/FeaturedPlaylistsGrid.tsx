@@ -7,7 +7,7 @@ import { memo } from "react";
 import { PlaylistPreview } from "../types";
 import { DeezerIcon } from "./DeezerIcon";
 import { MediaCard } from "@/components/cards/MediaCard";
-import { plural } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface FeaturedPlaylistsGridProps {
     playlists: PlaylistPreview[];
@@ -34,6 +34,7 @@ export function FeaturedPlaylistsSkeleton() {
 export const FeaturedPlaylistsGrid = memo(function FeaturedPlaylistsGrid({
     playlists,
 }: FeaturedPlaylistsGridProps) {
+    const { t, locale } = useLanguage();
     if (!playlists || playlists.length === 0) {
         return null;
     }
@@ -45,7 +46,7 @@ export const FeaturedPlaylistsGrid = memo(function FeaturedPlaylistsGrid({
                     <MediaCard
                         href={`/browse/playlists/${playlist.id}`}
                         title={playlist.title}
-                        subtitle={plural(playlist.trackCount, "track")}
+                        subtitle={`${playlist.trackCount.toLocaleString(locale)} ${t(playlist.trackCount === 1 ? "track" : "tracks")}`}
                         imageUrl={playlist.imageUrl || null}
                         fallbackIcon={Music2}
                         type="track"

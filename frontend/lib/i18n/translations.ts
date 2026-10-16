@@ -1465,6 +1465,7 @@ export const english = {
     "repeat off": "repeat off",
     "Playback system error": "Playback system error",
     "Reload": "Reload",
+    "Your library at a glance": "Your library at a glance",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2933,6 +2934,7 @@ export const dutch: Record<TranslationKey, string> = {
     "repeat off": "herhalen uit",
     "Playback system error": "Fout in het afspeelsysteem",
     "Reload": "Opnieuw laden",
+    "Your library at a glance": "Je bibliotheek in één oogopslag",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

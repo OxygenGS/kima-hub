@@ -7,6 +7,7 @@ import { MediaCard } from "@/components/cards/MediaCard";
 import { cascadeStyle } from "@/lib/motion";
 import { memo } from "react";
 import { ListenedItem } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ContinueListeningProps {
     items: ListenedItem[];
@@ -26,6 +27,7 @@ const VIEWS = {
 } as const;
 
 const ContinueListening = memo(function ContinueListening({ items }: ContinueListeningProps) {
+    const { t } = useLanguage();
     return (
         <HorizontalCarousel style={cascadeStyle(items.length)}>
             {items.map((item, index) => {
@@ -36,7 +38,7 @@ const ContinueListening = memo(function ContinueListening({ items }: ContinueLis
                         <MediaCard
                             href={`${view.href}${item.id}`}
                             title={item.name}
-                            subtitle={type === "artist" ? view.label : item.author || view.label}
+                            subtitle={type === "artist" ? t(view.label) : item.author || t(view.label)}
                             imageUrl={imageFor(item)}
                             fallbackIcon={view.icon}
                             type={type}

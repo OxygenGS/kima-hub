@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 const getGreeting = () => {
     const hour = new Date().getHours();
@@ -10,7 +11,8 @@ const getGreeting = () => {
 };
 
 export function HomeHero() {
+    const { t } = useLanguage();
     const greeting = getGreeting();
 
-    return <PageHeader eyebrow="Home" title={greeting} description="Your library at a glance" />;
+    return <PageHeader eyebrow={t("Home")} title={t(greeting)} description={t("Your library at a glance")} />;
 }
