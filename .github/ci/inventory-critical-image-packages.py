@@ -5,6 +5,7 @@ Run by piping this script to docker run -i --entrypoint python3 IMAGE -.
 No /data mount. Package linkage is NOT exploitability proof.
 """
 from __future__ import annotations
+from collections import deque
 import json
 import platform
 import re
@@ -13,7 +14,7 @@ import sys
 
 PRIORITY = ("libaom3", "libglib2.0-0", "libmbedcrypto7",
             "libsqlite3-0", "libxml2", "zlib1g", "ffmpeg",
-            "libavcodec59", "libavformat59")
+            "libavcodec59", "libavformat59", "librist4")
 
 def dependency_names(declaration: str) -> set[str]:
     names = set()
@@ -23,6 +24,31 @@ def dependency_names(declaration: str) -> set[str]:
             if match:
                 names.add(match.group(1))
     return names
+
+def dependency_chain(packages: dict[str, dict], source: str, target: str, max_hops: int = 5) -> list[str]:
+    # Follow installed-package reverse dependencies: a source vulnerability can
+    # matter to a higher-level consumer. This is metadata, not call-path proof.
+    if source not in packages or target not in packages:
+        return []
+    parents: dict[str, list[str]] = {}
+    for name, meta in packages.items():
+        for dependency in meta["depends"]:
+            if dependency in packages:
+                parents.setdefault(dependency, []).append(name)
+    queue = deque([(source, [source])])
+    visited = {source}
+    while queue:
+        current, path = queue.popleft()
+        if current == target:
+            return path
+        if len(path) > max_hops:
+            continue
+        for dependent in sorted(parents.get(current, [])):
+            if dependent not in visited:
+                visited.add(dependent)
+                queue.append((dependent, path + [dependent]))
+    return []
+
 
 def collect(text: str) -> dict:
     packages: dict[str, dict] = {}
@@ -46,7 +72,12 @@ def collect(text: str) -> dict:
     return {
         "architecture": platform.machine(),
         "installed_package_count": len(packages),
-        "limitation": "Declared direct Debian dependencies, NOT all dynamic loading or exploitability",
+        "limitation": "Declared Debian dependencies only, NOT all dynamic loading or exploitability",
+        "paths_to_ffmpeg": {
+            name: dependency_chain(packages, name, "ffmpeg")
+            for name in ("libmbedcrypto7", "libaom3", "libglib2.0-0",
+                         "libxml2", "zlib1g", "libsqlite3-0")
+        },
         "priority_packages": packages_of_interest,
     }
 
@@ -56,6 +87,16 @@ def main() -> int:
         sample = "\n".join(f"sample{i}\t1.0\tlibmbedcrypto7 (>= 2), zlib1g" for i in range(85))
         sample += "\nlibmbedcrypto7\t2.28.3-1\tlibc6\n"
         assert len(collect(sample)["priority_packages"][2]["direct_reverse_dependencies"]) == 85
+        packages = {
+            "libmbedcrypto7": {"depends": set()},
+            "librist4": {"depends": {"libmbedcrypto7"}},
+            "libavformat59": {"depends": {"librist4"}},
+            "ffmpeg": {"depends": {"libavformat59"}},
+        }
+        assert dependency_chain(packages, "libmbedcrypto7", "ffmpeg") == [
+            "libmbedcrypto7", "librist4", "libavformat59", "ffmpeg"
+        ]
+        assert dependency_chain(packages, "absent", "ffmpeg") == []
         print("Runtime package inventory self-test: PASS")
         return 0
     if sys.argv[1:]:
