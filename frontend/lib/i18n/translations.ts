@@ -1466,6 +1466,9 @@ export const english = {
     "Playback system error": "Playback system error",
     "Reload": "Reload",
     "Your library at a glance": "Your library at a glance",
+    "No tracks for this radio station": "No tracks for this radio station",
+    "Not enough tracks for this radio station": "Not enough tracks for this radio station",
+    "needs": "needs",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2935,6 +2938,9 @@ export const dutch: Record<TranslationKey, string> = {
     "Playback system error": "Fout in het afspeelsysteem",
     "Reload": "Opnieuw laden",
     "Your library at a glance": "Je bibliotheek in één oogopslag",
+    "No tracks for this radio station": "Geen nummers voor dit radiostation",
+    "Not enough tracks for this radio station": "Niet genoeg nummers voor dit radiostation",
+    "needs": "nodig",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

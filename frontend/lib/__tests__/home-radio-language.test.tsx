@@ -8,11 +8,12 @@ import { LanguageProvider } from "@/lib/i18n/language-context";
 import { LibraryRadioStations } from "@/features/home/components/LibraryRadioStations";
 import { buildGenreStations, buildDecadeStations, STATIC_STATIONS } from "@/features/home/radioData";
 
-const mocks = vi.hoisted(() => ({ playTracks: vi.fn(), get: vi.fn() }));
+const mocks = vi.hoisted(() => ({ playTracks: vi.fn(), get: vi.fn(), notifyError: vi.fn() }));
 vi.mock("@/lib/audio-controls-context", () => ({
     useAudioControls: () => ({ playTracks: mocks.playTracks }),
 }));
 vi.mock("@/lib/api", () => ({ api: { get: (...args: unknown[]) => mocks.get(...args) } }));
+vi.mock("@/lib/notify", () => ({ notify: { error: (...args: unknown[]) => mocks.notifyError(...args) } }));
 vi.mock("@/hooks/useMediaQuery", () => ({ useIsMobile: () => false, useIsTablet: () => false }));
 vi.mock("@/hooks/useQueries", () => ({
     useLibraryGenresQuery: () => ({
@@ -71,6 +72,25 @@ describe("home radio station presentation", () => {
         expect(host.textContent).toContain("Psychedelic Rock");
         expect(host.textContent).toContain("1,234 tracks");
         expect(mocks.get).not.toHaveBeenCalled();
+        expect(mocks.playTracks).not.toHaveBeenCalled();
+    });
+    it("keeps genre API filters intact while localizing radio failures", async () => {
+        localStorage.setItem("kima-hub-language", "nl");
+        mocks.get.mockResolvedValue({ tracks: [{ id: "single-track" }, { id: "second-track" }] });
+        await render();
+        const genreButton = [...host.querySelectorAll("button")].find(x => x.textContent?.includes("Psychedelic Rock")) as HTMLButtonElement;
+        expect(genreButton).toBeDefined();
+        await act(async () => genreButton.click());
+        expect(mocks.get).toHaveBeenCalledWith("/library/radio?type=genre&value=Psychedelic+Rock&limit=100");
+        expect(mocks.notifyError).toHaveBeenCalledWith("Niet genoeg nummers voor dit radiostation", {
+            message: "Psychedelic Rock: 2 gevonden, 15 nodig",
+        });
+        expect(mocks.playTracks).not.toHaveBeenCalled();
+        await changeLocale("en");
+        mocks.get.mockResolvedValue({ tracks: [] });
+        mocks.notifyError.mockClear();
+        await act(async () => genreButton.click());
+        expect(mocks.notifyError).toHaveBeenCalledWith("No tracks for this radio station", { message: "Psychedelic Rock" });
         expect(mocks.playTracks).not.toHaveBeenCalled();
     });
     it("preserves station backend filter IDs, genre text and decade IDs", () => {

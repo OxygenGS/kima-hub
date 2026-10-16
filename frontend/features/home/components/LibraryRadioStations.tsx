@@ -20,7 +20,7 @@ import {
 
 export function LibraryRadioStations() {
     const { t, locale } = useLanguage();
-    const { loadingStation, startRadio } = useRadioPlayer();
+    const { loadingStation, startRadio } = useRadioPlayer(locale);
     const { data: genresData, isLoading: genresLoading } = useLibraryGenresQuery();
     const { data: decadesData, isLoading: decadesLoading } = useLibraryDecadesQuery();
 

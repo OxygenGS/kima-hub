@@ -5,6 +5,7 @@ import { shuffleArray } from "@/lib/shuffle";
 import { notify } from "@/lib/notify";
 import { useState } from "react";
 import { plural } from "@/lib/format";
+import { translate, type Locale } from "@/lib/i18n/translations";
 
 export interface RadioStation {
     id: string;
@@ -132,8 +133,9 @@ function getDecadeName(decade: number): string {
     return `${decade}s`;
 }
 
-export function useRadioPlayer() {
+export function useRadioPlayer(locale: Locale = "en") {
     const { playTracks } = useAudioControls();
+    const t = (label: string) => translate(locale, label);
     const [loadingStation, setLoadingStation] = useState<string | null>(null);
 
     const startRadio = async (station: RadioStation) => {
@@ -149,12 +151,18 @@ export function useRadioPlayer() {
             );
 
             if (!response.tracks || response.tracks.length === 0) {
-                notify.error("No tracks for this radio station", { message: station.name });
+                const displayName = station.filter.type === "genre" || station.filter.type === "decade"
+                    ? station.name
+                    : t(station.name);
+                notify.error(t("No tracks for this radio station"), { message: displayName });
                 return;
             }
             if (response.tracks.length < (station.minTracks || 10)) {
-                notify.error("Not enough tracks for this radio station", {
-                    message: `${station.name}: found ${response.tracks.length}, needs ${station.minTracks || 10}`,
+                const displayName = station.filter.type === "genre" || station.filter.type === "decade"
+                    ? station.name
+                    : t(station.name);
+                notify.error(t("Not enough tracks for this radio station"), {
+                    message: `${displayName}: ${t("found")} ${response.tracks.length.toLocaleString(locale)}, ${t("needs")} ${(station.minTracks || 10).toLocaleString(locale)}`,
                 });
                 return;
             }
@@ -163,7 +171,7 @@ export function useRadioPlayer() {
             playTracks(shuffled, 0);
         } catch (error) {
             console.error("Failed to start radio:", error);
-            notify.error("Failed to start radio station");
+            notify.error(t("Failed to start radio station"));
         } finally {
             setLoadingStation(null);
         }
