@@ -301,7 +301,7 @@ if [ -f /data/.schema_ready ]; then
 fi
 
 while [ $COUNTER -lt $TIMEOUT ]; do
-    if PGPASSWORD=kima psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
+    if PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
         echo "[wait-for-db] ✓ Database is ready and schema exists!"
         exit 0
     fi
@@ -316,7 +316,7 @@ done
 
 echo "[wait-for-db] ERROR: Database schema not ready after ${TIMEOUT}s"
 echo "[wait-for-db] Listing available tables:"
-PGPASSWORD=kima psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
+PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
 exit 1
 EOF
 
