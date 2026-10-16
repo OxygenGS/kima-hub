@@ -1448,6 +1448,21 @@ export const english = {
     "repeat: one (loop this track)": "repeat: one (loop this track)",
     "show lyrics": "show lyrics",
     "expand to full screen": "expand to full screen",
+    "show player": "show player",
+    "Playback Error": "Playback Error",
+    "Tap retry to reconnect": "Tap retry to reconnect",
+    "show bottom player": "show bottom player",
+    "previous": "previous",
+    "previous (music only)": "previous (music only)",
+    "next": "next",
+    "next (music only)": "next (music only)",
+    "repeat: all": "repeat: all",
+    "repeat: one": "repeat: one",
+    "repeat (music only)": "repeat (music only)",
+    "skip only for music": "skip only for music",
+    "repeat one": "repeat one",
+    "repeat all": "repeat all",
+    "repeat off": "repeat off",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2899,6 +2914,21 @@ export const dutch: Record<TranslationKey, string> = {
     "repeat: one (loop this track)": "herhalen: één (dit nummer herhalen)",
     "show lyrics": "songteksten tonen",
     "expand to full screen": "vergroten naar volledig scherm",
+    "show player": "speler tonen",
+    "Playback Error": "Afspeelfout",
+    "Tap retry to reconnect": "Tik op opnieuw proberen om opnieuw verbinding te maken",
+    "show bottom player": "speler onderaan tonen",
+    "previous": "vorige",
+    "previous (music only)": "vorige (alleen muziek)",
+    "next": "volgende",
+    "next (music only)": "volgende (alleen muziek)",
+    "repeat: all": "herhalen: alles",
+    "repeat: one": "herhalen: één",
+    "repeat (music only)": "herhalen (alleen muziek)",
+    "skip only for music": "overslaan alleen bij muziek",
+    "repeat one": "één nummer herhalen",
+    "repeat all": "alles herhalen",
+    "repeat off": "herhalen uit",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

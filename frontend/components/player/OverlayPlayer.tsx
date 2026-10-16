@@ -31,8 +31,11 @@ import { LyricsView } from "@/components/lyrics/LyricsView";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
 import { VibeToggleButton } from "./VibeToggleButton";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function OverlayPlayer() {
+    const { t, locale } = useLanguage();
     const {
         currentTrack,
         currentAudiobook,
@@ -127,12 +130,13 @@ export function OverlayPlayer() {
                         returnToPreviousMode();
                     }}
                     className="text-[var(--text-secondary)] hover:text-white transition-colors p-2 -ml-2 rounded-full hover:bg-white/10"
-                    title="close"
+                    title={t("close")}
+                    aria-label={t("close")}
                 >
                     <ChevronDown className="w-7 h-7" />
                 </button>
                 <span className="text-xs text-[var(--text-muted)] font-medium">
-                    Now Playing
+                    {t("Now Playing")}
                 </span>
                 <div className="w-11" /> {/* Spacer for centering */}
             </div>
@@ -265,7 +269,8 @@ export function OverlayPlayer() {
                             <button
                                 onClick={() => skipBackward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="rewind 30 seconds"
+                                title={t("rewind 30 seconds")}
+                                aria-label={t("Rewind 30 seconds")}
                             >
                                 <RotateCcw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -282,7 +287,8 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "previous" : "skip only for music"}
+                            title={t(canSkip ? "previous" : "skip only for music")}
+                            aria-label={t(canSkip ? "Previous track" : "skip only for music")}
                         >
                             <SkipBack className="w-8 h-8" />
                         </button>
@@ -297,7 +303,7 @@ export function OverlayPlayer() {
                                     ? "bg-brand/80 text-black"
                                     : "bg-brand text-black"
                             )}
-                            title={
+                            title={t(
                                 audioError
                                     ? "retry playback"
                                     : isBuffering
@@ -305,7 +311,8 @@ export function OverlayPlayer() {
                                     : isPlaying
                                     ? "pause"
                                     : "play"
-                            }
+                            )}
+                            aria-label={t(audioError ? "Retry playback" : isBuffering ? "Buffering..." : isPlaying ? "Pause" : "Play")}
                         >
                             {audioError ? (
                                 <RefreshCw className="w-7 h-7" />
@@ -326,7 +333,8 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "next" : "skip only for music"}
+                            title={t(canSkip ? "next" : "skip only for music")}
+                            aria-label={t(canSkip ? "Next track" : "skip only for music")}
                         >
                             <SkipForward className="w-8 h-8" />
                         </button>
@@ -335,7 +343,8 @@ export function OverlayPlayer() {
                             <button
                                 onClick={() => skipForward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="forward 30 seconds"
+                                title={t("forward 30 seconds")}
+                                aria-label={t("Forward 30 seconds")}
                             >
                                 <RotateCw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -359,7 +368,8 @@ export function OverlayPlayer() {
                                     ? "text-brand"
                                     : "text-[var(--text-muted)] hover:text-white"
                             )}
-                            title={shuffle.title}
+                            title={translate(locale, shuffle.title)}
+                            aria-label={t("Shuffle")}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -375,13 +385,14 @@ export function OverlayPlayer() {
                                     ? "text-brand"
                                     : "text-[var(--text-muted)] hover:text-white"
                             )}
-                            title={
+                            title={t(
                                 repeatMode === "one"
                                     ? "repeat one"
                                     : repeatMode === "all"
                                     ? "repeat all"
                                     : "repeat off"
-                            }
+                            )}
+                            aria-label={t(repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat off")}
                         >
                             {repeatMode === "one" ? (
                                 <Repeat1 className="w-5 h-5" />
@@ -410,8 +421,8 @@ export function OverlayPlayer() {
                                         : "text-[var(--text-muted)] hover:text-brand"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Toggle lyrics"
-                                title="show lyrics"
+                                aria-label={t("Toggle lyrics")}
+                                title={t("show lyrics")}
                             >
                                 <MicVocal className="w-5 h-5" />
                             </button>

@@ -32,8 +32,11 @@ import { SleepTimer } from "./SleepTimer";
 import { VibeToggleButton } from "./VibeToggleButton";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { PlayerCover } from "@/components/player/PlayerCover";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function MiniPlayer() {
+    const { t, locale } = useLanguage();
     const {
         currentTrack,
         currentAudiobook,
@@ -142,8 +145,8 @@ export function MiniPlayer() {
                     style={{
                         bottom: "calc(var(--nav-h) + var(--standalone-safe-area-bottom, 0px) + 8px)",
                     }}
-                    aria-label="Show player"
-                    title="show player"
+                    aria-label={t("Show player")}
+                    title={t("show player")}
                 >
                     <div
                         className="rounded-l-2xl p-[2px]"
@@ -240,7 +243,7 @@ export function MiniPlayer() {
                                 {/* Album Art - expand button for keyboard/AT users */}
                                 <button
                                     className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-black/30 landscape-short:w-10 landscape-short:h-10"
-                                    aria-label="Expand player"
+                                    aria-label={t("Expand player")}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setPlayerMode("overlay");
@@ -267,11 +270,11 @@ export function MiniPlayer() {
                                             <div className="flex items-center gap-1">
                                                 <AlertTriangle className="w-3.5 h-3.5 text-danger-light flex-shrink-0" />
                                                 <p className="text-danger-light text-sm font-medium truncate leading-tight">
-                                                    Playback Error
+                                                    {t("Playback Error")}
                                                 </p>
                                             </div>
                                             <p className="text-danger-light/70 text-xs truncate leading-tight mt-0.5">
-                                                Tap retry to reconnect
+                                                {t("Tap retry to reconnect")}
                                             </p>
                                         </>
                                     ) : (
@@ -297,7 +300,7 @@ export function MiniPlayer() {
                                     className="flex items-center gap-1.5 flex-shrink-0"
                                     onClick={(e) => e.stopPropagation()}
                                     role="group"
-                                    aria-label="Playback controls"
+                                    aria-label={t("Playback controls")}
                                 >
                                     <VibeToggleButton
                                         unavailable={!canSkip}
@@ -324,7 +327,7 @@ export function MiniPlayer() {
                                                 ? "bg-brand/80 text-black"
                                                 : "bg-brand text-black hover:scale-105"
                                         )}
-                                        aria-label={
+                                        aria-label={t(
                                             audioError
                                                 ? "Retry playback"
                                                 : isBuffering
@@ -332,8 +335,8 @@ export function MiniPlayer() {
                                                 : isPlaying
                                                 ? "Pause"
                                                 : "Play"
-                                        }
-                                        title={
+                                        )}
+                                        title={t(
                                             audioError
                                                 ? "retry playback"
                                                 : isBuffering
@@ -341,7 +344,7 @@ export function MiniPlayer() {
                                                 : isPlaying
                                                 ? "pause"
                                                 : "play"
-                                        }
+                                        )}
                                     >
                                         {audioError ? (
                                             <RefreshCw className="w-5 h-5" />
@@ -412,8 +415,8 @@ export function MiniPlayer() {
                             <button
                                 onClick={() => setPlayerMode("full")}
                                 className="text-[var(--text-secondary)] hover:text-white transition p-2"
-                                aria-label="Show bottom player"
-                                title="show bottom player"
+                                aria-label={t("Show bottom player")}
+                                title={t("show bottom player")}
                             >
                                 <MonitorUp className="w-3.5 h-3.5" />
                             </button>
@@ -426,8 +429,8 @@ export function MiniPlayer() {
                                         : "text-[var(--text-muted)] cursor-not-allowed"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Expand player"
-                                title="expand to full screen"
+                                aria-label={t("Expand player")}
+                                title={t("expand to full screen")}
                             >
                                 <Maximize2 className="w-3.5 h-3.5" />
                             </button>
@@ -448,9 +451,9 @@ export function MiniPlayer() {
                                         : "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label="Shuffle"
+                            aria-label={t("Shuffle")}
                             aria-pressed={isShuffle}
-                            title={shuffle.title}
+                            title={translate(locale, shuffle.title)}
                         >
                             <Shuffle className="w-3.5 h-3.5" />
                         </button>
@@ -464,8 +467,8 @@ export function MiniPlayer() {
                                     ? "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label="Skip backward 30 seconds"
-                            title="rewind 30 seconds"
+                            aria-label={t("Skip backward 30 seconds")}
+                            title={t("rewind 30 seconds")}
                         >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -482,10 +485,8 @@ export function MiniPlayer() {
                                     ? "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label="Previous track"
-                            title={
-                                canSkip ? "previous" : "previous (music only)"
-                            }
+                            aria-label={t("Previous track")}
+                            title={t(canSkip ? "previous" : "previous (music only)")}
                         >
                             <SkipBack className="w-4 h-4" />
                         </button>
@@ -501,14 +502,14 @@ export function MiniPlayer() {
                                         : "bg-brand text-black hover:scale-105"
                                     : "bg-gray-700 text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label={isPlaying ? "Pause" : "Play"}
-                            title={
+                            aria-label={t(isPlaying ? "Pause" : "Play")}
+                            title={t(
                                 isBuffering
                                     ? "buffering..."
                                     : isPlaying
                                     ? "pause"
                                     : "play"
-                            }
+                            )}
                         >
                             {isBuffering ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -528,8 +529,8 @@ export function MiniPlayer() {
                                     ? "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label="Next track"
-                            title={canSkip ? "next" : "next (music only)"}
+                            aria-label={t("Next track")}
+                            title={t(canSkip ? "next" : "next (music only)")}
                         >
                             <SkipForward className="w-4 h-4" />
                         </button>
@@ -543,8 +544,8 @@ export function MiniPlayer() {
                                     ? "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label="Skip forward 30 seconds"
-                            title="forward 30 seconds"
+                            aria-label={t("Skip forward 30 seconds")}
+                            title={t("forward 30 seconds")}
                         >
                             <RotateCw className="w-3.5 h-3.5" />
                             <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -563,9 +564,9 @@ export function MiniPlayer() {
                                         : "text-[var(--text-secondary)] hover:text-white"
                                     : "text-[var(--text-muted)] cursor-not-allowed"
                             )}
-                            aria-label={repeatMode === 'one' ? "Repeat one" : repeatMode === 'all' ? "Repeat all" : "Repeat off"}
+                            aria-label={t(repeatMode === 'one' ? "Repeat one" : repeatMode === 'all' ? "Repeat all" : "Repeat off")}
                             aria-pressed={repeatMode !== 'off'}
-                            title={
+                            title={t(
                                 canSkip
                                     ? repeatMode === "off"
                                         ? "repeat: off"
@@ -573,7 +574,7 @@ export function MiniPlayer() {
                                         ? "repeat: all"
                                         : "repeat: one"
                                     : "repeat (music only)"
-                            }
+                            )}
                         >
                             {repeatMode === "one" ? (
                                 <Repeat1 className="w-3.5 h-3.5" />
