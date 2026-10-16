@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { formatStatsCount, formatStatsOneDecimal } from "../locale-format";
 import { translate } from "@/lib/i18n/translations";
 import { useReveal } from "../useReveal";
 import { hourLabel, whenLabel } from "../format";
@@ -236,7 +237,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                             <span className="text-sm text-[var(--text-primary)]">
                                 {when(dow, hour)}
                             </span>
-                            <span className="t-meta shrink-0">{n} {t(n === 1 ? "play (count)" : "plays")}</span>
+                            <span className="t-meta shrink-0">{formatStatsCount(n, locale)} {t(n === 1 ? "play (count)" : "plays")}</span>
                         </button>
                     );
                 })}
@@ -254,9 +255,7 @@ export function ListeningClock({ listening, period }: { listening: ListeningStat
                             <p className="t-meta">
                                 {shownCount === 0
                                     ? t("no plays")
-                                    : `${shownCount.toLocaleString()} ${t(shownCount === 1 ? "play (count)" : "plays")} · ${(
-                                          (shownCount / plays) * 100
-                                      ).toFixed(1)}% ${t("of all plays")}`}
+                                    : `${formatStatsCount(shownCount, locale)} ${t(shownCount === 1 ? "play (count)" : "plays")} · ${formatStatsOneDecimal((shownCount / plays) * 100, locale)}% ${t("of all plays")}`}
                                 {isPeak && !open && ` · ${t("busiest")}`}
                                 {shownCount > 0 && !open && (
                                     <span className="hidden sm:inline"> · {t("click for tracks")}</span>

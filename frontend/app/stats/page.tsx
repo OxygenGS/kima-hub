@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
+import { formatStatsCount } from "@/features/stats/locale-format";
 import { api } from "@/lib/api";
 import { ShapePlot } from "@/features/stats/components/ShapePlot";
 import { ListeningClock } from "@/features/stats/components/ListeningClock";
@@ -93,7 +94,7 @@ export default function StatsPage() {
         ? played.reduce((a, b) => (b.energy > a.energy ? b : a))
         : null;
 
-    const analysed = shelf.analysis.done.toLocaleString();
+    const analysed = formatStatsCount(shelf.analysis.done, locale);
     const topKey = signature.key?.top[0]?.key;
     const keyClaim = topKey ? `${t("top key:")} ${topKey.toLowerCase()}` : t("keys");
 
@@ -183,7 +184,7 @@ export default function StatsPage() {
             label: t("unplayed"),
             content: (
                 <Finding
-                    claim={`${shelf.neverPlayed.toLocaleString()} ${shelf.neverPlayed === 1 ? t("track") : t("tracks")} ${t("never played")}`}
+                    claim={`${formatStatsCount(shelf.neverPlayed, locale)} ${shelf.neverPlayed === 1 ? t("track") : t("tracks")} ${t("never played")}`}
                     scope={shown === "all" ? undefined : "all time"}
                     evidence={
                         <div className="flex flex-col gap-(--stat-gap-block)">
@@ -327,9 +328,9 @@ function Overview({
                 {/* The hours are an estimate and say so; these four counts are exact.
                     Under 480px four columns cannot hold their labels, so phones get two. */}
                 <dl className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-x-4 gap-y-6 sm:gap-x-8 lg:max-w-[42rem]">
-                    <Reading value={listening.plays.toLocaleString()} label={t("plays")} />
-                    <Reading value={listening.distinctArtists.toLocaleString()} label={t("artists")} />
-                    <Reading value={listening.distinctAlbums.toLocaleString()} label={t("albums")} />
+                    <Reading value={formatStatsCount(listening.plays, locale)} label={t("plays")} />
+                    <Reading value={formatStatsCount(listening.distinctArtists, locale)} label={t("artists")} />
+                    <Reading value={formatStatsCount(listening.distinctAlbums, locale)} label={t("albums")} />
                     <Reading value={`${heard}%`} label={period === "all" ? t("of library played") : t("of library played · all time")} />
                 </dl>
 
@@ -554,7 +555,7 @@ function Ranked({
     period: Period;
 }) {
     const { play, busy } = usePlaySlice();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
 
     return (
         <div className="flex flex-col gap-3">
@@ -587,7 +588,7 @@ function Ranked({
                                     />
                                 )}
                                 <span className="t-figure text-xs text-[var(--text-secondary)]">
-                                    {item.count.toLocaleString()}
+                                    {formatStatsCount(item.count, locale)}
                                 </span>
                             </span>
                         </>

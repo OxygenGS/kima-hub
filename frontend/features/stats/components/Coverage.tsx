@@ -6,6 +6,7 @@
  */
 
 import { percent } from "../format";
+import { formatStatsCount } from "../locale-format";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
 import { useReveal } from "../useReveal";
@@ -63,7 +64,7 @@ export function Coverage({ shelf }: { shelf: ShelfStats }) {
                             <div className="flex flex-col gap-0.5">
                                 <dt className="t-label text-[var(--text-secondary)]">{t(row.label)}</dt>
                                 <p className="t-meta">
-                                    {row.part.toLocaleString()} {t("of")} {row.whole.toLocaleString()}
+                                    {formatStatsCount(row.part, locale)} {t("of")} {formatStatsCount(row.whole, locale)}
                                 </p>
                             </div>
                         </div>
