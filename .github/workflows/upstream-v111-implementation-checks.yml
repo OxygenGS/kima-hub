@@ -53,6 +53,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assert fork-specific security, branding and locale wiring
         run: bash .github/ci/check-v111-security-guards.sh
+      - name: Validate proposed fork version and publishing guard
+        run: |
+          python3 .github/ci/check-release-metadata.py --self-test
+          python3 .github/ci/check-release-metadata.py --candidate
+          grep -Fq 'check-release-metadata.py --tag' .github/workflows/docker-publish.yml
+          grep -Fq -- '--exit-code 1' .github/workflows/docker-publish.yml
 
   frontend:
     name: Updated v1.11 frontend typecheck lint and unit tests
