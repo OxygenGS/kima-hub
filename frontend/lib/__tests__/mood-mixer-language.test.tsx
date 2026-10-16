@@ -108,7 +108,9 @@ describe("Mood Mixer EN/NL UI", () => {
 
     it("explains unavailable moods with correct Dutch counts, then the threshold without pending work", async () => {
         localStorage.setItem("kima-hub-language", "nl");
-        mocks.getPresets.mockResolvedValueOnce([
+        // A locale switch refetches presets: return the same pending status
+        // until the test explicitly changes the server fixture below.
+        mocks.getPresets.mockResolvedValue([
             { id: "happy", trackCount: 12, pendingTracks: 1234 },
             { id: "party", trackCount: 2 },
         ]);
