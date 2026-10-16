@@ -8,6 +8,7 @@
 
 This fork introduces several improvements over the original Kima Hub:
 
+- **Planned combined v1.11 release (unpublished):** Official upstream Kima Hub v1.11 functionality plus English/Dutch user-interface selection, server-side fork permission controls and extra AIO hardening. Track its acceptance in [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7). The currently published stable fork image remains `ghcr.io/oxygengs/kima-hub:v1.10.0`; do not pull a not-yet-created v1.11.0 image.
 - **Granular music permissions:** Administrators can independently control whether users may request albums or download individual tracks.
 - **Server-side authorization:** Protected download endpoints enforce permissions independently of frontend visibility.
 - **Instance branding:** Administrators can customize the application name, tagline, colors, logo, and favicon.
@@ -17,7 +18,7 @@ This fork introduces several improvements over the original Kima Hub:
 
 ### Security and Validation
 
-Development validation included 1,193 passing automated tests, targeted authorization checks, and a successful database migration test using a copy of existing production data.
+Development CI for the combined v1.11 candidate now runs frontend/backend suites, EN/NL browser checks, role-based authorization, native AMD64/ARM64 AIO smoke, and independent original-image v1.10/v1.11 upgrade/rollback tests **only on disposable synthetic data**. See [release acceptance](docs/v111-release-acceptance.md) and [open assembled-image security findings](docs/v111-image-security-review.md). These checks do not approve a public release or cover a privately managed installation.
 
 These results do not constitute an independent security audit or guarantee that all vulnerabilities have been eliminated.
 
