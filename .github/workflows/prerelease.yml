@@ -122,12 +122,24 @@ jobs:
                   version: v0.74.0
                   cache: true
 
-            - name: Block fixable HIGH/CRITICAL before publishing any prerelease image
+            # Use the same unfiltered fixable-vulnerability image gate as
+            # CI and stable publishing; keep secrets checking separately.
+            - name: Scan candidate AMD64 image and block fixable HIGH/CRITICAL
               run: |
                   trivy image \
-                    --scanners vuln,secret \
+                    --scanners vuln \
                     --severity HIGH,CRITICAL \
-                    --ignore-unfixed \
+                    --exit-code 0 \
+                    --format json \
+                    --output "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" \
+                    kima:prerelease-scan
+                  python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+                  python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" amd64
+
+            - name: Scan candidate image for embedded secrets before publication
+              run: |
+                  trivy image \
+                    --scanners secret \
                     --ignorefile .trivyignore \
                     --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
                     --exit-code 1 \
@@ -141,7 +153,7 @@ jobs:
                   file: ./Dockerfile
                   push: true
                   tags: ${{ steps.tags.outputs.list }}
-                  # Makes the running app show "1.10.0-prerelease" rather than a
+                  # Makes the running app show a prerelease variant of the checked package version, not a
                   # bare version, so nobody mistakes one for a release.
                   build-args: |
                       NEXT_PUBLIC_BUILD_TYPE=prerelease
