@@ -162,7 +162,9 @@ export function useRadioPlayer(locale: Locale = "en") {
                     ? station.name
                     : t(station.name);
                 notify.error(t("Not enough tracks for this radio station"), {
-                    message: `${displayName}: ${t("found")} ${response.tracks.length.toLocaleString(locale)}, ${t("needs")} ${(station.minTracks || 10).toLocaleString(locale)}`,
+                    message: locale === "nl"
+                        ? `${displayName}: ${response.tracks.length.toLocaleString(locale)} ${t("found")}, ${(station.minTracks || 10).toLocaleString(locale)} ${t("needs")}`
+                        : `${displayName}: ${t("found")} ${response.tracks.length.toLocaleString(locale)}, ${t("needs")} ${(station.minTracks || 10).toLocaleString(locale)}`,
                 });
                 return;
             }
