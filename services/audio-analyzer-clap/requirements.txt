@@ -7,11 +7,10 @@ soundfile==0.14.0
 # onnx_backend at module load.
 onnxruntime==1.30.0
 
-# transformers supplies what the ONNX backends need and nothing more: the
-# numpy audio_utils primitives used by our vendored clap_mel.py (bit-for-bit
-# equivalent of ClapFeatureExtractor's mel, which is torch-gated upstream on
-# every installable version) and the text tokenizer (RobertaTokenizer).
-transformers==4.57.6
+# The shipped runtime uses only the pinned fast RoBERTa tokenizer JSON.
+# CLAP NumPy audio feature helpers are vendored with the Apache-2.0 notice
+# in audio_features_numpy.py. The transformers package is not installed.
+tokenizers==0.22.1
 
 # Database and queue
 redis>=4.5.0
