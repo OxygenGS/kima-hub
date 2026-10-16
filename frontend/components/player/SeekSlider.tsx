@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { formatTime } from "@/lib/format";
 
 interface SeekSliderProps {
     /** Current progress percentage (0-100) */
@@ -175,6 +176,42 @@ export function SeekSlider({
     const displayProgress =
         previewProgress !== null ? previewProgress : progress;
     const isActive = canSeek && hasMedia;
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const currentTime = (Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0)) / 100) * safeDuration;
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!isActive || safeDuration <= 0) return;
+
+        let newTime: number;
+        switch (e.key) {
+            case "ArrowLeft":
+            case "ArrowDown":
+                newTime = Math.max(0, currentTime - 5);
+                break;
+            case "ArrowRight":
+            case "ArrowUp":
+                newTime = Math.min(safeDuration, currentTime + 5);
+                break;
+            case "PageDown":
+                newTime = Math.max(0, currentTime - 10);
+                break;
+            case "PageUp":
+                newTime = Math.min(safeDuration, currentTime + 10);
+                break;
+            case "Home":
+                newTime = 0;
+                break;
+            case "End":
+                newTime = safeDuration;
+                break;
+            default:
+                return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (newTime !== currentTime) onSeek(newTime);
+    };
 
     const getTooltipText = () => {
         if (!hasMedia) return undefined;
@@ -224,6 +261,15 @@ export function SeekSlider({
     return (
         <div
             ref={sliderRef}
+            role="slider"
+            aria-label={t("Playback position")}
+            aria-disabled={!isActive || safeDuration <= 0}
+            aria-valuemin={0}
+            aria-valuemax={Math.floor(safeDuration)}
+            aria-valuenow={Math.floor(currentTime)}
+            aria-valuetext={`${formatTime(currentTime)} / ${formatTime(safeDuration)}`}
+            tabIndex={isActive && safeDuration > 0 ? 0 : -1}
+            onKeyDown={handleKeyDown}
             className={cn(
                 "relative rounded-full transition-all",
                 styles.container,
