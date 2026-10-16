@@ -1,8 +1,8 @@
 # First post-v1.10.0 release — OxygenGS fork
 
-Last reviewed: **2026-10-14**. This is the **current** release checklist for PR [#5](https://github.com/OxygenGS/kima-hub/pull/5); `docs/release-readiness.md` is an archived checklist for earlier PR #1.
+Last reviewed: **2026-10-14**. This is the **current** release checklist for PR [#5](https://github.com/OxygenGS/kima-hub/pull/5). The earlier deployment-specific draft checklist has been retired.
 
-**Do not merge, publish a container, create a tag/release, or update CT 101 until explicitly approved.** Production CT 101 remains at upstream v1.10.0. The OxygenGS repository already published its own `v1.10.0` tag on 13 October 2026. Pick a **new, unique version** for the combined fork features; do not reuse that tag.
+**Do not merge, publish a container, create a tag/release, or deploy to a production installation without explicit approval.** Independently operated installations are outside the scope of this source repository. The OxygenGS repository already published its own `v1.10.0` tag on 13 October 2026. Pick a **new, unique version** for the combined fork features; do not reuse that tag.
 
 ## Verified evidence
 
@@ -24,7 +24,7 @@ Last reviewed: **2026-10-14**. This is the **current** release checklist for PR 
 - [ ] **Review image security findings.** The publishing workflow's Trivy image report is informational, **not blocking**. Review its actionable findings before approving public images; CI dependency security gates are a separate check.
 - [ ] **Release instructions and version.** Choose a new version newer than the fork's existing `v1.10.0`; update the frontend/backend package versions and lockfile root versions **together**, the changelog, pinned Compose examples, README release-channel statements, and support/backup notes. Verify license and upstream attribution.
 - [ ] **Test the actual published candidate image** in a separate test stack with fresh and restored old data, after explicit approval to publish a pre-release. Do not push to `:latest` for candidate testing.
-- [ ] **Human sign-off** before marking PR #5 ready, merging to `main`, making a new stable tag, or publishing a registry image. A separate production CT 101 update requires its **own** approval, backup and rollback plan.
+- [ ] **Human sign-off** before marking PR #5 ready, merging to `main`, making a new stable tag, or publishing a registry image. A separate production installation update requires its **own** approval, backup and rollback plan.
 
 ## Release-channel guard
 

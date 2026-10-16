@@ -33,7 +33,7 @@ The server-side middleware retrieves the current database permissions for each r
 3. Run frontend lint, type checking, and unit tests.
 4. Confirm normal users are denied (HTTP 403), admins retain access, and granting/revoking permissions takes effect without logging out.
 5. Audit any further background import or download routes and confirm that the visible UI reflects permission failures clearly.
-6. Keep production Proxmox, Kima, and Lidarr/Soulseek integrations unchanged until a test deployment is validated.
+6. Leave existing production music services and external integrations unchanged until a separately approved upgrade has been tested.
 
 ## Release safety
 
