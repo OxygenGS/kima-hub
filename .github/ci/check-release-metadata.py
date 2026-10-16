@@ -64,7 +64,7 @@ def self_test() -> None:
             (folder / "package.json").write_text('{"version":"1.11.0"}', encoding="utf-8")
             (folder / "package-lock.json").write_text(
                 '{"name":"kima","version":"1.11.0","lockfileVersion":3,"packages":{"":{"version":"1.11.0"}}}',
-                encoding="utf-8)
+                encoding="utf-8")
         (root / "CHANGELOG.md").write_text("## OxygenGS fork v1.11.0 — release preparation (unpublished)\n", encoding="utf-8")
         assert check(root, "v1.11.0") == "1.11.0"
         for invalid in ("v1.10.0", "v1.11.0-rc1", "v01.11.0", "latest", "v1.11.1"):
