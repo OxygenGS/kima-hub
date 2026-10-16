@@ -261,6 +261,39 @@ jobs:
         shell: bash
         timeout-minutes: 35
         run: bash .github/ci/aio-v111-real-image-rehearsal.sh
+      - name: Install pinned Trivy for assembled amd64 AIO inspection
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Record actual amd64 image HIGH/CRITICAL vulnerability findings
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            --output "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" \
+            kima-hub:aio-ci-smoke
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          path = os.path.join(os.environ["RUNNER_TEMP"], "v111-image-vulnerabilities-amd64.json")
+          with open(path, encoding="utf-8") as handle:
+              results = json.load(handle).get("Results", [])
+          findings = [item for result in results for item in (result.get("Vulnerabilities") or [])]
+          fixable = [item for item in findings if item.get("FixedVersion")]
+          print("### amd64 assembled AIO vulnerability report")
+          print(f"HIGH/CRITICAL findings: {len(findings)}; with an identified fixed version: {len(fixable)}")
+          print("Full JSON is attached as a CI artifact; manual security triage remains mandatory before release.")
+          PY
+      - name: Retain amd64 image scan evidence for manual release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-aio-image-vulnerabilities-amd64
+          path: ${{ runner.temp }}/v111-image-vulnerabilities-amd64.json
+          if-no-files-found: error
+          retention-days: 14
 
   arm64-image-build:
     name: Build v1.11 AIO linux/arm64 image (no push)
@@ -296,3 +329,36 @@ jobs:
         run: |
           test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
           bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Install pinned Trivy for assembled arm64 AIO inspection
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Record actual arm64 image HIGH/CRITICAL vulnerability findings
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            --output "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" \
+            kima-hub:aio-ci-smoke
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          path = os.path.join(os.environ["RUNNER_TEMP"], "v111-image-vulnerabilities-arm64.json")
+          with open(path, encoding="utf-8") as handle:
+              results = json.load(handle).get("Results", [])
+          findings = [item for result in results for item in (result.get("Vulnerabilities") or [])]
+          fixable = [item for item in findings if item.get("FixedVersion")]
+          print("### arm64 assembled AIO vulnerability report")
+          print(f"HIGH/CRITICAL findings: {len(findings)}; with an identified fixed version: {len(fixable)}")
+          print("Full JSON is attached as a CI artifact; manual security triage remains mandatory before release.")
+          PY
+      - name: Retain arm64 image scan evidence for manual release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-aio-image-vulnerabilities-arm64
+          path: ${{ runner.temp }}/v111-image-vulnerabilities-arm64.json
+          if-no-files-found: error
+          retention-days: 14
