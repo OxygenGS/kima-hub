@@ -115,6 +115,8 @@ function probe(host) {
   console.log("AIO API loopback-only network isolation: PASS");
 })().catch(err => { console.error(err); process.exitCode = 1; });
 '
+bash .github/ci/check-aio-db-credential.sh "$name"
+db_secret_before="$(docker exec "$name" sha256sum /data/secrets/database_password | cut -d' ' -f1)"
 echo "Fork-specific persisted schema, unauthenticated write denial and PostgreSQL isolation: PASS"
 
 # Creates only synthetic 440Hz audio, an admin, a listener, playlists/history.
@@ -131,6 +133,8 @@ start_aio
 wait_ready
 secret_after="$(docker exec "$name" sha256sum /data/secrets/session_secret | cut -d' ' -f1)"
 test "$secret_before" = "$secret_after"
+test "$db_secret_before" = "$(docker exec "$name" sha256sum /data/secrets/database_password | cut -d' ' -f1)"
+bash .github/ci/check-aio-db-credential.sh "$name"
 n="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM \"User\" WHERE username IN ('ci_audio_admin','ci_audio_listener')")"
 test "$n" = 2
 n="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM \"Track\" WHERE id='ci-audio-track'")"
