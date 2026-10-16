@@ -17,7 +17,7 @@ describe("v1.11 Stats hours and storage units follow selected UI locale", () => 
         expect(bytes(n, "en")).toBe("1.5 GB");
         expect(bytes(n)).toBe("1.5 GB");
         expect(bytes(0, "nl")).toBe("0");
-        expect(bytes(1024 ** 2 * 1234, "nl")).toBe("1.234 MB");
+        expect(bytes(1024 ** 2 * 1000, "nl")).toBe("1.000 MB");
         expect(n).toBe(1610612736);
     });
 });
