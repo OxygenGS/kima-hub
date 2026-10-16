@@ -157,9 +157,10 @@ describe("Discover Weekly EN/NL interface", () => {
         expect(host.textContent).toContain("Hoe het werkt");
         expect(host.textContent).toContain("ListenBrainz");
         expect(host.textContent).toContain("Deezer");
-        expect(host.textContent).toContain("80-100%");
+        expect(host.textContent).toContain("80–100%");
         expect(host.textContent).toContain("/music/discovery");
         await selectLanguage("en");
+        expect(host.textContent).toContain("80-100%");
         expect(host.textContent).toContain("How It Works");
         expect(host.textContent).toContain("/music/discovery");
     });
