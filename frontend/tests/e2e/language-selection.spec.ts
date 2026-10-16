@@ -337,9 +337,9 @@ test.describe("Interface language", () => {
         await expect(moods).toContainText("Opgewekt");
         // The total count is intentionally outside the mood button group.
         await expect(page.getByText("1 nummer", { exact: true })).toBeVisible();
-        const search = page.getByRole("textbox", { name: "Nummers of artiesten zoeken" });
+        const search = page.getByRole("combobox", { name: "Nummers of artiesten zoeken" });
         await search.fill("CI Original Music Title");
-        await expect(page.getByRole("button", { name: /CI Original Music Title/ })).toBeVisible();
+        await expect(page.getByRole("option", { name: /CI Original Music Title/ })).toBeVisible();
 
         await page.evaluate(() => {
             localStorage.setItem("kima-hub-language", "en");
@@ -347,8 +347,8 @@ test.describe("Interface language", () => {
         });
         await expect(fallback).toContainText("This browser cannot draw the map because WebGL");
         await expect(page.getByRole("group", { name: "Moods in your library" })).toContainText("Upbeat");
-        await expect(page.getByRole("textbox", { name: "Search tracks or artists" })).toHaveValue("CI Original Music Title");
-        await expect(page.getByRole("button", { name: /CI Original Music Title/ })).toBeVisible();
+        await expect(page.getByRole("combobox", { name: "Search tracks or artists" })).toHaveValue("CI Original Music Title");
+        await expect(page.getByRole("option", { name: /CI Original Music Title/ })).toBeVisible();
         expect(mutations).toEqual([]);
     });
 
