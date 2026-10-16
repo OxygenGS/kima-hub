@@ -100,7 +100,8 @@ RUN apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
-RUN mkdir -p /app/backend /app/frontend /app/audio-analyzer /app/models \
+RUN groupadd --system kimaweb && useradd --system --gid kimaweb --home-dir /app/frontend --shell /usr/sbin/nologin kimaweb \
+    && mkdir -p /app/backend /app/frontend /app/audio-analyzer /app/models \
     /data/postgres /data/redis /run/postgresql /var/log/supervisor \
     && chown -R postgres:postgres /data/postgres /run/postgresql
 
@@ -369,7 +370,8 @@ ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 # Drop dev dependencies after the build: the runtime needs only next + react,
 # and the dev tree ships advisories the app never executes (the braces chain).
 RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build \
-    && npm prune --omit=dev && npm cache clean --force
+    && npm prune --omit=dev && npm cache clean --force \
+    && chown -R kimaweb:kimaweb /app/frontend/.next
 
 # ============================================
 # SECURITY HARDENING
@@ -408,7 +410,7 @@ pidfile=/var/run/supervisord.pid
 user=root
 
 [program:postgres]
-command=/usr/lib/postgresql/16/bin/postgres -D /data/postgres
+command=/usr/lib/postgresql/16/bin/postgres -D /data/postgres -c listen_addresses=localhost
 user=postgres
 autostart=true
 autorestart=true
@@ -419,7 +421,7 @@ stderr_logfile_maxbytes=0
 priority=10
 
 [program:redis]
-command=/usr/bin/redis-server --dir /data/redis --appendonly yes
+command=/usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
 user=redis
 autostart=true
 autorestart=true
@@ -444,6 +446,8 @@ directory=/app/backend
 priority=30
 
 [program:frontend]
+# Web UI serves port 3030 but does not require root. Its generated Next cache is owned by kimaweb.
+user=kimaweb
 command=/bin/bash -c "sleep 10 && cd /app/frontend && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3030"
 autostart=true
 autorestart=true
@@ -489,9 +493,9 @@ RUN cat > /app/start.sh << 'EOF'
 #!/bin/bash
 set -e
 
-# Security check: Warn if running internal services as root
-# Note: This container runs multiple services, some require root for initial setup
-# but individual services (postgres, backend processes) run as non-root users
+# AIO startup requires root for persistent volume preparation and the initial
+# PostgreSQL role/migration bootstrap. Supervisord drops privileges for the
+# frontend, PostgreSQL and Redis. Backend/analyzer privilege review remains open.
 
 echo ""
 echo "============================================================"
@@ -603,7 +607,7 @@ HBA
 fi
 
 # Start PostgreSQL temporarily to create database and user
-gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
+gosu postgres $PG_BIN/pg_ctl -D /data/postgres -o "-c listen_addresses=localhost" -w start
 
 # Migrate from Lidify -> Kima: rename old database and user if they exist
 if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" | grep -q 1; then
