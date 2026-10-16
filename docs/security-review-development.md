@@ -25,6 +25,13 @@ Inspected the current combined Draft #7 root `Dockerfile` and `.github/workflows
 
 **Decision:** Security gate OPEN. No merge/tag/push or real-installation change is authorized by this inspection.
 
+## AIO backend bind hardening — 16 October 2026
+
+- `backend/src/index.ts` now honors the existing validated `config.host` (`HOST` environment variable), rather than hardcoding `0.0.0.0`.
+- The AIO `Dockerfile` startup-generated backend `.env` sets `HOST=127.0.0.1`, restricting the internal backend API to the same container where the frontend proxy runs. The documented public interface remains port 3030.
+- Standalone backend deployments retain their existing default (`0.0.0.0`) unless operators explicitly set `HOST`, preserving their independent configurations. Any explicitly provided container environment `HOST` can override the `.env` value according to dotenv precedence; do not assume this protects custom configurations.
+- This mitigates one network exposure, **not** the fixed database password, root-execution concern or all internal endpoint authorization risks. Both native AIO builds, browser tests, permission tests, upgrade/rollback and fresh-image runtime must be green on the final commit before treating it as verified.
+
 ## Required follow-up validation
 
 - Enumerate all administration and download/request APIs, including aliases, import endpoints and job creation; verify regular-user denial server-side.
