@@ -56,4 +56,12 @@ if grep -Fq -- 'PGPASSWORD=kima' Dockerfile; then
   echo "SECURITY CHECK FAILED: legacy fixed password in AIO worker readiness checks" >&2
   exit 1
 fi
+require_text Dockerfile 'user=kimaweb' "Next.js frontend must drop root privileges"
+require_text Dockerfile 'chown -R kimaweb:kimaweb /app/frontend/.next' "Next runtime writable cache owned by its dedicated account"
+require_text Dockerfile 'redis-server --bind 127.0.0.1 -::1 --protected-mode yes' "Redis binds exclusively to AIO loopback"
+require_text Dockerfile 'postgres -D /data/postgres -c listen_addresses=localhost' "Persistent Postgres is restricted to loopback even on upgraded volumes"
+require_text Dockerfile 'pg_ctl -D /data/postgres -o "-c listen_addresses=localhost"' "Temporary Postgres migration server stays on loopback"
+require_text .github/ci/v111-aio-runtime-smoke.sh 'check-aio-service-boundaries.sh' "Fresh and restarted AIO runs real service boundary checks"
+require_text .github/ci/aio-real-image-rehearsal.sh 'check-aio-service-boundaries.sh' "v1.10 upgrade checks backend, Redis, Postgres and Next runtime"
+require_text .github/ci/aio-v111-real-image-rehearsal.sh 'check-aio-service-boundaries.sh' "v1.11 upgrade checks backend, Redis, Postgres and Next runtime"
 echo "Structural guard PASS; runtime authorization and all additional endpoints still require review."
