@@ -2,14 +2,21 @@
 
 Kima Hub — Oxygen's Fork uses typed, incremental interface translations.
 
-## Status — development (2026-10-14)
+## Status — development (2026-10-16)
 
 - English (`en`) is the default interface language; Dutch (`nl`) is available on the login, registration, **first-run onboarding**, and Settings screens.
 - Language changes immediately, applies to all components wired to the translation context, and persists in **this browser** using the `kima-hub-language` local storage key. Tabs of the same origin share the choice when browser storage is available. When storage is blocked, users can still switch between English and Dutch in the current tab, but the preference cannot survive a reload.
 - Preferences are **not stored in user accounts** and are **not synchronized between devices**. This does not require database changes or migrations.
-- The current dictionary contains **1,077 matching English/Dutch UI keys** on the language-development branch. This is the number of keys, **not** proof of complete screen coverage.
+- On experimental v1.11 PR #7 commit `f9858e3`, the dictionary contains **1,466 matching English/Dutch UI keys**, with no duplicate keys. This is a checked dictionary count, **not** proof that every visible screen is fully translated. The current GitHub Actions run must finish before its code is considered CI-green.
 - Route-level translations cover onboarding, sync, mix details, album/artist pages, and Vibe map/Galaxy/path/blend controls. Navigation, login, many Settings controls, and selected activity panels are also translated. The Soulseek results browser, filtering labels, grouped results and Vibe operation confirmation prompt also support Dutch. Route errors and critical recovery screens now provide Dutch labels, including a storage-backed fallback when the regular language provider is unavailable.
 - Incomplete areas include nested dialogs, some authenticated-only flows, server-provided errors, third-party metadata, and device-specific interfaces. Do **not** describe the entire application as translated until a real authenticated walkthrough is complete.
+
+## v1.11 experimental branch
+
+- The current work is chained as Draft PR #7 (v1.11 application + additional translations) → Draft PR #6 (upstream integration) → Draft PR #5 (original language selector) → `main`. The language selector already appears on public authentication/onboarding and signed-in Settings; the selected language is browser-local, not tied to the user account.
+- The current v1.11 localization covers new Stats, Vibe Map/Mood Mixer, Discover Weekly, settings, main player variants, audio-error recovery, home radio, and home media cards. Locale-aware keyboard seeking was added without changing the playback API. These changes remain experimental until final-head CI and real-device acceptance.
+- Verify both `en` and `nl` in actual authenticated admin/listener sessions before release. Preserve media metadata, playlist titles, genre/API identifiers and download controls; a translated visible button must never bypass backend permissions.
+- Final localized coverage, accessible controls and display text still require human review across desktop/mobile/TV. See [v1.11 release acceptance matrix](v111-release-acceptance.md).
 
 ## Implementation rules
 

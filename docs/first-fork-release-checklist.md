@@ -1,6 +1,6 @@
 # First post-v1.10.0 release — OxygenGS fork
 
-Last reviewed: **2026-10-14**. This is the **current** release checklist for PR [#5](https://github.com/OxygenGS/kima-hub/pull/5); `docs/release-readiness.md` is an archived checklist for earlier PR #1.
+Last reviewed: **2026-10-16**. This is the **current** release checklist for PR [#5](https://github.com/OxygenGS/kima-hub/pull/5); `docs/release-readiness.md` is an archived checklist for earlier PR #1.
 
 **Do not merge, publish a container, create a tag/release, or update CT 101 until explicitly approved.** Production CT 101 remains at upstream v1.10.0. The OxygenGS repository already published its own `v1.10.0` tag on 13 October 2026. Pick a **new, unique version** for the combined fork features; do not reuse that tag.
 
@@ -14,6 +14,14 @@ Last reviewed: **2026-10-14**. This is the **current** release checklist for PR 
 
 - [x] Offline full-volume snapshot and independently restored legacy PostgreSQL 16 data **passed** on `7129428` (AIO job `116107289812`), preserving account records, preferences, library and a non-database marker. This does **not** complete the genuine old-monolithic-AIO rollback requirement.
 - [x] [AIO Docker Compose and Dockge update/recovery guide](safe-aio-updates.md) added. Its full old-image procedure still requires a separate manual rehearsal.
+
+## v1.11 integration checkpoint — 16 October 2026
+
+- The combined update is being developed in three chained **Draft** PRs: [#7](https://github.com/OxygenGS/kima-hub/pull/7) → [#6](https://github.com/OxygenGS/kima-hub/pull/6) → [#5](https://github.com/OxygenGS/kima-hub/pull/5) → main. Do not release any one PR in isolation and assume it contains all v1.11/UI/localization changes.
+- Experimental `35b5e5a` passed [eight/eight GitHub Actions jobs](https://github.com/OxygenGS/kima-hub/actions/runs/38875081664), including both locally built no-push AIO architectures, actual official upstream v1.10.0/v1.11.0 upgrade/independent rollback, full backend tests, and public EN/NL browser switching.
+- Latest experimental `f9858e3` extends localized media cards; [its own CI](https://github.com/OxygenGS/kima-hub/actions/runs/38878982120) is separate. **Do not reuse green evidence from an earlier commit when deciding release readiness.**
+- Latest official upstream release checked: **v1.11.0**, dated 12 October 2026; no fork candidate image, stable tag or new Docker/Compose version has been published.
+- The **remaining manual and publication gates** are defined in [the v1.11 acceptance matrix](v111-release-acceptance.md). Actual production CT 101 remains untouched.
 
 ## Open before merging or publishing anything
 
