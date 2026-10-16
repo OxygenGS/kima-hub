@@ -5,6 +5,7 @@ import { useAudioState } from "@/lib/audio-state-context";
 import { useFeatures } from "@/lib/features-context";
 import { useVibeToggle } from "@/hooks/useVibeToggle";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface VibeToggleButtonProps {
     /** True when there is no music track to match against. */
@@ -26,6 +27,7 @@ export function VibeToggleButton({
     idleClassName,
     activeClassName,
 }: VibeToggleButtonProps) {
+    const { t } = useLanguage();
     const { activeOperation } = useAudioState();
     const { vibeEmbeddings, loading } = useFeatures();
     const { handleVibeToggle, isVibeLoading } = useVibeToggle();
@@ -47,9 +49,9 @@ export function VibeToggleButton({
                       ? activeClassName
                       : idleClassName,
             )}
-            aria-label={active ? "Turn off vibe mode" : "Match this vibe"}
+            aria-label={t(active ? "Turn off vibe mode" : "Match this vibe")}
             aria-pressed={active}
-            title={active ? "turn off vibe mode" : "match this vibe - find similar sounding tracks"}
+            title={t(active ? "Turn off vibe mode" : "Match this vibe - find similar sounding tracks")}
         >
             <Icon className={cn(iconClassName, isVibeLoading && "animate-spin")} />
         </button>

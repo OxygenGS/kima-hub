@@ -1429,6 +1429,11 @@ export const english = {
     "months": "months",
     "Moved": "Moved",
     "you liked to your library.": "you liked to your library.",
+    "downloading": "downloading",
+    "seek will be available when cached": "seek will be available when cached",
+    "downloading... seeking will be available when cached": "downloading... seeking will be available when cached",
+    "release to seek": "release to seek",
+    "click or drag to seek": "click or drag to seek",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2861,6 +2866,11 @@ export const dutch: Record<TranslationKey, string> = {
     "months": "maanden",
     "Moved": "Verplaatst",
     "you liked to your library.": "die je leuk vindt naar je bibliotheek.",
+    "downloading": "downloaden",
+    "seek will be available when cached": "spoelen is mogelijk zodra het nummer in de cache staat",
+    "downloading... seeking will be available when cached": "downloaden... spoelen is mogelijk zodra het nummer in de cache staat",
+    "release to seek": "loslaten om te spoelen",
+    "click or drag to seek": "klik of sleep om te spoelen",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface SeekSliderProps {
     /** Current progress percentage (0-100) */
@@ -35,6 +36,7 @@ export function SeekSlider({
     showHandle = true,
     variant = "default",
 }: SeekSliderProps) {
+    const { t } = useLanguage();
     const [isDragging, setIsDragging] = useState(false);
     const [previewProgress, setPreviewProgress] = useState<number | null>(null);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -177,11 +179,11 @@ export function SeekSlider({
     const getTooltipText = () => {
         if (!hasMedia) return undefined;
         if (!canSeek) {
-            return downloadProgress !== null
-                ? `downloading ${downloadProgress}%... seek will be available when cached`
-                : "downloading... seeking will be available when cached";
+            return downloadProgress != null
+                ? `${t("downloading")} ${downloadProgress}%... ${t("seek will be available when cached")}`
+                : t("downloading... seeking will be available when cached");
         }
-        return isDragging ? "release to seek" : "click or drag to seek";
+        return t(isDragging ? "release to seek" : "click or drag to seek");
     };
 
     const getVariantStyles = () => {
