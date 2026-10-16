@@ -276,17 +276,9 @@ jobs:
             --format json \
             --output "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" \
             kima-hub:aio-ci-smoke
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json, os
-          path = os.path.join(os.environ["RUNNER_TEMP"], "v111-image-vulnerabilities-amd64.json")
-          with open(path, encoding="utf-8") as handle:
-              results = json.load(handle).get("Results", [])
-          findings = [item for result in results for item in (result.get("Vulnerabilities") or [])]
-          fixable = [item for item in findings if item.get("FixedVersion")]
-          print("### amd64 assembled AIO vulnerability report")
-          print(f"HIGH/CRITICAL findings: {len(findings)}; with an identified fixed version: {len(fixable)}")
-          print("Full JSON is attached as a CI artifact; manual security triage remains mandatory before release.")
-          PY
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py \
+            "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" amd64
       - name: Retain amd64 image scan evidence for manual release review
         uses: actions/upload-artifact@v4
         with:
@@ -344,17 +336,9 @@ jobs:
             --format json \
             --output "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" \
             kima-hub:aio-ci-smoke
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json, os
-          path = os.path.join(os.environ["RUNNER_TEMP"], "v111-image-vulnerabilities-arm64.json")
-          with open(path, encoding="utf-8") as handle:
-              results = json.load(handle).get("Results", [])
-          findings = [item for result in results for item in (result.get("Vulnerabilities") or [])]
-          fixable = [item for item in findings if item.get("FixedVersion")]
-          print("### arm64 assembled AIO vulnerability report")
-          print(f"HIGH/CRITICAL findings: {len(findings)}; with an identified fixed version: {len(fixable)}")
-          print("Full JSON is attached as a CI artifact; manual security triage remains mandatory before release.")
-          PY
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py \
+            "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" arm64
       - name: Retain arm64 image scan evidence for manual release review
         uses: actions/upload-artifact@v4
         with:
