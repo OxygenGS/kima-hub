@@ -3,7 +3,7 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useLanguage } from "@/lib/i18n/language-context";
 
-const getGreeting = () => {
+const getGreeting = (): "Good morning" | "Good afternoon" | "Good evening" => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
     if (hour < 18) return "Good afternoon";
