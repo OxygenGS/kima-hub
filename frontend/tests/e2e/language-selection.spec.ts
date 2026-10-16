@@ -284,6 +284,73 @@ test.describe("Interface language", () => {
         expect(writes).toEqual([]);
     });
 
+    test("localizes a populated Vibe map and WebGL-disabled fallback without rewriting music", async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "nl");
+            // Emulate a device without WebGL2; the real map component must
+            // still show a localized, accessible fallback without a crash.
+            HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
+                apply(target, thisArg, args) {
+                    if (args[0] === "webgl2") return null;
+                    return Reflect.apply(target, thisArg, args);
+                },
+            });
+        });
+        const mutations: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/vibe/") && request.method() !== "GET") {
+                mutations.push(request.url());
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "vibe-browser-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/vibe/map") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        trackCount: 1,
+                        tracks: [{
+                            id: "ci-unmodified-track-id",
+                            title: "CI Original Music Title",
+                            artist: "CI Original Artist",
+                            artistId: "ci-artist-id", albumId: "ci-album-id", coverUrl: null,
+                            x: 0.3, y: 0.4, z: 0.5, colour: 0.8,
+                            dominantMood: "moodHappy",
+                            moods: { moodHappy: 0.98 }, energy: 0.15, valence: 0.82,
+                        }],
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+
+        await page.goto("/vibe");
+        const fallback = page.getByTestId("vibe-map-unsupported");
+        await expect(fallback).toContainText("Deze browser kan de kaart niet tekenen");
+        const moods = page.getByRole("group", { name: "Sferen in je bibliotheek" });
+        await expect(moods).toContainText("Opgewekt");
+        await expect(moods).toContainText("1 nummer");
+        const search = page.getByRole("textbox", { name: "Nummers of artiesten zoeken" });
+        await search.fill("CI Original Music Title");
+        await expect(page.getByRole("button", { name: /CI Original Music Title/ })).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(fallback).toContainText("This browser cannot draw the map because WebGL");
+        await expect(page.getByRole("group", { name: "Moods in your library" })).toContainText("Upbeat");
+        await expect(page.getByRole("textbox", { name: "Search tracks or artists" })).toHaveValue("CI Original Music Title");
+        await expect(page.getByRole("button", { name: /CI Original Music Title/ })).toBeVisible();
+        expect(mutations).toEqual([]);
+    });
+
     test("switches the Vibe Map empty-library page EN/NL without modifying music data", async ({ page }) => {
         await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         const mutations: string[] = [];

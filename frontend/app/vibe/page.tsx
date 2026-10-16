@@ -170,7 +170,7 @@ export default function VibePage() {
             const response = await api.getVibeSimilarTracks(trackId, 50, controller.signal);
             if (controller.signal.aborted) return;
             if (!response.tracks?.length) {
-                notify.error("No matches for this track yet");
+                notify.error(translate(locale, "No matches for this track yet"));
                 return;
             }
             if (!mapData?.tracks.some((t) => t.id === trackId)) return;
@@ -192,18 +192,18 @@ export default function VibePage() {
             }
         } catch (error) {
             if (controller.signal.aborted) return;
-            notify.error(error instanceof Error && error.message ? error.message : "Couldn't find matches for this track");
+            notify.error(error instanceof Error && error.message ? error.message : translate(locale, "Couldn't find matches for this track"));
         }
-    }, [mapData, replaceOperation, setHighlightedIds, setMode]);
+    }, [mapData, replaceOperation, setHighlightedIds, setMode, locale]);
 
     const playById = useCallback(async (trackId: string) => {
         try {
             const track = await api.getTrack(trackId);
             if (track) playTrack(track);
         } catch {
-            notify.error("Couldn't play this track");
+            notify.error(translate(locale, "Couldn't play this track"));
         }
-    }, [playTrack]);
+    }, [playTrack, locale]);
 
     // The second click of a double-click that picked a song-path destination
     // must not also start that track and race the path's queue.
@@ -235,9 +235,9 @@ export default function VibePage() {
             };
             await replaceOperation(operation, tracks, 0);
         } catch (error) {
-            notify.error(error instanceof Error && error.message ? error.message : "Couldn't find a path between those two tracks");
+            notify.error(error instanceof Error && error.message ? error.message : translate(locale, "Couldn't find a path between those two tracks"));
         }
-    }, [replaceOperation]);
+    }, [replaceOperation, locale]);
 
     // ── map interaction ──
     const handleTrackClick = useCallback((trackId: string) => {
