@@ -69,6 +69,9 @@ start_aio
 wait_ready
 bash .github/ci/check-aio-service-boundaries.sh "$name"
 
+echo "---- Confirm vendored CLAP audio license ships with runtime ----"
+docker exec "$name" test -r /app/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0
+docker exec "$name" grep -Fq 'Apache License' /app/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0
 echo "---- Assert deployed Python runtime is transformers-free ----"
 docker exec "$name" python3 -c 'import importlib.util,tokenizers; assert importlib.util.find_spec("transformers") is None, "vulnerable transformers runtime unexpectedly shipped"; print("Pinned Rust tokenizer present; transformers absent: PASS")'
 echo "---- Verify fork-specific schema, branding, PG isolation ----"
