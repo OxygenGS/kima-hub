@@ -29,10 +29,10 @@ export function ServerPanel({ system }: { system: SystemStats }) {
 
             <div className="grid gap-x-10 gap-y-5 grid-cols-2 sm:grid-cols-4">
                 <Reading label={t("tracks")} value={formatStatsCount(system.library.tracks, locale)} />
-                <Reading label={t("library size")} value={bytes(system.library.bytes)} />
+                <Reading label={t("library size")} value={bytes(system.library.bytes, locale)} />
                 <Reading
                     label={t("cache size")}
-                    value={bytes((system.cache.downloadedMb + system.cache.transcodedMb) * 1048576)}
+                    value={bytes((system.cache.downloadedMb + system.cache.transcodedMb) * 1048576, locale)}
                 />
                 <Reading
                     label={t("failed tracks")}

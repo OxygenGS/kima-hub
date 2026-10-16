@@ -185,7 +185,7 @@ export default function StatsPage() {
             content: (
                 <Finding
                     claim={`${formatStatsCount(shelf.neverPlayed, locale)} ${shelf.neverPlayed === 1 ? t("track") : t("tracks")} ${t("never played")}`}
-                    scope={shown === "all" ? undefined : "all time"}
+                    scope={shown === "all" ? undefined : t("all time")}
                     evidence={
                         <div className="flex flex-col gap-(--stat-gap-block)">
                             <Coverage shelf={shelf} />
@@ -316,11 +316,11 @@ function Overview({
             <div className="flex flex-col gap-(--stat-gap-block)">
                 <h1
                     className="text-[length:var(--stat-hero)] leading-[1.02] font-light tracking-[-0.03em] text-[var(--text-primary)] text-balance"
-                    aria-label={`${t("about")} ${hoursValue(listening.estimatedSeconds)} ${t("hours of music")} ${window}`.trim()}
+                    aria-label={`${t("about")} ${hoursValue(listening.estimatedSeconds, locale)} ${t("hours of music")} ${window}`.trim()}
                 >
                     {t("about")}{" "}
                     <span className="t-figure text-[length:var(--stat-hero)]">
-                        {hoursValue(listening.estimatedSeconds)}
+                        {hoursValue(listening.estimatedSeconds, locale)}
                     </span>{" "}
                     {t("hours of music")}{window ? ` ${window}` : ""}
                 </h1>

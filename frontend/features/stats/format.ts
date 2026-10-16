@@ -4,19 +4,22 @@
  * Nothing rounds to a lie: 0.4 hours is "24 minutes", not "0 hours".
  */
 
+import type { Locale } from "@/lib/i18n/translations";
+import { formatStatsCount, formatStatsOneDecimal } from "./locale-format";
+
 /** Just the figure, for when a label already says what it is. */
-export function hoursValue(seconds: number): string {
+export function hoursValue(seconds: number, locale: Locale = "en"): string {
     const h = seconds / 3600;
-    if (h < 10 && h > 0) return h.toFixed(1);
-    return Math.round(h).toLocaleString();
+    if (h < 10 && h > 0) return formatStatsOneDecimal(h, locale);
+    return formatStatsCount(Math.round(h), locale);
 }
 
-export function bytes(n: number): string {
+export function bytes(n: number, locale: Locale = "en"): string {
     if (n <= 0) return "0";
     const units = ["B", "KB", "MB", "GB", "TB"];
     const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
     const v = n / 1024 ** i;
-    return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+    return `${v < 10 && i > 0 ? formatStatsOneDecimal(v, locale) : formatStatsCount(Math.round(v), locale)} ${units[i]}`;
 }
 
 export function uptime(seconds: number): string {

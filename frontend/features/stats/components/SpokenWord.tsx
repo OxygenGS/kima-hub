@@ -6,6 +6,7 @@
  */
 
 import { hoursValue } from "../format";
+import { formatStatsCount } from "../locale-format";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
 import type { SpokenStats } from "../types";
@@ -27,13 +28,13 @@ export function SpokenWord({ spoken }: { spoken: SpokenStats }) {
         <div className="flex flex-col gap-5">
             {audiobooks.seconds > 0 && (
                 <Entry
-                    value={hoursValue(audiobooks.seconds)}
+                    value={hoursValue(audiobooks.seconds, locale)}
                     unit={t("hours of audiobooks")}
                     lines={[
                         joined([
-                            audiobooks.finished > 0 && `${audiobooks.finished} ${t("finished")}`,
-                            audiobooks.inProgress > 0 && `${audiobooks.inProgress} ${t("in progress")}`,
-                            audiobooks.setAside > 0 && `${audiobooks.setAside} ${t("untouched 90+ days")}`,
+                            audiobooks.finished > 0 && `${formatStatsCount(audiobooks.finished, locale)} ${t("finished")}`,
+                            audiobooks.inProgress > 0 && `${formatStatsCount(audiobooks.inProgress, locale)} ${t("in progress")}`,
+                            audiobooks.setAside > 0 && `${formatStatsCount(audiobooks.setAside, locale)} ${t("untouched 90+ days")}`,
                         ]),
                         audiobooks.current &&
                             `${t("current:")} ${audiobooks.current.title} · ${Math.round(audiobooks.current.percent * 100)}%`,
@@ -44,17 +45,17 @@ export function SpokenWord({ spoken }: { spoken: SpokenStats }) {
 
             {podcasts.seconds > 0 && (
                 <Entry
-                    value={hoursValue(podcasts.seconds)}
+                    value={hoursValue(podcasts.seconds, locale)}
                     unit={t("hours of podcasts")}
                     lines={[
                         joined([
                             podcasts.subscriptions > 0 &&
-                                `${podcasts.subscriptions} ${t(podcasts.subscriptions === 1 ? "subscription" : "subscriptions")}`,
+                                `${formatStatsCount(podcasts.subscriptions, locale)} ${t(podcasts.subscriptions === 1 ? "subscription" : "subscriptions")}`,
                             podcasts.finished > 0 &&
-                                `${podcasts.finished} ${t(podcasts.finished === 1 ? "episode" : "episodes")} ${t("finished")}`,
+                                `${formatStatsCount(podcasts.finished, locale)} ${t(podcasts.finished === 1 ? "episode" : "episodes")} ${t("finished")}`,
                         ]),
                         podcasts.backlog > 0 &&
-                            `${podcasts.backlog.toLocaleString()} ${t("unplayed (count)")} ${t(podcasts.backlog === 1 ? "episode" : "episodes")}`,
+                            `${formatStatsCount(podcasts.backlog, locale)} ${t("unplayed (count)")} ${t(podcasts.backlog === 1 ? "episode" : "episodes")}`,
                     ]}
                 />
             )}
