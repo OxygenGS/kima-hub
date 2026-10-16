@@ -335,7 +335,8 @@ test.describe("Interface language", () => {
         await expect(fallback).toContainText("Deze browser kan de kaart niet tekenen");
         const moods = page.getByRole("group", { name: "Sferen in je bibliotheek" });
         await expect(moods).toContainText("Opgewekt");
-        await expect(moods).toContainText("1 nummer");
+        // The total count is intentionally outside the mood button group.
+        await expect(page.getByText("1 nummer", { exact: true })).toBeVisible();
         const search = page.getByRole("textbox", { name: "Nummers of artiesten zoeken" });
         await search.fill("CI Original Music Title");
         await expect(page.getByRole("button", { name: /CI Original Music Title/ })).toBeVisible();
