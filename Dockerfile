@@ -468,7 +468,7 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",MAX_ANALYZE_SECONDS="90",BRPOP_TIMEOUT="5",MODEL_IDLE_TIMEOUT="300",NUM_WORKERS="2",THREADS_PER_WORKER="1"
+environment=REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",MAX_ANALYZE_SECONDS="90",BRPOP_TIMEOUT="5",MODEL_IDLE_TIMEOUT="300",NUM_WORKERS="2",THREADS_PER_WORKER="1"
 priority=50
 
 [program:audio-analyzer-clap]
@@ -481,7 +481,7 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",MODEL_IDLE_TIMEOUT="300"
+environment=REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",MODEL_IDLE_TIMEOUT="300"
 priority=60
 EOF
 
@@ -562,6 +562,28 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
 
+# Preserve a unique AIO database credential alongside the full /data backup.
+# Never regenerate it on an ordinary restart. A pre-fork volume receives one
+# on first upgrade; PostgreSQL's role is then updated before Prisma starts.
+mkdir -p /data/secrets
+chmod 700 /data/secrets
+if [ ! -f /data/secrets/database_password ]; then
+    secret_tmp="$(mktemp /data/secrets/.database_password.XXXXXXXX)"
+    if ! openssl rand -hex 32 > "$secret_tmp"; then
+        rm -f "$secret_tmp"
+        echo "FATAL: Cannot generate the database credential" >&2
+        exit 1
+    fi
+    chmod 600 "$secret_tmp"
+    mv "$secret_tmp" /data/secrets/database_password
+fi
+chmod 600 /data/secrets/database_password
+DB_PASSWORD="$(cat /data/secrets/database_password)"
+if [[ ! "$DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "FATAL: Invalid persisted AIO database credential; refusing to change the database role" >&2
+    exit 1
+fi
+
 # Start PostgreSQL temporarily to create database and user
 gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
 
@@ -576,16 +598,21 @@ if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" |
     # Rename the user if it exists
     if gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'lidify'" | grep -q 1; then
         gosu postgres psql -c "ALTER USER lidify RENAME TO kima;"
-        gosu postgres psql -c "ALTER USER kima WITH PASSWORD 'kima';"
         echo "✓ User renamed: lidify -> kima"
     fi
 fi
 
 # Create user and database if they don't exist (fresh install)
 gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'kima'" | grep -q 1 || \
-    gosu postgres psql -c "CREATE USER kima WITH PASSWORD 'kima';"
+    gosu postgres psql -c "CREATE USER kima;"
 gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'kima'" | grep -q 1 || \
     gosu postgres psql -c "CREATE DATABASE kima OWNER kima;"
+
+# Pass the generated 64-character hex value over stdin (never as a psql
+# command-line argument). Reapplying the same password is restart-safe.
+gosu postgres psql -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
+ALTER ROLE kima WITH PASSWORD '$DB_PASSWORD';
+SQL
 
 # Create pgvector extension as superuser (required before migrations)
 echo "Creating pgvector extension..."
@@ -593,7 +620,7 @@ gosu postgres psql -d kima -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Run Prisma migrations
 cd /app/backend
-export DATABASE_URL="postgresql://kima:kima@localhost:5432/kima"
+export DATABASE_URL="postgresql://kima:${DB_PASSWORD}@localhost:5432/kima"
 echo "Running Prisma migrations..."
 ls -la prisma/migrations/ || echo "No migrations directory!"
 
@@ -681,7 +708,7 @@ fi
 # Write environment file for backend
 cat > /app/backend/.env << ENVEOF
 NODE_ENV=production
-DATABASE_URL=postgresql://kima:kima@localhost:5432/kima
+DATABASE_URL=postgresql://kima:${DB_PASSWORD}@localhost:5432/kima
 REDIS_URL=redis://localhost:6379
 # The AIO frontend proxies API requests to loopback; do not expose the backend on container networks.
 HOST=127.0.0.1
@@ -692,6 +719,7 @@ SESSION_SECRET=$SESSION_SECRET
 SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
 DISABLE_CLAP=${DISABLE_CLAP:-}
 ENVEOF
+chmod 600 /app/backend/.env
 
 # Optionally disable CLAP audio analyzer (for low-memory deployments)
 if [ "${DISABLE_CLAP:-false}" = "true" ] || [ "${DISABLE_CLAP:-0}" = "1" ]; then
@@ -712,7 +740,7 @@ fi
 echo "Starting Kima..."
 exec env \
     NODE_ENV=production \
-    DATABASE_URL="postgresql://kima:kima@localhost:5432/kima" \
+    DATABASE_URL="$DATABASE_URL" \
     SESSION_SECRET="$SESSION_SECRET" \
     SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
