@@ -24,4 +24,4 @@ Scope: `feature/user-permissions`, initial static review on 2026-10-13. Not a pe
 
 ## Gate
 
-Security review remains OPEN. No merge, registry publication, tag or deployment to any real installation is authorized by this review.
+Security review remains OPEN. No merge, release, registry publication or deployment to any real installation is authorized by this review. A separate release approval is required.
