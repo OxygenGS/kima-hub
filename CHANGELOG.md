@@ -4,6 +4,28 @@
 
 This changelog documents changes made to Kima Hub — Oxygen's Fork, independently maintained by OxygenGS and originally developed by Chevron7Locked.
 
+## OxygenGS fork v1.11.0 — release preparation (unpublished)
+
+**Release status: Draft PRs #5, #6 and #7; no new GHCR image/tag exists.** This is OxygenGS's combined release target, not the official upstream tag and not authorization to deploy.
+
+### Added
+- Integrated official upstream Kima v1.11.0 features including Stats, Discover Weekly, Vibe Map, updated audio and library processing.
+- English/Dutch language selector across user-facing screens, login, onboarding, Settings, playback controls and the newer v1.11 views; music titles, stored metadata and API identifiers remain unchanged.
+- Kept fork-owned user music-request/download permissions and configurable instance branding.
+
+### Security and reliability
+- AIO backend, Redis and PostgreSQL bound to container loopback; PostgreSQL role uses a persistent per-installation random credential with SCRAM and an upgrade-safe legacy-password migration.
+- Dedicated unprivileged Next.js frontend process; backend and analyzers require separate non-root compatibility review.
+- Removed vulnerable Transformers runtime dependency from ONNX CLAP while retaining tested model/audio parity, with pinned tokenizer and Apache-licensed NumPy helper attribution.
+- Added structural and real HTTP permission tests, native AMD64/ARM64 AIO build/smoke, synthetic EN/NL browser and user-role tests, and disposable genuine upstream v1.10/v1.11 copy-upgrade plus independent rollback.
+- Added Trivy source/dependency and assembled-image scans. **Image-security acceptance is still OPEN:** prior scans reported eight CRITICAL OS-package records on each architecture; green CI is not proof of a safe release.
+
+### Release gates outstanding
+- Exact final-head CI including image security, manual cross-device EN/NL accessibility and playback, independent representative cold backup/restore, and security/license review.
+- Explicit separate approval for a candidate image, stable tag/merge/publication and any existing-installation upgrade. Existing `ghcr.io/oxygengs/kima-hub:v1.10.0` remains the published default.
+
+---
+
 ## Unreleased — October 2026
 
 ### Added
@@ -29,10 +51,7 @@ This changelog documents changes made to Kima Hub — Oxygen's Fork, independent
 - 879 backend automated tests passed.
 - 1,193 automated tests passed in total.
 - Confirmed successful application startup and health checks.
-- Tested database migration using a restored copy of production data.
-- Successfully deployed the fork using an existing Kima Hub installation.
-- Confirmed preservation of the existing user and 1,152 music tracks during migration.
-- Verified authentication, branding, music playback, and availability of permission controls.
+- Verified migration, authentication, branding, media playback and permission checks in isolated test environments; no private installation details are included in this public changelog.
 
 ### Known Limitations
 
