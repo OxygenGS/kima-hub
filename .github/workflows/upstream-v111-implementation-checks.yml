@@ -16,6 +16,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependency-security:
+    name: Fixable dependency vulnerabilities and committed secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Trivy scanner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Block fixable HIGH/CRITICAL findings and secrets
+        run: |
+          trivy fs \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --exit-code 1 \
+            --format table \
+            .
+      - name: Report container configuration findings for human review
+        if: always()
+        run: |
+          trivy config \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format table \
+            . >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+
   fork-safety:
     name: Verify fork guards survived v1.11 source merge
     runs-on: ubuntu-latest
@@ -193,7 +223,7 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety]
+    needs: [frontend, backend, fork-safety, dependency-security]
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples (do not deploy)
@@ -238,7 +268,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety]
+    needs: [frontend, backend, fork-safety, dependency-security]
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples
