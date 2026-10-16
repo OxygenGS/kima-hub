@@ -23,6 +23,34 @@ test.describe("Interface language", () => {
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
     });
 
+    test("can switch Dutch in a storage-blocked browser for the current tab", async ({ page }) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(window, "localStorage", {
+                configurable: true,
+                get() {
+                    throw new DOMException("Storage disabled", "SecurityError");
+                },
+            });
+        });
+        await page.goto("/login");
+
+        const select = page.locator("#login-language");
+        await expect(select).toHaveValue("en");
+        await select.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await select.selectOption("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await select.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+
+        // Storage is blocked, so the preference should not survive a full reload.
+        await page.reload();
+        await expect(select).toHaveValue("en");
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
     test("keeps language selection separate from server-side credentials", async ({ page }) => {
         await page.goto("/login");
         await page.locator("#login-language").selectOption("nl");

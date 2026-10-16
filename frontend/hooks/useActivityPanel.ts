@@ -7,14 +7,23 @@ const ACTIVITY_PANEL_KEY = "kima_activity_panel_open";
 export function useActivityPanel() {
     const [isOpen, setIsOpen] = useState(() => {
         if (typeof window === "undefined") return false;
-        return localStorage.getItem(ACTIVITY_PANEL_KEY) === "true";
+        try {
+            return window.localStorage.getItem(ACTIVITY_PANEL_KEY) === "true";
+        } catch {
+            // Private/sandboxed browsers may prohibit access to storage.
+            return false;
+        }
     });
     const [activeTab, setActiveTab] = useState<"notifications" | "active" | "imports" | "history" | "settings">("notifications");
 
     // Persist state to localStorage
     useEffect(() => {
         if (typeof window !== "undefined") {
-            localStorage.setItem(ACTIVITY_PANEL_KEY, isOpen ? "true" : "false");
+            try {
+                window.localStorage.setItem(ACTIVITY_PANEL_KEY, isOpen ? "true" : "false");
+            } catch {
+                // The panel continues to function in memory without persistence.
+            }
         }
     }, [isOpen]);
 
