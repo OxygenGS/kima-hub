@@ -13,7 +13,7 @@ The intended release combines Draft PR #5 (EN/NL language selector), Draft PR #6
 | Upgrade migrations | Fresh database and two real upstream AIO sources (official v1.10.0 **and** official v1.11.0), both into new candidate using **isolated copies** | Both real-upstream source upgrades and independent rollbacks passed again on `d42a966` in Actions #38946015055; rerun on final candidate/merged release commit |
 | Independent rollback | Restore an untouched *pre-upgrade full /data* snapshot to a **new volume**, then boot the original image and check original data, credentials and secrets | Disposable original-image restores passed on `d42a966`; representative copied-data human rehearsal outstanding |
 | Containers and dependencies | Native AMD64/ARM64 image build and smoke, non-root/secret exposure, Docker/Compose mounts, dependency findings, third-party license/attribution | Both AIO architectures built, smoked and full-image Trivy scanned on `d42a966`. Reports: AMD64 297 HIGH / 8 CRITICAL and ARM64 296 HIGH / 8 CRITICAL, with no Trivy-listed fixed versions. [Image security triage](v111-image-security-review.md) **OPEN**; non-root, exploitability, distro alternatives and licensing still require review |
-| Release trigger safety | Final tags unique and higher than existing fork v1.10.0; GHCR image origin, no accidental \`:latest\` prerelease, stable publishing only after approval | Not published or trigger-tested |
+| Release trigger safety | Final tags unique and newer than published fork v1.10.0; metadata check on stable and pre-release workflows, blocking fixable-image vulnerability scan before push, no accidental `:latest` pre-release | v1.11.0 proposed (not tagged); source guards added, publishing workflows have not been dispatched or end-to-end release tested |
 
 ## Gate B — genuine interface acceptance (disposable isolated install)
 
@@ -34,7 +34,7 @@ Record explicit sign-off by a reviewer after these checks. Automated synthetic-b
 ## Gate C — candidate publication (requires a new explicit approval)
 
 - [ ] Review open issues and translate/resolve known release-blocking errors.
-- [ ] Set a unique fork version above existing published v1.10.0 and update frontend/backend root package versions, lockfiles, changelog, release notes, Compose tags, README, supported migration notes and upstream attribution together.
+- [ ] Proposed fork tag is **v1.11.0** (not created; verified absent during preparation). Both package.json versions and lockfile roots are already 1.11.0; the root has no npm package. Recheck tag uniqueness, run `.github/ci/check-release-metadata.py --candidate`, complete metadata/release notes and the [release handoff](v111-release-handoff.md). Keep Compose defaults at published v1.10.0 until v1.11.0 actually exists.
 - [ ] Inspect dependency and image-vulnerability reports, including [both fully built AIO image scans](v111-image-security-review.md). Eight CRITICAL OS-package findings per architecture remain unaccepted. The new CI image evaluator blocks findings with Trivy-listed fixes; unresolved findings require documented human security acceptance and possible package/base-image mitigation before publication.
 - [ ] Obtain explicit permission to publish an isolated pre-release tag/image; **do not** update \`:latest\`. Pull the published digest into an isolated test stack and repeat smoke plus copied-volume migration and independent rollback.
 - [ ] Obtain separate permission to merge/release a stable tag, and reverify the exact resulting combined commit. No production use follows automatically.
