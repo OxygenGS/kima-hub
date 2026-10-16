@@ -5,8 +5,12 @@ import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { Music } from "lucide-react";
 import { api } from "@/lib/api";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function NowPlayingTab() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
 
@@ -19,7 +23,7 @@ export function NowPlayingTab() {
             <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
                 <Music className="w-10 h-10 text-[var(--text-muted)] mb-4" />
                 <p className="text-sm text-[var(--text-muted)]">
-                    Start listening to see what&apos;s playing here
+                    {t("Start listening to see what's playing here")}
                 </p>
             </div>
         );
@@ -32,7 +36,7 @@ export function NowPlayingTab() {
                     {coverUrl ? (
                         <CachedImage
                             src={coverUrl}
-                            alt={currentTrack.album?.title || "Album art"}
+                            alt={currentTrack.album?.title || t("Album art")}
                             fill
                             sizes="280px"
                             className="object-cover"
@@ -52,7 +56,7 @@ export function NowPlayingTab() {
                         {currentTrack.title}
                     </p>
                     <p className="text-sm text-[var(--text-secondary)] truncate">
-                        {currentTrack.artist?.name || "Unknown Artist"}
+                        {currentTrack.artist?.name || t("Unknown Artist")}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)] truncate">
                         {currentTrack.album?.title}

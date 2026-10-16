@@ -11,6 +11,7 @@ import { VibeToolbar } from "@/features/vibe/VibeToolbar";
 import { MoodLegend } from "@/features/vibe/MoodLegend";
 import { TrackPanel } from "@/features/vibe/TrackPanel";
 import { QueueTab } from "@/features/vibe/tabs/QueueTab";
+import { NowPlayingTab } from "@/features/vibe/tabs/NowPlayingTab";
 import type { MapTrack } from "@/features/vibe/types";
 
 vi.mock("@/components/ui/CachedImage", () => ({
@@ -20,13 +21,14 @@ vi.mock("@/components/ui/CachedImage", () => ({
 const audioControls = vi.hoisted(() => ({
     playTracks: vi.fn(), pause: vi.fn(), resume: vi.fn(),
 }));
+const fixtures = vi.hoisted(() => ({ showNowPlaying: true }));
 const originals = vi.hoisted(() => ([
     { id: "ci-recording-1", title: "CI Original Track Title", artist: { name: "CI Artist" }, duration: 180 },
     { id: "ci-recording-2", title: "Another Original Track", artist: { name: "CI Artist" }, duration: 150 },
 ]));
 vi.mock("@/lib/audio-state-context", () => ({
     useAudioState: () => ({
-        currentTrack: originals[0], queue: originals,
+        currentTrack: fixtures.showNowPlaying ? originals[0] : null, queue: originals,
         currentIndex: 0, activeOperation: { type: "drift" },
     }),
 }));
@@ -66,6 +68,7 @@ const track: MapTrack = {
 };
 
 beforeEach(() => {
+    fixtures.showNowPlaying = true;
     localStorage.removeItem("kima-hub-language");
     audioControls.playTracks.mockReset();
     audioControls.pause.mockReset();
@@ -80,6 +83,26 @@ afterEach(() => {
 });
 
 describe("Vibe Map EN/NL controls", () => {
+    it("translates the empty Now Playing tab without inventing track metadata", async () => {
+        fixtures.showNowPlaying = false;
+        localStorage.setItem("kima-hub-language", "nl");
+        await render(<NowPlayingTab />);
+        expect(host.textContent).toContain("Begin met luisteren om hier het huidige nummer te zien");
+        await switchLanguage("en");
+        expect(host.textContent).toContain("Start listening to see what's playing here");
+    });
+
+    it("leaves the original song title and artist unchanged in the Now Playing tab", async () => {
+        localStorage.setItem("kima-hub-language", "nl");
+        await render(<NowPlayingTab />);
+        expect(host.textContent).toContain("CI Original Track Title");
+        expect(host.textContent).toContain("CI Artist");
+        await switchLanguage("en");
+        expect(host.textContent).toContain("CI Original Track Title");
+        expect(host.textContent).toContain("CI Artist");
+    });
+
+
     it("translates both toolbar layouts live without altering actions or search terms", async () => {
         localStorage.setItem("kima-hub-language", "nl");
         const onPathMode = vi.fn(), onAlchemyMode = vi.fn(), onSearch = vi.fn();

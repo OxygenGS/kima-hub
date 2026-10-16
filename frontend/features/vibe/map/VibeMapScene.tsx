@@ -11,6 +11,9 @@ import type { VibeOperation } from "@/lib/audio-state-context";
 import { useDoubleClickById } from "@/hooks/useDoubleTap";
 import { useReducedMotion } from "@/hooks/useMediaQuery";
 import { normalizeNFC } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
+import { vibeMapAccessibleLabel } from "./accessibility";
 import { MOOD_COLORS, moodIndex } from "../mapUtils";
 import type { MapTrack } from "../types";
 import { createGlowTexture, createStarMaterial, emphasisScale, setStarFocus, STAR_MIN_PX, STAR_SIZE_SCALE, tickStars, type StarUniforms } from "./starShader";
@@ -134,7 +137,7 @@ function Chip({ position, tone, children }: { position: [number, number, number]
  * projected and laid out biggest-mood-first; a label that would overlap one
  * already placed, or sit off the edge of the view, fades out.
  */
-function MoodLabels({ anchors }: { anchors: Array<{ mood: string; label: string; position: [number, number, number] }> }) {
+function MoodLabels({ anchors, locale }: { anchors: Array<{ mood: string; label: string; position: [number, number, number] }>; locale: Locale }) {
     const refs = useRef<Array<HTMLDivElement | null>>([]);
     const v = useMemo(() => new THREE.Vector3(), []);
     const { size } = useThree();
@@ -159,7 +162,7 @@ function MoodLabels({ anchors }: { anchors: Array<{ mood: string; label: string;
         <>
             {anchors.map((a, k) => (
                 <Html key={a.mood} position={a.position} center zIndexRange={[10, 0]} pointerEvents="none" style={{ pointerEvents: "none" }}>
-                    <div ref={(el) => { refs.current[k] = el; }} className="vibe-chip vibe-chip--region" style={{ transition: "opacity 200ms", opacity: 0 }}>{a.label}</div>
+                    <div ref={(el) => { refs.current[k] = el; }} className="vibe-chip vibe-chip--region" style={{ transition: "opacity 200ms", opacity: 0 }}>{translate(locale, a.label)}</div>
                 </Html>
             ))}
         </>
@@ -245,7 +248,7 @@ function QueueRings({ stars, avoid }: { stars: Array<{ order: number; star: Ring
     );
 }
 
-function Scene(props: VibeMapSceneProps & { apiRef: MutableRefObject<SceneApi | null>; hoverId: string | null }) {
+function Scene(props: VibeMapSceneProps & { apiRef: MutableRefObject<SceneApi | null>; hoverId: string | null; locale: Locale }) {
     const {
         tracks, trackMap, highlightedIds, selectedTrackId, playingTrackId, queueTrackIds, activeOperation,
         showLabels, focusMood, resetSignal, flyTo, coveredRight, apiRef, hoverId,
@@ -559,7 +562,7 @@ function Scene(props: VibeMapSceneProps & { apiRef: MutableRefObject<SceneApi | 
 
             {ringed.length > 0 && <QueueRings stars={ringed} avoid={ringAvoid} />}
 
-            {showAnchors && <MoodLabels anchors={anchorPositions} />}
+            {showAnchors && <MoodLabels anchors={anchorPositions} locale={props.locale} />}
             {selectedTrack && selectedTrack.id !== hoverTrack?.id && (
                 <Chip position={toWorld(selectedTrack)} tone="track">{normalizeNFC(selectedTrack.title)}</Chip>
             )}
@@ -603,6 +606,7 @@ function hasWebGL2() {
 }
 
 export function VibeMapScene(props: VibeMapSceneProps) {
+    const { locale } = useLanguage();
     const apiRef = useRef<SceneApi | null>(null);
     const pointer = useRef<{ x: number; y: number; button: number; id: number } | null>(null);
     // Fingers currently down; a gesture that ever had two is a pinch, never a tap.
@@ -688,7 +692,7 @@ export function VibeMapScene(props: VibeMapSceneProps) {
     if (!supported) {
         return (
             <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[var(--text-secondary)]" data-testid="vibe-map-unsupported">
-                This browser cannot draw the map because WebGL is turned off or unavailable.
+                {translate(locale, "This browser cannot draw the map because WebGL is turned off or unavailable.")}
             </div>
         );
     }
@@ -701,7 +705,7 @@ export function VibeMapScene(props: VibeMapSceneProps) {
             data-playing-id={props.playingTrackId ?? ""}
             data-selected-id={props.selectedTrackId ?? ""}
             role="application"
-            aria-label={`Music map of ${props.tracks.length} tracks. Tracks that sound alike sit close together.`}
+            aria-label={vibeMapAccessibleLabel(locale, props.tracks.length)}
             style={{ cursor: props.picking ? "crosshair" : hoverId ? "pointer" : grabbing ? "grabbing" : "grab" }}
             onPointerDownCapture={onPointerDown}
             onPointerUpCapture={onPointerUp}
@@ -715,7 +719,7 @@ export function VibeMapScene(props: VibeMapSceneProps) {
                 gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
                 dpr={[1, 2]}
             >
-                <Scene {...props} apiRef={apiRef} hoverId={hoverId} />
+                <Scene {...props} apiRef={apiRef} hoverId={hoverId} locale={locale} />
             </Canvas>
         </div>
     );

@@ -1373,6 +1373,9 @@ export const english = {
     "Actions for": "Actions for",
     "Show similar": "Show similar",
     "Song Path from here": "Song Path from here",
+    "Music map of": "Music map of",
+    "Tracks that sound alike sit close together.": "Tracks that sound alike sit close together.",
+    "This browser cannot draw the map because WebGL is turned off or unavailable.": "This browser cannot draw the map because WebGL is turned off or unavailable.",
 } as const;
 
 export type TranslationKey = keyof typeof english;
@@ -2749,6 +2752,9 @@ export const dutch: Record<TranslationKey, string> = {
     "Actions for": "Acties voor",
     "Show similar": "Vergelijkbare nummers tonen",
     "Song Path from here": "Nummerpad vanaf hier",
+    "Music map of": "Muziekkaart met",
+    "Tracks that sound alike sit close together.": "Nummers die vergelijkbaar klinken staan dicht bij elkaar.",
+    "This browser cannot draw the map because WebGL is turned off or unavailable.": "Deze browser kan de kaart niet tekenen omdat WebGL uitgeschakeld of niet beschikbaar is.",
 };
 
 export const translations: Record<Locale, Record<TranslationKey, string>> = {
