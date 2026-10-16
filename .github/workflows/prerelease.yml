@@ -41,6 +41,11 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
+            - name: Validate candidate fork metadata before image publication
+              run: |
+                  python3 .github/ci/check-release-metadata.py --self-test
+                  python3 .github/ci/check-release-metadata.py --candidate
+
             - name: Set image name
               run: |
                   OWNER="${{ github.repository_owner }}"
