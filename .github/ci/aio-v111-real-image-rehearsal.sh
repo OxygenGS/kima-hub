@@ -207,6 +207,7 @@ echo "---- Start new fork image using a COPY of upstream's full /data ----"
 start_image "$upgraded" "$new_data" "$candidate_image"
 wait_healthy "$upgraded"
 check_records "$upgraded" after
+bash .github/ci/check-aio-db-credential.sh "$upgraded"
 docker exec -u postgres "$upgraded" psql -d kima -v ON_ERROR_STOP=1 -Atc \
     "SELECT 1 FROM \"User\" WHERE username='ci_v111_image_listener' AND NOT \"canRequestAlbums\" AND NOT \"canDownloadTracks\"" | grep -qx 1
 echo "PASS: original monolithic AIO -> fork image preserved full data and role defaults"
