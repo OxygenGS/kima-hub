@@ -32,6 +32,19 @@ Inspected the current combined Draft #7 root `Dockerfile` and `.github/workflows
 - Standalone backend deployments retain their existing default (`0.0.0.0`) unless operators explicitly set `HOST`, preserving their independent configurations. Any explicitly provided container environment `HOST` can override the `.env` value according to dotenv precedence; do not assume this protects custom configurations.
 - This mitigates one network exposure, **not** the fixed database password, root-execution concern or all internal endpoint authorization risks. Both native AIO builds, browser tests, permission tests, upgrade/rollback and fresh-image runtime must be green on the final commit before treating it as verified.
 
+## PostgreSQL credential and HBA hardening — combined Draft #7, awaiting final-head CI
+
+The current development branch now carries the following **unreleased, not-yet-accepted changes**:
+
+- The AIO generates a separate 64-hex-character PostgreSQL password and persists it under `/data/secrets/database_password`, mode 600, alongside the existing session/encryption secrets. An ordinary restart reuses it.
+- When an original upstream AIO `/data` volume is upgraded in a disposable test, the local `kima` PostgreSQL role receives that stored password before Prisma migrations begin. New installations also receive the generated password. The previous fixed `kima` password must not remain accepted.
+- The startup-generated backend `.env`, migration environment and inherited supervisor worker environment use the same dynamic database URL. No fixed database password should remain in AIO runtime URLs.
+- The AIO prepends managed `pg_hba.conf` rules: peer authentication on Unix sockets, SCRAM on IPv4/IPv6 loopback and reject rules for non-loopback TCP. Earlier rules are retained below the managed preface; this is intended to cover legacy upstream trust rules without allowing them to take precedence. Verify effective auth against both upstream versions and recheck nonstandard customized installations separately.
+- Disposable AIO CI now asserts that the generated password authenticates, the old fixed password is rejected, the role stores a SCRAM verifier, the secret file is permission-restricted and persists after restart. Both original upstream v1.10.0 and v1.11.0 full-volume copy upgrades exercise these assertions before independent rollback.
+- The stacked `upstream-v111-implementation-checks.yml` workflow now includes a fail-closed Trivy dependency/committed-secret scan for fixable HIGH/CRITICAL findings. Build jobs depend on the result. Image-vulnerability review, process privilege hardening and full security E2E remain separate acceptance gates.
+
+**CI status:** The changed AIO image, HBA behavior, test scripts and Trivy job require a new complete workflow result before claiming they work. Green CI would not be equivalent to permission for publication, nor cover human review of existing external database clients. Do not install the development image on a real instance.
+
 ## Required follow-up validation
 
 - Enumerate all administration and download/request APIs, including aliases, import endpoints and job creation; verify regular-user denial server-side.
