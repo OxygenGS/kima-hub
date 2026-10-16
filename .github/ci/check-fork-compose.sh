@@ -32,14 +32,16 @@ print("User-selected update version accepted")
 done
 
 # Consumer installation instructions must point to a published fork image.
-if grep -Eq 'chevron7locked/kima(:|@)|ghcr\.io/chevron7locked/kima' docs/install.md; then
-    echo "INSTALL DOCUMENT CHECK FAILED: upstream image used as a fork installation image" >&2
-    exit 1
-fi
-grep -Fq 'ghcr.io/oxygengs/kima-hub:v1.10.0' docs/install.md || {
-    echo "INSTALL DOCUMENT CHECK FAILED: published fork stable image missing" >&2
-    exit 1
-}
+for doc in docs/install.md docs/gpu.md; do
+    if grep -Eq 'chevron7locked/kima(:|@)|ghcr[.]io/chevron7locked/kima' "$doc"; then
+        echo "FORK DOCUMENT CHECK FAILED: upstream installation image in $doc" >&2
+        exit 1
+    fi
+    grep -Fq 'ghcr.io/oxygengs/kima-hub:v1.10.0' "$doc" || {
+        echo "FORK DOCUMENT CHECK FAILED: published stable fork image missing in $doc" >&2
+        exit 1
+    }
+done
 # Keep private infrastructure IDs out of current public project documentation.
 if grep -ERiq 'CT[[:space:]-]*10[15]([[:space:][:punct:]]|$)' docs/ README.md; then
     echo "DOCUMENT PRIVACY CHECK FAILED: private deployment identifier found" >&2

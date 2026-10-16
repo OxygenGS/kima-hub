@@ -1,5 +1,7 @@
 # NVIDIA GPU
 
+This page documents optional GPU acceleration for the OxygenGS Kima Hub fork. The command below uses the **currently published fork image**. The v1.11-specific GPU controls described here remain experimental until the combined fork update is officially released.
+
 Kima runs on the processor by default and nothing about the graphics card is touched until an administrator turns it on. If the container can see an NVIDIA card, two jobs can run on it:
 
 - **Vibe embeddings:** the sound vector of each song (the CLAP model). In one test on an RTX 4060 Ti the model took 11.7 milliseconds for a 10-second clip, against 114 on the processor, and the processor stays free for everything else. How much faster a whole library finishes depends on the other steps too.
@@ -24,7 +26,7 @@ docker run -d --gpus all \
   -p 3030:3030 \
   -v /path/to/your/music:/music \
   -v kima_data:/data \
-  chevron7locked/kima:latest
+  ghcr.io/oxygengs/kima-hub:v1.10.0
 ```
 
 The `--device` lines keep the card available after the host reloads its services (`systemctl daemon-reload`). Without them, on hosts where systemd manages Docker's control groups, anything the container starts afterwards cannot open the card. NVIDIA describes this in its [troubleshooting notes](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/troubleshooting.html).
