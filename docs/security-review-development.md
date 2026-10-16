@@ -24,4 +24,4 @@ Scope: `feature/user-permissions`, initial static review on 2026-10-13. Not a pe
 
 ## Gate
 
-Security review remains OPEN. Do not merge, publish, tag, or deploy to CT 101/CT 105 as part of this review. `main` remains untouched.
+Security review remains OPEN. No merge, registry publication, tag or deployment to any real installation is authorized by this review.
