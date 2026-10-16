@@ -18,6 +18,8 @@ export interface RadioStation {
         value?: string;
     };
     minTracks?: number;
+    /** UI-only count: never used as a radio filter or API parameter. */
+    trackCount?: number;
 }
 
 export interface GenreCount {
@@ -177,6 +179,7 @@ export function buildGenreStations(genres: GenreCount[]): RadioStation[] {
             id: `genre-${g.genre}`,
             name: g.genre,
             description: plural(g.count, "track"),
+            trackCount: g.count,
             ...style,
             filter: { type: "genre" as const, value: g.genre },
             minTracks: 15,
@@ -191,6 +194,7 @@ export function buildDecadeStations(decades: DecadeCount[]): RadioStation[] {
             id: `decade-${d.decade}`,
             name: getDecadeName(d.decade),
             description: plural(d.count, "track"),
+            trackCount: d.count,
             ...style,
             filter: { type: "decade" as const, value: d.decade.toString() },
             minTracks: 15,

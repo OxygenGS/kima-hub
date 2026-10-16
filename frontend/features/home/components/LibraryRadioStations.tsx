@@ -7,6 +7,8 @@ import { HorizontalCarousel } from "@/components/ui/HorizontalCarousel";
 import { cn } from "@/lib/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { cascadeStyle } from "@/lib/motion";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useLibraryGenresQuery, useLibraryDecadesQuery } from "@/hooks/useQueries";
 import {
     RadioStation,
@@ -17,6 +19,7 @@ import {
 } from "../radioData";
 
 export function LibraryRadioStations() {
+    const { t, locale } = useLanguage();
     const { loadingStation, startRadio } = useRadioPlayer();
     const { data: genresData, isLoading: genresLoading } = useLibraryGenresQuery();
     const { data: decadesData, isLoading: decadesLoading } = useLibraryDecadesQuery();
@@ -73,12 +76,16 @@ export function LibraryRadioStations() {
     const renderCard = (station: RadioStation, compact: boolean, globalIdx: number, delayIdx = globalIdx) => (
         <TileCard
             key={station.id}
-            title={station.name}
-            subtitle={station.description}
+            title={station.filter.type === "genre" || station.filter.type === "decade"
+                ? station.name
+                : translate(locale, station.name)}
+            subtitle={station.trackCount !== undefined
+                ? `${station.trackCount.toLocaleString(locale)} ${t(station.trackCount === 1 ? "track" : "tracks")}`
+                : translate(locale, station.description)}
             eyebrow={
                 <span className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                     <Radio className="w-3 h-3" />
-                    Radio
+                    {t("Radio")}
                 </span>
             }
             tint={station.color}
@@ -144,7 +151,7 @@ export function LibraryRadioStations() {
                                 if (el) el.scrollTo({ left: index * el.clientWidth, behavior: "smooth" });
                             }}
                             className="group/dot flex items-center justify-center"
-                            aria-label={`Go to page ${index + 1}`}
+                            aria-label={`${t("Go to page")} ${index + 1}`}
                             aria-current={index === currentPage ? "true" : undefined}
                         >
                             <span
