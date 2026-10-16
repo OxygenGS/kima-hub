@@ -45,6 +45,18 @@ The current development branch now carries the following **unreleased, not-yet-a
 
 **CI status:** The changed AIO image, HBA behavior, test scripts and Trivy job require a new complete workflow result before claiming they work. Green CI would not be equivalent to permission for publication, nor cover human review of existing external database clients. Do not install the development image on a real instance.
 
+## AIO local services and frontend privilege hardening — 16 October 2026
+
+The combined development branch adds the following **unreleased changes**, pending its latest exact-head CI:
+
+- The PostgreSQL startup/migration `pg_ctl` command and the long-running supervisor process explicitly set `listen_addresses=localhost`. This guards restored upstream PostgreSQL volumes even if their persistent configuration previously specified a wider listener. The existing SCRAM and deny-remote HBA policies remain.
+- AIO Redis starts with `--bind 127.0.0.1 -::1 --protected-mode yes` rather than relying on redis-server defaults. It is intended for services **within the same container**; separate Redis deployments are not changed.
+- Next.js now executes as dedicated system account `kimaweb`, not root. The build-time `.next` cache is owned by this account. Supervisord and initial database setup still run as root; backend and analyzers remain root until separate permission/volume reviews prove privilege reduction safe.
+- CI includes `check-aio-service-boundaries.sh`, restricted to disposable GitHub-hosted test containers, which probes ports 3006, 6379 and 5432 through loopback and the container network interface, checks PostgreSQL's effective listen address, and inspects the running Next.js process UID. The same assertions run on fresh, restarted and copied upstream v1.10/v1.11 upgraded AIOs.
+- Existing interfaces remain the public web port 3030 and the original `/data` and `/music` mounts. Custom layouts and actual production installations are **not tested or modified** by this source change.
+
+**Acceptance:** Do not mark this as runtime validated until all backend/frontend/EN-NL/permission/AMD64/ARM64/live AIO and independent upgrade/rollback checks succeed on the exact latest commit. A passing scan does not clear the previously documented Debian/FFmpeg CRITICAL image findings; see [image security review](v111-image-security-review.md).
+
 ## Required follow-up validation
 
 - Enumerate all administration and download/request APIs, including aliases, import endpoints and job creation; verify regular-user denial server-side.
