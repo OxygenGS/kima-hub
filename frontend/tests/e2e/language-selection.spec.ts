@@ -198,6 +198,80 @@ test.describe("Interface language", () => {
     });
 
 
+
+    test("shows Discover Weekly and unavailable previews in Dutch/English without changing music data or starting downloads", async ({ page }) => {
+        const discoveryWrites: string[] = [];
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "nl");
+            localStorage.setItem("auth_token", "discovery-local-only");
+        });
+        page.on("request", (request) => {
+            const path = new URL(request.url()).pathname;
+            if (path.startsWith("/api/discover/") && request.method() !== "GET") {
+                discoveryWrites.push(request.method() + " " + path);
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const path = new URL(route.request().url()).pathname;
+            const replies: Record<string, unknown> = {
+                "/api/auth/me": {
+                    id: "discovery-locale-user", username: "discovery-locale-user",
+                    role: "user", onboardingComplete: true,
+                    canRequestAlbums: false, canDownloadTracks: false,
+                },
+                "/api/discover/current": {
+                    weekStart: "2026-10-12T12:00:00Z", weekEnd: "2026-10-19T12:00:00Z",
+                    tracks: [{
+                        id: "ci-untouched-song-1", title: "CI Original Discovery Song",
+                        artist: "CI Original Artist", album: "CI Original Album",
+                        albumId: "ci-album-1", isLiked: false, likedAt: null,
+                        similarity: 0.91, tier: "high", coverUrl: null,
+                        available: true, duration: 201,
+                    }],
+                    unavailable: [{
+                        id: "ci-unavailable-1", title: "CI Original Preview Song",
+                        artist: "CI Other Artist", album: "CI Other Album", albumId: "ci-album-2",
+                        similarity: 0.55, tier: "medium", previewUrl: "https://example.invalid/preview",
+                        deezerTrackId: null, deezerAlbumId: null, available: false, attemptNumber: 0,
+                    }],
+                    totalCount: 1, unavailableCount: 1,
+                },
+                "/api/discover/config": {
+                    playlistSize: 10, exclusionMonths: 6, downloadRatio: 1,
+                    enabled: true, lastGeneratedAt: "2026-10-12T12:00:00Z",
+                },
+                "/api/discover/batch-status": { active: false, status: null },
+            };
+            return route.fulfill({
+                status: path in replies ? 200 : 404,
+                contentType: "application/json",
+                body: JSON.stringify(path in replies ? replies[path] : { error: "Not part of isolated locale test" }),
+            });
+        });
+        await page.goto("/discover");
+        await expect(page.getByRole("heading", { name: "Wekelijkse ontdekkingen" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Afspeellijst" })).toBeVisible();
+        await expect(page.getByText("CI Original Discovery Song")).toBeVisible();
+        await expect(page.getByText("CI Original Artist")).toBeVisible();
+        await expect(page.getByRole("button", { name: "leuk vinden CI Original Discovery Song" })).toBeVisible();
+        await page.getByRole("button", { name: "1 album niet beschikbaar" }).click();
+        await expect(page.getByText("Oorspronkelijke aanbeveling")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Voorbeeld afspelen: CI Other Album" })).toBeVisible();
+        await expect(page.getByText("/music/discovery")).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByRole("heading", { name: "Discover Weekly" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Playlist" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "like CI Original Discovery Song" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Play preview: CI Other Album" })).toBeVisible();
+        await expect(page.getByText("CI Original Discovery Song")).toBeVisible();
+        await expect(page.getByText("CI Original Artist")).toBeVisible();
+        expect(discoveryWrites).toEqual([]);
+    });
+
     test("reads official 1.11 and 1.10.1 release articles in Dutch without changing API decisions", async ({ page }) => {
         await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         const writes: string[] = [];
