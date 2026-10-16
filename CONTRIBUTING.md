@@ -1,65 +1,22 @@
-# Contributing to Kima Hub — Oxygen's Fork
+# Contributing to OxygenGS Kima Hub
 
-First off, thanks for taking the time to contribute! 🎉
+This is the independently maintained [OxygenGS fork](https://github.com/OxygenGS/kima-hub) of [Kima Hub](https://github.com/Chevron7Locked/kima-hub). Keep upstream attribution and the GPLv3 license intact.
 
-## Getting Started
+## Where changes belong
 
-1. Fork the repository
-2. Clone your fork locally
-3. Set up the development environment (see README.md)
-4. Create a new branch from `main` for your changes
+- Contributions to **this fork** belong in OxygenGS pull requests. Do not submit fork-specific permissions, branding, release or EN/NL bugs to the upstream project as if it maintains our fork.
+- The fork currently has **Issues and Discussions disabled**. The inherited upstream Discussion and sponsorship links have therefore been removed from fork templates. Do not use unrelated upstream channels as a substitute for the fork's disabled tracker.
+- Normal focused changes should target `main`. Stacked Draft PRs are allowed for substantial coordinated work: currently #5 (language foundation), #6 (upstream v1.11 integration base), #7 (combined application).
+- Open a pull request containing a concise description, the relevant test results and any security or migration impact. Never commit real installation identifiers, environment files, passwords, private logs or production backup paths.
 
-## Branch Strategy
+## Build and verify
 
-All development happens on the `main` branch:
+Start with [development.md](docs/development.md). Follow the project's TypeScript, React and backend conventions and run the relevant frontend/backend tests, lint and typechecks. Production and upgrade paths require the exact candidate commit's AIO checks, not just a successful unit-test run.
 
--   **All PRs should target `main`**
--   Preview images are built on demand, not on a schedule: push the `prerelease`
-    branch, or run the **Pre-release Image** workflow from the Actions tab. They
-    publish to this repository's GitHub Container Registry only
--   Stable releases are created via version tags and published to `ghcr.io/oxygengs/kima-hub`
+The published OxygenGS image namespace is `ghcr.io/oxygengs/kima-hub`. Do not replace fork installation instructions with an upstream image or a tag that has not been published. For published-version guidance use [OxygenGS Releases](https://github.com/OxygenGS/kima-hub/releases).
 
-## Making Contributions
+## Review and publication boundaries
 
-### Bug Fixes
+A passing pull request is not automatically ready for a tag or registry push. Release candidates require explicit review, versioning, security and data-migration acceptance. Individual Docker/Compose/LXC/hypervisor installations are owned and operated separately and are not part of the fork source repository.
 
-1. Check existing issues to see if the bug has been reported
-2. If not, open a bug report issue first
-3. Fork, branch, fix, and submit a PR referencing the issue
-
-### Small Enhancements
-
-1. Open a feature request issue to discuss first
-2. Keep changes focused and minimal
-
-### Large Features
-
-Please open an issue to discuss before starting work.
-
-## Code Style
-
-### Frontend
-
-The frontend uses ESLint. Before submitting a PR:
-
-```bash
-cd frontend
-npm run lint
-```
-
-### Backend
-
-Follow existing code patterns and TypeScript conventions.
-
-## Pull Request Process
-
-1. **Target the `main` branch**
-2. Fill out the PR template completely
-3. Ensure the Docker build check passes
-4. Wait for review - we'll provide feedback or approve
-
-## Questions?
-
-Open a Discussion thread for questions that aren't bugs or feature requests.
-
-Thanks for contributing!
+For suspected security issues, use an available **private** maintainer/security contact mechanism rather than posting working exploit details in public PRs or unrelated upstream channels.

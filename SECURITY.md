@@ -1,108 +1,37 @@
-# Security — Kima Hub — Oxygen's Fork
+# Security — OxygenGS Kima Hub fork
 
-This is Oxygen's independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub), originally developed by Chevron7Locked and maintained by [OxygenGS](https://github.com/OxygenGS).
+This repository is an independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub), under GPLv3. Security claims apply to the **exact code version** tested, not automatically to other branches or third-party installations.
 
-This document describes the security improvements implemented in this fork, their validation, and known limitations.
+## Authorization and privacy
 
-## Security Improvements
+The fork adds granular music-acquisition permissions such as `canRequestAlbums` and `canDownloadTracks`. Enforcement must occur server-side using the current authenticated user's permissions, not only through translated or hidden buttons. The combined v1.11 development PR includes additional regression checks for acquisition routes, file-path containment, streaming and account changes. These checks must be rerun on the eventual release commit.
 
-### 1. Granular authorization
+A selected interface language must never alter account roles, backend/API codes, download authorization, path validation or original music metadata.
 
-Two additional user permissions have been introduced:
+**Repository versus deployment:** this source tree and its public release artifacts are general-purpose. Specific users' container IDs, host configurations, credentials, backups, network addresses, music mounts and installation details are private deployment information and should not be stored here.
 
-- `canRequestAlbums` — controls album download requests.
-- `canDownloadTracks` — controls individual track downloads.
+## Current release boundaries
 
-Permissions are enforced by the backend, independently of frontend visibility.
+The latest already published OxygenGS stable release is listed at [OxygenGS Releases](https://github.com/OxygenGS/kima-hub/releases). Kima v1.11 combined with the EN/NL language selector is being developed in stacked Draft PRs [#5](https://github.com/OxygenGS/kima-hub/pull/5), [#6](https://github.com/OxygenGS/kima-hub/pull/6), and [#7](https://github.com/OxygenGS/kima-hub/pull/7). Passing CI on a draft is not approval to publish a container image or deploy it.
 
-Validation confirmed:
-- Unauthorized album requests return HTTP 403.
-- Unauthorized track downloads return HTTP 403.
-- Administrators pass authorization checks.
-- Requests without valid authentication return HTTP 401.
+Container image builds, migrations and independent backups/rollback must be tested on synthetic or isolated data. A database migrated by a newer version must **not** be opened directly by an older image: restore an untouched pre-upgrade backup to an independent volume before starting the old version.
 
-### 2. Dependency security
+## Residual risks and verification
 
-Frontend and backend dependencies were updated to address known vulnerabilities.
+- Dependency and container vulnerability findings must be reviewed on the **actual proposed release artifact**. Historical audit counts can become stale and are not ongoing security guarantees.
+- Automated checks, including user permission tests, cannot replace a manual authorization review or independent penetration test.
+- Docker image layers can preserve historical artifacts; multi-stage build and image-content review remain release considerations.
+- Secrets, tokens and personal runtime logs must not be committed. Sanitized, synthetic reproduction cases should be used instead.
+- Publisher workflows and GitHub-hosted image builds are separate from anyone's actual installation and require explicit release approval.
 
-At the time of validation:
-- Backend npm audit reported zero known vulnerabilities.
-- Frontend production dependency audit reported zero known vulnerabilities.
-- The full frontend development dependency tree still contained five high-severity audit findings.
+## Reporting
 
-These findings involved development tooling rather than required frontend production dependencies.
+Do not disclose sensitive exploit details in a public pull request. Use the repository maintainer's available **private** vulnerability reporting channel. The fork's public Issues and Discussions are currently disabled; a guaranteed response time or security advisory channel is not claimed.
 
-### 3. Production runtime hardening
-
-The Docker build removes frontend development dependencies after the production build using:
-
-`npm prune --omit=dev --ignore-scripts`
-
-The Next.js configuration was updated so the optional bundle analyzer is loaded only when explicitly enabled.
-
-This allows the frontend to run without its development dependencies.
-
-### 4. Authentication
-
-The frontend uses Bearer-token authentication for protected API requests.
-
-Backend authorization checks do not rely solely on frontend restrictions.
-
-## Validation
-
-The development test suite previously passed:
-
-- 314 frontend tests.
-- 879 backend tests.
-- 1,193 tests in total.
-
-Additional validation included:
-- Permission enforcement tests.
-- Successful production builds.
-- Successful application health checks.
-- Database migration testing using restored production data.
-- Successful application deployment and functional checks.
-
-These tests do not constitute an independent penetration test or comprehensive security audit.
-
-## Known Limitations and Residual Risks
-
-### Docker image layers
-
-Development dependencies have been removed from the final running container filesystem.
-
-However, packages installed during earlier Docker build layers may remain recoverable from the image history.
-
-A multi-stage build may reduce this exposure.
-
-### Development dependency findings
-
-The frontend development dependency tree contained five high-severity npm audit findings during the last recorded review.
-
-These findings should be reassessed when dependencies are updated.
-
-### Security guarantees
-
-Zero reported vulnerabilities in an npm audit does not prove that an application is free of vulnerabilities.
-
-Security depends on application configuration, dependency versions, infrastructure, authentication, authorization, and ongoing maintenance.
-
-### Database migrations
-
-Database migrations should be preceded by backups.
-
-Rollback after a database schema change may require restoring a database backup rather than only reverting the Docker image.
-
-## Vulnerability Reporting
-
-Please report suspected vulnerabilities privately to the repository maintainer rather than publishing exploit details in a public issue.
-
-No formal security response time or coordinated disclosure program is currently established.
-
-## Upstream Attribution
+## Attribution
 
 Original project: https://github.com/Chevron7Locked/kima-hub
 
-This fork is independently maintained and is not an official upstream security release.
+Fork: https://github.com/OxygenGS/kima-hub
 
-License: GPLv3.
+This fork is not an official upstream security release.
