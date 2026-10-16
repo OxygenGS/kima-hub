@@ -99,6 +99,41 @@ jobs:
                     echo 'TAGS_EOF'
                   } >> "$GITHUB_OUTPUT"
 
+            # Pre-push mandatory fixable vulnerability gate. Unfixed
+            # Debian advisories still require explicit human acceptance.
+            # Never trigger this publishing workflow without user approval.
+            - name: Build local AMD64 candidate for security scan (no push)
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: ./Dockerfile
+                  push: false
+                  load: true
+                  tags: kima:prerelease-scan
+                  platforms: linux/amd64
+                  build-args: |
+                      NEXT_PUBLIC_BUILD_TYPE=prerelease
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - name: Install pinned Trivy
+              uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+              with:
+                  version: v0.74.0
+                  cache: true
+
+            - name: Block fixable HIGH/CRITICAL before publishing any prerelease image
+              run: |
+                  trivy image \
+                    --scanners vuln,secret \
+                    --severity HIGH,CRITICAL \
+                    --ignore-unfixed \
+                    --ignorefile .trivyignore \
+                    --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+                    --exit-code 1 \
+                    --format table \
+                    kima:prerelease-scan
+
             - name: Build and push pre-release
               uses: docker/build-push-action@v5
               with:
