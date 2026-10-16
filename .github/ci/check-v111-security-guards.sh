@@ -40,4 +40,6 @@ require_text backend/src/routes/releases.ts 'router.post("/download/:albumMbid",
 require_text backend/src/index.ts 'app.use("/api/branding"' "Instance branding API mounted"
 require_text frontend/app/layout.tsx '<LanguageProvider>' "EN/NL browser language provider mounted"
 require_text frontend/app/layout.tsx '<BrandingProvider>' "Instance branding provider mounted"
+require_text backend/src/index.ts 'app.listen(config.port, config.host, async () => {' "Backend must honor configured listen HOST"
+require_text Dockerfile 'HOST=127.0.0.1' "AIO backend must default to container loopback"
 echo "Structural guard PASS; runtime authorization and all additional endpoints still require review."
