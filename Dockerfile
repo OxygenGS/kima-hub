@@ -129,18 +129,14 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 # since v1.11.0 the shipped images run the ONNX CLAP backend (CLAP_BACKEND=onnx,
 # the analyzer default) and are torch-free. The legacy torch backend remains
 # available in code; restore it with services/audio-analyzer-clap/requirements-torch.txt.
-# transformers supplies the tokenizer (RobertaTokenizer) for the text encoder
-# and the audio_utils numpy primitives used by our vendored clap_mel.py.
-# NOTE: ClapFeatureExtractor itself is torch-gated on EVERY version we can
-# install (verified 4.57.6 AND 5.8.1 raise ImportError without torch) -- the
-# shipped runtime does NOT use it; clap_mel.py reproduces its mel bit-for-bit
-# (proven, test_clap_mel_parity). 4.57.6 is the pin the parity was validated on.
-# The same pins as services/audio-analyzer-clap/requirements.txt (test_ship_blocker.py checks).
-# transformers is exact: newer releases reference torch.float8_e8m0fnu at import and crash
-# without torch. Bump only with a full ONNX re-validation (verify_runtime.py, the build gate).
+# The runtime no longer installs transformers. An Apache-licensed subset
+# of the validated NumPy mel functions lives in audio_features_numpy.py;
+# tokenizers==0.22.1 loads the hash-pinned offline RoBERTa JSON.
+# The ONNX fixture/parity build gate rejects altered audio outputs.
+# Build-stage ONNX export remains pinned independently (not copied to runtime).
 RUN pip3 install --no-cache-dir --break-system-packages \
     'onnxruntime==1.30.0' \
-    'transformers==4.57.6' \
+    'tokenizers==0.22.1' \
     'librosa==0.11.0' \
     'soundfile==0.14.0'
 
@@ -174,7 +170,7 @@ RUN pip3 uninstall -y pandas scipy numpy || true \
     'pandas==2.0.3'
 
 # Fail fast during build if the CLAP ONNX runtime stack imports cleanly.
-RUN python3 -c "import numpy, scipy, pandas, onnxruntime, librosa, transformers; from transformers import RobertaTokenizer; from transformers.audio_utils import spectrogram, mel_filter_bank, window_function; print(f'CLAP ONNX deps OK: ort={onnxruntime.__version__} transformers={transformers.__version__} numpy={numpy.__version__}')" 
+RUN python3 -c "import numpy, scipy, pandas, onnxruntime, librosa, tokenizers; print(f'CLAP ONNX deps OK: ort={onnxruntime.__version__} tokenizers={tokenizers.__version__} numpy={numpy.__version__}')" 
 
 # Cleanup
 RUN pip cache purge \
@@ -204,7 +200,7 @@ WORKDIR /app/audio-analyzer-clap
 # verify_runtime.py + test_fixtures ride along for the build-time parity gate.
 COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/onnx_backend.py /app/audio-analyzer-clap/
-COPY services/audio-analyzer-clap/clap_mel.py /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/clap_mel.py services/audio-analyzer-clap/audio_features_numpy.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/verify_runtime.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/gpu_runtime.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer-clap/
 COPY services/audio-analyzer-clap/gpu_env.sh /app/audio-analyzer-clap/
