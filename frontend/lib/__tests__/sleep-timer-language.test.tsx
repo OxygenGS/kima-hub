@@ -99,13 +99,16 @@ describe("sleep timer live EN/NL language", () => {
         expect(mocks.clearTimer).toHaveBeenCalledOnce();
     });
 
-    it("preserves the custom minute bounds and calls the original timer setter", async () => {
+    it("translates custom-minute labels and preserves the original input bounds and preset values", async () => {
         localStorage.setItem("kima-hub-language", "nl");
         await render();
         await click(host.querySelector('button[aria-haspopup="dialog"]') as HTMLButtonElement);
         const input = host.querySelector('input[type="number"]') as HTMLInputElement;
         expect(input.getAttribute("aria-label")).toBe("Aangepast aantal minuten");
         expect(input.getAttribute("placeholder")).toBe("Aangepast");
+        expect(input.min).toBe("1");
+        expect(input.max).toBe("480");
+        expect(input.step).toBe("1");
         // Presets need no network calls, and language never affects numeric timer values.
         await selectLanguage("en");
         expect(input.getAttribute("aria-label")).toBe("Custom minutes");
