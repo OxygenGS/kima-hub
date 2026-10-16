@@ -280,11 +280,12 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" amd64
       - name: Retain amd64 image scan evidence for manual release review
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v111-aio-image-vulnerabilities-amd64
           path: ${{ runner.temp }}/v111-image-vulnerabilities-amd64.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   arm64-image-build:
@@ -340,9 +341,10 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" arm64
       - name: Retain arm64 image scan evidence for manual release review
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: v111-aio-image-vulnerabilities-arm64
           path: ${{ runner.temp }}/v111-image-vulnerabilities-arm64.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
