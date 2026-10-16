@@ -88,6 +88,33 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
     -X POST -H 'Content-Type: application/json' \
     -d '{"name":"Not allowed"}' "$url/api/branding")"
 test "$status" = 401 || test "$status" = 403
+echo "---- Verify AIO API is loopback-only inside its Docker network ----"
+container_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name")"
+if [ -z "$container_ip" ]; then
+    echo "Cannot determine disposable container IP for isolation test" >&2
+    exit 1
+fi
+docker exec -e TEST_CONTAINER_IP="$container_ip" "$name" node -e '
+const net = require("node:net");
+function probe(host) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({host, port: 3006});
+    socket.setTimeout(4000);
+    socket.once("connect", () => { socket.destroy(); resolve(true); });
+    socket.once("timeout", () => { socket.destroy(); reject(new Error("Connection timed out: " + host)); });
+    socket.once("error", err => {
+      socket.destroy();
+      if (err.code === "ECONNREFUSED") resolve(false);
+      else reject(err);
+    });
+  });
+}
+(async () => {
+  if (!(await probe("127.0.0.1"))) throw new Error("AIO backend not listening on loopback");
+  if (await probe(process.env.TEST_CONTAINER_IP)) throw new Error("AIO backend exposed on container network interface");
+  console.log("AIO API loopback-only network isolation: PASS");
+})().catch(err => { console.error(err); process.exitCode = 1; });
+'
 echo "Fork-specific persisted schema, unauthenticated write denial and PostgreSQL isolation: PASS"
 
 # Creates only synthetic 440Hz audio, an admin, a listener, playlists/history.
