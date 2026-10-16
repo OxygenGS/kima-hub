@@ -68,6 +68,8 @@ echo "---- Boot actual fresh merged v1.11 AIO with empty data and music ----"
 start_aio
 wait_ready
 
+echo "---- Assert deployed Python runtime is transformers-free ----"
+docker exec "$name" python3 -c 'import importlib.util,tokenizers; assert importlib.util.find_spec("transformers") is None, "vulnerable transformers runtime unexpectedly shipped"; print("Pinned Rust tokenizer present; transformers absent: PASS")'
 echo "---- Verify fork-specific schema, branding, PG isolation ----"
 curl -fsS --max-time 25 "$url/api/branding" | python3 -c '
 import json,sys
