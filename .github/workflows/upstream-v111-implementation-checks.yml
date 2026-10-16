@@ -284,6 +284,20 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" amd64
+      - name: Inventory amd64 critical Debian packages and direct consumers
+        run: |
+          python3 .github/ci/inventory-critical-image-packages.py --self-test
+          docker run --rm -i --entrypoint python3 kima-hub:aio-ci-smoke - \
+            < .github/ci/inventory-critical-image-packages.py \
+            > "$RUNNER_TEMP/v111-critical-runtime-packages-amd64.json"
+      - name: Retain amd64 critical-package dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-critical-runtime-packages-amd64
+          path: ${{ runner.temp }}/v111-critical-runtime-packages-amd64.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Retain amd64 image scan evidence for manual release review
         if: always()
         uses: actions/upload-artifact@v4
@@ -345,6 +359,20 @@ jobs:
           python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
           python3 .github/ci/evaluate-image-vulnerabilities.py \
             "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" arm64
+      - name: Inventory arm64 critical Debian packages and direct consumers
+        run: |
+          python3 .github/ci/inventory-critical-image-packages.py --self-test
+          docker run --rm -i --entrypoint python3 kima-hub:aio-ci-smoke - \
+            < .github/ci/inventory-critical-image-packages.py \
+            > "$RUNNER_TEMP/v111-critical-runtime-packages-arm64.json"
+      - name: Retain arm64 critical-package dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-critical-runtime-packages-arm64
+          path: ${{ runner.temp }}/v111-critical-runtime-packages-arm64.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Retain arm64 image scan evidence for manual release review
         if: always()
         uses: actions/upload-artifact@v4
