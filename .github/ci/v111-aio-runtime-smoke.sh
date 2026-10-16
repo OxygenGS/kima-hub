@@ -67,6 +67,7 @@ wait_ready() {
 echo "---- Boot actual fresh merged v1.11 AIO with empty data and music ----"
 start_aio
 wait_ready
+bash .github/ci/check-aio-service-boundaries.sh "$name"
 
 echo "---- Assert deployed Python runtime is transformers-free ----"
 docker exec "$name" python3 -c 'import importlib.util,tokenizers; assert importlib.util.find_spec("transformers") is None, "vulnerable transformers runtime unexpectedly shipped"; print("Pinned Rust tokenizer present; transformers absent: PASS")'
@@ -133,6 +134,7 @@ docker stop -t 45 "$name" >/dev/null
 docker rm "$name" >/dev/null
 start_aio
 wait_ready
+bash .github/ci/check-aio-service-boundaries.sh "$name"
 secret_after="$(docker exec "$name" sha256sum /data/secrets/session_secret | cut -d' ' -f1)"
 test "$secret_before" = "$secret_after"
 test "$db_secret_before" = "$(docker exec "$name" sha256sum /data/secrets/database_password | cut -d' ' -f1)"
