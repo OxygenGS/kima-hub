@@ -1,0 +1,133 @@
+name: Verify published OxygenGS v1.11 candidate by immutable digest
+
+# Standalone, no-publish verification of the exact GHCR prerelease manifest.
+# This branch is intentionally separate from the three stacked Draft PRs.
+on:
+  push:
+    branches:
+      - feature/prerelease-f31e589-verification
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: verify-published-f31e589
+  cancel-in-progress: false
+
+env:
+  CANDIDATE: ghcr.io/oxygengs/kima-hub@sha256:a3c6e8fbf45d729d80d02dc8b317174640e74ab651cefbfafedcdff42a7b0195
+  SOURCE_SHA: f31e5892289bbb7d193f96fdf10a1a7d54ee9d28
+
+jobs:
+  verify-manifest:
+    name: Check signed-off source and published candidate multi-arch index
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Confirm candidate sources unchanged by this isolated workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$SOURCE_SHA"
+          test "$(git diff HEAD^ HEAD --name-only)" = ".github/workflows/verify-published-v111-prerelease.yml"
+          test "$(git show HEAD^:backend/package.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')" = 1.11.0
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Assert published manifest is an OCI index for AMD64 and ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "$CANDIDATE" |
+            python3 -c '
+          import json,sys
+          index=json.load(sys.stdin)
+          platforms={
+              ((manifest.get("platform") or {}).get("os"), (manifest.get("platform") or {}).get("architecture"))
+              for manifest in index.get("manifests", [])
+          }
+          assert {("linux", "amd64"), ("linux", "arm64")} <= platforms, f"Missing supported architecture in {platforms}"
+          print("Published immutable OCI index contains AMD64 and ARM64: PASS")
+          '
+      - name: Report exactly pinned published candidate
+        run: |
+          echo "### Published v1.11.0 prerelease verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "Immutable OCI digest: \`$CANDIDATE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: \`$SOURCE_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "GHCR publish source: [Actions #38972414569](https://github.com/OxygenGS/kima-hub/actions/runs/38972414569)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published image verification is NOT a stable release or production acceptance." >> "$GITHUB_STEP_SUMMARY"
+
+  published-amd64:
+    name: Pull published AMD64 digest and exercise real AIO + upgrades/rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    needs: verify-manifest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner space for full media AIO and independent upstream image restores
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull the actually published image, never rebuild or push
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$CANDIDATE"
+          docker tag "$CANDIDATE" kima-hub:aio-ci-smoke
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = amd64
+          echo "Loaded native AMD64 prerelease from immutable OCI index"
+      - name: Run disposable user/locale/security/audio and persisted-data smoke
+        timeout-minutes: 35
+        shell: bash
+        run: bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Test published candidate upgrading real official v1.10 and independent rollback
+        timeout-minutes: 35
+        shell: bash
+        run: bash .github/ci/aio-real-image-rehearsal.sh
+      - name: Test published candidate upgrading real official v1.11 and independent rollback
+        timeout-minutes: 35
+        shell: bash
+        run: bash .github/ci/aio-v111-real-image-rehearsal.sh
+
+  published-arm64:
+    name: Pull published ARM64 digest and exercise real AIO
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 100
+    needs: verify-manifest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner space for published multi-arch AIO image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull published ARM64 image from exact immutable OCI index
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/arm64 "$CANDIDATE"
+          docker tag "$CANDIDATE" kima-hub:aio-ci-smoke
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
+          echo "Loaded native ARM64 prerelease from immutable OCI index"
+      - name: Run real disposable ARM64 AIO, audio rights and persisted-data smoke
+        timeout-minutes: 35
+        shell: bash
+        run: bash .github/ci/v111-aio-runtime-smoke.sh
