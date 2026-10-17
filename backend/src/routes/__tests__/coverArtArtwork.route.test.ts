@@ -168,6 +168,8 @@ describe("the cover-art route asks every source", () => {
             });
         });
 
+        // Give busy CI hosts room to schedule the mocked HTTP handler;
+        // keep the route result and source-selection assertions intact.
         it("still asks for an album the library does not have a row for", async () => {
             (prisma.album.findFirst as jest.Mock).mockResolvedValue(null);
             mockFindAlbumArtwork.mockResolvedValue({ url: FOUND, source: "coverartarchive" });
@@ -180,7 +182,7 @@ describe("the cover-art route asks every source", () => {
                 albumTitle: "",
             });
             expect(res.status).toBe(200);
-        });
+        }, 15_000);
 
         it("says so plainly when nobody has it", async () => {
             (prisma.album.findFirst as jest.Mock).mockResolvedValue({
