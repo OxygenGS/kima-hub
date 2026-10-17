@@ -132,7 +132,8 @@ def check_native_prerelease(text: str) -> None:
     alias_at = assemble.find('docker buildx imagetools create -t "${IMAGE}:prerelease"')
     if check_at < 0 or alias_at < check_at:
         raise ValueError("Moving prerelease alias may only be published after manifest validation")
-    if "latest" in assemble.replace("NO stable tag, :latest", ""):
+    import re
+    if re.search(r"(?:-t |tags:|docker tag ).*?:latest\\b", assemble):
         raise ValueError("A prerelease may never publish latest")
 
 
