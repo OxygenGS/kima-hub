@@ -158,10 +158,18 @@ describe("utils/knn helper contract", () => {
 
     it("reverts to the 40 default on the pool after the transaction", async () => {
         await withEfSearch(500, async () => undefined);
-        const rows = await prisma.$queryRaw<Array<{ v: string }>>`
-            SELECT current_setting('hnsw.ef_search') AS v
-        `;
-        expect(rows[0].v).toBe("40");
+        // A fresh pooled PostgreSQL backend might not have loaded the pgvector
+        // shared library yet; its hnsw.* GUCs are registered on first use.
+        // Resolve a vector operator and read the GUC on the SAME connection,
+        // so lack of a registered GUC cannot masquerade as leaked settings.
+        const outside = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT '[1,0]'::vector <=> '[0,1]'::vector AS distance`;
+            const rows = await tx.$queryRaw<Array<{ v: string }>>`
+                SELECT current_setting('hnsw.ef_search') AS v
+            `;
+            return rows[0].v;
+        });
+        expect(outside).toBe("40");
     });
 
     it("sizes the width as min(1000, max(2*limit, 100))", () => {
