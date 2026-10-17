@@ -83,6 +83,10 @@ RUN apt-get install -y --no-install-recommends \
     openssl \
     bash \
     gosu \
+    # Existing PostgreSQL 16 /data volumes may have been initialized with
+    # en_US.utf8. The runtime must provide that exact libc locale before
+    # starting the migrated database, not silently change database collations.
+    locales \
     # Python for audio analyzer
     python3 \
     python3-pip \
@@ -99,6 +103,9 @@ RUN apt-get install -y --no-install-recommends \
     libfftw3-single3 \
     libsamplerate0 \
     libyaml-0-2 \
+    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
+    && locale -a | grep -Fxq 'en_US.utf8' \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
