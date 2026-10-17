@@ -97,13 +97,14 @@ test.describe("Vibe", () => {
         await page.goto("/vibe", { waitUntil: "domcontentloaded" });
         await dismissWhatsNew(page);
 
-        // Wait for loading to settle: either the track count appears (map loaded with data)
-        // or the no-data placeholder appears (library has no vibe embeddings yet).
-        // "Computing music map" is a transient loading state -- do not assert on it.
-        const trackCount = page.locator("text=/ tracks$/");
-        const noData = page.locator("text=/No tracks with vibe/i");
+        // Wait for the Vibe map itself or its explicit empty state. The page
+        // sidebar can contain several unrelated "0 tracks" counters, so a
+        // document-wide text=/ tracks$/ selector is not a Vibe load signal.
+        // Playwright strict mode also rejects locator unions with >1 match.
+        const map = page.getByTestId("vibe-map-field");
+        const noData = page.getByText("No tracks with vibe analysis yet");
 
-        await expect(trackCount.or(noData)).toBeVisible({ timeout: 35_000 });
+        await expect(map.or(noData).first()).toBeVisible({ timeout: 35_000 });
     });
 
     test("toolbar buttons are present when map loads", async ({ page }) => {
