@@ -4,6 +4,13 @@ name: Verify published OxygenGS v1.11 candidate by digest
 # The source revision is fixed to the application/release workflow commit
 # independently of this verification-only branch.
 on:
+  # One isolated no-publish verification on this verification-only branch.
+  # Limit the trigger to edits to THIS workflow; never trigger image publication.
+  push:
+    branches:
+      - feature/prerelease-f31e589-verification
+    paths:
+      - .github/workflows/verify-published-v111-prerelease.yml
   workflow_dispatch:
     inputs:
       candidate_tag:
@@ -17,12 +24,13 @@ permissions:
   packages: read
 
 concurrency:
-  group: verify-published-v111-${{ inputs.candidate_tag }}
+  group: verify-published-v111-${{ inputs.candidate_tag || 'prerelease-v111-rc2' }}
   cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/oxygengs/kima-hub
   EXPECTED_SOURCE_SHA: ec44b98d9f69175b08bd2c6c88b0fb6552d6581c
+  EXPECTED_CANDIDATE_DIGEST: sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56
 
 jobs:
   verify-manifest:
@@ -53,7 +61,7 @@ jobs:
         id: resolve
         shell: bash
         env:
-          CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          CANDIDATE_TAG: ${{ inputs.candidate_tag || 'prerelease-v111-rc2' }}
         run: |
           set -euo pipefail
           if ! [[ "$CANDIDATE_TAG" =~ ^prerelease-[a-z0-9][a-z0-9.-]{0,31}$ ]]; then
@@ -74,6 +82,7 @@ jobs:
           '
           digest="$(docker buildx imagetools inspect "$tag_ref" | sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          test "$digest" = "$EXPECTED_CANDIDATE_DIGEST"
           candidate="${IMAGE}@${digest}"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
