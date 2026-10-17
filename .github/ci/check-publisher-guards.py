@@ -133,7 +133,7 @@ def check_native_prerelease(text: str) -> None:
     if check_at < 0 or alias_at < check_at:
         raise ValueError("Moving prerelease alias may only be published after manifest validation")
     import re
-    if re.search(r"(?:-t |tags:|docker tag ).*?:latest\\b", assemble):
+    if re.search(r"(?:-t |tags:|docker tag ).*?:latest\b", assemble):
         raise ValueError("A prerelease may never publish latest")
 
 
