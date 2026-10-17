@@ -3,8 +3,9 @@ name: Upstream v1.11 Implementation Checks
 on:
   pull_request:
     branches:
+      - main
       - feature/upstream-v1.11-integration
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
