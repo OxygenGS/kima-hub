@@ -1,7 +1,11 @@
 import { randomUUID } from "crypto";
 import { EventEmitter } from "events";
 import { redisClient } from "../utils/redis";
+import { withTimeout } from "../utils/timeout";
 import { logger } from "../utils/logger";
+import { efFor, withEfSearch } from "../utils/knn";
+import { formatEmbedding } from "../utils/embedding";
+import { MATCHING_MODEL } from "./matching/state";
 
 const REQUEST_CHANNEL = "audio:text:embed";
 const RESPONSE_PREFIX = "audio:text:embed:response:";
@@ -18,24 +22,11 @@ const emitter = new EventEmitter();
 // than pick an arbitrary ceiling that would mask a genuine leak.
 emitter.setMaxListeners(0);
 
-// The shared redisClient is enableOfflineQueue:false + maxRetriesPerRequest:0
-// (fail-fast for request/session work). Text-embed pub/sub must instead ride out a
-// cold or reconnecting Redis rather than throwing "Stream isn't writeable" (#197).
-// BOTH ends need the soft options: the first fix only hardened the subscriber, so
-// publish() on the strict client still threw the same error under load. A
-// subscriber-mode connection also cannot publish, so the publisher is separate.
+// The shared redisClient fails fast; text-embed pub/sub must ride out a cold
+// or reconnecting Redis, so both ends use soft duplicates. A subscribing
+// connection cannot publish, so the publisher is separate.
 function softDuplicate(): RedisConn {
     return redisClient.duplicate({ enableOfflineQueue: true, maxRetriesPerRequest: null });
-}
-
-// Bound a Redis op so an unreachable server surfaces as an error instead of an
-// unbounded hang (the offline queue buffers commands indefinitely while down).
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`text-embed ${label} timed out`)), ms);
-    });
-    return Promise.race([p.finally(() => clearTimeout(timer)), timeout]);
 }
 
 let subscriber: RedisConn | null = null;
@@ -58,12 +49,9 @@ function getPublisher(): RedisConn {
 }
 
 async function ensureSubscriber(): Promise<RedisConn> {
-    // Transient drops self-heal: ioredis reconnects (retryStrategy) and re-issues
-    // the psubscribe (autoResubscribe), so the cached subscriber recovers on its
-    // own. Only a terminal "end" -- reached here via the explicit disconnect()
-    // below when setup fails -- must not be reused: the cached promise would
-    // otherwise let every later request publish and then wait the full timeout for
-    // a response that can never arrive.
+    // ioredis reconnects and resubscribes on its own; only an ended subscriber
+    // (after a failed setup) must be replaced, or requests would wait out the
+    // timeout for replies that never come.
     if (subscriber && subscriber.status === "end") {
         subscriber = null;
         subscriberPromise = null;
@@ -91,7 +79,7 @@ async function ensureSubscriber(): Promise<RedisConn> {
             // Offline queue buffers psubscribe until connected; bound it so a
             // genuinely unreachable Redis fails instead of hanging the caller (the
             // per-request timeout only starts after this resolves).
-            await withTimeout(sub.psubscribe(`${RESPONSE_PREFIX}*`), CONNECT_TIMEOUT_MS, "subscribe");
+            await withTimeout(sub.psubscribe(`${RESPONSE_PREFIX}*`), CONNECT_TIMEOUT_MS, "subscribe timed out");
         } catch (err) {
             sub.disconnect(); // close the half-open socket instead of leaking it
             throw err;
@@ -100,8 +88,8 @@ async function ensureSubscriber(): Promise<RedisConn> {
         logger.info("[TEXT-EMBED] Shared subscriber connected");
         return sub;
     })().catch((err) => {
-        // Never cache a rejected promise -- one transient failure must not
-        // permanently break vibe text search (#197).
+        // Never cache a rejected promise: one transient failure must not
+        // permanently break vibe text search.
         subscriber = null;
         subscriberPromise = null;
         throw err;
@@ -116,7 +104,7 @@ async function ensureSubscriber(): Promise<RedisConn> {
  * subscriber-mode connection cannot publish) configured to ride out a cold or
  * reconnecting Redis.
  */
-export async function getTextEmbedding(text: string): Promise<number[]> {
+async function getTextEmbedding(text: string): Promise<number[]> {
     await ensureSubscriber();
 
     const requestId = randomUUID();
@@ -150,7 +138,7 @@ export async function getTextEmbedding(text: string): Promise<number[]> {
         await withTimeout(
             getPublisher().publish(REQUEST_CHANNEL, JSON.stringify({ requestId, text })),
             PUBLISH_TIMEOUT_MS,
-            "publish",
+            "publish timed out"
         );
     } catch (err) {
         // The request never reached the analyzer; tear down the pending listener
@@ -161,4 +149,62 @@ export async function getTextEmbedding(text: string): Promise<number[]> {
     }
 
     return embeddingPromise;
+}
+
+export interface TextSearchRow {
+    id: string;
+    title: string;
+    duration: number;
+    trackNo: number;
+    /** pgvector cosine distance between the track and the query text. */
+    distance: number;
+    albumId: string;
+    albumTitle: string;
+    albumCoverUrl: string | null;
+    artistId: string;
+    artistName: string;
+}
+
+/**
+ * Text search over CLAP embeddings: the `limit` nearest tracks, best first,
+ * shared by /api/vibe/search and the public copy. No similarity cut-off:
+ * text-to-audio cosine is comparable only within one query, and no threshold
+ * measured on the full library separated "nothing matches" from "many match".
+ */
+export async function searchTracksByText(
+    query: string,
+    limit: number,
+): Promise<TextSearchRow[]> {
+    return searchTracksByEmbedding(await getTextEmbedding(query), limit);
+}
+
+/** The ranking half of searchTracksByText, for an already-embedded query. */
+export async function searchTracksByEmbedding(
+    embedding: number[],
+    limit: number,
+): Promise<TextSearchRow[]> {
+    const vector = formatEmbedding(embedding);
+    // Widen hnsw.ef_search, or any limit past 40 comes back short.
+    return withEfSearch(efFor(limit), (tx) =>
+        tx.$queryRaw<TextSearchRow[]>`
+            SELECT
+                t.id,
+                t.title,
+                t.duration,
+                t."trackNo",
+                te.embedding <=> ${vector}::vector AS distance,
+                a.id AS "albumId",
+                a.title AS "albumTitle",
+                a."coverUrl" AS "albumCoverUrl",
+                ar.id AS "artistId",
+                ar.name AS "artistName"
+            FROM track_embeddings te
+            JOIN "Track" t ON te.track_id = t.id
+            JOIN "Album" a ON t."albumId" = a.id
+            JOIN "Artist" ar ON a."artistId" = ar.id
+            WHERE t."missingSince" IS NULL AND te.model_version = ${MATCHING_MODEL}
+            ORDER BY te.embedding <=> ${vector}::vector
+            LIMIT ${limit}
+        `,
+    );
 }

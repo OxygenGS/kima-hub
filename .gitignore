@@ -17,9 +17,6 @@ venv/
 **/.venv/
 
 # Build Outputs
-frontend/.next/
-frontend/out/
-backend/dist/
 **/dist/
 **/build/
 **/out/
@@ -31,8 +28,6 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
-backend/logs/
-frontend/logs/
 
 # Testing & Coverage
 coverage/
@@ -90,7 +85,6 @@ pids/
 *.db
 *.db-shm
 *.db-wal
-**/prisma/dev.db
 **/prisma/dev.db-journal
 
 # TypeScript
@@ -110,80 +104,17 @@ pnpm-lock.yaml
 keystore.b64
 **/key.txt
 *.conf
-lidify.keystore
 
 # Backend
 backend/cache/
 **/cache/covers/
 **/cache/transcodes/
-**/mullvad/
 
 # Frontend
-frontend/android/
 frontend/test-*.tsx
 
-# Research/Scraping Cache
-**/.firecrawl/
+# Local CLAP model weights (validated hf_audio.onnx, copied into the analyzer)
+services/audio-analyzer-clap/models/
 
-# AI Tools & Assistants
-.claude/
-**/.claude/
-!.claude/commands/
-.cursor/
-**/.cursor/
-.roo/
-**/.roo/
-.aider*
-.serena/
-**/.serena/
-.opencode/
-**/.opencode/
-.vibe/
-**/.vibe/
-.claudeignore
-CLAUDE.md
-AGENTS.md
-
-# Internal Documentation (public docs are in project root)
-docs/
-**/docs/
-context_portal/
-issues/
-plans/
-planning/
-systems/
-
-# Dev test scripts
-/e2e/
-
-# Release/Deployment Artifacts
-RELEASE_NOTES_*.md
-RELEASE_*_COMMANDS.sh
-DEPLOYMENT_COMMANDS_*.txt
-*_RELEASE_SUMMARY.md
-CODE_REVIEW_*.md
-
-# Local stress tests
-tests/stress/
-
-# Development
-.worktrees/
-reset-and-setup.sh
-organize-singles.sh
-COMMIT_MESSAGE.txt
-ISSUE_REVIEW.md
-backend/backend/
-postman/
-soularr/
-
-# Legacy (removed from repo)
-/App.tsx
-/app.json
-/src/
-
-# Allow README files
-!README.md
-!readme.md
-
-# Claude Code internal task tracking
-.task/
+# Model caches are large binaries, not source
+services/audio-analyzer-clap/cache/

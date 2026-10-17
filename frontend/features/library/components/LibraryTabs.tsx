@@ -1,33 +1,27 @@
 import { Tab } from "../types";
-import { cn } from "@/utils/cn";
-import { Users, Disc3, ListMusic } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface LibraryTabsProps {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
 }
 
-// No per-tab colour. A filter is not a category with an identity, and three
-// saturated hues on one control read as candy rather than hierarchy. The active
-// segment carries the app's one accent; the others carry none.
+// No per-tab colour: only the active segment carries the app accent.
 const tabs = [
-  { id: "artists" as Tab, label: "Artists", icon: Users },
-  { id: "albums" as Tab, label: "Albums", icon: Disc3 },
-  { id: "tracks" as Tab, label: "Tracks", icon: ListMusic },
+  { id: "artists" as Tab, label: "Artists" },
+  { id: "albums" as Tab, label: "Albums" },
+  { id: "tracks" as Tab, label: "Tracks" },
 ];
 
 export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
+  const { locale } = useLanguage();
   return (
-    // A segmented control: one quiet container, one filled segment. What was
-    // here before stacked five effects on a three-item filter -- a per-tab
-    // gradient, a permanent shimmer sweep, scale-105 on both active AND hover,
-    // and a backdrop-blur glass panel behind all of it. None of them carried
-    // information; together they made the smallest control on the page the
-    // loudest thing on it.
-    <div data-tv-section="library-tabs" className="inline-flex items-center gap-1 rounded-xl bg-white/5 p-1">
+    // Soft pills: the chosen one is amber text on a faint amber tint, the rest quiet.
+    <div data-tv-section="library-tabs" className="inline-flex items-center gap-1">
       {tabs.map((tab, index) => {
         const isActive = activeTab === tab.id;
-        const Icon = tab.icon;
 
         return (
           <button
@@ -38,16 +32,14 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
             aria-pressed={isActive}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              // min-h matches the Refine control beside it and clears the 44px
-              // touch guideline; py alone gave a 36px target.
-              "flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 min-h-[44px] text-sm font-medium transition-colors duration-150",
+              // min-h meets the 44px touch target; the pill rounds fully.
+              "min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150",
               isActive
-                ? "bg-brand text-black"
-                : "text-[var(--text-secondary)] hover:text-white hover:bg-white/5",
+                ? "text-brand bg-brand/10"
+                : "text-[var(--text-muted)] hover:text-white hover:bg-white/5",
             )}
           >
-            <Icon className="w-4 h-4 shrink-0" />
-            {tab.label}
+            {translate(locale, tab.label)}
           </button>
         );
       })}

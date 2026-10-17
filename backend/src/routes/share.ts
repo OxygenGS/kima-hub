@@ -3,13 +3,13 @@ import { createShareLink, ShareError } from "../services/shareService";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { requireAuth } from "../middleware/auth";
-import { randomBytes } from "crypto";
-import rateLimit from "express-rate-limit";
+import { createRateLimiter } from "../middleware/rateLimiter";
 import path from "path";
 import fs from "fs";
-import { getLocalImagePath, getResizedImagePath } from "../services/imageStorage";
+import { getLocalImagePath, getResizedImagePath, getCanonicalCoverFilePath } from "../services/imageStorage";
 import { getAudioStreamingService } from "../services/audioStreaming";
 import { config } from "../config";
+import { resolveWithinMusicRoot } from "./library/trackPath";
 
 const router = Router();
 
@@ -23,21 +23,9 @@ setInterval(() => {
     }
 }, 60_000).unref();
 
-const shareResolveLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 60,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
-});
+const shareResolveLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 60 });
 
-const shareStreamLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 300,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
-});
+const shareStreamLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 300 });
 
 function getMimeType(filePath: string): string {
     const ext = path.extname(filePath).toLowerCase();
@@ -52,6 +40,67 @@ function getMimeType(filePath: string): string {
         ".wma": "audio/x-ms-wma",
     };
     return mimeTypes[ext] || "application/octet-stream";
+}
+
+/** The share link for `token`, or null once the response has gone out: 404 unknown, 410 expired or out of plays. */
+async function loadUsableShareLink(token: string, res: Response) {
+    // Never cache a public capability result past expiry or owner revocation.
+    // This covers metadata and rejected streams/covers, not just 200 audio.
+    res.setHeader("Cache-Control", "private, no-store");
+    const shareLink = await prisma.shareLink.findUnique({ where: { token } });
+
+    if (!shareLink) {
+        res.status(404).json({ error: "Share link not found" });
+        return null;
+    }
+
+    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
+        res.status(410).json({ error: "Share link has expired" });
+        return null;
+    }
+
+    if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
+        res.status(410).json({ error: "Share link play limit reached" });
+        return null;
+    }
+
+    return shareLink;
+}
+
+/**
+ * A share token grants access to the art attached to its shared tracks,
+ * NOT every native image stored on the server. Use indexed relations so even
+ * large playlists need no unbounded per-request materialization.
+ */
+async function shareContainsCover(
+    shareLink: { entityType: string; entityId: string },
+    coverArtId: string,
+): Promise<boolean> {
+    if (shareLink.entityType === "track") {
+        const track = await prisma.track.findUnique({
+            where: { id: shareLink.entityId },
+            select: { album: { select: { coverUrl: true } } },
+        });
+        return track?.album?.coverUrl === coverArtId;
+    }
+    if (shareLink.entityType === "album") {
+        const album = await prisma.album.findUnique({
+            where: { id: shareLink.entityId },
+            select: { coverUrl: true },
+        });
+        return album?.coverUrl === coverArtId;
+    }
+    if (shareLink.entityType === "playlist") {
+        const item = await prisma.playlistItem.findFirst({
+            where: {
+                playlistId: shareLink.entityId,
+                track: { album: { coverUrl: coverArtId } },
+            },
+            select: { id: true },
+        });
+        return !!item;
+    }
+    return false;
 }
 
 /**
@@ -89,42 +138,38 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
  */
 router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
+        // Public endpoints return an explicit safe projection. In particular,
+        // raw Track includes filePath, identity analysis and private metadata;
+        // only the shared music display fields belong in an anonymous response.
+        const sharedTrackSelect = {
+            id: true,
+            title: true,
+            duration: true,
+            trackNo: true,
+            discNumber: true,
+            discSubtitle: true,
+            album: {
+                select: {
+                    title: true,
+                    coverUrl: true,
+                    artist: { select: { name: true } },
+                },
+            },
+        } as const;
 
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
-
-        let entity: any = null;
+        let entity: unknown = null;
 
         if (shareLink.entityType === "playlist") {
             entity = await prisma.playlist.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
+                select: {
+                    id: true,
+                    name: true,
                     items: {
-                        include: {
-                            track: {
-                                include: {
-                                    album: {
-                                        include: {
-                                            artist: {
-                                                select: { id: true, name: true },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
+                        select: { track: { select: sharedTrackSelect } },
                         orderBy: { sort: "asc" },
                     },
                     user: { select: { username: true } },
@@ -133,19 +178,16 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
         } else if (shareLink.entityType === "track") {
             entity = await prisma.track.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
-                    album: {
-                        include: {
-                            artist: { select: { id: true, name: true } },
-                        },
-                    },
-                },
+                select: sharedTrackSelect,
             });
         } else if (shareLink.entityType === "album") {
             entity = await prisma.album.findUnique({
                 where: { id: shareLink.entityId },
-                include: {
-                    artist: { select: { id: true, name: true } },
+                select: {
+                    id: true,
+                    title: true,
+                    coverUrl: true,
+                    artist: { select: { name: true } },
                     tracks: {
                         orderBy: [
                             { discNumber: { sort: "asc", nulls: "first" } },
@@ -184,27 +226,18 @@ router.get("/:token", shareResolveLimiter, async (req: Request, res: Response) =
  */
 router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
-
-        const coverArtId = decodeURIComponent(req.params.coverArtId);
+        // Express has already decoded the path parameter once.
+        const coverArtId = req.params.coverArtId;
         const size = req.query.size as string | undefined;
 
         if (!coverArtId.startsWith("native:")) {
             return res.status(404).json({ error: "Cover art not found" });
+        }
+        if (!(await shareContainsCover(shareLink, coverArtId))) {
+            return res.status(403).json({ error: "Cover art not in shared content" });
         }
 
         const localPath = getLocalImagePath(coverArtId);
@@ -215,18 +248,24 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
         const width = size ? parseInt(size, 10) : 0;
         if (width >= 16 && width <= 2048) {
             const resizedPath = getResizedImagePath(coverArtId, width);
-            if (resizedPath) {
+            // Cached variants need the same canonical-root validation as the
+            // original image; a resized-name symlink must not escape /covers.
+            const safeResizedPath = resizedPath ? getCanonicalCoverFilePath(resizedPath) : null;
+            if (safeResizedPath) {
                 try {
-                    await fs.promises.access(resizedPath, fs.constants.R_OK);
+                    await fs.promises.access(safeResizedPath, fs.constants.R_OK);
                     res.setHeader("Content-Type", "image/jpeg");
-                    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-                    return res.sendFile(resizedPath);
-                } catch {}
+                    res.setHeader("Cache-Control", "private, no-store");
+                    return res.sendFile(safeResizedPath);
+                } catch {
+                    // No readable resized copy yet: serve the authorized original.
+                }
             }
         }
 
         res.setHeader("Content-Type", "image/jpeg");
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        // Revoked or expired share tokens must never leave a lasting cached image.
+        res.setHeader("Cache-Control", "private, no-store");
         return res.sendFile(localPath);
     } catch (error: any) {
         logger.error(`[Share] Cover art error: ${error.message}`);
@@ -239,21 +278,8 @@ router.get("/:token/cover-art/:coverArtId", shareResolveLimiter, async (req: Req
  */
 router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, res: Response) => {
     try {
-        const shareLink = await prisma.shareLink.findUnique({
-            where: { token: req.params.token },
-        });
-
-        if (!shareLink) {
-            return res.status(404).json({ error: "Share link not found" });
-        }
-
-        if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-            return res.status(410).json({ error: "Share link has expired" });
-        }
-
-        if (shareLink.maxPlays && shareLink.playCount >= shareLink.maxPlays) {
-            return res.status(410).json({ error: "Share link play limit reached" });
-        }
+        const shareLink = await loadUsableShareLink(req.params.token, res);
+        if (!shareLink) return;
 
         const trackId = req.params.trackId;
         let authorized = false;
@@ -285,18 +311,26 @@ router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, r
             return res.status(404).json({ error: "Track file not found" });
         }
 
-        const musicPath = config.music.musicPath;
-        const resolvedMusicPath = path.resolve(musicPath);
-        const fullPath = path.resolve(resolvedMusicPath, track.filePath);
-
-        if (!fullPath.startsWith(resolvedMusicPath + path.sep)) {
+        // Stored file paths can contain traversal segments or point to a
+        // symlink escaping the music root. Compare canonical, existing paths
+        // before making this public stream available to an anonymous token.
+        const candidatePath = resolveWithinMusicRoot(track.filePath);
+        if (!candidatePath) {
             return res.status(403).json({ error: "Access denied" });
         }
-
+        let fullPath: string;
+        let realMusicRoot: string;
         try {
+            [fullPath, realMusicRoot] = await Promise.all([
+                fs.promises.realpath(candidatePath),
+                fs.promises.realpath(config.music.musicPath),
+            ]);
             await fs.promises.access(fullPath, fs.constants.R_OK);
         } catch {
             return res.status(404).json({ error: "Audio file not found" });
+        }
+        if (!fullPath.startsWith(realMusicRoot + path.sep)) {
+            return res.status(403).json({ error: "Access denied" });
         }
 
         // Deduplicate play count: only increment once per share+track within time window
@@ -332,7 +366,8 @@ router.get("/:token/stream/:trackId", shareStreamLimiter, async (req: Request, r
             config.music.transcodeCachePath,
             config.music.transcodeCacheMaxGb,
         );
-        await streamingService.streamFileWithRangeSupport(req, res, fullPath, mimeType);
+        // A revoked/expired token must not leave a reusable cached audio file.
+        await streamingService.streamFileWithRangeSupport(req, res, fullPath, mimeType, "private, no-store");
     } catch (error: any) {
         logger.error(`[Share] Stream error: ${error.message}`);
         if (!res.headersSent) {

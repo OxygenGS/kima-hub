@@ -4,6 +4,7 @@ import { prisma } from "../../utils/db";
 import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicResponse";
 import { searchService } from "../../services/search";
 import { wrap, clamp, parseIntParam, firstArtistGenre, mapSong } from "./mappers";
+import { LIBRARY_LOCATION } from "../../services/libraryFilters";
 
 export const searchRouter = Router();
 
@@ -44,7 +45,7 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
     if (rawAlbums.length > 0) {
         const libraryIds = new Set(
             (await prisma.album.findMany({
-                where: { id: { in: rawAlbums.map((a) => a.id) }, location: "LIBRARY" },
+                where: { id: { in: rawAlbums.map((a) => a.id) }, location: LIBRARY_LOCATION },
                 select: { id: true },
             })).map((a) => a.id)
         );
@@ -230,6 +231,7 @@ searchRouter.all("/getSongsByGenre.view", wrap(async (req, res) => {
         JOIN "Album" al ON t."albumId" = al.id
         JOIN "Artist" ar ON al."artistId" = ar.id
         WHERE t.corrupt = false
+          AND t."missingSince" IS NULL
           AND al.location = 'LIBRARY'
           AND EXISTS (
             SELECT 1 FROM jsonb_array_elements_text(
@@ -369,11 +371,7 @@ searchRouter.all(["/getSimilarSongs2.view", "/getSimilarSongs.view"], wrap(async
 
     const count = clamp(parseIntParam(req.query.count as string | undefined, 50), 1, 500);
 
-    // Subsonic's `id` here is "the artist, album or song ID", and clients send a
-    // SONG id in the common case (similar-to-what-is-playing). This looked the
-    // value up directly as fromArtistId, so a song id matched no SimilarArtist
-    // row and the endpoint returned an empty list for exactly the request it
-    // exists to serve.
+    // `id` may be an artist, album or song; clients usually send a song id.
     let artistId: string | null = null;
     const track = await prisma.track.findUnique({
         where: { id },

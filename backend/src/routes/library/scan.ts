@@ -4,6 +4,7 @@ import { prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
 import { config } from "../../config";
 import { scanQueue } from "../../workers/queues";
+import { requestScan } from "../../workers/scanRequest";
 import { organizeSingles } from "../../workers/organizeSingles";
 
 const router = Router();
@@ -27,14 +28,13 @@ router.post("/scan", requireAdmin, async (req, res) => {
 
     const userId = req.user?.id || "system";
 
-    const job = await scanQueue.add("scan", {
-      userId,
-      musicPath: config.music.musicPath,
-    });
+    const result = await requestScan({ userId, source: "manual-scan" });
 
     res.json({
-      message: "Library scan started",
-      jobId: job.id,
+      message: result.queued
+        ? "Library scan started"
+        : `Library scan already queued or running (${result.reason})`,
+      jobId: result.jobId,
       musicPath: config.music.musicPath,
     });
   } catch (error) {
@@ -94,6 +94,7 @@ router.get("/corrupt-tracks", requireAdmin, async (_req, res) => {
         title: t.title,
         artist: t.album.artist.name,
         album: t.album.title,
+        filePath: t.filePath,
       })),
     });
   } catch (error) {
@@ -102,13 +103,48 @@ router.get("/corrupt-tracks", requireAdmin, async (_req, res) => {
   }
 });
 
+router.get("/missing-tracks", requireAdmin, async (_req, res) => {
+  try {
+    // Tracks whose file is gone, and since when. The scan flags them rather than
+    // deleting them and clears the flag when the file returns, so there is no
+    // manual clear.
+    const tracks = await prisma.track.findMany({
+      where: { missingSince: { not: null } },
+      include: { album: { include: { artist: { select: { name: true } } } } },
+      orderBy: { missingSince: "asc" },
+    });
+
+    res.json({
+      count: tracks.length,
+      tracks: tracks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.album.artist.name,
+        album: t.album.title,
+        missingSince: t.missingSince,
+      })),
+    });
+  } catch (error) {
+    logger.error("Get missing tracks error:", error);
+    res.status(500).json({ error: "Failed to get missing tracks" });
+  }
+});
+
 router.delete("/corrupt-tracks", requireAdmin, async (_req, res) => {
   try {
-    const result = await prisma.track.deleteMany({ where: { corrupt: true } });
-    res.json({ deleted: result.count, message: `Removed ${result.count} corrupt tracks` });
+    // Clear the corrupt flag only, keeping the track and its stage records; the
+    // next scan re-checks the file.
+    const result = await prisma.track.updateMany({
+      where: { corrupt: true },
+      data: { corrupt: false },
+    });
+    res.json({
+      cleared: result.count,
+      message: `Cleared the corrupt flag on ${result.count} tracks (rows kept)`,
+    });
   } catch (error) {
-    logger.error("Delete corrupt tracks error:", error);
-    res.status(500).json({ error: "Failed to delete corrupt tracks" });
+    logger.error("Clear corrupt tracks error:", error);
+    res.status(500).json({ error: "Failed to clear corrupt tracks" });
   }
 });
 

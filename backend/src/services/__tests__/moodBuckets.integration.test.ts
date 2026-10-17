@@ -1,0 +1,232 @@
+/**
+ * A track carries a mood when its head leans that way (> 0.5) — the verdict
+ * is membership, library rank is display only (CLAP is not a mood signal and
+ * must not gate the buckets). Buckets fill once a track is analysed, refresh
+ * when the library changes, and match the vibe map.
+ */
+
+const store = new Map<string, string>();
+jest.mock("../../utils/redis", () => ({
+    redisClient: {
+        get: jest.fn(async (k: string) => store.get(k) ?? null),
+        del: jest.fn(async (k: string) => { store.delete(k); return 1; }),
+        multi: jest.fn(() => {
+            const ops: Array<() => void> = [];
+            const chain = {
+                setex: (k: string, _ttl: number, v: string) => { ops.push(() => store.set(k, v)); return chain; },
+                del: (k: string) => { ops.push(() => store.delete(k)); return chain; },
+                sadd: () => chain,
+                expire: () => chain,
+                exec: async () => { ops.forEach((op) => op()); return []; },
+            };
+            return chain;
+        }),
+    },
+}));
+
+import fs from "fs";
+import path from "path";
+import { prisma } from "../../utils/db";
+import {
+    classifyMoods,
+    MoodDistribution,
+    MoodValues,
+    moodBucketService,
+    NEUTRAL,
+    UNANALYZED,
+} from "../moodBucketService";
+import { syncMoodBuckets } from "../../workers/moodBucketWorker";
+import { getVibeMap } from "../vibeMap";
+import { MATCHING_MODEL } from "../matching/state";
+
+jest.setTimeout(60_000);
+
+const quiet: MoodValues = { moodHappy: 0.2, moodSad: 0.2, moodRelaxed: 0.2, moodAggressive: 0.2, moodParty: 0.2 };
+
+describe("classifyMoods (pure)", () => {
+    // 10 tracks: values 0.0 .. 0.9 on every mood
+    const lib: MoodValues[] = Array.from({ length: 10 }, (_, i) => ({
+        moodHappy: i / 10, moodSad: i / 10, moodRelaxed: i / 10, moodAggressive: i / 10, moodParty: i / 10,
+    }));
+    const dist = new MoodDistribution(lib);
+
+    it("ranks a value by the share of the library below it, ties counted half", () => {
+        expect(dist.rank("moodHappy", 0.9)).toBeCloseTo(0.95);
+        expect(dist.rank("moodHappy", 0.0)).toBeCloseTo(0.05);
+        expect(dist.rank("moodHappy", 0.45)).toBeCloseTo(0.5);
+    });
+
+    it("gives a mood to a track whose head leans that way", () => {
+        const v = classifyMoods({ ...quiet, moodParty: 0.9 }, dist);
+        expect(v.dominant).toBe("moodParty");
+        expect(v.moods).toEqual(["moodParty"]);
+    });
+
+    it("does not give a mood the head says no to, however high it ranks", () => {
+        // Library where every sad value is tiny: 0.09 is the top, but P(sad) < 0.5.
+        const low = new MoodDistribution(lib.map((r) => ({ ...r, moodSad: (r.moodSad as number) / 10 })));
+        const v = classifyMoods({ ...quiet, moodSad: 0.09 }, low);
+        expect(v.ranks.moodSad).toBeGreaterThan(0.8);
+        expect(v.moods).not.toContain("moodSad");
+    });
+
+    it("has no single mood when nothing stands out", () => {
+        const v = classifyMoods({ moodHappy: 0.5, moodSad: 0.5, moodRelaxed: 0.5, moodAggressive: 0.5, moodParty: 0.5 }, dist);
+        expect(v.dominant).toBe(NEUTRAL);
+        expect(v.score).toBe(0);
+    });
+
+    it("picks the mood the track stands out on most, and keeps every mood it has", () => {
+        const v = classifyMoods({ ...quiet, moodHappy: 0.8, moodParty: 0.9 }, dist);
+        expect(v.dominant).toBe("moodParty");
+        expect(v.moods.sort()).toEqual(["moodHappy", "moodParty"]);
+    });
+
+    it("reports a track with any missing mood as not analysed, never as 0.5", () => {
+        const v = classifyMoods({ ...quiet, moodSad: null }, dist);
+        expect(v.dominant).toBe(UNANALYZED);
+        expect(v.ranks).toEqual({});
+        expect(v.moods).toEqual([]);
+    });
+});
+
+async function seed() {
+    const artist = await prisma.artist.create({ data: { id: "art_mood", name: "Mood Artist", identityKey: "a_mood" } });
+    const album = await prisma.album.create({
+        data: { id: "alb_mood", rgMbid: "rg_mood", artistId: artist.id, title: "Mood Album", primaryType: "Album" },
+    });
+    // 20 analysed tracks. t0..t3 are clearly Energetic (party 0.9), t4 clearly
+    // Calm (relaxed 0.95); the rest are quiet. t3 has no CLAP yet.
+    for (let i = 0; i < 20; i++) {
+        const id = `trk_mood_${i}`;
+        const moods = { ...quiet, moodParty: 0.1 + i * 0.001, moodRelaxed: 0.1 + i * 0.001 };
+        if (i < 4) moods.moodParty = 0.9;
+        if (i === 4) moods.moodRelaxed = 0.95;
+        await prisma.track.create({
+            data: {
+                id, albumId: album.id, title: `M ${i}`, trackNo: i + 1, duration: 180,
+                filePath: `/tmp/${id}.flac`, fileModified: new Date(), fileSize: 1000,
+                analysisStatus: "completed", analysisMode: "enhanced", analysisVersion: "2.1b6-enhanced-v3",
+                analyzedAt: new Date(Date.UTC(2026, 8, 24, 0, i)),
+                vibeAnalysisStatus: i === 3 ? "pending" : "completed",
+                ...moods,
+            },
+        });
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO track_embeddings (track_id, embedding, model_version) VALUES ($1, $2::vector, $3)`,
+            id, `[${Array.from({ length: 512 }, (_, d) => (d === i ? 1 : 0)).join(",")}]`, MATCHING_MODEL,
+        );
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO matching_map (track_id, embedded_at, x, y, z, colour, laid_out)
+             SELECT track_id, analyzed_at, 0.5, 0.5, 0.5, 0.5, true FROM track_embeddings WHERE track_id = $1`,
+            id,
+        );
+    }
+    // One track still waiting for analysis.
+    await prisma.track.create({
+        data: {
+            id: "trk_mood_pending", albumId: album.id, title: "Pending", trackNo: 21, duration: 180,
+            filePath: "/tmp/trk_mood_pending.flac", fileModified: new Date(), fileSize: 1000,
+            analysisStatus: "pending",
+        },
+    });
+}
+
+async function mapTracks() {
+    const state = await getVibeMap();
+    if (state.status !== "ready") throw new Error("the map is not laid out");
+    return state.data.tracks;
+}
+
+describe("mood buckets (database)", () => {
+    beforeAll(async () => {
+        await seed();
+    });
+
+    // The worker DB is shared by every suite in this Jest worker: remove our rows.
+    afterAll(async () => {
+        await prisma.$executeRawUnsafe(`DELETE FROM track_embeddings WHERE track_id LIKE $1`, "trk\\_mood\\_%");
+        await prisma.$executeRawUnsafe(`DELETE FROM "Track" WHERE id LIKE $1`, "trk\\_mood\\_%");
+        await prisma.$executeRawUnsafe(`DELETE FROM "Album" WHERE id = $1`, "alb_mood");
+        await prisma.$executeRawUnsafe(`DELETE FROM "Artist" WHERE id = $1`, "art_mood");
+        await prisma.$disconnect();
+    });
+
+    it("sorts every analysed track on the first run, bucketing by the verdict alone", async () => {
+        expect(await syncMoodBuckets()).toBe(true);
+        // The worker DB is shared: judge only the rows this seed created.
+        const buckets = (await prisma.moodBucket.findMany({ orderBy: [{ mood: "asc" }, { trackId: "asc" }] }))
+            .filter((b) => b.trackId.startsWith("trk_mood_"));
+        expect(buckets.map((b) => `${b.mood}:${b.trackId}`)).toEqual([
+            "chill:trk_mood_4",
+            "party:trk_mood_0",
+            "party:trk_mood_1",
+            "party:trk_mood_2",
+            "party:trk_mood_3",
+        ]);
+        for (const b of buckets) expect(b.score).toBeGreaterThanOrEqual(0.8);
+    });
+
+    it("does not rebuild when nothing in the library changed", async () => {
+        expect(await syncMoodBuckets()).toBe(false);
+    });
+
+    it("a track's CLAP finishing changes no bucket (CLAP is not a mood signal), and pending tracks are reported", async () => {
+        await prisma.track.update({ where: { id: "trk_mood_3" }, data: { vibeAnalysisStatus: "completed" } });
+        expect(await syncMoodBuckets()).toBe(false);
+        expect(await prisma.moodBucket.count({ where: { mood: "party", trackId: { startsWith: "trk_mood_" } } })).toBe(4);
+        const presets = await moodBucketService.getMoodPresets();
+        expect(presets.map((p) => p.name)).toEqual(["Upbeat", "Melancholic", "Calm", "Intense", "Energetic"]);
+        expect(presets.find((p) => p.id === "party")!.trackCount).toBeGreaterThanOrEqual(4);
+        // Other suites in this Jest worker may leave pending rows; count them all.
+        const pending = await prisma.track.count({ where: { analysisStatus: { in: ["pending", "queued", "processing"] } } });
+        expect(pending).toBeGreaterThanOrEqual(1);
+        expect(presets[0].pendingTracks).toBe(pending);
+    });
+
+    it("serves the same decision on the vibe map, and 'unanalyzed' once values are cleared", async () => {
+        const byId = new Map((await mapTracks()).map((t) => [t.id, t]));
+        expect(byId.get("trk_mood_0")!.dominantMood).toBe("moodParty");
+        expect(byId.get("trk_mood_4")!.dominantMood).toBe("moodRelaxed");
+        expect(byId.get("trk_mood_10")!.dominantMood).toBe(NEUTRAL);
+        expect(Object.keys(byId.get("trk_mood_0")!.moods).sort()).toEqual(
+            ["moodAggressive", "moodHappy", "moodParty", "moodRelaxed", "moodSad"],
+        );
+
+        await prisma.track.update({ where: { id: "trk_mood_0" }, data: { moodParty: null } });
+        await syncMoodBuckets();
+        expect((await mapTracks()).find((t) => t.id === "trk_mood_0")!.dominantMood).toBe(UNANALYZED);
+        expect(await prisma.moodBucket.count({ where: { trackId: "trk_mood_0" } })).toBe(0);
+    });
+
+    it("the inverted-heads migration re-queues exactly the rows the broken analyzer wrote", async () => {
+        await prisma.track.update({
+            where: { id: "trk_mood_5" },
+            data: { analysisVersion: "2.1b6-enhanced-v2", danceabilityMl: 0.3, moodAcoustic: 0.4, moodTags: ["happy"], analysisRetryCount: 2 },
+        });
+        await prisma.track.update({
+            where: { id: "trk_mood_6" },
+            data: { analysisMode: "standard", analysisVersion: "2.1b6-enhanced-v2", moodTags: ["chill"] },
+        });
+        const sql = fs.readFileSync(
+            path.join(__dirname, "../../../prisma/migrations/20260924120000_reset_inverted_mood_heads/migration.sql"),
+            "utf8",
+        );
+        await prisma.$executeRawUnsafe(sql);
+
+        const reset = await prisma.track.findUniqueOrThrow({ where: { id: "trk_mood_5" } });
+        expect(reset.analysisStatus).toBe("pending");
+        expect(reset.analysisRetryCount).toBe(0);
+        expect([reset.moodHappy, reset.moodSad, reset.moodRelaxed, reset.moodAggressive, reset.moodParty,
+            reset.moodAcoustic, reset.moodElectronic, reset.danceabilityMl]).toEqual(Array(8).fill(null));
+        expect(reset.moodTags).toEqual([]);
+
+        // Fixed-analyzer rows and standard-mode rows are left alone.
+        const fixed = await prisma.track.findUniqueOrThrow({ where: { id: "trk_mood_7" } });
+        expect(fixed.analysisStatus).toBe("completed");
+        expect(fixed.moodParty).not.toBeNull();
+        const standard = await prisma.track.findUniqueOrThrow({ where: { id: "trk_mood_6" } });
+        expect(standard.analysisStatus).toBe("completed");
+        expect(standard.moodTags).toEqual(["chill"]);
+    });
+});

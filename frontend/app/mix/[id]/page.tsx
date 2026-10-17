@@ -2,17 +2,19 @@
 
 import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { Play, Pause, Music, Shuffle, Save, ListPlus } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { formatTime } from "@/utils/formatTime";
-import { shuffleArray } from "@/utils/shuffle";
-import { useToast } from "@/lib/toast-context";
+import { cn } from "@/lib/cn";
+import { formatTime, plural } from "@/lib/format";
+import { shuffleArray } from "@/lib/shuffle";
+import { notify } from "@/lib/notify";
 import { useMixQuery } from "@/hooks/useQueries";
 import { useDoubleTapList } from "@/hooks/useDoubleTap";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { PageMessage } from "@/components/ui/PageMessage";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface MixTrack {
     id: string;
@@ -30,7 +32,6 @@ interface MixTrack {
 }
 
 export default function MixPage() {
-    const { toast } = useToast();
     const params = useParams();
     const router = useRouter();
     const mixId = params.id as string;
@@ -39,26 +40,22 @@ export default function MixPage() {
     const { isPlaying } = useAudioPlayback();
     const { playTracks, addToQueue, pause, resumeWithGesture } = useAudioControls();
 
-    const { data: mix, isLoading } = useMixQuery(mixId);
+    const { data: mix, isLoading, error, refetch } = useMixQuery(mixId);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Calculate total duration
     const totalDuration = useMemo(() => {
         if (!mix?.tracks) return 0;
         return mix.tracks.reduce((sum: number, track: MixTrack) => sum + (track.duration || 0), 0);
     }, [mix?.tracks]);
 
     const formatTotalDuration = (seconds: number) => {
-        const hours = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        if (hours > 0) {
-            return `about ${hours} hr ${mins} min`;
-        }
-        return `${mins} min`;
+        const total = Math.max(1, Math.round(seconds / 60));
+        const hours = Math.floor(total / 60);
+        const mins = total % 60;
+        if (hours === 0) return `${mins} min`;
+        return mins === 0 ? `${hours} hr` : `${hours} hr ${mins} min`;
     };
 
-
-    // Check if this mix is currently playing
     const mixTrackIds = useMemo(() => {
         return new Set(mix?.tracks?.map((track: MixTrack) => track.id) || []);
     }, [mix?.tracks]);
@@ -88,7 +85,6 @@ export default function MixPage() {
     const handlePlayMix = () => {
         if (!mix?.tracks || mix.tracks.length === 0) return;
 
-        // If this mix is playing, toggle pause/resume
         if (isThisMixPlaying) {
             if (isPlaying) {
                 pause();
@@ -117,24 +113,7 @@ export default function MixPage() {
         playTracks(shuffled, 0);
     };
 
-    const handleAddToQueue = (track: MixTrack) => {
-        const formattedTrack = {
-            id: track.id,
-            title: track.title,
-            artist: {
-                name: track.album.artist.name,
-                id: track.album.artist.id,
-            },
-            album: {
-                title: track.album.title,
-                coverArt: track.album.coverUrl,
-                id: track.albumId,
-            },
-            duration: track.duration,
-        };
-        addToQueue(formattedTrack);
-        toast.success(`Added ${track.title} to queue`);
-    };
+    const handleAddToQueue = (track: MixTrack) => addToQueue(formatTracksForPlayback([track])[0]);
 
     const handleSaveAsPlaylist = async () => {
         if (!mix) return;
@@ -142,7 +121,6 @@ export default function MixPage() {
         setIsSaving(true);
         try {
             const result = await api.saveMixAsPlaylist(mixId);
-            toast.success(`Saved as "${result.name}" playlist!`);
             window.dispatchEvent(new Event("playlist-created"));
             setTimeout(() => {
                 router.push(`/playlist/${result.id}`);
@@ -151,16 +129,16 @@ export default function MixPage() {
             console.error("Failed to save mix as playlist:", error);
             const err = error as { status?: number; data?: { playlistId?: string } };
             if (err?.status === 409) {
-                toast.info("You've already saved this mix as a playlist.");
+                notify.info("You've already saved this mix as a playlist.");
                 if (err?.data?.playlistId) {
                     setTimeout(() => {
                         router.push(`/playlist/${err.data!.playlistId}`);
                     }, 1000);
                 }
-            } else if (error instanceof Error) {
-                toast.error(error.message);
             } else {
-                toast.error("Failed to save mix as playlist");
+                notify.error("Failed to save mix as playlist", {
+                    message: error instanceof Error ? error.message : undefined,
+                });
             }
         } finally {
             setIsSaving(false);
@@ -176,24 +154,26 @@ export default function MixPage() {
     }
 
     if (!mix) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-                <p className="text-[var(--text-muted)]">Mix not found</p>
-                <button
-                    onClick={() => router.push("/")}
-                    className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all"
-                >
-                    Back to Mixes
-                </button>
-            </div>
+        // Only a 404 means the mix is gone (a rebuild makes new mixes); anything else is a failed request.
+        return (error as { status?: number } | null)?.status === 404 ? (
+            <PageMessage
+                title="Mix not found"
+                description="This mix no longer exists. Rebuilding mixes replaces them with new ones."
+                action={{ label: "Home", href: "/" }}
+            />
+        ) : (
+            <PageMessage
+                title="Couldn't load this mix"
+                description="The server didn't answer. Try again in a moment."
+                action={{ label: "Try again", onClick: () => void refetch() }}
+            />
         );
     }
 
     return (
         <div className="min-h-screen">
-            {/* Compact Hero - Spotify Style */}
             <div
-                className="relative pt-16 pb-10 px-4 md:px-8"
+                className="relative pt-16 pb-10 page-shell"
                 style={{
                     background: mix.color
                         ? `${mix.color}, linear-gradient(to bottom, transparent, #1a1a1a)`
@@ -201,7 +181,6 @@ export default function MixPage() {
                 }}
             >
                 <div className="flex items-end gap-6">
-                        {/* Cover Art Mosaic */}
                         <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-[#282828] rounded shrink-0 overflow-hidden">
                             {mix.coverUrls && mix.coverUrls.length > 0 ? (
                                 <div className="grid grid-cols-2 gap-0 w-full h-full">
@@ -209,13 +188,12 @@ export default function MixPage() {
                                         const proxiedUrl = api.getCoverArtUrl(url, 200);
                                         return (
                                             <div key={index} className="relative bg-[#181818]">
-                                                <Image
+                                                <CachedImage
                                                     src={proxiedUrl}
                                                     alt=""
                                                     fill
                                                     className="object-cover"
                                                     sizes="96px"
-                                                    unoptimized
                                                 />
                                             </div>
                                         );
@@ -233,7 +211,6 @@ export default function MixPage() {
                             )}
                         </div>
 
-                        {/* Mix Info - Bottom Aligned */}
                         <div className="flex-1 min-w-0 pb-1">
                             <p className="text-xs font-medium text-[var(--text-primary)] mb-1">Mix</p>
                             <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
@@ -245,7 +222,7 @@ export default function MixPage() {
                                 </p>
                             )}
                             <div className="flex items-center gap-1 text-sm text-[var(--text-secondary)]">
-                                <span>{mix.trackCount || mix.tracks?.length || 0} songs</span>
+                                <span>{plural(mix.trackCount || mix.tracks?.length || 0, "song")}</span>
                                 {totalDuration > 0 && (
                                     <span>, {formatTotalDuration(totalDuration)}</span>
                                 )}
@@ -254,15 +231,13 @@ export default function MixPage() {
                 </div>
             </div>
 
-            {/* Action Bar */}
-            <div className="bg-gradient-to-b from-[#1a1a1a]/60 to-transparent px-4 md:px-8 py-4">
+            <div className="bg-gradient-to-b from-[#1a1a1a]/60 to-transparent page-shell py-4">
                 <div className="flex items-center gap-4">
-                    {/* Play Button */}
                     {mix.tracks && mix.tracks.length > 0 && (
                         <button
                             onClick={handlePlayMix}
                             aria-label={isThisMixPlaying && isPlaying ? `Pause ${mix.name}` : `Play ${mix.name}`}
-                            className="h-12 w-12 rounded-full bg-brand hover:bg-[#d4a000] hover:scale-105 flex items-center justify-center transition-all"
+                            className="h-12 w-12 rounded-full bg-brand hover:bg-brand-hover hover:scale-105 flex items-center justify-center transition-all"
                         >
                             {isThisMixPlaying && isPlaying ? (
                                 <Pause className="w-5 h-5 fill-current text-black" />
@@ -272,7 +247,6 @@ export default function MixPage() {
                         </button>
                     )}
 
-                    {/* Shuffle Button */}
                     {mix.tracks && mix.tracks.length > 1 && (
                         <button
                             onClick={handleShuffle}
@@ -283,7 +257,6 @@ export default function MixPage() {
                         </button>
                     )}
 
-                    {/* Save as Playlist Button */}
                     <button
                         onClick={handleSaveAsPlaylist}
                         disabled={isSaving}
@@ -297,11 +270,9 @@ export default function MixPage() {
                 </div>
             </div>
 
-            {/* Track Listing */}
-            <div className="px-4 md:px-8 pb-32">
+            <div className="page-shell pb-32">
                 {mix.tracks && mix.tracks.length > 0 ? (
                     <div className="w-full">
-                        {/* Table Header */}
                         <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 text-xs text-[var(--text-secondary)] border-b border-white/10 mb-2">
                             <span className="text-center">#</span>
                             <span>Title</span>
@@ -309,7 +280,6 @@ export default function MixPage() {
                             <span className="text-right">Duration</span>
                         </div>
 
-                        {/* Track Rows */}
                         <div>
                             {mix.tracks.map((track: MixTrack, index: number) => {
                                 const isCurrentlyPlaying = currentTrack?.id === track.id;
@@ -324,7 +294,6 @@ export default function MixPage() {
                                             isCurrentlyPlaying && "bg-white/10"
                                         )}
                                     >
-                                        {/* Track Number / Play Button */}
                                         <div className="flex items-center justify-center">
                                             <button
                                                 onClick={(e) => {
@@ -350,17 +319,15 @@ export default function MixPage() {
                                             </button>
                                         </div>
 
-                                        {/* Title + Artist */}
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className="relative w-10 h-10 bg-[#282828] rounded shrink-0 overflow-hidden">
                                                 {track.album?.coverUrl ? (
-                                                    <Image
+                                                    <CachedImage
                                                         src={api.getCoverArtUrl(track.album.coverUrl, 100)}
                                                         alt={track.title}
                                                         fill
                                                         sizes="40px"
                                                         className="object-cover"
-                                                        unoptimized
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
@@ -383,15 +350,13 @@ export default function MixPage() {
                                             </div>
                                         </div>
 
-                                        {/* Album (hidden on mobile) */}
                                         <p className="hidden md:flex items-center text-sm text-[var(--text-secondary)] truncate">
                                             {track.album.title}
                                         </p>
 
-                                        {/* Duration + Actions */}
                                         <div className="flex items-center justify-end gap-2">
                                             <button
-                                                className="min-h-[44px] min-w-[44px] rounded-full opacity-0 group-hover:opacity-100 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition-all flex items-center justify-center"
+                                                className="min-h-[44px] min-w-[44px] rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition-all flex items-center justify-center"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleAddToQueue(track);
@@ -410,19 +375,12 @@ export default function MixPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="w-20 h-20 bg-[#282828] rounded-full flex items-center justify-center mb-4">
-                            <Music className="w-10 h-10 text-[var(--text-muted)]" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-1">No tracks</h3>
-                        <p className="text-sm text-[var(--text-muted)] mb-4">This mix is empty</p>
-                        <button
-                            onClick={() => router.push("/")}
-                            className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-medium transition-all"
-                        >
-                            Back to Mixes
-                        </button>
-                    </div>
+                    <EmptyState
+                        icon={<Music className="w-12 h-12" />}
+                        title="No tracks"
+                        description="This mix is empty"
+                        action={{ label: "Back to Mixes", onClick: () => router.push("/"), variant: "secondary" }}
+                    />
                 )}
             </div>
         </div>

@@ -1,4 +1,5 @@
 import { Page, TestInfo, test } from "@playwright/test";
+import { PLAYER, readPlayer } from "./shared";
 
 function requireEnv(name: string): string {
     const value = process.env[name];
@@ -10,7 +11,6 @@ function requireEnv(name: string): string {
 
 const username = requireEnv("KIMA_TEST_USERNAME");
 const password = requireEnv("KIMA_TEST_PASSWORD");
-const baseUrl = process.env.KIMA_UI_BASE_URL || "http://127.0.0.1:3030";
 
 export async function loginAsTestUser(page: Page): Promise<void> {
     await page.goto("/login");
@@ -31,18 +31,6 @@ export function skipIfNoEnv(envVar: string, testInfo: TestInfo): void {
     }
 }
 
-export async function waitForApiHealth(page: Page, timeoutMs = 30000): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        try {
-            const response = await page.request.get(`${baseUrl}/api/health`);
-            if (response.ok()) return;
-        } catch {}
-        await page.waitForTimeout(1000);
-    }
-    throw new Error("API health check timed out");
-}
-
 /** Navigate to the first available album and start playing all tracks.
  *  Skips gracefully if the library has no music (e.g., bare CI container). */
 export async function startPlayingFirstAlbum(page: Page): Promise<void> {
@@ -57,45 +45,42 @@ export async function startPlayingFirstAlbum(page: Page): Promise<void> {
     await firstAlbum.click();
     await page.waitForURL(/\/album\//);
     await page.getByLabel("Play all").click();
-    await waitForPlaying(page); // waits for FullPlayer's title="Pause"
+    await waitForPlaying(page); // waits for FullPlayer's title="pause"
 }
 
 /** Wait until the player shows the Pause button (meaning audio started).
- * Uses `title="Pause"` to target the FullPlayer button specifically (avoids ambiguity
+ * Uses `title="pause"` to target the FullPlayer button specifically (avoids ambiguity
  * with album action bar and section-level Pause buttons). */
-export async function waitForPlaying(page: Page, timeoutMs = 8_000): Promise<void> {
-    await page.getByTitle("Pause", { exact: true }).waitFor({ timeout: timeoutMs });
+async function waitForPlaying(page: Page, timeoutMs = 8_000): Promise<void> {
+    await page.getByTitle("pause", { exact: true }).waitFor({ timeout: timeoutMs });
 }
 
 /** Get the current <audio> src -- the stream URL. */
 export async function getAudioSrc(page: Page): Promise<string> {
-    return page.evaluate(() => {
-        const el = document.querySelector('[data-kima-player="main"]') as HTMLAudioElement | null;
-        return el?.src ?? "";
-    });
+    return (await readPlayer(page)).src;
 }
 
 /** Get the current playback position in seconds. */
 export async function getAudioCurrentTime(page: Page): Promise<number> {
-    return page.evaluate(() => (document.querySelector('[data-kima-player="main"]') as HTMLAudioElement | null)?.currentTime ?? -1);
+    return (await readPlayer(page)).t;
 }
 
 /** Force-set the audio element currentTime (bypasses player seek logic -- test only). */
 export async function setAudioCurrentTime(page: Page, seconds: number): Promise<void> {
-    await page.evaluate((t) => {
-        const el = document.querySelector('[data-kima-player="main"]') as HTMLAudioElement | null;
+    await page.evaluate(({ sel, t }) => {
+        const el = document.querySelector(sel) as HTMLAudioElement | null;
         if (el) el.currentTime = t;
-    }, seconds);
+    }, { sel: PLAYER, t: seconds });
 }
 
 /** Wait for audio.src to change from the given value. */
 export async function waitForSrcChange(page: Page, prevSrc: string, timeoutMs = 6_000): Promise<string> {
     await page.waitForFunction(
-        (prev) => {
-            const src = (document.querySelector('[data-kima-player="main"]') as HTMLAudioElement | null)?.src ?? "";
+        ({ sel, prev }) => {
+            const src = (document.querySelector(sel) as HTMLAudioElement | null)?.src ?? "";
             return src !== prev && src !== "";
         },
-        prevSrc,
+        { sel: PLAYER, prev: prevSrc },
         { timeout: timeoutMs },
     );
     return getAudioSrc(page);
@@ -103,13 +88,12 @@ export async function waitForSrcChange(page: Page, prevSrc: string, timeoutMs = 
 
 /** Click the seek slider at a percentage of its width (0–100). */
 export async function seekToPercent(page: Page, percent: number): Promise<void> {
-    const slider = page.locator('[title="Click or drag to seek"]');
+    const slider = page.locator('[title="click or drag to seek"]');
     const box = await slider.boundingBox();
     if (!box) throw new Error("Seek slider not found");
     const x = box.x + box.width * (percent / 100);
     const y = box.y + box.height / 2;
     await page.mouse.click(x, y);
-    // Brief settle time for the seek to take effect
     await page.waitForTimeout(300);
 }
 
@@ -137,4 +121,4 @@ export async function skipIfEmptyLibrary(page: Page): Promise<void> {
     }
 }
 
-export { username, password, baseUrl };
+export { username, password };

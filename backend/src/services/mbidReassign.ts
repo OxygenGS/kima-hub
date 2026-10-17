@@ -1,13 +1,7 @@
 /**
- * Shared MBID reassignment helper
- *
- * Provides canonical MBID/rgMbid reassignment with:
- * - Prisma P2002 -> DuplicateMbidError translation (HTTP 409 for routes)
- * - OwnedAlbum row migration (delete old, upsert new) when Album.rgMbid changes
- * - No-op when the new value equals the current value
- * - No-op when the entity doesn't exist
- *
- * Used by BOTH the editor routes AND the enrichment service.
+ * MBID reassignment shared by the editor routes and enrichment. Unique
+ * violations become DuplicateMbidError (409); an unchanged value or a missing
+ * row is a no-op.
  */
 
 import { prisma } from "../utils/db";
@@ -30,21 +24,14 @@ export class DuplicateMbidError extends Error {
 }
 
 /**
- * Reassign an album's rgMbid and migrate the associated OwnedAlbum row.
- *
- * Steps inside a single transaction:
- * 1. Read current Album.rgMbid — no-op if album gone or rgMbid unchanged.
- * 2. Update Album.rgMbid to the new value.
- * 3. If rgMbid changed: delete the old OwnedAlbum row (artistId, oldRgMbid),
- *    then upsert the new OwnedAlbum row (artistId, newRgMbid).
- * 4. If P2002 is raised on the upsert, translate to DuplicateMbidError.
+ * Change an album's rgMbid in one transaction and move the rows keyed on the
+ * old string (OwnedAlbum, DiscoveryAlbum) to the new one.
  */
 export async function reassignAlbumRgMbid(
     albumId: string,
     newRgMbid: string
 ): Promise<void> {
     await prisma.$transaction(async (tx) => {
-        // Step 1: read current rgMbid
         const album = await tx.album.findUnique({
             where: { id: albumId },
             select: { rgMbid: true, artistId: true },
@@ -56,15 +43,13 @@ export async function reassignAlbumRgMbid(
         }
 
         if (album.rgMbid === newRgMbid) {
-            // No change needed
             return;
         }
 
         const oldRgMbid = album.rgMbid;
         const artistId = album.artistId;
 
-        // Step 2: update Album.rgMbid. Album.rgMbid is @unique, so a duplicate
-        // collides HERE first — translate P2002 to DuplicateMbidError (same as Step 3).
+        // Album.rgMbid is @unique, so a duplicate collides here first.
         try {
             await tx.album.update({
                 where: { id: albumId },
@@ -77,9 +62,7 @@ export async function reassignAlbumRgMbid(
             throw err;
         }
 
-        // Step 3: migrate OwnedAlbum row
         try {
-            // Delete the old OwnedAlbum row
             await tx.ownedAlbum.delete({
                 where: {
                     artistId_rgMbid: {
@@ -95,7 +78,6 @@ export async function reassignAlbumRgMbid(
             }
         }
 
-        // Upsert the new OwnedAlbum row
         try {
             await tx.ownedAlbum.upsert({
                 where: {
@@ -116,6 +98,51 @@ export async function reassignAlbumRgMbid(
                 throw new DuplicateMbidError("album", newRgMbid);
             }
             throw err;
+        }
+
+        // Move DiscoveryAlbum rows to the new rgMbid. Rows whose (userId,
+        // weekStartDate, newRgMbid) slot is taken are left and logged, since a unique
+        // violation would abort the transaction; a racing insert still can, and
+        // identification retries later.
+        const staleRows = await tx.discoveryAlbum.findMany({
+            where: { rgMbid: oldRgMbid },
+            select: { id: true, userId: true, weekStartDate: true },
+        });
+        if (staleRows.length > 0) {
+            const takenSlots = await tx.discoveryAlbum.findMany({
+                where: {
+                    rgMbid: newRgMbid,
+                    OR: staleRows.map((r) => ({
+                        userId: r.userId,
+                        weekStartDate: r.weekStartDate,
+                    })),
+                },
+                select: { userId: true, weekStartDate: true },
+            });
+            const taken = new Set(
+                takenSlots.map(
+                    (t) => `${t.userId}|${t.weekStartDate.toISOString()}`
+                )
+            );
+            const movableIds = staleRows
+                .filter(
+                    (r) => !taken.has(`${r.userId}|${r.weekStartDate.toISOString()}`)
+                )
+                .map((r) => r.id);
+            for (const row of staleRows) {
+                if (taken.has(`${row.userId}|${row.weekStartDate.toISOString()}`)) {
+                    logger.warn(
+                        `[rgMbid-reassign] DiscoveryAlbum ${row.id} kept on stale ${oldRgMbid}: ` +
+                            `user ${row.userId} already has a discovery row for ${newRgMbid} in the same week`
+                    );
+                }
+            }
+            if (movableIds.length > 0) {
+                await tx.discoveryAlbum.updateMany({
+                    where: { id: { in: movableIds } },
+                    data: { rgMbid: newRgMbid },
+                });
+            }
         }
     });
 }

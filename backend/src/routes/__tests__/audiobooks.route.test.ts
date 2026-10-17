@@ -1,11 +1,7 @@
 /**
- * Audiobooks Route Tests -- spec 1.10 + sections remediation
- *
- * Covers:
- * - List (GET /) and series (GET /series/:name): tracks + trackCount present
- *   when DB row has tracksJson; NULL numTracks -> trackCount absent, never 0/1.
- * - Detail (GET /:id): cache-only response with sections + tracks from DB;
- *   null sectionsJson triggers audiobookCacheService resync.
+ * The audiobook list and series carry tracks and trackCount (absent, never 0,
+ * when numTracks is null). Detail is served from the cache with sections and
+ * tracks, and resyncs when sectionsJson is null.
  */
 
 // All mocks before imports.
@@ -68,10 +64,6 @@ jest.mock("../../middleware/auth", () => ({
 
 jest.mock("../../middleware/rateLimiter", () => ({
     apiLimiter: (_req: any, _res: any, next: any) => next(),
-}));
-
-jest.mock("../../services/notificationService", () => ({
-    notificationService: { notifySystem: jest.fn() },
 }));
 
 jest.mock("../../config", () => ({
@@ -147,9 +139,8 @@ describe("GET /audiobooks", () => {
         (prisma.audiobookProgress.findMany as jest.Mock).mockResolvedValue([]);
     });
 
-    // sortName, not title -- "The Hobbit" used to file under T. Kept in sync
-    // at write time in audiobookCache.ts and audiobookshelf.ts, same as
-    // Artist.sortName and Album.sortName.
+    // "The Hobbit" files under H. sortName is written by audiobookCache.ts and
+    // audiobookshelf.ts, like Artist.sortName and Album.sortName.
     it("orders the list on sortName, not title", async () => {
         (prisma.audiobook.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -160,11 +151,8 @@ describe("GET /audiobooks", () => {
         );
     });
 
-    // The query being ordered on sortName (above) proves nothing about the
-    // response body -- the DTO is a hand-built object literal, not a spread,
-    // so a field the query fetches is not automatically one the client
-    // receives. The client-side series-mode fallback (see
-    // useAudiobookLibrary.test.tsx) depends on this actually being present.
+    // The DTO is built by hand, so a field the query reads is not automatically
+    // in the response; the client's series fallback needs sortName.
     it("includes sortName in the response body", async () => {
         (prisma.audiobook.findMany as jest.Mock).mockResolvedValue([bookRow]);
 
@@ -213,17 +201,6 @@ describe("GET /audiobooks", () => {
         expect(book.tracks).toBeUndefined();
         expect(book.trackCount).toBeUndefined();
         expect(book).not.toHaveProperty("trackCount");
-    });
-
-    it("never coerces NULL numTracks to 0 or 1", async () => {
-        (prisma.audiobook.findMany as jest.Mock).mockResolvedValue([bookRowNullTracks]);
-
-        const res = await request(app).get("/audiobooks");
-        const book = res.body[0];
-
-        expect(book.trackCount).not.toBe(0);
-        expect(book.trackCount).not.toBe(1);
-        expect(book.trackCount).toBeUndefined();
     });
 });
 
@@ -408,15 +385,15 @@ describe("POST /audiobooks/sync", () => {
         expect(res.body.error).toContain("Audiobookshelf returned status 502");
     });
 
-    it("returns 500 for genuine internal errors (no response.status)", async () => {
+    it("returns 500 without internal details for genuine internal errors", async () => {
         (audiobookCacheService.syncAll as jest.Mock).mockRejectedValue(
-            new Error("Database connection failed"),
+            new Error("EACCES: permission denied, mkdir '/data/covers/audiobooks'"),
         );
 
         const res = await request(app).post("/audiobooks/sync");
 
         expect(res.status).toBe(500);
         expect(res.body.success).toBe(false);
-        expect(res.body.error).toBe("Database connection failed");
+        expect(res.body.error).toBe("Audiobook sync failed");
     });
 });

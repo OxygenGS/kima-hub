@@ -41,4 +41,4 @@ the installed-app icon to refresh, depending on their PWA cache policy.
 
 ## Deployment
 
-Branding is configured at runtime under **Settings → Branding**. The production installer uses the AIO image from GHCR; refer to the [README](../README.md) for the supported Docker Compose and Dockge procedures. The former CT 105 development stack has been retired.
+Branding is configured at runtime under **Settings → Branding**. Use the published OxygenGS all-in-one image and the installation instructions in the [README](../README.md) for supported Docker Compose procedures. Branding is independent of any operator's private installation.

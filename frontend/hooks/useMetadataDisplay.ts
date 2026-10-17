@@ -52,11 +52,10 @@ interface AlbumMetadata {
     hasUserOverrides?: boolean;
 }
 
-
 /**
  * Compute display data for an artist, merging user overrides with canonical data
  */
-export function useArtistDisplayData(artist: ArtistMetadata | null): ArtistDisplayData {
+export function getArtistDisplayData(artist: ArtistMetadata | null): ArtistDisplayData {
     if (!artist) {
         return {
             name: "Unknown Artist",
@@ -83,7 +82,7 @@ export function useArtistDisplayData(artist: ArtistMetadata | null): ArtistDispl
 /**
  * Compute display data for an album, merging user overrides with canonical data
  */
-export function useAlbumDisplayData(album: AlbumMetadata | null): AlbumDisplayData {
+export function getAlbumDisplayData(album: AlbumMetadata | null): AlbumDisplayData {
     if (!album) {
         return {
             title: "Unknown Album",
@@ -107,7 +106,6 @@ export function useAlbumDisplayData(album: AlbumMetadata | null): AlbumDisplayDa
                 : undefined,
     };
 }
-
 
 /**
  * Merge user genres with canonical genres (user genres first for priority)

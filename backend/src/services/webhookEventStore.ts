@@ -1,11 +1,6 @@
 /**
- * Webhook Event Store
- *
- * Event sourcing service for storing and processing webhook events.
- * Ensures all webhooks are persisted before processing, enabling:
- * - Replay of missed events
- * - Audit trail of all webhooks
- * - Resilience to server restarts
+ * Lidarr webhook events, stored before processing so they survive restarts and
+ * can be replayed.
  */
 
 import { prisma } from "../utils/db";
@@ -33,47 +28,37 @@ interface StoredWebhookEvent {
 
 class WebhookEventStore {
     /**
-     * Store a webhook event before processing
-     * Uses eventId for deduplication (same event won't be stored twice)
+     * Stores an event once per eventId. `created` is false when the event was
+     * already stored, so only its first arrival is processed.
      */
     async storeEvent(
         source: string,
         eventType: string,
         payload: WebhookEventPayload,
         eventId?: string
-    ): Promise<StoredWebhookEvent> {
+    ): Promise<{ event: StoredWebhookEvent; created: boolean }> {
         const generatedEventId = eventId || this.generateEventId(source, payload);
 
-        try {
-            const event = await prisma.webhookEvent.create({
-                data: {
-                    eventId: generatedEventId,
-                    source,
-                    eventType,
-                    payload,
-                },
-            });
-
-            logger.debug(`[WEBHOOK-STORE] Stored ${source} event: ${eventType} (${event.id})`);
-            return event as StoredWebhookEvent;
-        } catch (error: any) {
-            if (error.code === 'P2002' && error.meta?.target?.includes('eventId')) {
-                logger.debug(`[WEBHOOK-STORE] Duplicate event ignored: ${generatedEventId}`);
-                const existing = await prisma.webhookEvent.findUnique({
-                    where: { eventId: generatedEventId },
-                });
-                if (!existing) {
-                    throw new Error('Duplicate event but not found in database');
-                }
-                return existing as StoredWebhookEvent;
-            }
-            throw error;
+        const { count } = await prisma.webhookEvent.createMany({
+            data: [{ eventId: generatedEventId, source, eventType, payload }],
+            skipDuplicates: true,
+        });
+        const event = await prisma.webhookEvent.findUniqueOrThrow({ where: { eventId: generatedEventId } });
+        if (count === 0) {
+            logger.debug(`[WEBHOOK-STORE] Duplicate event ignored: ${generatedEventId}`);
+            return { event: event as StoredWebhookEvent, created: false };
         }
+        logger.debug(`[WEBHOOK-STORE] Stored ${source} event: ${eventType} (${event.id})`);
+        return { event: event as StoredWebhookEvent, created: true };
     }
 
-    /**
-     * Mark an event as processed successfully
-     */
+    /** Whether an event is already stored, under the id `storeEvent` would give it. */
+    async isStored(source: string, payload: WebhookEventPayload): Promise<boolean> {
+        const eventId = this.generateEventId(source, payload);
+        return (await prisma.webhookEvent.count({ where: { eventId } })) > 0;
+    }
+
+    /** Marks an event processed. */
     async markProcessed(
         eventId: string,
         correlationId?: string
@@ -90,9 +75,7 @@ class WebhookEventStore {
         logger.debug(`[WEBHOOK-STORE] Marked processed: ${eventId}`);
     }
 
-    /**
-     * Mark an event as failed (stores error and increments retry count)
-     */
+    /** Marks an event failed, storing the error and counting a retry. */
     async markFailed(
         eventId: string,
         error: string
@@ -111,12 +94,13 @@ class WebhookEventStore {
     }
 
     /**
-     * Get unprocessed events for reconciliation
-     * Excludes events that have exceeded max retries
+     * Unprocessed events under the retry cap, skipping those stored in the
+     * last `minAgeMs` (still being processed by the route that stored them).
      */
     async getUnprocessedEvents(
         source?: string,
-        maxRetries: number = 3
+        maxRetries: number = 3,
+        minAgeMs: number = 0
     ): Promise<StoredWebhookEvent[]> {
         const events = await prisma.webhookEvent.findMany({
             where: {
@@ -124,6 +108,7 @@ class WebhookEventStore {
                 retryCount: {
                     lt: maxRetries,
                 },
+                createdAt: { lte: new Date(Date.now() - minAgeMs) },
                 ...(source && { source }),
             },
             orderBy: {
@@ -135,39 +120,14 @@ class WebhookEventStore {
     }
 
     /**
-     * Get events by correlation ID (find all events for a download job)
-     */
-    async getEventsByCorrelationId(
-        correlationId: string
-    ): Promise<StoredWebhookEvent[]> {
-        const events = await prisma.webhookEvent.findMany({
-            where: { correlationId },
-            orderBy: {
-                createdAt: 'asc',
-            },
-        });
-
-        return events as StoredWebhookEvent[];
-    }
-
-    /**
-     * Get event by Lidarr-provided eventId (for deduplication checking)
-     */
-    async getEventByEventId(eventId: string): Promise<StoredWebhookEvent | null> {
-        const event = await prisma.webhookEvent.findUnique({
-            where: { eventId },
-        });
-
-        return event as StoredWebhookEvent | null;
-    }
-
-    /**
-     * Generate a unique event ID from payload
-     * Uses downloadId + eventType for Lidarr events
+     * The event's id: for Lidarr its type and download id, plus the album for an
+     * import event, since Lidarr sends one per album a download carries (a bundle
+     * carries several); anything else by a hash of its payload.
      */
     private generateEventId(source: string, payload: WebhookEventPayload): string {
         if (source === 'lidarr' && payload.downloadId) {
-            return `${source}-${payload.eventType}-${payload.downloadId}`;
+            const album = payload.eventType === "Download" || payload.eventType === "ImportFailure" ? payload.album?.id : undefined;
+            return `${source}-${payload.eventType}-${payload.downloadId}${album ? `-${album}` : ""}`;
         }
 
         const payloadStr = JSON.stringify(payload);
@@ -176,19 +136,15 @@ class WebhookEventStore {
     }
 
     /**
-     * Clean up old processed events (older than N days)
+     * Delete events older than `daysToKeep`, including those that ran out of
+     * retries: by then the download sweeps have settled their jobs.
      */
     async cleanupOldEvents(daysToKeep: number = 30): Promise<number> {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
         const result = await prisma.webhookEvent.deleteMany({
-            where: {
-                processed: true,
-                createdAt: {
-                    lt: cutoffDate,
-                },
-            },
+            where: { createdAt: { lt: cutoffDate } },
         });
 
         if (result.count > 0) {

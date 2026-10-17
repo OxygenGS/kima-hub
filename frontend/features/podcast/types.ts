@@ -1,4 +1,4 @@
-export interface EpisodeProgress {
+interface EpisodeProgress {
     currentTime: number;
     progress: number;
     isFinished: boolean;
@@ -13,6 +13,7 @@ export interface Episode {
     publishedAt: string;
     episodeNumber?: number;
     season?: number;
+    imageUrl?: string;
     progress?: EpisodeProgress;
 }
 
@@ -26,6 +27,7 @@ export interface Podcast {
     genres?: string[];
     feedUrl?: string;
     episodes: Episode[];
+    episodeTotal?: number;
 }
 
 export interface PodcastPreview {

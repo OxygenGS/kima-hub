@@ -1,21 +1,8 @@
 /**
- * DELETE /discover/clear -- the recursive delete must stay inside the discovery
- * folder.
- *
- * The fallback filesystem cleanup builds three candidate paths out of
- * `album.artistName` and `album.albumTitle` and hands the first one that exists
- * to `fs.rmSync(..., { recursive: true, force: true })`. Those two values are
- * not paths the scanner produced: they come from Spotify-imported playlist and
- * track names and from file tags, so a caller can arrange for one to contain
- * `../..`. `path.join` normalises those segments away silently.
- *
- * Containment is asserted against the DISCOVERY folder, not just the music
- * root, because `../Radiohead` resolves to a path that IS inside the music root
- * and is still entirely the wrong directory to delete.
- *
- * `fs` is mocked here (the precedent is library-albums.route.test.ts): with the
- * guard removed and a real filesystem, the traversal case resolves to `/`,
- * which exists, and the test would attempt to delete the machine.
+ * DELETE /discover/clear only deletes inside the discovery folder. Artist and
+ * album names come from imports and tags and can contain `../`, so containment
+ * is checked against the discovery folder, not the music root. `fs` is mocked
+ * so a failure cannot delete real files.
  */
 
 jest.mock('../../utils/db', () => ({
@@ -70,7 +57,6 @@ jest.mock('../../middleware/auth', () => ({
     },
 }));
 
-jest.mock('../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../workers/queues', () => ({
     discoverQueue: {
         getJob: jest.fn(),
@@ -103,6 +89,15 @@ import request from 'supertest';
 import fs from 'fs';
 import discoverRoutes from '../discover';
 import { prisma } from '../../utils/db';
+import { redisClient } from '../../utils/redis';
+import { closeClient } from '../../utils/closeRedisClient';
+
+afterAll(async () => {
+    // The router pulls in services/listenBrainz, which opens the shared Redis
+    // client at import. Left open, Jest finishes the suite and outlives the
+    // process on that socket.
+    await closeClient(redisClient);
+});
 
 const DISCOVERY_ROOT = '/music/discovery';
 

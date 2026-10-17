@@ -1,10 +1,8 @@
-// backend/src/routes/subsonic/mappers.ts
-// Shared mapper functions used across all Subsonic route files.
-// These convert Kima's Prisma models to Subsonic API response shapes.
-// The @_ prefix convention is used by fast-xml-parser for XML attributes.
-// subsonicResponse.ts strips these prefixes for JSON output automatically.
+// Mappers from Prisma models to Subsonic response shapes. `@_` marks XML
+// attributes for fast-xml-parser; subsonicResponse.ts strips it for JSON.
 import { Request, Response } from "express";
 import { subsonicError, SubsonicError } from "../../utils/subsonicResponse";
+import { logger } from "../../utils/logger";
 
 export type ArtistRow = {
     id: string;
@@ -160,9 +158,11 @@ export function bitrateToQuality(
 export function wrap(fn: (req: Request, res: Response) => Promise<void | Response>) {
     return (req: Request, res: Response) => {
         fn(req, res).catch((err: unknown) => {
+            // Unexpected database/provider errors belong in server logs only.
+            // Subsonic clients get the protocol envelope, not internal details.
+            logger.error("[Subsonic] Unhandled route error", err);
             if (!res.headersSent) {
-                const msg = err instanceof Error ? err.message : "Internal error";
-                subsonicError(req, res, SubsonicError.GENERIC, msg);
+                subsonicError(req, res, SubsonicError.GENERIC, "Internal server error");
             }
         });
     };

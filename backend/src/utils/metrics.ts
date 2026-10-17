@@ -1,5 +1,4 @@
 import { register, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
-import { logger } from './logger';
 
 collectDefaultMetrics({ prefix: 'kima_' });
 
@@ -99,6 +98,15 @@ export const cacheMisses = new Counter({
   name: 'kima_cache_misses_total',
   help: 'Total number of cache misses',
   labelNames: ['cache_name'],
+});
+
+// AcoustID identification: where the fingerprint came from (file_tag or
+// stored) and how it ended: resolved, no_match, refused, or the failed call's
+// outcome kind.
+export const acoustidTrackIdentityTotal = new Counter({
+  name: 'kima_acoustid_track_identity_total',
+  help: 'AcoustID identification attempts by where the answer or fingerprint came from, and outcome',
+  labelNames: ['path', 'outcome'],
 });
 
 export function getMetrics(): Promise<string> {

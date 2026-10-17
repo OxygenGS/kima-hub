@@ -1,12 +1,12 @@
 "use client";
 
 import { Play, Pause } from "lucide-react";
-import { Podcast, Episode } from "../types";
-import { formatDuration } from "@/utils/formatTime";
+import { Episode } from "../types";
+import { formatDuration } from "@/lib/format";
 import { formatDate } from "../utils";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 interface ContinueListeningProps {
-    podcast: Podcast;
     inProgressEpisodes: Episode[];
     sortedEpisodes: Episode[];
     isEpisodePlaying: (episodeId: string) => boolean;
@@ -16,7 +16,6 @@ interface ContinueListeningProps {
 }
 
 export function ContinueListening({
-    podcast: _podcast,
     inProgressEpisodes,
     sortedEpisodes,
     isEpisodePlaying,
@@ -48,35 +47,20 @@ export function ContinueListening({
 
     return (
         <section>
-            <div className="flex items-center gap-3 mb-6">
-                <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Continue Listening</h2>
-                <span className="flex-1 border-t border-white/10" />
-            </div>
+            <SectionHeader title="Continue Listening" type="podcast" />
 
-            <div className="space-y-1.5">
-                {/* Previous Episode */}
+            <div className="space-y-0.5">
                 {previousEpisode && (
-                    <div
-                        className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-white/5 hover:bg-white/[0.02] transition-all cursor-pointer opacity-40 hover:opacity-60 animate-rise"
-                        style={{ animationDelay: "0ms" }}
-                        onClick={() => onPlayEpisode(previousEpisode)}
-                    >
-                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                            <Play className="w-3 h-3 text-[var(--text-secondary)]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
-                                {previousEpisode.title}
-                            </h3>
-                            <p className="text-xs text-[var(--text-muted)]">Previous episode</p>
-                        </div>
-                    </div>
+                    <AdjacentEpisode
+                        episode={previousEpisode}
+                        which="previous"
+                        delayMs={0}
+                        onPlay={onPlayEpisode}
+                    />
                 )}
 
-                {/* Current Episode */}
                 <div
-                    className="flex items-center gap-4 p-4 rounded-lg bg-[var(--bg-primary)] border-2 border-[#3b82f6]/30 hover:border-[#3b82f6]/50 transition-all cursor-pointer animate-rise"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5 transition-all cursor-pointer animate-rise"
                     style={{ animationDelay: "45ms" }}
                     onClick={() => onPlayPause(recentEpisode)}
                 >
@@ -85,36 +69,36 @@ export function ContinueListening({
                             e.stopPropagation();
                             onPlayPause(recentEpisode);
                         }}
-                        className="w-12 h-12 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] hover:scale-105 transition-all flex items-center justify-center shrink-0"
+                        aria-label={isCurrentPlaying && isPlaying ? "pause" : "play"}
+                        className="w-10 h-10 rounded-lg bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] flex items-center justify-center shrink-0"
                     >
                         {isCurrentPlaying && isPlaying ? (
-                            <Pause className="w-5 h-5 text-white" />
+                            <Pause className="w-4 h-4 text-black" />
                         ) : (
-                            <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+                            <Play className="w-4 h-4 text-black ml-0.5" fill="black" />
                         )}
                     </button>
                     <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-white truncate tracking-tight">
+                        <h3 className="font-bold text-[var(--color-brand)] truncate text-sm tracking-tight">
                             {recentEpisode.title}
                         </h3>
-                        <div className="flex items-center gap-3 mt-1 text-xs tabular-nums text-[var(--text-muted)]">
+                        <div className="flex items-center gap-3 mt-0.5 text-xs tabular-nums text-[var(--text-muted)]">
                             <span>{formatDuration(recentEpisode.duration)}</span>
                             <span className="text-[var(--text-muted)]">|</span>
                             <span>{formatDate(recentEpisode.publishedAt)}</span>
                         </div>
-                        {/* Progress Bar */}
                         {recentEpisode.progress && (
                             <div className="mt-2">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
                                         <div
-                                            className="h-full bg-[#3b82f6] rounded-full transition-all"
+                                            className="h-full bg-[var(--color-brand)] rounded-full transition-all"
                                             style={{
                                                 width: `${recentEpisode.progress.progress}%`,
                                             }}
                                         />
                                     </div>
-                                    <span className="text-micro tabular-nums text-[#3b82f6]">
+                                    <span className="text-micro tabular-nums text-[var(--color-brand)]">
                                         {Math.floor(recentEpisode.progress.progress)}%
                                     </span>
                                 </div>
@@ -123,24 +107,38 @@ export function ContinueListening({
                     </div>
                 </div>
 
-                {/* Next Episode */}
                 {nextEpisode && (
-                    <div
-                        className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-white/5 hover:bg-white/[0.02] transition-all cursor-pointer opacity-40 hover:opacity-60 animate-rise"
-                        style={{ animationDelay: "90ms" }}
-                    >
-                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                            <Play className="w-3 h-3 text-[var(--text-secondary)]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
-                                {nextEpisode.title}
-                            </h3>
-                            <p className="text-xs text-[var(--text-muted)]">Next episode</p>
-                        </div>
-                    </div>
+                    <AdjacentEpisode episode={nextEpisode} which="next" delayMs={90} onPlay={onPlayEpisode} />
                 )}
             </div>
         </section>
+    );
+}
+
+/** The episode before or after the one in progress, as one control. */
+function AdjacentEpisode({ episode, which, delayMs, onPlay }: {
+    episode: Episode;
+    which: "previous" | "next";
+    delayMs: number;
+    onPlay: (episode: Episode) => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={() => onPlay(episode)}
+            aria-label={`play the ${which} episode, ${episode.title}`}
+            className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg border border-transparent hover:bg-white/[0.02] hover:border-white/5 transition-all opacity-40 hover:opacity-60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 animate-rise"
+            style={{ animationDelay: `${delayMs}ms` }}
+        >
+            <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                <Play className="w-3 h-3 text-[var(--text-secondary)]" />
+            </span>
+            <span className="flex-1 min-w-0">
+                <span className="block font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
+                    {episode.title}
+                </span>
+                <span className="block text-xs text-[var(--text-muted)]">{which} episode</span>
+            </span>
+        </button>
     );
 }

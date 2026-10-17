@@ -1,5 +1,10 @@
+"use client";
+
+import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
+
 import { Download } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { FilterTab } from "../types";
 
 interface SearchFiltersProps {
@@ -17,6 +22,7 @@ export function SearchFilters({
     hasSearched,
     soulseekResultCount,
 }: SearchFiltersProps) {
+    const { t, locale } = useLanguage();
     if (!hasSearched) {
         return null;
     }
@@ -51,10 +57,7 @@ export function SearchFilters({
     }
 
     return (
-        // Same segmented control as the library tabs. This file carried an
-        // identical copy of the old treatment -- glass panel, per-filter
-        // gradient, permanent shimmer, scale-105 on active and hover -- so it
-        // gets the identical fix rather than a second look.
+        // Same segmented control as the library tabs.
         <div className="relative">
             <div
                 className="inline-flex flex-wrap items-center gap-1 rounded-xl bg-white/5 p-1"
@@ -79,7 +82,7 @@ export function SearchFilters({
                         >
                             <span className="relative z-(--z-raised) flex items-center gap-2">
                                 {filter.icon}
-                                {filter.label}
+                                {t(filter.label as TranslationKey)}
                                 {filter.count != null && filter.count > 0 && (
                                     <span
                                         className={cn(
@@ -89,7 +92,7 @@ export function SearchFilters({
                                                 : "bg-white/10 text-[var(--text-primary)]"
                                         )}
                                     >
-                                        {filter.count}
+                                        {filter.count.toLocaleString(locale === "nl" ? "nl-NL" : "en-US")}
                                     </span>
                                 )}
                             </span>

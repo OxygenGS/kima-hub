@@ -1,5 +1,7 @@
 "use client";
 
+import { useLanguage } from "@/lib/i18n/language-context";
+
 export interface SidebarItem {
     id: string;
     label: string;
@@ -14,6 +16,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ items, activeSection, onSectionClick, isAdmin }: SettingsSidebarProps) {
+    const { t } = useLanguage();
     const filteredItems = items.filter(item => !item.adminOnly || isAdmin);
 
     const regularItems = filteredItems.filter(item => !item.adminOnly);
@@ -42,7 +45,7 @@ export function SettingsSidebar({ items, activeSection, onSectionClick, isAdmin 
                     <>
                         <div className="pt-4 pb-2 px-3">
                             <span className="text-xs text-[var(--text-muted)]">
-                                Admin
+                                {t("Admin")}
                             </span>
                         </div>
                         {adminItems.map((item) => (

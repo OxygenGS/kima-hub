@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 
 interface PaginationProps {
     currentPage: number;
@@ -9,11 +9,7 @@ interface PaginationProps {
     onPageChange: (page: number) => void;
     /** Disables every control, e.g. while the next page is still loading. */
     disabled?: boolean;
-    /**
-     * What is being paged, in the user's words -- "Artists", "Podcasts".
-     * Read aloud as "Artists pagination", so two paginated sections on one
-     * page are tellable apart by a screen reader.
-     */
+    /** What is paged, e.g. "Artists"; read aloud as "Artists pagination". */
     label: string;
     className?: string;
 }
@@ -27,15 +23,8 @@ const CONTROL =
     "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-brand)]";
 
 /**
- * One pager for every paginated list.
- *
- * Collection, Podcasts and Audiobooks each carried a hand-rolled version of
- * this, and all three differed: Collection had text First/Prev/Next/Last in
- * bold tracked capitals inside a double-bordered box, Podcasts mixed text and
- * chevrons with a blue accent, Audiobooks offered only prev/next with no way
- * to jump to either end. None of the three named its buttons for a screen
- * reader, none announced the page change, and every control sat around 32px
- * against a 44px touch-target floor.
+ * The pager for every paginated list: labelled first/prev/next/last controls
+ * at the 44px touch floor, with the page change announced to screen readers.
  */
 export function Pagination({
     currentPage,

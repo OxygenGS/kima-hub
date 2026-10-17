@@ -4,15 +4,59 @@ on:
     push:
         tags:
             - "v*"
-    workflow_dispatch:
-        inputs:
-            version:
-                description: "Version tag (e.g., v1.0.0)"
-                required: true
-                type: string
+
+# One explicitly created stable version tag triggers the publishing workflow.
+# Reruns for the same tag are serialized; protect version tags in repository settings.
+concurrency:
+    group: stable-publish-${{ github.ref }}
+    cancel-in-progress: false
 
 jobs:
+    validate-release:
+        name: Validate stable release version and branch
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+        steps:
+            - name: Checkout branch history for stable-tag verification
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Require stable SemVer and trusted release context
+              id: version
+              shell: bash
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  REF_NAME: ${{ github.ref_name }}
+                  REF_TYPE: ${{ github.ref_type }}
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  set -euo pipefail
+                  if [ "$EVENT_NAME" != "push" ] || [ "$REF_TYPE" != "tag" ]; then
+                      echo "Stable publishing only runs on an explicitly created tag." >&2
+                      exit 1
+                  fi
+                  VERSION="$REF_NAME"
+
+                  # Never tag pre-release builds as :latest.
+                  if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+                      echo "Not a stable version: $VERSION" >&2
+                      echo "Use the separate prerelease workflow for candidates." >&2
+                      exit 1
+                  fi
+                  # A tag on an unmerged feature branch must never ship as stable.
+                  if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+                      echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
+                      exit 1
+                  fi
+                  python3 .github/ci/check-release-metadata.py --tag "$VERSION"
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
     build:
+        needs: [validate-release]
         runs-on: ubuntu-latest
         permissions:
             contents: read
@@ -46,50 +90,17 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
-
-            # ---- Image scan (reports, does not block) --------------------
-            # Build the Intel image on its own first and scan it before anything
-            # is published. This costs almost nothing on top of the real build:
-            # the multi-architecture step below reuses the identical cached
-            # layers for its Intel leg.
-            #
-            # WHY THIS REPORTS RATHER THAN BLOCKS. It was written to block, then
-            # run against a real build of this image (arm64, locally, 2026-08-23)
-            # and it failed on 19 findings — none of which anyone would act on
-            # before a release:
-            #
-            #   8  Go stdlib CVEs inside wandb-core. wandb is a hard dependency
-            #      of laion-clap; nothing here imports it, and the binary is
-            #      never executed.
-            #   1  torch 2.5.1 -> 2.6.0 (CVE-2025-32434). The 2.5.1 pin is
-            #      deliberate; a mismatched torch ABI is what caused #165.
-            #   7  Node packages, most of them inside npm's OWN bundled
-            #      node_modules rather than this project's dependency tree.
-            #   1  /etc/ssl/private/ssl-cert-snakeoil.key — Debian's throwaway
-            #      self-signed placeholder from the ssl-cert package. Skipped
-            #      below; it is not a secret in any meaningful sense.
-            #
-            # A gate that stops a release over a placeholder key and an unused
-            # telemetry binary trains people to bypass it, which is worse than
-            # not having one. So: report every run, keep it visible in the job
-            # summary, and turn `--exit-code 1` back on once the baseline is
-            # something a failure would genuinely mean. The dependency scan in
-            # security.yml DOES block, and passes clean.
+            # ---- Mandatory assembled-image security gate before publishing ----
+            # Fixable HIGH/CRITICAL findings block a stable push.
+            # A human must separately review unresolved OS findings and the
+            # previously validated ARM64 image; green CI != release approval.
             - name: Build image for scanning (amd64)
               uses: docker/build-push-action@v5
               with:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: false
                   load: true
                   tags: kima:scan
@@ -103,24 +114,29 @@ jobs:
                   version: v0.74.0
                   cache: true
 
-            - name: Scan the image (report only)
-              if: always()
+            # Use the exact same unfiltered vulnerability evaluator as Draft #7.
+            # Never let the generic .trivyignore suppress OS CVE release blockers.
+            - name: Scan actual AMD64 image and fail on patchable HIGH/CRITICAL
               run: |
-                  {
-                    echo '### Image scan — HIGH/CRITICAL with a fix available'
-                    echo ''
-                    echo '```'
-                    trivy image \
-                      --scanners vuln,secret \
-                      --severity HIGH,CRITICAL \
-                      --ignore-unfixed \
-                      --ignorefile .trivyignore \
-                      --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
-                      --exit-code 0 \
-                      --format table \
-                      kima:scan 2>&1
-                    echo '```'
-                  } >> "$GITHUB_STEP_SUMMARY"
+                  trivy image \
+                    --scanners vuln \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 0 \
+                    --format json \
+                    --output "$RUNNER_TEMP/stable-image-vulnerabilities.json" \
+                    kima:scan
+                  python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+                  python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/stable-image-vulnerabilities.json" amd64
+
+            - name: Scan assembled AMD64 image for embedded secrets
+              run: |
+                  trivy image \
+                    --scanners secret \
+                    --ignorefile .trivyignore \
+                    --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+                    --exit-code 1 \
+                    --format table \
+                    kima:scan
 
             - name: Build and push
               uses: docker/build-push-action@v5
@@ -128,17 +144,17 @@ jobs:
                   context: .
                   file: ./Dockerfile
                   build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
                   push: true
                   tags: |
-                      ${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.version }}
+                      ${{ env.GHCR_IMAGE_NAME }}:${{ needs.validate-release.outputs.version }}
                       ${{ env.GHCR_IMAGE_NAME }}:latest
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
                   platforms: linux/amd64,linux/arm64
 
     create-release:
-        needs: [build]
+        needs: [build, validate-release]
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -146,20 +162,11 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
-
             - name: Create Release
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: ${{ steps.version.outputs.version }}
-                  name: Kima ${{ steps.version.outputs.version }}
+                  tag_name: ${{ needs.validate-release.outputs.version }}
+                  name: Kima ${{ needs.validate-release.outputs.version }}
                   body: |
                       ## Quick Start
 
@@ -169,7 +176,7 @@ jobs:
                         -p 3030:3030 \
                         -v /path/to/your/music:/music \
                         -v kima_data:/data \
-                        ghcr.io/oxygengs/kima-hub:${{ steps.version.outputs.version }}
+                        ghcr.io/oxygengs/kima-hub:${{ needs.validate-release.outputs.version }}
                       ```
 
                       Then open http://localhost:3030 and create your account!

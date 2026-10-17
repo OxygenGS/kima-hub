@@ -1,0 +1,133 @@
+/**
+ * lastActivity, which the hang detector watches, moves only on real work
+ * (counter changes, status transitions), never on phase changes.
+ */
+// The module under test instantiates two real ioredis connections at import
+// time (module-level singleton). Without a mock, jest's event loop never
+// drains and the suite hangs forever. The functions under test are pure, so
+// the mocks only need to exist -- they are never called.
+jest.mock("ioredis", () => {
+    return jest.fn().mockImplementation(() => ({
+        on: jest.fn(),
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue("OK"),
+        del: jest.fn().mockResolvedValue(1),
+        publish: jest.fn().mockResolvedValue(1),
+        quit: jest.fn().mockResolvedValue(undefined),
+    }));
+});
+jest.mock("../../config", () => ({
+    config: { redisUrl: "redis://localhost:6379" },
+}));
+jest.mock("../../utils/logger", () => ({
+    logger: {
+        debug: jest.fn(),
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+    },
+}));
+
+import {
+    progressSignature,
+    shouldRefreshLastActivity,
+} from "../enrichmentState";
+
+function baseState(overrides: Record<string, unknown> = {}) {
+    return {
+        status: "running" as const,
+        currentPhase: "artists" as const,
+        lastActivity: "2026-01-01T00:00:00.000Z",
+        artists: { total: 10, completed: 2, failed: 0 },
+        tracks: { total: 100, completed: 20, failed: 0 },
+        audio: { total: 100, completed: 30, failed: 1, processing: 2 },
+        ...overrides,
+    };
+}
+
+describe("progressSignature", () => {
+    it("changes when an audio counter moves", () => {
+        const a = baseState();
+        const b = baseState({
+            audio: { total: 100, completed: 31, failed: 1, processing: 2 },
+        });
+        expect(progressSignature(a)).not.toBe(progressSignature(b));
+    });
+
+    it("changes when an artist counter moves", () => {
+        const a = baseState();
+        const b = baseState({ artists: { total: 10, completed: 3, failed: 0 } });
+        expect(progressSignature(a)).not.toBe(progressSignature(b));
+    });
+
+    it("changes on status transition", () => {
+        const a = baseState();
+        const b = baseState({ status: "idle" as const });
+        expect(progressSignature(a)).not.toBe(progressSignature(b));
+    });
+
+    it("changes on paused status", () => {
+        const a = baseState();
+        const b = baseState({ status: "paused" as const });
+        expect(progressSignature(a)).not.toBe(progressSignature(b));
+    });
+
+    it("does NOT change on phase rotation alone", () => {
+        const a = baseState();
+        const b = baseState({ currentPhase: "audio" as const });
+        expect(progressSignature(a)).toBe(progressSignature(b));
+    });
+
+    it("does NOT change on bookkeeping flags (completionNotificationSent, cache-cleared)", () => {
+        const a = baseState();
+        const b = baseState({
+            completionNotificationSent: true,
+            coreCacheCleared: true,
+            fullCacheCleared: true,
+        });
+        expect(progressSignature(a)).toBe(progressSignature(b));
+    });
+
+    it("does NOT change on lastActivity alone", () => {
+        const a = baseState();
+        const b = baseState({ lastActivity: "2026-06-01T00:00:00.000Z" });
+        expect(progressSignature(a)).toBe(progressSignature(b));
+    });
+});
+
+describe("shouldRefreshLastActivity", () => {
+    it("returns true when a counter moves (real work)", () => {
+        const prev = baseState();
+        const next = baseState({
+            audio: { total: 100, completed: 31, failed: 1, processing: 2 },
+        });
+        expect(shouldRefreshLastActivity(prev, next)).toBe(true);
+    });
+
+    it("returns true on status transition", () => {
+        expect(
+            shouldRefreshLastActivity(baseState(), baseState({ status: "idle" as const })),
+        ).toBe(true);
+        expect(
+            shouldRefreshLastActivity(baseState(), baseState({ status: "paused" as const })),
+        ).toBe(true);
+    });
+
+    it("returns FALSE when only the phase rotates (the false-heartbeat trap)", () => {
+        expect(
+            shouldRefreshLastActivity(baseState(), baseState({ currentPhase: "audio" as const })),
+        ).toBe(false);
+        expect(
+            shouldRefreshLastActivity(baseState(), baseState({ currentPhase: "vibe" as const })),
+        ).toBe(false);
+    });
+
+    it("returns FALSE for an identical state (idempotent cycle rewrite)", () => {
+        expect(shouldRefreshLastActivity(baseState(), baseState())).toBe(false);
+    });
+
+    it("returns FALSE when only lastActivity is newer (pure heartbeat write)", () => {
+        const next = baseState({ lastActivity: "2026-06-01T00:00:00.000Z" });
+        expect(shouldRefreshLastActivity(baseState(), next)).toBe(false);
+    });
+});

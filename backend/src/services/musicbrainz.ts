@@ -1,8 +1,87 @@
 import axios, { AxiosInstance } from "axios";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
-import { rateLimiter } from "./rateLimiter";
+import { INTERACTIVE_PRIORITY, rateLimiter } from "./rateLimiter";
+import { sourcePauseController } from "./sourcePauseController";
+import {
+    Outcome,
+    answered,
+    absent,
+    rateLimited,
+    permanent,
+} from "../utils/outcome";
 import { USER_AGENT } from "../config";
+import {
+    normalizeIsrc,
+    pickRecording,
+    recordingAgrees,
+    type CandidateRecording,
+    type ExpectedRecording,
+} from "./recordingMatch";
+
+/** Every name an artist credit gives: each credited name as written, the artist's own and sort names, and
+ * the whole credit as one line ("Hall & Oates"). */
+function creditNames(credit: any[] | undefined): string[] {
+    const parts = credit ?? [];
+    const names = [
+        ...parts.flatMap((c) => [c?.name, c?.artist?.name, c?.artist?.["sort-name"]]),
+        parts.map((c) => `${c?.name ?? ""}${c?.joinphrase ?? ""}`).join("").trim(),
+    ];
+    return [...new Set(names.filter((n): n is string => typeof n === "string" && n !== ""))];
+}
+
+/** Curated genres or crowd tags with their vote counts, as MusicBrainz lists them. */
+function voteCounts(entries: any[] | undefined): Array<{ name: string; count: number }> {
+    return (entries ?? []).filter((e) => e.count > 0).map((e) => ({ name: e.name, count: e.count }));
+}
+
+/** The release that stands for its release group: official first, then the earliest (a date of only a year
+ * or a month sorts after the full dates within it; undated last), then by id, so the choice never varies. */
+function chooseRelease<T extends { id: string; status?: string; date?: string }>(releases: T[]): T {
+    const sortableDate = (date: string | undefined) => `${date || "9999"}-99-99`.slice(0, 10);
+    return [...releases].sort((a, b) => {
+        const official = Number(b.status === "Official") - Number(a.status === "Official");
+        if (official !== 0) return official;
+        return sortableDate(a.date).localeCompare(sortableDate(b.date)) || String(a.id).localeCompare(String(b.id));
+    })[0];
+}
+
+/** A MusicBrainz disambiguation that marks another version of a song: live, a demo, acoustic, a remix, or a
+ * dated performance. */
+function isOtherVersion(disambiguation: string | undefined): boolean {
+    const text = (disambiguation ?? "").toLowerCase();
+    return /\b(live|demo|acoustic|remix)\b/.test(text) || /\d{4}[-‐]\d{2}[-‐]\d{2}/.test(text);
+}
+
+type RecordingGenres = { genres: Array<{ name: string; count: number }>; tags: Array<{ name: string; count: number }> };
+
+function toCandidate(rec: any): CandidateRecording {
+    return {
+        id: rec.id,
+        title: rec.title ?? "",
+        lengthMs: typeof rec.length === "number" ? rec.length : null,
+        artists: creditNames(rec["artist-credit"]),
+        score: typeof rec.score === "number" ? rec.score : undefined,
+    };
+}
+
+/**
+ * MusicBrainz Web Service v2 client. Every method returns an `Outcome`, so a
+ * failed or rate-limited call is never mistaken for "the source has nothing".
+ * `answered` is cached 30 days and `absent` 7; failures are never cached.
+ */
+
+const ANSWERED_TTL = 30 * 24 * 3600;
+const ABSENT_TTL = 7 * 24 * 3600;
+
+interface CacheEnvelope {
+    __outcome: "answered" | "absent";
+    value?: unknown;
+    evidence?: Record<string, unknown>;
+    savedAt?: string;
+}
+
+type StrategyError = { code: string; message: string };
 
 class MusicBrainzService {
     private client: AxiosInstance;
@@ -18,126 +97,279 @@ class MusicBrainzService {
     }
 
     /**
-     * Rate-limited HTTP GET - each call individually goes through the rate limiter.
-     * This prevents methods that make multiple HTTP calls (searchRecording, searchAlbum)
-     * from exceeding MusicBrainz's 1 req/s limit.
+     * Every HTTP call goes through the rate limiter so that methods making
+     * several calls (searchRecording, searchAlbum) cannot exceed the
+     * 1 req/s limit.
      */
-    private async rateLimitedGet(url: string, config?: any): Promise<any> {
-        return rateLimiter.execute("musicbrainz", () =>
-            this.client.get(url, config)
-        );
+    private async rateLimitedGet(
+        url: string,
+        config?: any,
+        priority = 0
+    ): Promise<any> {
+        return rateLimiter.execute("musicbrainz", () => this.client.get(url, config), {
+            priority,
+        });
     }
 
-    private async cachedRequest(
+    /**
+     * Classify a source error: a rate limit extends the MusicBrainz pause
+     * (`rateLimited`), a 404 on a lookup is `absent`, other 4xx except timeouts
+     * are `permanent`, and 5xx or transport errors are `transient`.
+     */
+    private async classifyError(
+        err: any,
+        notFoundMeansAbsent: boolean
+    ): Promise<Outcome<never>> {
+        if (await sourcePauseController.handleRateLimit("musicbrainz", err)) {
+            const pause = await sourcePauseController.getPause("musicbrainz");
+            return rateLimited(
+                pause?.until ?? new Date(Date.now() + 30_000),
+                { reason: "rate-limited", detail: String(err?.message ?? err) }
+            );
+        }
+        const status = err?.response?.status;
+        if (status === 404 && notFoundMeansAbsent) {
+            return absent({ status: 404 });
+        }
+        const code =
+            status !== undefined
+                ? `HTTP_${status}`
+                : err?.code === "ECONNABORTED"
+                  ? "TIMEOUT"
+                  : "NETWORK";
+        if (
+            status !== undefined &&
+            status >= 400 &&
+            status < 500 &&
+            status !== 408
+        ) {
+            return permanent(code, String(err?.message ?? err));
+        }
+        return {
+            kind: "transient",
+            error: { code, message: String(err?.message ?? err) },
+        };
+    }
+
+    private async cachedOutcome<T>(
         cacheKey: string,
-        requestFn: () => Promise<any>,
-        ttlSeconds = 2592000 // 30 days
-    ) {
+        fetch: () => Promise<Outcome<T>>
+    ): Promise<Outcome<T>> {
+        const cached = await this.readCached<T>(cacheKey);
+        if (cached) return cached;
+        const outcome = await fetch();
+        await this.writeCached(cacheKey, outcome);
+        return outcome;
+    }
+
+    /** A cached answer or "nothing there", or null when the source must be asked. */
+    private async readCached<T>(cacheKey: string): Promise<Outcome<T> | null> {
         try {
-            const cached = await redisClient.get(cacheKey);
-            if (cached) {
-                return JSON.parse(cached);
+            const raw = await redisClient.get(cacheKey);
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw) as CacheEnvelope;
+                    if (parsed?.__outcome === "answered") {
+                        return {
+                            kind: "answered",
+                            value: parsed.value as T,
+                            evidence: {
+                                ...parsed.evidence,
+                                cached: true,
+                                cachedAt: parsed.savedAt,
+                            },
+                        };
+                    }
+                    if (parsed?.__outcome === "absent") {
+                        return {
+                            kind: "absent",
+                            evidence: {
+                                ...parsed.evidence,
+                                cached: true,
+                                cachedAt: parsed.savedAt,
+                            },
+                        };
+                    }
+                } catch {
+                    // unparseable cache value
+                }
+                // Legacy entry (raw pre-Outcome value) or garbage: drop it
+                // and ask the source again.
+                await redisClient.del(cacheKey);
             }
         } catch (err) {
             logger.warn("Redis get error:", err);
         }
-
-        // requestFn uses rateLimitedGet internally for each HTTP call
-        const data = await requestFn();
-
-        try {
-            // Use shorter TTL for null results (1 hour) vs successful results (30 days)
-            // This allows retrying failed lookups sooner while still caching successes
-            const actualTtl = data === null ? 3600 : ttlSeconds;
-            await redisClient.setex(cacheKey, actualTtl, JSON.stringify(data));
-        } catch (err) {
-            logger.warn("Redis set error:", err);
-        }
-
-        return data;
+        return null;
     }
 
-    async searchArtist(query: string, limit = 10) {
-        const cacheKey = `mb:search:artist:${query}:${limit}`;
+    /** Answers and "nothing there" are kept; failures are not, so the next caller asks again. */
+    private async writeCached<T>(cacheKey: string, outcome: Outcome<T>): Promise<void> {
+        if (outcome.kind === "answered") {
+            const envelope: CacheEnvelope = {
+                __outcome: "answered",
+                value: outcome.value,
+                evidence: outcome.evidence,
+                savedAt: new Date().toISOString(),
+            };
+            await this.cacheWrite(cacheKey, ANSWERED_TTL, envelope);
+        } else if (outcome.kind === "absent") {
+            const envelope: CacheEnvelope = {
+                __outcome: "absent",
+                evidence: outcome.evidence,
+                savedAt: new Date().toISOString(),
+            };
+            await this.cacheWrite(cacheKey, ABSENT_TTL, envelope);
+        }
+    }
 
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet("/artist", {
-                params: {
-                    query,
-                    limit,
-                    fmt: "json",
-                },
-            });
-            return response.data.artists || [];
+    /**
+     * A failed cache write never un-answers the source: the envelope is
+     * for the next caller, and the caller in front of us already has the
+     * real answer.
+     */
+    private async cacheWrite(
+        cacheKey: string,
+        ttlSeconds: number,
+        envelope: CacheEnvelope
+    ): Promise<void> {
+        try {
+            await redisClient.setex(cacheKey, ttlSeconds, JSON.stringify(envelope));
+        } catch (err) {
+            logger.warn(`Redis cache write failed for ${cacheKey}:`, err);
+        }
+    }
+
+    async searchArtist(
+        query: string,
+        limit = 10,
+        opts: { interactive?: boolean } = {}
+    ): Promise<Outcome<any[]>> {
+        const cacheKey = `mb:search:artist:${query}:${limit}`;
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const response = await this.rateLimitedGet(
+                    "/artist",
+                    { params: { query, limit, fmt: "json" } },
+                    opts.interactive ? INTERACTIVE_PRIORITY : 0
+                );
+                const artists: any[] = response.data.artists || [];
+                if (artists.length === 0) {
+                    return absent({ query, limit, hits: 0 });
+                }
+                return answered(artists, { query, limit, hits: artists.length });
+            } catch (err: any) {
+                return this.classifyError(err, false);
+            }
         });
     }
 
-    async getArtist(mbid: string, includes: string[] = ["url-rels", "tags"]) {
+    async getArtist(
+        mbid: string,
+        includes: string[] = ["url-rels", "tags"],
+        opts: { interactive?: boolean } = {}
+    ): Promise<Outcome<any>> {
         const cacheKey = `mb:artist:${mbid}:${includes.join(",")}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet(`/artist/${mbid}`, {
-                params: {
-                    inc: includes.join("+"),
-                    fmt: "json",
-                },
-            });
-            return response.data;
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const response = await this.rateLimitedGet(
+                    `/artist/${mbid}`,
+                    { params: { inc: includes.join("+"), fmt: "json" } },
+                    opts.interactive ? INTERACTIVE_PRIORITY : 0
+                );
+                return answered(response.data, {
+                    mbid,
+                    includes,
+                    source: "musicbrainz",
+                });
+            } catch (err: any) {
+                return this.classifyError(err, true);
+            }
         });
     }
 
     async getReleaseGroups(
         artistMbid: string,
         types: string[] = ["album", "ep"],
-        limit = 100
-    ) {
+        limit = 100,
+        opts: { interactive?: boolean } = {}
+    ): Promise<Outcome<any[]>> {
         const cacheKey = `mb:rg:${artistMbid}:${types.join(",")}:${limit}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet("/release-group", {
-                params: {
-                    artist: artistMbid,
-                    type: types.join("|"),
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const response = await this.rateLimitedGet(
+                    "/release-group",
+                    {
+                        params: {
+                            artist: artistMbid,
+                            type: types.join("|"),
+                            limit,
+                            fmt: "json",
+                        },
+                    },
+                    opts.interactive ? INTERACTIVE_PRIORITY : 0
+                );
+                const groups: any[] = response.data["release-groups"] || [];
+                if (groups.length === 0) {
+                    return absent({ artistMbid, types, limit, hits: 0 });
+                }
+                return answered(groups, {
+                    artistMbid,
+                    types,
                     limit,
-                    fmt: "json",
-                },
-            });
-            return response.data["release-groups"] || [];
+                    hits: groups.length,
+                });
+            } catch (err: any) {
+                return this.classifyError(err, false);
+            }
         });
     }
 
-    async getReleaseGroup(rgMbid: string) {
+    /** Every release group of these types an artist has: MusicBrainz browses 100 at a time, so this pages to the end. */
+    async getAllReleaseGroups(
+        artistMbid: string,
+        types: string[],
+        opts: { interactive?: boolean } = {}
+    ): Promise<Outcome<any[]>> {
+        const cacheKey = `mb:rg:all:${artistMbid}:${types.join(",")}`;
+        return this.cachedOutcome(cacheKey, async () => {
+            const groups: any[] = [];
+            try {
+                for (let offset = 0; ; offset += 100) {
+                    const response = await this.rateLimitedGet(
+                        "/release-group",
+                        { params: { artist: artistMbid, type: types.join("|"), limit: 100, offset, fmt: "json" } },
+                        opts.interactive ? INTERACTIVE_PRIORITY : 0
+                    );
+                    const page: any[] = response.data["release-groups"] || [];
+                    groups.push(...page);
+                    const total = Number(response.data["release-group-count"] ?? 0);
+                    if (page.length === 0 || groups.length >= total) break;
+                }
+            } catch (err: any) {
+                return this.classifyError(err, false);
+            }
+            if (groups.length === 0) return absent({ artistMbid, types, hits: 0 });
+            return answered(groups, { artistMbid, types, hits: groups.length });
+        });
+    }
+
+    async getReleaseGroup(rgMbid: string): Promise<Outcome<any>> {
         const cacheKey = `mb:rg:${rgMbid}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet(`/release-group/${rgMbid}`, {
-                params: {
-                    inc: "artist-credits+releases",
-                    fmt: "json",
-                },
-            });
-            return response.data;
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const response = await this.rateLimitedGet(
+                    `/release-group/${rgMbid}`,
+                    { params: { inc: "artist-credits+releases", fmt: "json" } }
+                );
+                return answered(response.data, { rgMbid, source: "musicbrainz" });
+            } catch (err: any) {
+                return this.classifyError(err, true);
+            }
         });
     }
 
-    async getReleaseGroupDetails(rgMbid: string) {
-        const cacheKey = `mb:rg:details:${rgMbid}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet(`/release-group/${rgMbid}`, {
-                params: {
-                    inc: "artist-credits+releases+labels",
-                    fmt: "json",
-                },
-            });
-            return response.data;
-        });
-    }
-
-    /**
-     * Get detailed album information including track count, type, and release date
-     */
-    async getAlbumDetails(rgMbid: string): Promise<{
+    async getAlbumDetails(rgMbid: string): Promise<Outcome<{
         id: string;
         title: string;
         artistName: string;
@@ -145,98 +377,190 @@ class MusicBrainzService {
         trackCount?: number;
         primaryType?: string;
         secondaryTypes?: string[];
-    } | null> {
+    }>> {
         const cacheKey = `mb:album:details:${rgMbid}`;
-
-        return this.cachedRequest(cacheKey, async () => {
+        return this.cachedOutcome(cacheKey, async () => {
             try {
-                // Get release group info
-                const rgResponse = await this.rateLimitedGet(`/release-group/${rgMbid}`, {
-                    params: {
-                        inc: "releases",
-                        fmt: "json",
-                    },
-                });
-
+                const rgResponse = await this.rateLimitedGet(
+                    `/release-group/${rgMbid}`,
+                    { params: { inc: "releases", fmt: "json" } }
+                );
                 const rg = rgResponse.data;
 
-                // Get first release for track count
                 let trackCount = 0;
                 if (rg.releases && rg.releases.length > 0) {
                     const releaseId = rg.releases[0].id;
-                    const releaseResponse = await this.rateLimitedGet(`/release/${releaseId}`, {
-                        params: {
-                            inc: "recordings",
-                            fmt: "json",
-                        },
-                    });
-
-                    trackCount = releaseResponse.data.media?.[0]?.['track-count'] || 0;
+                    const releaseResponse = await this.rateLimitedGet(
+                        `/release/${releaseId}`,
+                        { params: { inc: "recordings", fmt: "json" } }
+                    );
+                    trackCount = releaseResponse.data.media?.[0]?.["track-count"] || 0;
                 }
 
-                return {
-                    id: rg.id,
-                    title: rg.title,
-                    artistName: rg['artist-credit']?.[0]?.name || '',
-                    releaseDate: rg['first-release-date'],
-                    trackCount,
-                    primaryType: rg['primary-type'],
-                    secondaryTypes: rg['secondary-types'] || [],
-                };
-            } catch (error: any) {
-                logger.error(`[MusicBrainz] Error fetching album details for ${rgMbid}: ${error.message}`);
-                return null;
+                return answered(
+                    {
+                        id: rg.id,
+                        title: rg.title,
+                        artistName: rg["artist-credit"]?.[0]?.name || "",
+                        releaseDate: rg["first-release-date"],
+                        trackCount,
+                        primaryType: rg["primary-type"],
+                        secondaryTypes: rg["secondary-types"] || [],
+                    },
+                    { rgMbid, source: "musicbrainz" }
+                );
+            } catch (err: any) {
+                return this.classifyError(err, true);
             }
         });
     }
 
-    async getRelease(releaseMbid: string) {
+    async getRelease(releaseMbid: string): Promise<Outcome<any>> {
         const cacheKey = `mb:release:${releaseMbid}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            const response = await this.rateLimitedGet(`/release/${releaseMbid}`, {
-                params: {
-                    inc: "recordings+artist-credits+labels",
-                    fmt: "json",
-                },
-            });
-            return response.data;
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const response = await this.rateLimitedGet(`/release/${releaseMbid}`, {
+                    params: {
+                        inc: "recordings+artist-credits+labels",
+                        fmt: "json",
+                    },
+                });
+                return answered(response.data, {
+                    releaseMbid,
+                    source: "musicbrainz",
+                });
+            } catch (err: any) {
+                return this.classifyError(err, true);
+            }
         });
     }
 
-    extractPrimaryArtist(artistCredits: any[]): string {
-        if (!artistCredits || artistCredits.length === 0)
-            return "Unknown Artist";
-        return (
-            artistCredits[0].name ||
-            artistCredits[0].artist?.name ||
-            "Unknown Artist"
-        );
+    /**
+     * One album's whole catalogue in two requests: the release group with its releases and genres, then its
+     * chosen release's tracklist (each track's credit, ISRCs and genres) and label. Cached 30 days.
+     * Matching files to `recordings` is the caller's job.
+     */
+    async getAlbumCatalogue(
+        rgMbid: string
+    ): Promise<
+        Outcome<{
+            releaseMbid: string;
+            originalYear: number | null;
+            label: string | null;
+            genres: { name: string; count: number }[];
+            recordings: Array<{
+                recordingId: string;
+                title: string;
+                position: number | null;
+                durationMs: number | null;
+                isrcs: string[];
+                genres: { name: string; count: number }[];
+                /** Every name the track is credited to (`creditNames`). */
+                artists: string[];
+            }>;
+        }>
+    > {
+        const cacheKey = `mb:album:tracklist:${rgMbid}`;
+        return this.cachedOutcome(cacheKey, async () => {
+            try {
+                const rgResponse = await this.rateLimitedGet(
+                    `/release-group/${rgMbid}`,
+                    { params: { inc: "releases+genres", fmt: "json" } }
+                );
+                const rg = rgResponse.data;
+                const releases: any[] = rg.releases || [];
+                if (releases.length === 0) {
+                    return absent({
+                        rgMbid,
+                        reason: "release group has no releases",
+                    });
+                }
+
+                const chosen = chooseRelease(releases);
+                const releaseResponse = await this.rateLimitedGet(
+                    `/release/${chosen.id}`,
+                    {
+                        params: {
+                            inc: "recordings+isrcs+labels+genres+artist-credits",
+                            fmt: "json",
+                        },
+                    }
+                );
+                const release = releaseResponse.data;
+
+                const recordings = (release.media || [])
+                    .flatMap((medium: any) => medium.tracks || [])
+                    .filter((t: any) => t.recording)
+                    .map((t: any) => ({
+                        recordingId: t.recording.id as string,
+                        title: (t.title || t.recording.title) as string,
+                        position: typeof t.position === "number" ? t.position : null,
+                        durationMs:
+                            typeof t.recording.length === "number"
+                                ? t.recording.length
+                                : null,
+                        isrcs: (t.recording.isrcs || []) as string[],
+                        genres: voteCounts(t.recording.genres),
+                        artists: creditNames(t["artist-credit"] || t.recording["artist-credit"]),
+                    }));
+                if (recordings.length === 0) {
+                    return absent({
+                        rgMbid,
+                        releaseMbid: chosen.id,
+                        reason: "release has no tracklist",
+                    });
+                }
+
+                const year = Number.parseInt(
+                    rg["first-release-date"] || chosen.date || "",
+                    10
+                );
+
+                return answered(
+                    {
+                        releaseMbid: chosen.id,
+                        originalYear: Number.isFinite(year) ? year : null,
+                        label:
+                            release["label-info"]?.[0]?.label?.name ?? null,
+                        genres: voteCounts(rg.genres),
+                        recordings,
+                    },
+                    { rgMbid, releaseMbid: chosen.id, source: "musicbrainz" }
+                );
+            } catch (err: any) {
+                return this.classifyError(err, true);
+            }
+        });
     }
 
     /**
-     * Escape special characters for Lucene query syntax
-     * MusicBrainz uses Lucene, which requires escaping: + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+     * MusicBrainz Lucene requires escaping: + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
      */
+    /** The exact then fuzzy name queries for a recording; none when the title is all brackets. */
+    private recordingQueries(expected: ExpectedRecording): string[] {
+        const title = this.escapeLucene(this.normalizeForSearch(expected.title));
+        const name = this.escapeLucene(this.normalizeForSearch(expected.artists[0] ?? ""));
+        if (!title.trim()) return [];
+        return [`recording:"${title}" AND artist:"${name}"`, `${title} AND artist:${name}`];
+    }
+
     private escapeLucene(str: string): string {
         return str.replace(/([+\-&|!(){}[\]^"~*?:\\/])/g, "\\$1");
     }
 
     /**
-     * Normalize album/artist names for better matching
-     * Removes common suffixes and cleans up the string
+     * The title without edition markers, for matching against release-group
+     * titles only; stored titles keep their markers.
      */
-    private normalizeForSearch(str: string): string {
+    normalizeForSearch(str: string): string {
         return (
             str
-                .replace(/\s*\([^)]*\)\s*/g, " ") // Remove parenthetical content
-                .replace(/\s*\[[^\]]*\]\s*/g, " ") // Remove bracketed content
-                // Remove "- YEAR Remaster", "- Remastered YEAR", "- Deluxe Edition", etc.
+                .replace(/\s*\([^)]*\)\s*/g, " ")
+                .replace(/\s*\[[^\]]*\]\s*/g, " ")
                 .replace(
                     /\s*-\s*(\d{4}\s+)?(deluxe|remastered|remaster|edition|version|expanded|bonus|explicit|clean|single|radio edit|remix|acoustic|live|mono|stereo)(\s+\d{4})?\s*(edition|version|mix)?\s*/gi,
                     " "
                 )
-                // Also catch standalone year suffixes like "- 2011"
                 .replace(/\s*-\s*\d{4}\s*$/gi, " ")
                 .replace(/\s+/g, " ")
                 .trim()
@@ -244,360 +568,186 @@ class MusicBrainzService {
     }
 
     /**
-     * Strip all punctuation from string for fuzzy matching
-     * Used as a fallback when normal search fails (e.g., "Do You Realize??")
-     */
-    private stripPunctuation(str: string): string {
-        return str
-            .replace(/[^\w\s]/g, "") // Remove all non-word, non-space chars
-            .replace(/\s+/g, " ")
-            .trim();
-    }
-
-    /**
-     * Search for an album (release-group) by title and artist name
-     * Returns the first matching release group or null
-     * Uses multiple search strategies for better matching
+     * Search for a release group by title and artist, trying three strategies in
+     * order. If none found anything and any of them errored, the answer is
+     * `transient`, not `absent`.
      */
     async searchAlbum(
         albumTitle: string,
         artistName: string
-    ): Promise<{ id: string; title: string } | null> {
+    ): Promise<Outcome<{ id: string; title: string }>> {
         const cacheKey = `mb:search:album:${artistName}:${albumTitle}`;
 
-        return this.cachedRequest(cacheKey, async () => {
-            // Strategy 1: Exact match with escaped special characters
-            const escapedTitle = this.escapeLucene(albumTitle);
-            const escapedArtist = this.escapeLucene(artistName);
+        return this.cachedOutcome(cacheKey, async () => {
+            let firstError: StrategyError | undefined;
 
-            try {
-                const query1 = `releasegroup:"${escapedTitle}" AND artist:"${escapedArtist}"`;
-                const response1 = await this.rateLimitedGet("/release-group", {
-                    params: {
-                        query: query1,
-                        limit: 5,
-                        fmt: "json",
-                    },
-                });
-
-                const releaseGroups1 = response1.data["release-groups"] || [];
-                if (releaseGroups1.length > 0) {
-                    return {
-                        id: releaseGroups1[0].id,
-                        title: releaseGroups1[0].title,
+            const recordError = async (err: any): Promise<Outcome<never> | undefined> => {
+                const classified = await this.classifyError(err, false);
+                if (classified.kind === "rateLimited") return classified;
+                if (!firstError) {
+                    firstError = {
+                        code:
+                            classified.kind === "transient"
+                                ? classified.error.code
+                                : "ERROR",
+                        message:
+                            classified.kind === "transient"
+                                ? classified.error.message
+                                : "unclassified",
                     };
                 }
-            } catch (e) {
-                // Continue to strategy 2
+                return undefined;
+            };
+
+            // Strategy 1: exact match with escaped special characters
+            {
+                const query = `releasegroup:"${this.escapeLucene(
+                    albumTitle
+                )}" AND artist:"${this.escapeLucene(artistName)}"`;
+                try {
+                    const response = await this.rateLimitedGet("/release-group", {
+                        params: { query, limit: 5, fmt: "json" },
+                    });
+                    const groups = response.data["release-groups"] || [];
+                    if (groups.length > 0) {
+                        return answered(
+                            { id: groups[0].id, title: groups[0].title },
+                            { query, strategy: "exact" }
+                        );
+                    }
+                } catch (err: any) {
+                    const bail = await recordError(err);
+                    if (bail) return bail;
+                }
             }
 
-            // Strategy 2: Normalized/cleaned title search
+            // Strategy 2: normalized/cleaned title search
             const normalizedTitle = this.normalizeForSearch(albumTitle);
             const normalizedArtist = this.normalizeForSearch(artistName);
-
             if (
                 normalizedTitle !== albumTitle ||
                 normalizedArtist !== artistName
             ) {
+                const query = `releasegroup:"${this.escapeLucene(
+                    normalizedTitle
+                )}" AND artist:"${this.escapeLucene(normalizedArtist)}"`;
                 try {
-                    const escapedNormTitle = this.escapeLucene(normalizedTitle);
-                    const escapedNormArtist =
-                        this.escapeLucene(normalizedArtist);
-                    const query2 = `releasegroup:"${escapedNormTitle}" AND artist:"${escapedNormArtist}"`;
-                    const response2 = await this.rateLimitedGet("/release-group", {
-                        params: {
-                            query: query2,
-                            limit: 5,
-                            fmt: "json",
-                        },
+                    const response = await this.rateLimitedGet("/release-group", {
+                        params: { query, limit: 5, fmt: "json" },
                     });
-
-                    const releaseGroups2 =
-                        response2.data["release-groups"] || [];
-                    if (releaseGroups2.length > 0) {
-                        return {
-                            id: releaseGroups2[0].id,
-                            title: releaseGroups2[0].title,
-                        };
+                    const groups = response.data["release-groups"] || [];
+                    if (groups.length > 0) {
+                        return answered(
+                            { id: groups[0].id, title: groups[0].title },
+                            { query, strategy: "normalized" }
+                        );
                     }
-                } catch (e) {
-                    // Continue to strategy 3
+                } catch (err: any) {
+                    const bail = await recordError(err);
+                    if (bail) return bail;
                 }
             }
 
-            // Strategy 3: Fuzzy search without quotes (last resort)
-            try {
-                // Use simple terms without quotes for fuzzy matching
+            // Strategy 3: fuzzy search on first words, verified against
+            // the artist name (last resort)
+            {
                 const simpleTitle = normalizedTitle
                     .split(" ")
                     .slice(0, 3)
-                    .join(" "); // First 3 words
-                const simpleArtist = normalizedArtist.split(" ")[0]; // First word of artist
-                const query3 = `${this.escapeLucene(
+                    .join(" ");
+                const simpleArtist = normalizedArtist.split(" ")[0];
+                const query = `${this.escapeLucene(
                     simpleTitle
                 )} AND artist:${this.escapeLucene(simpleArtist)}`;
-
-                const response3 = await this.rateLimitedGet("/release-group", {
-                    params: {
-                        query: query3,
-                        limit: 10,
-                        fmt: "json",
-                    },
-                });
-
-                const releaseGroups3 = response3.data["release-groups"] || [];
-
-                // Find a match where the artist name contains our search term
-                for (const rg of releaseGroups3) {
-                    const rgArtist =
-                        rg["artist-credit"]?.[0]?.name ||
-                        rg["artist-credit"]?.[0]?.artist?.name ||
-                        "";
-                    if (
-                        rgArtist
-                            .toLowerCase()
-                            .includes(simpleArtist.toLowerCase())
-                    ) {
-                        return {
-                            id: rg.id,
-                            title: rg.title,
-                        };
-                    }
-                }
-            } catch (e) {
-                // All strategies failed
-            }
-
-            return null;
-        });
-    }
-
-    /**
-     * Search for a recording (track) and return album information
-     * This is useful when we have artist + track title but not album name
-     * Returns the album (release group) that the track appears on
-     */
-    async searchRecording(
-        trackTitle: string,
-        artistName: string
-    ): Promise<{
-        albumName: string;
-        albumMbid: string;
-        artistMbid: string;
-        trackMbid: string;
-    } | null> {
-        const cacheKey = `mb:search:recording:${artistName}:${trackTitle}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                // Normalize track title first - removes "- 2011 Remaster", "(Radio Edit)", etc.
-                const normalizedTitle = this.normalizeForSearch(trackTitle);
-                const normalizedArtist = this.normalizeForSearch(artistName);
-
-                // Search for recording by normalized track title and artist
-                const escapedTitle = this.escapeLucene(normalizedTitle);
-                const escapedArtist = this.escapeLucene(normalizedArtist);
-
-                const query = `recording:"${escapedTitle}" AND artist:"${escapedArtist}"`;
-
-                const response = await this.rateLimitedGet("/recording", {
-                    params: {
-                        query,
-                        limit: 50, // Need high limit because bootleg recordings often rank first
-                        fmt: "json",
-                        inc: "releases+release-groups+artists",
-                    },
-                });
-
-                const allRecordings = response.data.recordings || [];
-
-                logger.debug(
-                    `[MusicBrainz] Query: "${trackTitle}" by "${artistName}"`
-                );
-                logger.debug(
-                    `[MusicBrainz] Found ${allRecordings.length} total recordings`
-                );
-
-                // Log first 5 recordings for debugging
-                allRecordings.slice(0, 5).forEach((rec: any, i: number) => {
-                    const disambig = rec.disambiguation || "(studio)";
-                    const releases = rec.releases || [];
-                    const albumNames = releases
-                        .slice(0, 2)
-                        .map((r: any) => r["release-group"]?.title || "?")
-                        .join(", ");
-                    logger.debug(
-                        `   ${i + 1}. [${disambig}] → ${
-                            albumNames || "(no albums)"
-                        }`
-                    );
-                });
-
-                // Filter out live recordings - they have disambiguation like "live, 1995-07-28"
-                // We want the studio recording, not live versions
-                const recordings = allRecordings.filter((rec: any) => {
-                    const disambig = (rec.disambiguation || "").toLowerCase();
-                    // Skip if disambiguation contains "live" or date patterns
-                    if (disambig.includes("live")) return false;
-                    if (disambig.match(/\d{4}[-‐]\d{2}[-‐]\d{2}/)) return false;
-                    if (disambig.includes("demo")) return false;
-                    if (disambig.includes("acoustic")) return false;
-                    if (disambig.includes("remix")) return false;
-                    return true;
-                });
-
-                logger.debug(
-                    `[MusicBrainz] After filtering live/demo: ${recordings.length} studio recordings`
-                );
-
-                if (recordings.length === 0) {
-                    // Try fuzzy search without quotes
-                    const normalizedTitle = this.normalizeForSearch(trackTitle);
-                    const normalizedArtist =
-                        this.normalizeForSearch(artistName);
-                    const fuzzyQuery = `${this.escapeLucene(
-                        normalizedTitle
-                    )} AND artist:${this.escapeLucene(normalizedArtist)}`;
-
-                    const fuzzyResponse = await this.rateLimitedGet("/recording", {
-                        params: {
-                            query: fuzzyQuery,
-                            limit: 10,
-                            fmt: "json",
-                            inc: "releases+release-groups+artists",
-                        },
+                try {
+                    const response = await this.rateLimitedGet("/release-group", {
+                        params: { query, limit: 10, fmt: "json" },
                     });
-
-                    const fuzzyRecordings = fuzzyResponse.data.recordings || [];
-
-                    // Find best match by checking artist name similarity
-                    for (const rec of fuzzyRecordings) {
-                        const recArtist =
-                            rec["artist-credit"]?.[0]?.name ||
-                            rec["artist-credit"]?.[0]?.artist?.name ||
+                    for (const rg of response.data["release-groups"] || []) {
+                        const rgArtist =
+                            rg["artist-credit"]?.[0]?.name ||
+                            rg["artist-credit"]?.[0]?.artist?.name ||
                             "";
                         if (
-                            recArtist
+                            rgArtist
                                 .toLowerCase()
-                                .includes(
-                                    normalizedArtist.toLowerCase().split(" ")[0]
-                                )
+                                .includes(simpleArtist.toLowerCase())
                         ) {
-                            const result = this.extractAlbumFromRecording(rec);
-                            if (result) return result; // Only return if we found a good album
+                            return answered(
+                                { id: rg.id, title: rg.title },
+                                { query, strategy: "fuzzy" }
+                            );
                         }
                     }
-
-                    // Strategy 3: Strip all punctuation (handles "Do You Realize??" etc.)
-                    const strippedTitle = this.stripPunctuation(trackTitle);
-                    const strippedArtist = this.stripPunctuation(artistName);
-
-                    if (strippedTitle !== normalizedTitle) {
-                        logger.debug(
-                            `[MusicBrainz] Trying punctuation-stripped search: "${strippedTitle}" by ${strippedArtist}`
-                        );
-
-                        const strippedQuery = `${strippedTitle} AND artist:${strippedArtist}`;
-                        const strippedResponse = await this.rateLimitedGet(
-                            "/recording",
-                            {
-                                params: {
-                                    query: strippedQuery,
-                                    limit: 10,
-                                    fmt: "json",
-                                    inc: "releases+release-groups+artists",
-                                },
-                            }
-                        );
-
-                        const strippedRecordings =
-                            strippedResponse.data.recordings || [];
-                        logger.debug(
-                            `[MusicBrainz] Punctuation-stripped search found ${strippedRecordings.length} recordings`
-                        );
-
-                        for (const rec of strippedRecordings) {
-                            const recArtist =
-                                rec["artist-credit"]?.[0]?.name ||
-                                rec["artist-credit"]?.[0]?.artist?.name ||
-                                "";
-                            if (
-                                recArtist
-                                    .toLowerCase()
-                                    .includes(
-                                        strippedArtist
-                                            .toLowerCase()
-                                            .split(" ")[0]
-                                    )
-                            ) {
-                                const result =
-                                    this.extractAlbumFromRecording(rec);
-                                if (result) {
-                                    logger.debug(
-                                        `[MusicBrainz] Found via punctuation-stripped search: ${result.albumName}`
-                                    );
-                                    return result;
-                                }
-                            }
-                        }
-                    }
-
-                    return null;
+                } catch (err: any) {
+                    const bail = await recordError(err);
+                    if (bail) return bail;
                 }
-
-                // Try each recording until we find one with a good (non-bootleg) album
-                for (const rec of recordings) {
-                    const disambig =
-                        rec.disambiguation || "(no disambiguation)";
-                    logger.debug(
-                        `[MusicBrainz] Trying recording: "${rec.title}" [${disambig}]`
-                    );
-                    const result = this.extractAlbumFromRecording(rec, false);
-                    if (result) {
-                        logger.debug(
-                            `[MusicBrainz] Found album: "${result.albumName}" (MBID: ${result.albumMbid})`
-                        );
-                        return result; // Found a good album
-                    } else {
-                        logger.debug(
-                            `[MusicBrainz] No valid album found for this recording`
-                        );
-                    }
-                }
-
-                // Fallback: Try again accepting Singles/EPs as last resort
-                logger.debug(
-                    `[MusicBrainz] No official albums found, trying to find Singles/EPs...`
-                );
-                for (const rec of recordings) {
-                    const result = this.extractAlbumFromRecording(rec, true);
-                    if (result) {
-                        logger.debug(
-                            `[MusicBrainz] Found Single/EP: "${result.albumName}" (MBID: ${result.albumMbid})`
-                        );
-                        return result;
-                    }
-                }
-
-                // No good albums found in any recording
-                logger.debug(
-                    `[MusicBrainz] No official albums or singles found for "${trackTitle}" by ${artistName} (checked ${recordings.length} recordings)`
-                );
-                return null;
-            } catch (error: any) {
-                logger.error(
-                    "MusicBrainz recording search error:",
-                    error.message
-                );
-                return null;
             }
+
+            if (firstError) {
+                return { kind: "transient", error: firstError };
+            }
+            return absent({
+                albumTitle,
+                artistName,
+                strategiesTried: ["exact", "normalized", "fuzzy"],
+                reason: "no strategy returned a matching release group",
+            });
         });
     }
 
     /**
-     * Extract album information from a MusicBrainz recording result
-     * Prioritizes studio albums and filters out compilations, live albums, and bootlegs
-     * @param allowSingles - If true, accepts Singles/EPs as a fallback (lower threshold)
+     * The album a track appears on, by name search: only a recording that is the track (`recordingAgrees`:
+     * title, version, artist, and length when known) counts, and among those a studio album before a single
+     * or EP. Recordings MusicBrainz marks live, demo, acoustic, remix or dated are passed over.
+     */
+    async searchRecording(expected: ExpectedRecording): Promise<
+        Outcome<{
+            albumName: string;
+            albumMbid: string;
+            artistMbid: string;
+            trackMbid: string;
+        }>
+    > {
+        const artist = expected.artists[0] ?? "";
+        const cacheKey = `mb:search:recording:${artist}:${expected.title}:${expected.durationSec ?? ""}`;
+        return this.cachedOutcome(cacheKey, async () => {
+            const queries = this.recordingQueries(expected);
+            if (queries.length === 0) return absent({ title: expected.title, artist, reason: "nothing to search by" });
+            let failure: Outcome<never> | undefined;
+            for (const query of queries) {
+                try {
+                    const response = await this.rateLimitedGet("/recording", {
+                        params: { query, limit: 50, fmt: "json", inc: "releases+release-groups+artists" },
+                    });
+                    const recordings = (response.data.recordings || []).filter(
+                        (rec: any) =>
+                            recordingAgrees(toCandidate(rec), expected) && !isOtherVersion(rec.disambiguation),
+                    );
+                    for (const allowSingles of [false, true]) {
+                        for (const rec of recordings) {
+                            const album = this.extractAlbumFromRecording(rec, allowSingles);
+                            if (album) return answered(album, { query, allowSingles });
+                        }
+                    }
+                } catch (err: any) {
+                    if (err?.response?.status === 400) continue;
+                    const classified = await this.classifyError(err, false);
+                    if (classified.kind === "rateLimited") return classified;
+                    failure ??= classified;
+                }
+            }
+            if (failure) return failure;
+            return absent({ title: expected.title, artist, reason: "no recording that is this track is on an album" });
+        });
+    }
+
+    /**
+     * Pick the release group to trust for a recording: score every release
+     * (studio albums high; compilations, live, bootlegs, soundtracks
+     * penalised) and take the first above the threshold. `allowSingles`
+     * lowers the threshold to accept Singles/EPs as a last resort.
      */
     private extractAlbumFromRecording(
         recording: any,
@@ -608,18 +758,11 @@ class MusicBrainzService {
         artistMbid: string;
         trackMbid: string;
     } | null {
-        // Get artist MBID
         const artistMbid = recording["artist-credit"]?.[0]?.artist?.id || "";
         const trackMbid = recording.id || "";
-
-        // Find the best release (prefer studio albums, avoid compilations/live/bootlegs)
         const releases = recording.releases || [];
+        if (releases.length === 0) return null;
 
-        if (releases.length === 0) {
-            return null;
-        }
-
-        // Score each release to find the best one
         const scoredReleases = releases.map((release: any) => {
             const rg = release["release-group"];
             if (!rg?.id) return { release, score: -1000 };
@@ -629,22 +772,19 @@ class MusicBrainzService {
             const secondaryTypes: string[] = rg["secondary-types"] || [];
             const title = (rg.title || "").toLowerCase();
 
-            // Primary type scoring
             if (primaryType === "Album") score += 100;
             else if (primaryType === "EP") score += 50;
             else if (primaryType === "Single") score += 25;
-            else score -= 50; // Unknown type
+            else score -= 50;
 
-            // Heavy penalties for compilations, live, bootlegs, soundtracks
             if (secondaryTypes.includes("Compilation")) score -= 200;
             if (secondaryTypes.includes("Live")) score -= 150;
             if (secondaryTypes.includes("Remix")) score -= 100;
             if (secondaryTypes.includes("DJ-mix")) score -= 200;
             if (secondaryTypes.includes("Mixtape/Street")) score -= 100;
-            if (secondaryTypes.includes("Soundtrack")) score -= 150; // Movie/TV soundtracks
+            if (secondaryTypes.includes("Soundtrack")) score -= 150;
 
-            // Title-based penalties (catch bootlegs and compilations missed by types)
-            if (title.match(/\d{4}[-‐]\d{2}[-‐]\d{2}/)) score -= 300; // Dates like "2006-03-11" = bootleg
+            if (title.match(/\d{4}[-‐]\d{2}[-‐]\d{2}/)) score -= 300;
             if (title.includes("live at") || title.includes("live from"))
                 score -= 150;
             if (title.includes("best of") || title.includes("greatest hits"))
@@ -653,48 +793,33 @@ class MusicBrainzService {
                 score -= 200;
             if (title.includes("soundtrack")) score -= 100;
             if (title.includes("various artists")) score -= 300;
-            if (title.includes("sounds of the")) score -= 200; // "Sounds of the 70s" etc.
+            if (title.includes("sounds of the")) score -= 200;
             if (title.includes("deep sounds")) score -= 200;
 
-            // Bonus for official status
             if (release.status === "Official") score += 20;
 
             return { release, score };
         });
 
-        // Sort by score (highest first)
         scoredReleases.sort((a: any, b: any) => b.score - a.score);
 
-        // Find the first release with a GOOD score
-        // Normal mode: score > 50 (studio album = 100+, EP = 50+)
-        // Allow singles mode: score > 0 (Single = 25+, excludes compilations with negative scores)
+        // Normal mode requires > 50 (a studio album); singles mode accepts
+        // anything above 0 (a Single), still rejecting penalised junk.
         const threshold = allowSingles ? 0 : 50;
         const bestResult = scoredReleases.find((r: any) => r.score > threshold);
 
         if (!bestResult) {
-            // No good releases found with this threshold - return null so we try the next recording
-            const modeText = allowSingles ? "singles" : "albums";
-            const topScores = scoredReleases.slice(0, 3).map((r: any) => {
-                const title =
-                    r.release["release-group"]?.title || r.release.title;
-                return `"${title}" (${r.score})`;
-            });
             logger.debug(
-                `[MusicBrainz] Skipping recording - no ${modeText} found in ${
-                    releases.length
-                } releases (threshold: ${threshold}). Top scores: ${topScores.join(
-                    ", "
-                )}`
+                `[MusicBrainz] Skipping recording - no ${
+                    allowSingles ? "singles" : "albums"
+                } found in ${releases.length} releases (threshold: ${threshold})`
             );
             return null;
         }
 
         const bestRelease = bestResult.release;
         const releaseGroup = bestRelease["release-group"];
-
-        if (!releaseGroup?.id) {
-            return null;
-        }
+        if (!releaseGroup?.id) return null;
 
         logger.debug(
             `[MusicBrainz] Selected "${releaseGroup.title}" (score: ${bestResult.score}) from ${releases.length} releases`
@@ -709,216 +834,110 @@ class MusicBrainzService {
         };
     }
 
+    /** Every recording MusicBrainz files under an ISRC, as candidates for `pickRecording`. A code that is not an
+     * ISRC is never sent; one MusicBrainz refuses (400) or does not know (404) is `absent`, not a failure. */
+    async lookupRecordingsByIsrc(isrc: string): Promise<Outcome<CandidateRecording[]>> {
+        const code = normalizeIsrc(isrc);
+        if (!code) return absent({ isrc, reason: "not an ISRC" });
+        return this.cachedOutcome(`mb:isrc:recordings:${code}`, async () => {
+            try {
+                const response = await this.rateLimitedGet(`/isrc/${code}`, {
+                    params: { fmt: "json", inc: "artist-credits" },
+                });
+                const recordings: any[] = response.data.recordings || [];
+                if (recordings.length === 0) return absent({ isrc: code, hits: 0 });
+                return answered(recordings.map(toCandidate), { isrc: code, hits: recordings.length });
+            } catch (err: any) {
+                if (err?.response?.status === 400) {
+                    return absent({ isrc: code, reason: "MusicBrainz refused the code" });
+                }
+                return this.classifyError(err, true);
+            }
+        });
+    }
+
     /**
-     * Clear cached recording search result
-     * Useful for retrying failed lookups
+     * The recording a track is, by name: MusicBrainz's search candidates for its
+     * title and artist, kept only when `recordingAgrees` (title, version, artist,
+     * length). Exact search first, then fuzzy; errors are never folded into
+     * "no match".
      */
-    async clearRecordingCache(
-        trackTitle: string,
-        artistName: string
-    ): Promise<boolean> {
-        const cacheKey = `mb:search:recording:${artistName}:${trackTitle}`;
+    async identifyRecording(expected: ExpectedRecording): Promise<Outcome<CandidateRecording>> {
+        const artist = expected.artists[0] ?? "";
+        const cacheKey = `mb:identify:recording:${artist}:${expected.title}:${expected.durationSec ?? ""}`;
+        return this.cachedOutcome(cacheKey, async () => {
+            const queries = this.recordingQueries(expected);
+            if (queries.length === 0) return absent({ title: expected.title, artist, reason: "nothing to search by" });
+            let failure: Outcome<never> | undefined;
+            let offered = 0;
+            for (const query of queries) {
+                try {
+                    const response = await this.rateLimitedGet("/recording", {
+                        params: { query, limit: 50, fmt: "json" },
+                    });
+                    const candidates = (response.data.recordings || []).map(toCandidate);
+                    offered += candidates.length;
+                    const pick = pickRecording(candidates, expected);
+                    if (pick) return answered(pick, { query, offered: candidates.length });
+                } catch (err: any) {
+                    // MusicBrainz refusing this track's query is no answer about the track: the
+                    // other query, then the next source, is asked.
+                    if (err?.response?.status === 400) continue;
+                    const classified = await this.classifyError(err, true);
+                    if (classified.kind === "rateLimited") return classified;
+                    failure ??= classified;
+                }
+            }
+            if (failure) return failure;
+            return absent({ title: expected.title, artist, offered, reason: "no candidate is this track" });
+        });
+    }
+
+    /**
+     * A recording's first ISRC and its genres from one request: asked separately they are two
+     * requests to the same page, at MusicBrainz's one a second. Each answer is cached under the
+     * key its single lookup uses, so either finds it.
+     */
+    async getRecordingIsrcAndGenres(recordingId: string): Promise<{
+        isrc: Outcome<string>;
+        genres: Outcome<RecordingGenres>;
+    }> {
+        const isrcKey = `mb:recording:isrc:${recordingId}`;
+        const genresKey = `mb:recording:genres:${recordingId}`;
+        const [cachedIsrc, cachedGenres] = await Promise.all([
+            this.readCached<string>(isrcKey),
+            this.readCached<RecordingGenres>(genresKey),
+        ]);
+        if (cachedIsrc && cachedGenres) return { isrc: cachedIsrc, genres: cachedGenres };
         try {
-            await redisClient.del(cacheKey);
-            logger.debug(
-                `[MusicBrainz] Cleared cache for: "${trackTitle}" by ${artistName}`
-            );
-            return true;
-        } catch (err) {
-            logger.warn("Redis del error:", err);
-            return false;
+            const response = await this.rateLimitedGet(`/recording/${recordingId}`, {
+                params: { fmt: "json", inc: "isrcs+genres+tags" },
+            });
+            const data = response.data;
+            const first = (data.isrcs || [])[0];
+            const isrc: Outcome<string> = first
+                ? answered(first, { recordingId })
+                : absent({ recordingId, reason: "no ISRC" });
+            const genreList = voteCounts(data.genres);
+            const tagList = voteCounts(data.tags);
+            const genres =
+                genreList.length === 0 && tagList.length === 0
+                    ? absent({ recordingId, reason: "no genres or tags" })
+                    : answered({ genres: genreList, tags: tagList }, { recordingId, genres: genreList.length, tags: tagList.length });
+            await Promise.all([this.writeCached(isrcKey, isrc), this.writeCached(genresKey, genres)]);
+            return { isrc, genres };
+        } catch (err: any) {
+            const failed = await this.classifyError(err, true);
+            return { isrc: failed, genres: failed };
         }
     }
 
-    /**
-     * Clear all stale null cache entries for recording searches
-     * Returns the number of entries cleared
-     */
-    async clearStaleRecordingCaches(): Promise<number> {
-        try {
-            // Collect all recording cache keys using SCAN (non-blocking)
-            const keys: string[] = [];
-            let cursor = "0";
-            do {
-                const [nextCursor, found] = await redisClient.scan(cursor, "MATCH", "mb:search:recording:*", "COUNT", "100");
-                cursor = nextCursor;
-                keys.push(...found);
-            } while (cursor !== "0");
-
-            let cleared = 0;
-
-            for (const key of keys) {
-                const value = await redisClient.get(key);
-                if (value === "null") {
-                    await redisClient.del(key);
-                    cleared++;
-                }
-            }
-
-            logger.debug(
-                `[MusicBrainz] Cleared ${cleared} stale null cache entries`
-            );
-            return cleared;
-        } catch (err) {
-            logger.error("Error clearing stale caches:", err);
-            return 0;
-        }
+    /** A recording's genres (curated) and tags (crowd-sourced); `absent` when it has neither. */
+    async getRecordingGenres(recordingId: string): Promise<Outcome<RecordingGenres>> {
+        const cached = await this.readCached<RecordingGenres>(`mb:recording:genres:${recordingId}`);
+        return cached ?? (await this.getRecordingIsrcAndGenres(recordingId)).genres;
     }
 
-    /**
-     * Get track list for an album by release group MBID
-     * Uses the first official release from the release group
-     */
-    async getAlbumTracks(
-        rgMbid: string
-    ): Promise<Array<{ title: string; position?: number; duration?: number }>> {
-        const cacheKey = `mb:albumtracks:${rgMbid}`;
-
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                // Step 1: Get releases from the release group
-                const rgResponse = await this.rateLimitedGet(
-                    `/release-group/${rgMbid}`,
-                    {
-                        params: {
-                            inc: "releases",
-                            fmt: "json",
-                        },
-                    }
-                );
-
-                const releases = rgResponse.data?.releases || [];
-                if (releases.length === 0) {
-                    logger.debug(
-                        `[MusicBrainz] No releases found for release group ${rgMbid}`
-                    );
-                    return [];
-                }
-
-                // Prefer official releases
-                const release =
-                    releases.find((r: any) => r.status === "Official") ||
-                    releases[0];
-
-                // Step 2: Get full release details with recordings
-                const releaseResponse = await this.rateLimitedGet(
-                    `/release/${release.id}`,
-                    {
-                        params: {
-                            inc: "recordings",
-                            fmt: "json",
-                        },
-                    }
-                );
-
-                const media = releaseResponse.data?.media || [];
-                const tracks: Array<{
-                    title: string;
-                    position?: number;
-                    duration?: number;
-                }> = [];
-
-                for (const medium of media) {
-                    for (const track of medium.tracks || []) {
-                        tracks.push({
-                            title: track.title || track.recording?.title,
-                            position: track.position,
-                            duration: track.length || track.recording?.length,
-                        });
-                    }
-                }
-
-                logger.debug(
-                    `[MusicBrainz] Found ${tracks.length} tracks for release group ${rgMbid}`
-                );
-                return tracks;
-            } catch (error: any) {
-                logger.error(
-                    `MusicBrainz getAlbumTracks error: ${error.message}`
-                );
-                return [];
-            }
-        });
-    }
-
-    /**
-     * Look up a recording by ISRC code.
-     * Returns the recording MBID and basic metadata, or null if not found.
-     */
-    async lookupByIsrc(isrc: string): Promise<{
-        recordingId: string;
-        title: string;
-        artistName: string;
-        artistMbid: string;
-    } | null> {
-        const cacheKey = `mb:isrc:${isrc}`;
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                const response = await this.rateLimitedGet(`/isrc/${isrc}`, {
-                    params: { fmt: "json" },
-                });
-                const recordings = response.data.recordings || [];
-                if (recordings.length === 0) return null;
-
-                const rec = recordings[0];
-                const artistCredit = rec["artist-credit"]?.[0];
-                return {
-                    recordingId: rec.id,
-                    title: rec.title,
-                    artistName: artistCredit?.name || artistCredit?.artist?.name || "",
-                    artistMbid: artistCredit?.artist?.id || "",
-                };
-            } catch (err: any) {
-                if (err.response?.status === 404) return null;
-                logger.warn(`MusicBrainz ISRC lookup failed for ${isrc}:`, err.message);
-                return null;
-            }
-        });
-    }
-
-    /**
-     * Fetch genres and tags for a recording.
-     * Genres are curated (MusicBrainz editorial); tags are crowd-sourced (includes mood descriptors).
-     */
-    async getRecordingGenres(recordingId: string): Promise<{
-        genres: Array<{ name: string; count: number }>;
-        tags: Array<{ name: string; count: number }>;
-    } | null> {
-        const cacheKey = `mb:recording:genres:${recordingId}`;
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                const response = await this.rateLimitedGet(`/recording/${recordingId}`, {
-                    params: { fmt: "json", inc: "genres+tags" },
-                });
-                const data = response.data;
-                return {
-                    genres: (data.genres || []).map((g: any) => ({ name: g.name, count: g.count })),
-                    tags: (data.tags || []).map((t: any) => ({ name: t.name, count: t.count })),
-                };
-            } catch (err: any) {
-                logger.warn(`MusicBrainz recording genres failed for ${recordingId}:`, err.message);
-                return null;
-            }
-        });
-    }
-    /**
-     * Get ISRCs for a recording MBID.
-     * Returns the first ISRC or null.
-     */
-    async getRecordingIsrc(recordingId: string): Promise<string | null> {
-        const cacheKey = `mb:recording:isrc:${recordingId}`;
-        return this.cachedRequest(cacheKey, async () => {
-            try {
-                const response = await this.rateLimitedGet(`/recording/${recordingId}`, {
-                    params: { fmt: "json", inc: "isrcs" },
-                });
-                const isrcs = response.data.isrcs || [];
-                return isrcs[0] || null;
-            } catch {
-                return null;
-            }
-        });
-    }
 }
 
 export const musicBrainzService = new MusicBrainzService();

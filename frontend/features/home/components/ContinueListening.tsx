@@ -1,150 +1,55 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { Music, Disc, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
-import { memo, type CSSProperties } from "react";
-import { cn } from "@/utils/cn";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { cascadeStyle } from "@/lib/motion";
+import { memo } from "react";
 import { ListenedItem } from "../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ContinueListeningProps {
     items: ListenedItem[];
 }
 
-const getImageForItem = (item: ListenedItem) => {
+function imageFor(item: ListenedItem) {
     if (item.type === "audiobook") {
         return api.getCoverArtUrl(`/audiobooks/${item.id}/cover`, 300);
     }
-    if (item.coverArt) {
-        return api.getCoverArtUrl(item.coverArt, 300);
-    }
-    return null;
-};
-
-const getDescriptionLabel = (item: ListenedItem) => {
-    if (item.type === "podcast") {
-        return item.author || "Podcast";
-    }
-    if (item.type === "audiobook") {
-        return item.author || "Audiobook";
-    }
-    return "Artist";
-};
-
-const TYPE_COLORS: Record<string, { border: string; accent: string; gradient: string }> = {
-    artist: {
-        border: "hover:border-[#fca200]/40",
-        accent: "from-[#fca200] to-[#d48c00]",
-        gradient: "",
-    },
-    podcast: {
-        border: "hover:border-[#3b82f6]/40",
-        accent: "from-[#3b82f6] to-[#2563eb]",
-        gradient: "",
-    },
-    audiobook: {
-        border: "hover:border-[#f59e0b]/40",
-        accent: "from-[#f59e0b] to-[#d97706]",
-        gradient: "",
-    },
-};
-
-interface ContinueListeningCardProps {
-    item: ListenedItem;
-    index: number;
+    return item.coverArt ? api.getCoverArtUrl(item.coverArt, 300) : null;
 }
 
-const ContinueListeningCard = memo(function ContinueListeningCard({
-    item,
-    index,
-}: ContinueListeningCardProps) {
-    const isPodcast = item.type === "podcast";
-    const isAudiobook = item.type === "audiobook";
-    const imageSrc = getImageForItem(item);
-    const href = isPodcast
-        ? `/podcasts/${item.id}`
-        : isAudiobook
-            ? `/audiobooks/${item.id}`
-            : `/artist/${item.id}`;
-    const hasProgress =
-        (isPodcast || isAudiobook) &&
-        item.progress &&
-        item.progress > 0;
-    const colors = TYPE_COLORS[item.type] || TYPE_COLORS.artist;
-    const staggered = index < 8;
-
-    return (
-        <CarouselItem>
-            <Link
-                href={href}
-                data-tv-card
-                data-tv-card-index={index}
-                tabIndex={0}
-                className={cn(
-                    "group block",
-                    staggered && "animate-rise [animation-delay:calc(var(--i)*45ms)]",
-                )}
-                style={staggered ? { "--i": index } as CSSProperties : undefined}
-            >
-                <div className={`relative bg-[var(--bg-primary)] border border-white/10 rounded-lg overflow-hidden ${colors.border} transition-[border-color] duration-150 mx-1`}>
-                    <div className="relative aspect-square overflow-hidden">
-                        <div className="w-full h-full bg-[#181818] flex items-center justify-center">
-                            {imageSrc ? (
-                                <Image
-                                    src={imageSrc}
-                                    alt={item.name}
-                                    fill
-                                    className="object-cover group-hover:scale-110 transition-transform duration-150"
-                                    sizes="180px"
-                                    priority={false}
-                                    unoptimized
-                                />
-                            ) : isPodcast ? (
-                                <Disc className="w-10 h-10 text-[var(--text-muted)]" />
-                            ) : isAudiobook ? (
-                                <BookOpen className="w-10 h-10 text-[var(--text-muted)]" />
-                            ) : (
-                                <Music className="w-10 h-10 text-[var(--text-muted)]" />
-                            )}
-                        </div>
-                        {hasProgress && (
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
-                                <div
-                                    className={`h-full bg-gradient-to-r ${colors.accent}`}
-                                    style={{ width: `${item.progress}%` }}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    {!hasProgress && (
-                        <div className={`h-0.5 bg-gradient-to-r ${colors.accent} scale-x-0 group-hover:scale-x-100 transition-transform duration-150`} />
-                    )}
-                    <div className="relative z-10 p-3 bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
-                        <h3 className="text-sm font-bold text-white truncate tracking-tight">
-                            {item.name}
-                        </h3>
-                        <p className="text-xs tabular-nums text-[var(--text-muted)] truncate mt-0.5">
-                            {getDescriptionLabel(item)}
-                        </p>
-                    </div>
-                </div>
-            </Link>
-        </CarouselItem>
-    );
-});
+const VIEWS = {
+    podcast: { href: "/podcasts/", icon: Disc, label: "Podcast" },
+    audiobook: { href: "/audiobooks/", icon: BookOpen, label: "Audiobook" },
+    artist: { href: "/artist/", icon: Music, label: "Artist" },
+} as const;
 
 const ContinueListening = memo(function ContinueListening({ items }: ContinueListeningProps) {
+    const { t } = useLanguage();
     return (
-        <HorizontalCarousel>
-            {items.map((item, index) => (
-                <ContinueListeningCard
-                    key={`${item.type}-${item.id}`}
-                    item={item}
-                    index={index}
-                />
-            ))}
+        <HorizontalCarousel style={cascadeStyle(items.length)}>
+            {items.map((item, index) => {
+                const type = item.type === "podcast" || item.type === "audiobook" ? item.type : "artist";
+                const view = VIEWS[type];
+                return (
+                    <CarouselItem key={`${item.type}-${item.id}`}>
+                        <MediaCard
+                            href={`${view.href}${item.id}`}
+                            title={item.name}
+                            subtitle={type === "artist" ? t(view.label) : item.author || t(view.label)}
+                            imageUrl={imageFor(item)}
+                            fallbackIcon={view.icon}
+                            type={type}
+                            index={index}
+                            sizes="180px"
+                            progress={type === "artist" ? undefined : item.progress ?? undefined}
+                            className="mx-1"
+                        />
+                    </CarouselItem>
+                );
+            })}
         </HorizontalCarousel>
     );
 });

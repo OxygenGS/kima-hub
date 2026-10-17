@@ -22,6 +22,8 @@ import {
     soulseekDownloadsTotal,
     soulseekDownloadDuration
 } from "../utils/metrics";
+import { sourcePauseController } from "./sourcePauseController";
+import { soulseekConfigured } from "../utils/soulseekConfigured";
 
 export interface SearchResult {
     user: string;
@@ -48,11 +50,18 @@ interface SearchTrackResult {
     allMatches: TrackMatch[];
 }
 
-/**
- * Sliding window rate limiter for Soulseek searches.
- * Empirically safe limit from slsk-batchdl: 34 searches / 220s.
- * We use 30/220s for extra safety (~8.2/min).
- */
+const sanitizePathPart = (name: string) => name.replace(/[<>:"/\\|?*]/g, "_").trim();
+
+function singlesPath(musicPath: string, artistName: string, albumName: string, fileName: string): string {
+    return path.join(
+        musicPath,
+        "Singles",
+        sanitizePathPart(artistName),
+        sanitizePathPart(albumName),
+        sanitizePathPart(fileName)
+    );
+}
+
 interface RateLimiterWaiter {
     resolve: () => void;
     reject: (err: Error) => void;
@@ -60,6 +69,11 @@ interface RateLimiterWaiter {
     timeout: NodeJS.Timeout | null;
 }
 
+/**
+ * Sliding window rate limiter for Soulseek searches.
+ * Empirically safe limit from slsk-batchdl: 34 searches / 220s.
+ * We use 30/220s for extra safety (~8.2/min).
+ */
 class SlidingWindowRateLimiter {
     private timestamps: number[] = [];
     private waitQueue: RateLimiterWaiter[] = [];
@@ -120,7 +134,6 @@ class SlidingWindowRateLimiter {
                 resolve();
             }, waitMs);
 
-            // Schedule drain to process queued waiters
             if (!this.drainTimer && this.waitQueue.length === 1) {
                 this.drainTimer = setTimeout(() => {
                     this.drainTimer = null;
@@ -146,7 +159,6 @@ class SlidingWindowRateLimiter {
             entry.resolve();
         }
 
-        // Schedule next drain if still waiting
         if (this.waitQueue.length > 0 && this.timestamps.length > 0) {
             const oldestInWindow = this.timestamps[0];
             const waitMs = oldestInWindow + this.windowMs - Date.now();
@@ -205,18 +217,17 @@ class SoulseekService {
     private maxConcurrentDownloads = 0;
 
     private userConnectionCooldowns = new Map<string, number>();
-    private readonly USER_CONNECTION_COOLDOWN = 5000; // Increased from 3s to 5s
+    private readonly USER_CONNECTION_COOLDOWN = 5000; // 5 s before retrying the same user
     private cooldownCleanupInterval: NodeJS.Timeout | null = null;
 
     private connectedAt: Date | null = null;
     private consecutiveEmptySearches = 0;
     private totalSearches = 0;
-    private totalSuccessfulSearches = 0;
-    private readonly MAX_CONSECUTIVE_EMPTY = 20; // Increased from 10 to reduce reconnect spam
+    private readonly MAX_CONSECUTIVE_EMPTY = 20; // 20 empty searches in a row force a reconnect
 
-    // slskd-inspired timeout values (from slskd.example.yml)
-    private readonly CONNECT_TIMEOUT = 10000; // 10s (slskd default)
-    private readonly LOGIN_TIMEOUT = 10000; // 10s (reduced from 15s)
+    // slskd-inspired timeouts
+    private readonly CONNECT_TIMEOUT = 10000;
+    private readonly LOGIN_TIMEOUT = 10000;
 
     private searchRateLimiter = new SlidingWindowRateLimiter(30, 220_000);
 
@@ -338,9 +349,7 @@ class SoulseekService {
             );
         });
 
-        // CRITICAL: Wait for server socket to connect before attempting login
-        // The SlskClient constructor creates a TCP socket via net.createConnection()
-        // which is async. We must wait for 'connect' event before sending login.
+        // The socket connects asynchronously; the login can only be sent after its 'connect' event.
         sessionLog("SOULSEEK", "Waiting for server socket connection...", "DEBUG");
         await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
@@ -362,8 +371,8 @@ class SoulseekService {
         try {
             sessionLog("SOULSEEK", "Attempting login to Soulseek server...", "DEBUG");
             await this.client.login(
-                settings.username,
-                settings.password,
+                settings.username ?? "",
+                settings.password ?? "",
                 this.LOGIN_TIMEOUT // 10s (slskd default, reduced from 15s)
             );
             sessionLog("SOULSEEK", "Login successful", "DEBUG");
@@ -390,9 +399,7 @@ class SoulseekService {
             }, 5 * 60 * 1000);
         }
 
-        // Handle unexpected server disconnection at service level
-        // This ensures reconnection goes through ensureConnected() with proper
-        // distributed locking and backoff, not the client's own scheduleReconnect
+        // Reconnects go through ensureConnected(), which holds the distributed lock and backoff.
         this.client.server.conn.once('close', () => {
             sessionLog("SOULSEEK", "Server connection closed unexpectedly", "WARN");
             if (this.client) {
@@ -467,40 +474,32 @@ class SoulseekService {
     }
 
     private async ensureConnected(force: boolean = false): Promise<void> {
-        // Check connection health before using existing connection
         if (!force && this.client && this.client.loggedIn) {
             if (this.checkConnectionHealth()) {
                 return;
             }
-            // Connection was stale, fall through to reconnect
         }
 
         if (force && this.client) {
             this.forceDisconnect();
         }
 
-        // Use distributed lock to prevent concurrent connections across processes
         const lockKey = 'soulseek:connection';
         const lockTtl = 360000; // 6 minutes - exceeds max backoff (5min)
 
         try {
-            // withLock handles lock release in its finally block
-            // so we don't need to manually check release() success
             await distributedLock.withLock(lockKey, lockTtl, async () => {
-                // Double-check after acquiring lock
                 if (!force && this.client && this.client.loggedIn) {
                     if (this.checkConnectionHealth()) {
                         return;
                     }
                 }
 
-                // Check if another process is already connecting
                 if (this.connecting && this.connectPromise) {
                     await this.connectPromise;
                     return;
                 }
 
-                // Client exists but not logged in AND not connecting - clean it up
                 if (this.client && !this.client.loggedIn) {
                     this.forceDisconnect();
                 }
@@ -533,10 +532,8 @@ class SoulseekService {
 
                 try {
                     await this.connectPromise;
-                    // Success - reset failure counter
                     this.failedConnectionAttempts = 0;
                 } catch (err) {
-                    // Increment failure counter for exponential backoff
                     this.failedConnectionAttempts++;
                     sessionLog(
                         "SOULSEEK",
@@ -551,7 +548,6 @@ class SoulseekService {
             });
         } catch (error: any) {
             if (error.message.includes('Failed to acquire lock')) {
-                // Another caller is connecting - wait for it instead of failing
                 sessionLog("SOULSEEK", "Connection already in progress - waiting for it to complete", "DEBUG");
                 await this.waitForConnection();
                 return;
@@ -569,23 +565,19 @@ class SoulseekService {
         const deadline = Date.now() + maxWaitMs;
 
         while (Date.now() < deadline) {
-            // If a connectPromise exists, wait on it directly
             if (this.connectPromise) {
                 try {
                     await this.connectPromise;
                     return;
                 } catch {
-                    // Connection attempt failed - caller will retry on next use
                     throw new Error('Soulseek connection attempt failed');
                 }
             }
 
-            // Already connected? Done.
             if (this.client && this.client.loggedIn) {
                 return;
             }
 
-            // Poll - connection may be in progress in another process
             await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
 
@@ -599,10 +591,14 @@ class SoulseekService {
     async isAvailable(): Promise<boolean> {
         try {
             const settings = await this.getSettings();
-            // slskd mode is available without Kima-side credentials.
-            if (settings.mode === 'slskd') return !!settings.slskdUrl;
-            return !!(settings.username && settings.password);
+            return soulseekConfigured({
+                soulseekMode: settings.mode,
+                slskdUrl: settings.slskdUrl,
+                soulseekUsername: settings.username,
+                soulseekPassword: settings.password,
+            });
         } catch {
+            // A settings read failure counts as not configured.
             return false;
         }
     }
@@ -618,6 +614,7 @@ class SoulseekService {
                 username: settings.username || null,
             };
         } catch {
+            // A settings read failure still reports the connection, just without the username.
             return {
                 connected: this.client !== null && this.client.loggedIn,
                 username: null,
@@ -651,12 +648,7 @@ class SoulseekService {
         return this.client!.search(query, options ?? {});
     }
 
-    /**
-     * Search for a track on Soulseek
-     *
-     * @param timeoutMs Default 15s per research (slsk-batchdl uses 6s, community recommends 10-15s)
-     *                  Too long wastes time, too short misses slow peers
-     */
+    /** Searches Soulseek for a track, waiting `timeoutMs` for peers to answer. */
     async searchTrack(
         artistName: string,
         trackTitle: string,
@@ -669,9 +661,28 @@ class SoulseekService {
         if (signal?.aborted) {
             return { found: false, bestMatch: null, allMatches: [] };
         }
+        // While 'soulseek' is paused, searches return not-found without using a
+        // rate-limiter slot or counting a failure.
+        if (await sourcePauseController.isPaused("soulseek")) {
+            sessionLog(
+                "SOULSEEK",
+                `[Search] Source paused; skipping "${trackTitle}" by ${artistName}`,
+                "WARN",
+            );
+            return { found: false, bestMatch: null, allMatches: [] };
+        }
         const metricsStartTime = Date.now();
         this.totalSearches++;
         const searchId = this.totalSearches;
+
+        const recordSearch = (status: "success" | "not_found" | "failed") => {
+            soulseekSearchesTotal.inc({ status });
+            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
+        };
+        const miss = (status: "not_found" | "failed"): SearchTrackResult => {
+            recordSearch(status);
+            return { found: false, bestMatch: null, allMatches: [] };
+        };
 
         // Pre-flight connection check -- fail fast before consuming rate limiter slots.
         // rateLimitedSearch also calls ensureConnected, but this avoids wasting a slot
@@ -684,9 +695,7 @@ class SoulseekService {
                 `[Search #${searchId}] Connection error: ${err.message}`,
                 "ERROR"
             );
-            soulseekSearchesTotal.inc({ status: 'failed' });
-            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-            return { found: false, bestMatch: null, allMatches: [] };
+            return miss("failed");
         }
 
         if (!this.client) {
@@ -695,12 +704,9 @@ class SoulseekService {
                 `[Search #${searchId}] Client not connected`,
                 "ERROR"
             );
-            soulseekSearchesTotal.inc({ status: 'failed' });
-            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-            return { found: false, bestMatch: null, allMatches: [] };
+            return miss("failed");
         }
 
-        // Use multi-strategy search with aggressive normalization
         const { searchWithStrategies } = await import("./soulseek-search-strategies");
 
         const searchStartTime = Date.now();
@@ -711,7 +717,6 @@ class SoulseekService {
             : this.rateLimitedSearch.bind(this);
 
         try {
-            // Delegate to optimized multi-strategy search
             const responses = await searchWithStrategies(
                 boundSearch,
                 artistName,
@@ -732,81 +737,21 @@ class SoulseekService {
                     "WARN"
                 );
 
-                if (
-                    !isRetry &&
-                    this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY
-                ) {
-                    // If we're now connected, reset counter and allow search
-                    // (prevents permanent blocking after recovering from rate limit)
-                    if (this.client?.loggedIn) {
-                        sessionLog(
-                            "SOULSEEK",
-                            `[Search #${searchId}] Resetting empty search counter (now connected)`,
-                            "DEBUG"
-                        );
-                        this.consecutiveEmptySearches = 0;
-                        // Continue with normal search flow below
-                    } else {
-                        // Not connected - check if we should wait for backoff
-                        const backoffDelay = this.getReconnectDelay();
-                        const timeSinceLastAttempt = this.lastConnectAttempt > 0
-                            ? Date.now() - this.lastConnectAttempt
-                            : backoffDelay + 1;
-
-                        if (timeSinceLastAttempt < backoffDelay) {
-                            sessionLog(
-                                "SOULSEEK",
-                                `[Search #${searchId}] Too many empty searches but respecting backoff period (${Math.round(backoffDelay / 1000)}s)`,
-                                "WARN"
-                            );
-                            soulseekSearchesTotal.inc({ status: 'not_found' });
-                            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                            return { found: false, bestMatch: null, allMatches: [] };
-                        }
-
-                        if (this.activeDownloads > 0) {
-                            sessionLog(
-                                "SOULSEEK",
-                                `[Search #${searchId}] Too many empty searches but ${this.activeDownloads} downloads active, skipping reconnect`,
-                                "WARN"
-                            );
-                            soulseekSearchesTotal.inc({ status: 'not_found' });
-                            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                            return { found: false, bestMatch: null, allMatches: [] };
-                        }
-
-                        sessionLog(
-                            "SOULSEEK",
-                            `[Search #${searchId}] Too many consecutive empty searches, forcing reconnect and retry...`,
-                            "WARN"
-                        );
-                        this.forceDisconnect();
-
-                        // Wait for disconnect to complete before reconnecting
-                        await new Promise(resolve => setTimeout(resolve, 100));
-
-                        return this.searchTrack(
-                            artistName,
-                            trackTitle,
-                            albumName,
-                            true,
-                            timeoutMs,
-                            onResult,
-                            signal
-                        );
-                    }
+                if (!isRetry && this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY) {
+                    return this.recoverFromSearchStreak(
+                        searchId,
+                        "not_found",
+                        "Too many consecutive empty searches",
+                        miss,
+                        () => this.searchTrack(artistName, trackTitle, albumName, true, timeoutMs, onResult, signal)
+                    );
                 }
 
-                soulseekSearchesTotal.inc({ status: 'not_found' });
-                soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                return { found: false, bestMatch: null, allMatches: [] };
+                return miss("not_found");
             }
 
-            // Success - reset counters
             this.consecutiveEmptySearches = 0;
-            this.totalSuccessfulSearches++;
 
-            // Flatten responses to SearchResult format
             const flatResults = this.flattenSearchResults(responses);
 
             sessionLog(
@@ -814,7 +759,6 @@ class SoulseekService {
                 `[Search #${searchId}] Found ${flatResults.length} unique results from ${responses.length} peers in ${searchDuration}ms`
             );
 
-            // Rank and filter results
             const rankedMatches = await this.rankAllResults(
                 flatResults,
                 artistName,
@@ -827,9 +771,7 @@ class SoulseekService {
                     `[Search #${searchId}] No suitable match found after ranking ${flatResults.length} files`,
                     "WARN"
                 );
-                soulseekSearchesTotal.inc({ status: 'not_found' });
-                soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                return { found: false, bestMatch: null, allMatches: [] };
+                return miss("not_found");
             }
 
             const best = rankedMatches[0];
@@ -842,8 +784,7 @@ class SoulseekService {
                 `[Search #${searchId}] Found ${rankedMatches.length} alternative sources for retry`
             );
 
-            soulseekSearchesTotal.inc({ status: 'success' });
-            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
+            recordSearch("success");
 
             return {
                 found: true,
@@ -852,6 +793,15 @@ class SoulseekService {
             };
         } catch (err: any) {
             const searchDuration = Date.now() - searchStartTime;
+            // A rate limit pauses only 'soulseek' and is not counted as a failure.
+            if (await sourcePauseController.handleRateLimit("soulseek", err)) {
+                sessionLog(
+                    "SOULSEEK",
+                    `[Search #${searchId}] Rate limited — 'soulseek' paused; not counted as failure`,
+                    "WARN",
+                );
+                return miss("not_found");
+            }
             sessionLog(
                 "SOULSEEK",
                 `[Search #${searchId}] Search error after ${searchDuration}ms: ${err.message}`,
@@ -859,73 +809,65 @@ class SoulseekService {
             );
             this.consecutiveEmptySearches++;
 
-if (!isRetry && this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY) {
-                 // If we're now connected, reset counter and allow search
-                 if (this.client?.loggedIn) {
-                     sessionLog(
-                         "SOULSEEK",
-                         `[Search #${searchId}] Resetting failure counter (now connected)`,
-                         "DEBUG"
-                     );
-                     this.consecutiveEmptySearches = 0;
-                     // Return the error result, don't retry
-                     soulseekSearchesTotal.inc({ status: 'failed' });
-                     soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                     return { found: false, bestMatch: null, allMatches: [] };
-                 }
-
-                 // Not connected - check if we should wait for backoff
-                 const backoffDelay = this.getReconnectDelay();
-                 const timeSinceLastAttempt = this.lastConnectAttempt > 0
-                     ? Date.now() - this.lastConnectAttempt
-                     : backoffDelay + 1;
-
-                 if (timeSinceLastAttempt < backoffDelay) {
-                     sessionLog(
-                         "SOULSEEK",
-                         `[Search #${searchId}] ${this.consecutiveEmptySearches} consecutive failures but respecting backoff period (${Math.round(backoffDelay / 1000)}s)`,
-                         "WARN"
-                     );
-                     soulseekSearchesTotal.inc({ status: 'failed' });
-                     soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                     return { found: false, bestMatch: null, allMatches: [] };
-                 }
-
-                 if (this.activeDownloads > 0) {
-                     sessionLog(
-                         "SOULSEEK",
-                         `[Search #${searchId}] ${this.consecutiveEmptySearches} consecutive failures but ${this.activeDownloads} downloads active, skipping reconnect`,
-                         "WARN"
-                     );
-                     soulseekSearchesTotal.inc({ status: 'failed' });
-                     soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-                     return { found: false, bestMatch: null, allMatches: [] };
-                 }
-
-                 sessionLog(
-                     "SOULSEEK",
-                     `[Search #${searchId}] ${this.consecutiveEmptySearches} consecutive search failures - forcing reconnect and retry...`,
-                     "WARN"
-                 );
-                 this.forceDisconnect();
-
-                 // Wait for disconnect to complete before reconnecting
-                 await new Promise(resolve => setTimeout(resolve, 100));
-
-                 return this.searchTrack(
-                    artistName,
-                    trackTitle,
-                    albumName,
-                    true,
-                    timeoutMs,
-                    onResult
+            if (!isRetry && this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY) {
+                return this.recoverFromSearchStreak(
+                    searchId,
+                    "failed",
+                    `${this.consecutiveEmptySearches} consecutive search failures`,
+                    miss,
+                    () => this.searchTrack(artistName, trackTitle, albumName, true, timeoutMs, onResult, signal)
                 );
             }
 
-            soulseekSearchesTotal.inc({ status: 'failed' });
-            soulseekSearchDuration.observe((Date.now() - metricsStartTime) / 1000);
-            return { found: false, bestMatch: null, allMatches: [] };
+            return miss("failed");
         }
+    }
+
+    /**
+     * After MAX_CONSECUTIVE_EMPTY empty or failed searches in a row. If the
+     * connection is back the streak ends; otherwise the client reconnects and
+     * `retry` runs, unless the reconnect backoff or an active download says not to.
+     */
+    private async recoverFromSearchStreak(
+        searchId: number,
+        outcome: "not_found" | "failed",
+        streak: string,
+        miss: (status: "not_found" | "failed") => SearchTrackResult,
+        retry: () => Promise<SearchTrackResult>
+    ): Promise<SearchTrackResult> {
+        if (this.client?.loggedIn) {
+            sessionLog("SOULSEEK", `[Search #${searchId}] Resetting streak counter (now connected)`, "DEBUG");
+            this.consecutiveEmptySearches = 0;
+            return miss(outcome);
+        }
+
+        const backoffDelay = this.getReconnectDelay();
+        const timeSinceLastAttempt = this.lastConnectAttempt > 0
+            ? Date.now() - this.lastConnectAttempt
+            : backoffDelay + 1;
+
+        if (timeSinceLastAttempt < backoffDelay) {
+            sessionLog(
+                "SOULSEEK",
+                `[Search #${searchId}] ${streak} but respecting backoff period (${Math.round(backoffDelay / 1000)}s)`,
+                "WARN"
+            );
+            return miss(outcome);
+        }
+
+        if (this.activeDownloads > 0) {
+            sessionLog(
+                "SOULSEEK",
+                `[Search #${searchId}] ${streak} but ${this.activeDownloads} downloads active, skipping reconnect`,
+                "WARN"
+            );
+            return miss(outcome);
+        }
+
+        sessionLog("SOULSEEK", `[Search #${searchId}] ${streak}, forcing reconnect and retry...`, "WARN");
+        this.forceDisconnect();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return retry();
     }
 
     private flattenSearchResults(responses: FileSearchResponse[]): SearchResult[] {
@@ -939,7 +881,6 @@ if (!isRetry && this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY) {
                 // different directories to be silently dropped
                 const key = `${response.username}:${file.filename}`;
 
-                // Skip if we've already seen this user+filename combo
                 if (seen.has(key)) {
                     continue;
                 }
@@ -959,23 +900,22 @@ if (!isRetry && this.consecutiveEmptySearches >= this.MAX_CONSECUTIVE_EMPTY) {
         return results;
     }
 
+    private isUserInCooldown(username: string): boolean {
+        const cooldownUntil = this.userConnectionCooldowns.get(username);
+        if (!cooldownUntil) return false;
 
-     private isUserInCooldown(username: string): boolean {
-         const cooldownUntil = this.userConnectionCooldowns.get(username);
-         if (!cooldownUntil) return false;
+        if (Date.now() >= cooldownUntil) {
+            this.userConnectionCooldowns.delete(username);
+            return false;
+        }
 
-         if (Date.now() >= cooldownUntil) {
-             this.userConnectionCooldowns.delete(username);
-             return false;
-         }
+        return true;
+    }
 
-         return true;
-     }
-
-private async recordUserFailure(username: string): Promise<void> {
-         await this.markUserFailed(username);
-         this.userConnectionCooldowns.set(username, Date.now() + this.USER_CONNECTION_COOLDOWN);
-     }
+    private async recordUserFailure(username: string): Promise<void> {
+        await this.markUserFailed(username);
+        this.userConnectionCooldowns.set(username, Date.now() + this.USER_CONNECTION_COOLDOWN);
+    }
 
     private categorizeError(error: Error): {
         type:
@@ -1067,7 +1007,6 @@ private async recordUserFailure(username: string): Promise<void> {
             .filter(({ blocked }) => !blocked)
             .map(({ file }) => file);
 
-        // Sort by slots (active users first), then by speed
         availableResults.sort((a, b) => {
             if (a.slots !== b.slots) return b.slots ? 1 : -1; // slots true first
             return (b.speed || 0) - (a.speed || 0); // then by speed
@@ -1078,14 +1017,9 @@ private async recordUserFailure(username: string): Promise<void> {
             const normalizedFilename = filename.replace(/[^a-z0-9]/g, "");
             const shortFilename = filename.split(/[/\\]/).pop() || filename;
 
-            // Scoring system:
-            // - Has upload slots: +40 (file is available now)
-            // - Fast connection: +15 (quick download)
-            // - Artist match: +50 (exact) or +35 (partial)
-            // - Title match: +50 (exact) or +40 (all words) or +25 (some words)
-            // - FLAC quality: +30, MP3 320: +20, MP3 256: +10
-            // - Size in range: +10-15
-            // Minimum score 5 = any partial match
+            // Score: free upload slot +40, fast connection +15; artist exact +50 or
+            // partial +35; title exact +50, all words +40, some words +25; FLAC +30,
+            // MP3 320 +20, MP3 256 +10; size in range +10-15. 5 is the minimum.
             let score = 0;
 
             if (file.slots) score += 40;
@@ -1156,9 +1090,7 @@ private async recordUserFailure(username: string): Promise<void> {
             };
         });
 
-        // Lower threshold to 5 - be more lenient with partial matches
-        // Soulseek's natural matching is good, don't over-filter
-        // Research: slsk-batchdl does minimal filtering, relies on user ranking
+        // Partial matches are kept: slsk-batchdl does minimal filtering and relies on user ranking.
         return scored
             .filter((m) => m.score >= 5)
             .sort((a, b) => b.score - a.score)
@@ -1194,15 +1126,15 @@ private async recordUserFailure(username: string): Promise<void> {
             return { success: false, error: err.message };
         }
 
-if (!this.client) {
-             this.activeDownloads--;
-             return { success: false, error: "Not connected" };
-         }
+        if (!this.client) {
+            this.activeDownloads--;
+            return { success: false, error: "Not connected" };
+        }
 
-         if (!skipCooldown && this.isUserInCooldown(match.username)) {
-             this.activeDownloads--;
-             return { success: false, error: "User in cooldown" };
-         }
+        if (!skipCooldown && this.isUserInCooldown(match.username)) {
+            this.activeDownloads--;
+            return { success: false, error: "User in cooldown" };
+        }
 
         const destDir = path.dirname(destPath);
         try {
@@ -1350,23 +1282,23 @@ if (!this.client) {
                         resolve({ success: false, error: err.message });
                     });
 
-writeStream.on("error", async (err: Error) => {
-                         if (resolved) return;
-                         clearTimeout(timeoutId);
-                         cleanup();
-                         sessionLog(
-                             "SOULSEEK",
-                             `Write stream error: ${err.message}`,
-                             "ERROR"
-                         );
-                         this.client?.removeDownload(download);
-                         try {
-                             download.stream.destroy();
-                         } catch {
-                             // ignore
-                         }
-                         await this.recordUserFailure(match.username);
-                         resolve({
+                    writeStream.on("error", async (err: Error) => {
+                        if (resolved) return;
+                        clearTimeout(timeoutId);
+                        cleanup();
+                        sessionLog(
+                            "SOULSEEK",
+                            `Write stream error: ${err.message}`,
+                            "ERROR"
+                        );
+                        this.client?.removeDownload(download);
+                        try {
+                            download.stream.destroy();
+                        } catch {
+                            // ignore
+                        }
+                        await this.recordUserFailure(match.username);
+                        resolve({
                             success: false,
                             error: `Write error: ${err.message}`,
                         });
@@ -1400,7 +1332,7 @@ writeStream.on("error", async (err: Error) => {
         }
     }
 
-async downloadBestMatch(
+    async downloadBestMatch(
         artistName: string,
         trackTitle: string,
         albumName: string,
@@ -1411,8 +1343,6 @@ async downloadBestMatch(
             return { success: false, error: "No matches provided" };
         }
 
-        const sanitize = (name: string) =>
-            name.replace(/[<>:"/\\|?*]/g, "_").trim();
         const errors: string[] = [];
 
         const matchesToTry = allMatches.slice(0, this.MAX_DOWNLOAD_RETRIES);
@@ -1425,13 +1355,7 @@ async downloadBestMatch(
                 `[${artistName} - ${trackTitle}] Attempt ${attempt + 1}/${matchesToTry.length}: Trying ${match.username}`
             );
 
-            const destPath = path.join(
-                musicPath,
-                "Singles",
-                sanitize(artistName),
-                sanitize(albumName),
-                sanitize(match.filename)
-            );
+            const destPath = singlesPath(musicPath, artistName, albumName, match.filename);
 
             const downloadResult = await this.downloadTrack(match, destPath);
 
@@ -1460,7 +1384,7 @@ async downloadBestMatch(
         };
     }
 
-async searchAndDownloadAlbum(
+    async searchAndDownloadAlbum(
         artistName: string,
         albumName: string,
         tracks: Array<{ title: string; position?: number }>,
@@ -1473,16 +1397,16 @@ async searchAndDownloadAlbum(
             return results;
         }
 
-        const { normalizeArtistName, normalizeTrackTitle } = await import("./soulseek-search-strategies");
+        const { prepareArtistForSearch, normalizeTrackTitleForSearch } = await import("./soulseek-search-strategies");
         const { stripAlbumEdition, canonicalizeVariousArtists, VARIOUS_ARTISTS_CANONICAL } = await import("../utils/artistNormalization");
         const fuzz = await import("fuzzball");
 
-        // --- Phase 1: Album-level search (1-2 network calls) ---
+        // Album-level search (1-2 network calls)
         const isVA = canonicalizeVariousArtists(artistName) === VARIOUS_ARTISTS_CANONICAL;
         const normalizedAlbum = stripAlbumEdition(albumName);
         const query = isVA
             ? normalizedAlbum
-            : `${normalizeArtistName(artistName)} ${normalizedAlbum}`;
+            : `${prepareArtistForSearch(artistName)} ${normalizedAlbum}`;
 
         sessionLog("SOULSEEK", `[Album Search] "${query}" (${tracks.length} tracks, VA=${isVA})`);
 
@@ -1533,10 +1457,9 @@ async searchAndDownloadAlbum(
             );
         }
 
-        // --- Phase 2: Group results by user + parent directory ---
+        // Group results by user and parent directory
         const flatResults = this.flattenSearchResults(responses);
 
-        // Filter blocked users before grouping
         const blockChecks = await Promise.all(
             flatResults.map(async (r) => ({
                 result: r,
@@ -1568,7 +1491,6 @@ async searchAndDownloadAlbum(
             if (discPattern.test(dir)) {
                 const parentDir = dir.replace(discPattern, "");
                 if (!mergedKeys.has(key)) {
-                    // Find all disc subfolders for this user+parent
                     for (const [otherKey, otherFiles] of groups) {
                         if (otherKey === key) continue;
                         const [otherUser, otherDir] = otherKey.split("|||");
@@ -1607,7 +1529,7 @@ async searchAndDownloadAlbum(
 
         sessionLog("SOULSEEK", `[Album Search] Found ${groups.size} directory groups from ${audioResults.length} audio files`);
 
-        // --- Phase 3: Match track titles to filenames in each group ---
+        // Match track titles to filenames in each group
         const stripTrackNumber = (name: string): string =>
             name.replace(/^\d{1,3}\s*[-._)\s]\s*/, "");
 
@@ -1640,7 +1562,7 @@ async searchAndDownloadAlbum(
                         stripped = stripped.substring(dashIdx + 3);
                     }
                 }
-                const normalized = normalizeTrackTitle(stripped, 'aggressive').toLowerCase().replace(/[^a-z0-9\s]/g, "");
+                const normalized = normalizeTrackTitleForSearch(stripped, 'aggressive').toLowerCase().replace(/[^a-z0-9\s]/g, "");
                 return { file: f, base, stripped, normalized };
             });
 
@@ -1648,7 +1570,7 @@ async searchAndDownloadAlbum(
             const candidates: MatchCandidate[] = [];
 
             for (let ti = 0; ti < tracks.length; ti++) {
-                const trackNorm = normalizeTrackTitle(tracks[ti].title, 'aggressive').toLowerCase().replace(/[^a-z0-9\s]/g, "");
+                const trackNorm = normalizeTrackTitleForSearch(tracks[ti].title, 'aggressive').toLowerCase().replace(/[^a-z0-9\s]/g, "");
 
                 for (let fi = 0; fi < fileInfos.length; fi++) {
                     const fileNorm = fileInfos[fi].normalized;
@@ -1736,8 +1658,7 @@ async searchAndDownloadAlbum(
             );
         }
 
-        // --- Phase 4: Download from best groups, trying next group on failure ---
-        const sanitize = (name: string) => name.replace(/[<>:"/\\|?*]/g, "_").trim();
+        // Download from the best groups, trying the next on failure
         const downloadedTrackIndices = new Set<number>();
 
         for (let gi = 0; gi < groupsToTry.length; gi++) {
@@ -1773,13 +1694,7 @@ async searchAndDownloadAlbum(
 
                     const track = tracks[trackIdx];
                     const ext = path.extname(file.file);
-                    const destPath = path.join(
-                        musicPath,
-                        "Singles",
-                        sanitize(artistName),
-                        sanitize(albumName),
-                        sanitize(track.title) + ext
-                    );
+                    const destPath = singlesPath(musicPath, artistName, albumName, track.title + ext);
 
                     const match: TrackMatch = {
                         username: file.user,
@@ -1824,7 +1739,7 @@ async searchAndDownloadAlbum(
             }
         }
 
-        // --- Phase 5: Per-track fallback for remaining undownloaded tracks ---
+        // Per-track fallback for tracks still not downloaded
         const missingIndices = tracks
             .map((_, i) => i)
             .filter(i => !downloadedTrackIndices.has(i));
@@ -1856,43 +1771,43 @@ async searchAndDownloadAlbum(
         return results;
     }
 
-async searchAndDownloadBatch(
-          tracks: Array<{ artist: string; title: string; album: string }>,
-          musicPath: string,
-          concurrency?: number,
-          signal?: AbortSignal
-      ): Promise<{
-         successful: number;
-         failed: number;
-         files: string[];
-         errors: string[];
-     }> {
-         const results: {
-             successful: number;
-             failed: number;
-             files: string[];
-             errors: string[];
-         } = {
-             successful: 0,
-             failed: 0,
-             files: [],
-             errors: [],
-         };
+    async searchAndDownloadBatch(
+        tracks: Array<{ artist: string; title: string; album: string }>,
+        musicPath: string,
+        concurrency?: number,
+        signal?: AbortSignal
+    ): Promise<{
+        successful: number;
+        failed: number;
+        files: string[];
+        errors: string[];
+    }> {
+        const results: {
+            successful: number;
+            failed: number;
+            files: string[];
+            errors: string[];
+        } = {
+            successful: 0,
+            failed: 0,
+            files: [],
+            errors: [],
+        };
 
-         if (signal?.aborted) return results;
+        if (signal?.aborted) return results;
 
-         const downloadQueue = new PQueue({ concurrency: concurrency ?? 2 });
-         const searchQueue = new PQueue({ concurrency: concurrency ?? 2 });
+        const downloadQueue = new PQueue({ concurrency: concurrency ?? 2 });
+        const searchQueue = new PQueue({ concurrency: concurrency ?? 2 });
 
-         signal?.addEventListener('abort', () => {
-             searchQueue.clear();
-             downloadQueue.clear();
-         }, { once: true });
+        signal?.addEventListener('abort', () => {
+            searchQueue.clear();
+            downloadQueue.clear();
+        }, { once: true });
 
-         sessionLog(
-             "SOULSEEK",
-             `Searching for ${tracks.length} tracks with concurrency ${concurrency ?? 2}...`
-         );
+        sessionLog(
+            "SOULSEEK",
+            `Searching for ${tracks.length} tracks with concurrency ${concurrency ?? 2}...`
+        );
         const searchPromises = tracks.map((track) =>
             searchQueue.add(() =>
                 this.searchTrack(track.artist, track.title, track.album, false, 15000, undefined, signal).then((result) => ({
@@ -1915,12 +1830,12 @@ async searchAndDownloadBatch(
         }
 
         const tracksWithMatches = searchResults.filter(
-             (r) => r.result.found && r.result.allMatches.length > 0
-         );
-         sessionLog(
-             "SOULSEEK",
-             `Found matches for ${tracksWithMatches.length}/${tracks.length} tracks, downloading with concurrency ${concurrency ?? 2}...`
-         );
+            (r) => r.result.found && r.result.allMatches.length > 0
+        );
+        sessionLog(
+            "SOULSEEK",
+            `Found matches for ${tracksWithMatches.length}/${tracks.length} tracks, downloading with concurrency ${concurrency ?? 2}...`
+        );
 
         const noMatchTracks = searchResults.filter(
             (r) => !r.result.found || r.result.allMatches.length === 0
@@ -1971,74 +1886,65 @@ async searchAndDownloadBatch(
         return results;
     }
 
-private async downloadWithRetry(
-         artistName: string,
-         trackTitle: string,
-         albumName: string,
-         allMatches: TrackMatch[],
-         musicPath: string,
-         signal?: AbortSignal
-     ): Promise<{ success: boolean; filePath?: string; error?: string }> {
-         const sanitize = (name: string) =>
-             name.replace(/[<>:"/\\|?*]/g, "_").trim();
-         const errors: string[] = [];
-         const matchesToTry = allMatches.slice(0, this.MAX_DOWNLOAD_RETRIES);
+    private async downloadWithRetry(
+        artistName: string,
+        trackTitle: string,
+        albumName: string,
+        allMatches: TrackMatch[],
+        musicPath: string,
+        signal?: AbortSignal
+    ): Promise<{ success: boolean; filePath?: string; error?: string }> {
+        const errors: string[] = [];
+        const matchesToTry = allMatches.slice(0, this.MAX_DOWNLOAD_RETRIES);
 
-         const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+        const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-         for (let attempt = 0; attempt < matchesToTry.length; attempt++) {
-             if (signal?.aborted) {
-                 return { success: false, error: 'Import cancelled' };
-             }
-             const match = matchesToTry[attempt];
+        for (let attempt = 0; attempt < matchesToTry.length; attempt++) {
+            if (signal?.aborted) {
+                return { success: false, error: 'Import cancelled' };
+            }
+            const match = matchesToTry[attempt];
 
-             sessionLog(
-                 "SOULSEEK",
-                 `[${artistName} - ${trackTitle}] Attempt ${attempt + 1}/${matchesToTry.length}: Trying ${match.username}`
-             );
+            sessionLog(
+                "SOULSEEK",
+                `[${artistName} - ${trackTitle}] Attempt ${attempt + 1}/${matchesToTry.length}: Trying ${match.username}`
+            );
 
-             const destPath = path.join(
-                 musicPath,
-                 "Singles",
-                 sanitize(artistName),
-                 sanitize(albumName),
-                 sanitize(match.filename)
-             );
+            const destPath = singlesPath(musicPath, artistName, albumName, match.filename);
 
-             const result = await this.downloadTrack(match, destPath, attempt);
-             if (result.success) {
-                 if (attempt > 0) {
-                     sessionLog(
-                         "SOULSEEK",
-                         `[${artistName} - ${trackTitle}] Success on attempt ${attempt + 1}`
-                     );
-                 }
-                 return { success: true, filePath: destPath };
-             }
+            const result = await this.downloadTrack(match, destPath, attempt);
+            if (result.success) {
+                if (attempt > 0) {
+                    sessionLog(
+                        "SOULSEEK",
+                        `[${artistName} - ${trackTitle}] Success on attempt ${attempt + 1}`
+                    );
+                }
+                return { success: true, filePath: destPath };
+            }
 
-             // Log individual download failure for debugging
-             sessionLog(
-                 "SOULSEEK",
-                 `[${artistName} - ${trackTitle}] Attempt ${attempt + 1} failed: ${result.error}`,
-                 "WARN"
-             );
-             errors.push(`${match.username}: ${result.error}`);
+            sessionLog(
+                "SOULSEEK",
+                `[${artistName} - ${trackTitle}] Attempt ${attempt + 1} failed: ${result.error}`,
+                "WARN"
+            );
+            errors.push(`${match.username}: ${result.error}`);
 
-             if (attempt < matchesToTry.length - 1) {
-                 const delayMs = attempt < 3 ? 1000 : Math.pow(2, attempt - 2) * 1000;
-                 sessionLog(
-                     "SOULSEEK",
-                     `[${artistName} - ${trackTitle}] Waiting ${delayMs}ms before next attempt...`
-                 );
-                 await delay(delayMs);
-             }
-         }
+            if (attempt < matchesToTry.length - 1) {
+                const delayMs = attempt < 3 ? 1000 : Math.pow(2, attempt - 2) * 1000;
+                sessionLog(
+                    "SOULSEEK",
+                    `[${artistName} - ${trackTitle}] Waiting ${delayMs}ms before next attempt...`
+                );
+                await delay(delayMs);
+            }
+        }
 
-         sessionLog(
-             "SOULSEEK",
-             `[${artistName} - ${trackTitle}] All ${matchesToTry.length} attempts failed`,
-             "ERROR"
-         );
+        sessionLog(
+            "SOULSEEK",
+            `[${artistName} - ${trackTitle}] All ${matchesToTry.length} attempts failed`,
+            "ERROR"
+        );
         return { success: false, error: errors.join("; ") };
     }
 
@@ -2086,69 +1992,18 @@ private async downloadWithRetry(
     async resetAndReconnect(): Promise<void> {
         sessionLog("SOULSEEK", "Resetting connection state and forcing reconnect...", "DEBUG");
 
-        // Reset all counters
         this.failedConnectionAttempts = 0;
         this.consecutiveEmptySearches = 0;
         this.lastConnectAttempt = 0;
 
-        // Disconnect if connected
         this.disconnect();
 
-        // Force immediate reconnection (bypasses backoff)
         try {
             await this.ensureConnected(true);
             sessionLog("SOULSEEK", "Reset and reconnect successful", "DEBUG");
         } catch (err: any) {
             sessionLog("SOULSEEK", `Reset and reconnect failed: ${err.message}`, "ERROR");
             throw err;
-        }
-    }
-
-    async saveSearchSession(sessionId: string, data: unknown, ttlSeconds: number = 300): Promise<void> {
-        try {
-            const key = `soulseek:search:${sessionId}`;
-            await redisClient.setex(key, ttlSeconds, JSON.stringify(data));
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to save search session: ${err.message}`, "ERROR");
-        }
-    }
-
-    async getSearchSession(sessionId: string): Promise<unknown> {
-        try {
-            const key = `soulseek:search:${sessionId}`;
-            const data = await redisClient.get(key);
-            return data ? JSON.parse(data) : null;
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to get search session: ${err.message}`, "ERROR");
-            return null;
-        }
-    }
-
-    async deleteSearchSession(sessionId: string): Promise<void> {
-        try {
-            const key = `soulseek:search:${sessionId}`;
-            await redisClient.del(key);
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to delete search session: ${err.message}`, "ERROR");
-        }
-    }
-
-    async listSearchSessions(): Promise<string[]> {
-        try {
-            const keys = await redisClient.keys('soulseek:search:*');
-            return keys.map(key => key.replace('soulseek:search:', ''));
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to list search sessions: ${err.message}`, "ERROR");
-            return [];
-        }
-    }
-
-    async extendSearchSessionTTL(sessionId: string, ttlSeconds: number = 300): Promise<void> {
-        try {
-            const key = `soulseek:search:${sessionId}`;
-            await redisClient.expire(key, ttlSeconds);
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to extend search session TTL: ${err.message}`, "ERROR");
         }
     }
 
@@ -2186,38 +2041,6 @@ private async downloadWithRetry(
         } catch (err: any) {
             sessionLog("SOULSEEK", `Failed to check if user is blocked: ${err.message}`, "ERROR");
             return false;
-        }
-    }
-
-    async clearUserFailures(username: string): Promise<void> {
-        try {
-            const key = `soulseek:failed-user:${username}`;
-            await redisClient.del(key);
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to clear user failures: ${err.message}`, "ERROR");
-        }
-    }
-
-    async getBlockedUsers(): Promise<string[]> {
-        try {
-            const keys = await redisClient.keys('soulseek:failed-user:*');
-            const blockedUsers: string[] = [];
-
-            for (const key of keys) {
-                const data = await redisClient.get(key);
-                if (data) {
-                    const record = JSON.parse(data);
-                    if (record.failures >= this.FAILURE_THRESHOLD) {
-                        const username = key.replace('soulseek:failed-user:', '');
-                        blockedUsers.push(username);
-                    }
-                }
-            }
-
-            return blockedUsers;
-        } catch (err: any) {
-            sessionLog("SOULSEEK", `Failed to get blocked users: ${err.message}`, "ERROR");
-            return [];
         }
     }
 }

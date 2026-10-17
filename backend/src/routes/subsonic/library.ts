@@ -1,22 +1,14 @@
-// backend/src/routes/subsonic/library.ts
 import { Router } from "express";
-import { prisma } from "../../utils/db";
+import { prisma, Prisma } from "../../utils/db";
 import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicResponse";
 import { mapArtist, mapAlbum, mapSong, firstArtistGenre, wrap } from "./mappers";
 import { LEADING_ARTICLES } from "../../services/pgTextRules";
+import { LIBRARY_LOCATION } from "../../services/libraryFilters";
 
 export const libraryRouter = Router();
 
-// Rendered from the ONE canonical article list, which is also what
-// `artistSortName` -- and its `kima_sort_name` SQL twin -- strip when writing
-// `Artist.sortName`. This file used to carry a private English-only stripper
-// AND a separately hardcoded "The A An" advertisement, so the server stripped
-// eleven articles across four languages while telling clients it stripped
-// three. Clients use this list to sort and render locally, so a client that
-// disagrees with the server files the same artist in two different places.
-//
-// Space-separated and capitalized is what the protocol's own reference
-// implementations advertise (Navidrome ships "The El La Los Las Le Les ...").
+// Advertised from the same article list `artistSortName` strips, so clients
+// sort and group artists as the server does.
 const IGNORED_ARTICLES = LEADING_ARTICLES
     .map((a) => a.charAt(0).toUpperCase() + a.slice(1))
     .join(" ");
@@ -27,11 +19,7 @@ const IGNORED_ARTICLES = LEADING_ARTICLES
 libraryRouter.all(["/getArtists.view", "/getIndexes.view"], wrap(async (req, res) => {
     const artists = await prisma.artist.findMany({
         where: { libraryAlbumCount: { gt: 0 } },
-        // Ordered by the same stored value the buckets below are keyed on.
-        // These used to disagree -- ordering read the raw `name` while
-        // bucketing stripped articles -- so "The Beatles" filed correctly
-        // under B and then sorted to the BOTTOM of it, behind every genuine
-        // B artist, on every client.
+        // Ordered by the same sortName the buckets are keyed on.
         orderBy: { sortName: "asc" },
         select: {
             id: true,
@@ -79,7 +67,7 @@ libraryRouter.all("/getArtist.view", wrap(async (req, res) => {
         where: { id },
         include: {
             albums: {
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 orderBy: { year: "desc" },
                 include: {
                     _count: { select: { tracks: true } },
@@ -150,7 +138,7 @@ libraryRouter.all("/getMusicDirectory.view", wrap(async (req, res) => {
         where: { id: artistId },
         include: {
             albums: {
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 orderBy: { year: "desc" },
             },
         },
@@ -308,6 +296,18 @@ type AlbumWithArtist = {
     tracks?: { duration: number | null }[];
 };
 
+// The four raw album-list queries read the same columns in the same row
+// shape; only the joins, filter and ordering differ.
+const ALBUM_LIST_SELECT = Prisma.sql`
+    SELECT a.id, a.title, a."displayTitle", a.year, a."coverUrl", a."userCoverUrl", a."artistId",
+           json_build_object('id', ar.id, 'name', ar.name, 'displayName', ar."displayName",
+               'genres', ar.genres, 'userGenres', ar."userGenres") as artist,
+           (SELECT COUNT(*)::int FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false AND t2."missingSince" IS NULL) as "songCount",
+           (SELECT COALESCE(SUM(t2.duration), 0) FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false AND t2."missingSince" IS NULL) as "totalDuration"
+    FROM "Album" a
+    JOIN "Artist" ar ON a."artistId" = ar.id
+`;
+
 // getAlbumList2 is ID3-tagged; getAlbumList is the legacy folder-based alias
 libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req, res) => {
     const type = (req.query.type as string) || "newest";
@@ -318,7 +318,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
     const albumInclude = {
         artist: { select: { id: true, name: true, displayName: true, genres: true, userGenres: true } },
         _count: { select: { tracks: true } },
-        tracks: { where: { corrupt: false }, select: { duration: true } },
+        tracks: { where: { corrupt: false, missingSince: null }, select: { duration: true } },
     } as const;
 
     let albums: AlbumWithArtist[] = [];
@@ -326,7 +326,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
     switch (type) {
         case "newest":
             albums = await prisma.album.findMany({
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 orderBy: { lastSynced: "desc" },
                 take: size,
                 skip: offset,
@@ -336,7 +336,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
 
         case "alphabeticalByName":
             albums = await prisma.album.findMany({
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 orderBy: { sortName: "asc" },
                 take: size,
                 skip: offset,
@@ -346,7 +346,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
 
         case "alphabeticalByArtist":
             albums = await prisma.album.findMany({
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 // "alphabeticalByArtist" means alphabetical to the user, and a
                 // user does not file The Beatles under T.
                 orderBy: { artist: { sortName: "asc" } },
@@ -364,7 +364,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
             }
             albums = await prisma.album.findMany({
                 where: {
-                    location: "LIBRARY",
+                    location: LIBRARY_LOCATION,
                     year: {
                         gte: Math.min(fromYear, toYear),
                         lte: Math.max(fromYear, toYear),
@@ -385,14 +385,8 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
                 return subsonicError(req, res, SubsonicError.MISSING_PARAM, "byGenre requires genre");
             }
             // Genre lives on Artist, not Album — filter via artist's enriched genres
-            const rows = await prisma.$queryRaw<AlbumWithArtist[]>`
-                SELECT a.id, a.title, a."displayTitle", a.year, a."coverUrl", a."userCoverUrl", a."artistId",
-                       json_build_object('id', ar.id, 'name', ar.name, 'displayName', ar."displayName",
-                           'genres', ar.genres, 'userGenres', ar."userGenres") as artist,
-                       (SELECT COUNT(*)::int FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "songCount",
-                       (SELECT COALESCE(SUM(t2.duration), 0) FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "totalDuration"
-                FROM "Album" a
-                JOIN "Artist" ar ON a."artistId" = ar.id
+            const rows = await prisma.$queryRaw<AlbumWithArtist[]>(Prisma.sql`
+                ${ALBUM_LIST_SELECT}
                 WHERE a."location" = 'LIBRARY'
                   AND EXISTS (
                     SELECT 1 FROM jsonb_array_elements_text(
@@ -402,7 +396,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
                   AND EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id)
                 ORDER BY a."sortName" ASC
                 LIMIT ${size} OFFSET ${offset}
-            `;
+            `);
             albums = rows;
             break;
         }
@@ -410,7 +404,7 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
         case "starred":
             albums = await prisma.album.findMany({
                 where: {
-                    location: "LIBRARY",
+                    location: LIBRARY_LOCATION,
                     tracks: {
                         some: {
                             likedBy: { some: { userId } },
@@ -425,32 +419,20 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
             break;
 
         case "random": {
-            const rows = await prisma.$queryRaw<AlbumWithArtist[]>`
-                SELECT a.id, a.title, a."displayTitle", a.year, a."coverUrl", a."userCoverUrl", a."artistId",
-                       json_build_object('id', ar.id, 'name', ar.name, 'displayName', ar."displayName",
-                           'genres', ar.genres, 'userGenres', ar."userGenres") as artist,
-                       (SELECT COUNT(*)::int FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "songCount",
-                       (SELECT COALESCE(SUM(t2.duration), 0) FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "totalDuration"
-                FROM "Album" a
-                JOIN "Artist" ar ON a."artistId" = ar.id
+            const rows = await prisma.$queryRaw<AlbumWithArtist[]>(Prisma.sql`
+                ${ALBUM_LIST_SELECT}
                 WHERE a."location" = 'LIBRARY'
                   AND EXISTS (SELECT 1 FROM "Track" t WHERE t."albumId" = a.id)
                 ORDER BY RANDOM()
                 LIMIT ${size}
-            `;
+            `);
             albums = rows;
             break;
         }
 
         case "recent": {
-            const rows = await prisma.$queryRaw<AlbumWithArtist[]>`
-                SELECT a.id, a.title, a."displayTitle", a.year, a."coverUrl", a."userCoverUrl", a."artistId",
-                       json_build_object('id', ar.id, 'name', ar.name, 'displayName', ar."displayName",
-                           'genres', ar.genres, 'userGenres', ar."userGenres") as artist,
-                       (SELECT COUNT(*)::int FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "songCount",
-                       (SELECT COALESCE(SUM(t2.duration), 0) FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "totalDuration"
-                FROM "Album" a
-                JOIN "Artist" ar ON a."artistId" = ar.id
+            const rows = await prisma.$queryRaw<AlbumWithArtist[]>(Prisma.sql`
+                ${ALBUM_LIST_SELECT}
                 JOIN "Track" t ON t."albumId" = a.id
                 JOIN "Play" p ON p."trackId" = t.id
                 WHERE a."location" = 'LIBRARY'
@@ -459,20 +441,14 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
                          ar.id, ar.name, ar."displayName", ar.genres, ar."userGenres"
                 ORDER BY MAX(p."playedAt") DESC
                 LIMIT ${size} OFFSET ${offset}
-            `;
+            `);
             albums = rows;
             break;
         }
 
         case "frequent": {
-            const rows = await prisma.$queryRaw<AlbumWithArtist[]>`
-                SELECT a.id, a.title, a."displayTitle", a.year, a."coverUrl", a."userCoverUrl", a."artistId",
-                       json_build_object('id', ar.id, 'name', ar.name, 'displayName', ar."displayName",
-                           'genres', ar.genres, 'userGenres', ar."userGenres") as artist,
-                       (SELECT COUNT(*)::int FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "songCount",
-                       (SELECT COALESCE(SUM(t2.duration), 0) FROM "Track" t2 WHERE t2."albumId" = a.id AND t2.corrupt = false) as "totalDuration"
-                FROM "Album" a
-                JOIN "Artist" ar ON a."artistId" = ar.id
+            const rows = await prisma.$queryRaw<AlbumWithArtist[]>(Prisma.sql`
+                ${ALBUM_LIST_SELECT}
                 JOIN "Track" t ON t."albumId" = a.id
                 JOIN "Play" p ON p."trackId" = t.id
                 WHERE a."location" = 'LIBRARY'
@@ -481,14 +457,14 @@ libraryRouter.all(["/getAlbumList2.view", "/getAlbumList.view"], wrap(async (req
                          ar.id, ar.name, ar."displayName", ar.genres, ar."userGenres"
                 ORDER BY COUNT(p.id) DESC
                 LIMIT ${size} OFFSET ${offset}
-            `;
+            `);
             albums = rows;
             break;
         }
 
         default:
             albums = await prisma.album.findMany({
-                where: { location: "LIBRARY", tracks: { some: {} } },
+                where: { location: LIBRARY_LOCATION, tracks: { some: {} } },
                 orderBy: { lastSynced: "desc" },
                 take: size,
                 skip: offset,
@@ -548,13 +524,4 @@ libraryRouter.all("/getGenres.view", wrap(async (req, res) => {
     subsonicOk(req, res, { genres: { genre: sorted } });
 }));
 // getTopSongs / getSimilarSongs / getSimilarSongs2 live in search.ts.
-//
-// They were also registered here, and libraryRouter mounts first, so these
-// copies won and search.ts's were dead. Both of these were the worse
-// implementation: getTopSongs derived from play.groupBy, so a library with no
-// Play rows returned an empty list forever, while search.ts LEFT JOINs Play so
-// unplayed tracks still come back. getSimilarSongs took an UNORDERED slice and
-// Fisher-Yates shuffled it -- Postgres returns rows in physical order without
-// an ORDER BY, so it served the same rows on every call, merely permuted;
-// search.ts uses ORDER BY RANDOM().
 

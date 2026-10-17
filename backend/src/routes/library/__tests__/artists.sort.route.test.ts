@@ -1,18 +1,6 @@
 /**
- * Artist list ordering.
- *
- * `GET /artists` had no coverage, which is how the defect this pins survived:
- * `sortBy=name` and `name-desc` -- the alphabetical path, and the default --
- * do NOT use `ARTIST_SORT_MAP`. They take a raw-SQL branch that computed its
- * own order with `REGEXP_REPLACE(TRIM(a.name), '^the\s+', ...)`, stripping one
- * English article where the rest of the system strips eleven across four
- * languages, and skipping the unaccent that `sortName` carries. Changing the
- * Prisma sort map alone left that path untouched.
- *
- * These assert the SQL TEXT, which is what they can honestly prove: that the
- * query orders on the canonical stored column rather than recomputing a weaker
- * key inline. That the column then sorts correctly in Postgres is a separate
- * fact, verified directly against the database rather than here.
+ * GET /artists orders by name on the stored `sortName`, not on an article
+ * stripped inline. The tests check the SQL text.
  */
 
 jest.mock('p-limit', () => () => (fn: (...args: any[]) => any) => fn());
@@ -51,7 +39,6 @@ jest.mock('../../../utils/logger', () => ({
     logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
-jest.mock('../../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../../services/deezer', () => ({ deezerService: {} }));
 jest.mock('../../../services/musicbrainz', () => ({ musicBrainzService: {} }));
 jest.mock('../../../services/dataCache', () => ({
@@ -78,6 +65,7 @@ jest.mock('../../../utils/errors', () => ({
 import express from 'express';
 import request from 'supertest';
 import artistRoutes from '../artists';
+import { prisma } from '../../../utils/db';
 
 function makeApp() {
     const app = express();
@@ -169,5 +157,16 @@ describe('GET /artists alphabetical ordering', () => {
         // sort in the system.
         expect(sql).not.toContain('REGEXP_REPLACE');
         expect(sql.toLowerCase()).not.toContain("'^the");
+    });
+
+    it('appends a unique id tiebreaker to non-name sorts', async () => {
+        (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.artist.count as jest.Mock).mockResolvedValue(0);
+
+        await request(makeApp()).get('/artists?sortBy=tracks').expect(200);
+
+        expect(prisma.artist.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ orderBy: [{ totalTrackCount: 'desc' }, { id: 'asc' }] }),
+        );
     });
 });

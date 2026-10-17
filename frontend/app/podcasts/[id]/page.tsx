@@ -1,22 +1,26 @@
 "use client";
 
 import DOMPurify from "dompurify";
-import { useRouter } from "next/navigation";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
+import { api } from "@/lib/api";
+import { notify } from "@/lib/notify";
+import type { Episode } from "@/features/podcast/types";
 
 import { usePodcastData } from "@/features/podcast/hooks/usePodcastData";
 import { usePodcastActions } from "@/features/podcast/hooks/usePodcastActions";
 
 import { PodcastHero } from "@/features/podcast/components/PodcastHero";
+import { ColorWash } from "@/features/spoken/ColorWash";
 import { PodcastActionBar } from "@/features/podcast/components/PodcastActionBar";
 import { ContinueListening } from "@/features/podcast/components/ContinueListening";
 import { EpisodeList } from "@/features/podcast/components/EpisodeList";
 import { PreviewEpisodes } from "@/features/podcast/components/PreviewEpisodes";
 import { SimilarPodcasts } from "@/features/podcast/components/SimilarPodcasts";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function PodcastDetailPage() {
-    const router = useRouter();
     const {
         podcastId,
         podcast,
@@ -32,6 +36,10 @@ export default function PodcastDetailPage() {
         setSortOrder,
         inProgressEpisodes,
         sortedEpisodes,
+        episodesUpdating,
+        hasMore,
+        loadMore,
+        loadingMore,
     } = usePodcastData();
 
     const { colors } = useImageColor(colorExtractionImage);
@@ -54,58 +62,44 @@ export default function PodcastDetailPage() {
 
     if (previewLoadState === "error") {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <div className="flex flex-col items-center gap-3 text-center">
-                    <p className="text-xs tabular-nums text-[var(--text-muted)]">
-                        {previewError || "Could not load podcast"}
-                    </p>
-                    <button
-                        onClick={() => router.back()}
-                        className="text-xs text-[var(--text-muted)] underline underline-offset-2 hover:text-gray-400 transition-colors"
-                    >
-                        Go back
-                    </button>
-                </div>
-            </div>
+            <PageMessage
+                title="Couldn't load this podcast"
+                description={previewError || undefined}
+                action={{ label: "Podcasts", href: "/podcasts" }}
+            />
         );
     }
 
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (!podcast && !previewData) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">Podcast not found</p>
-            </div>
+            <PageMessage title="Podcast not found" action={{ label: "Podcasts", href: "/podcasts" }} />
         );
     }
 
     if (!displayData) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     const isSubscribed = !!podcast;
     const episodeCount = podcast
-        ? podcast.episodes.length
+        ? podcast.episodeTotal ?? podcast.episodes.length
         : previewData?.episodeCount || 0;
 
-    const handlePlayLatest = () => {
-        if (sortedEpisodes.length > 0 && podcast) {
-            // Play the most recent unfinished episode, or the latest episode
-            const unfinished = sortedEpisodes.find(
-                (ep) => !ep.progress?.isFinished
-            );
-            handlePlayEpisode(unfinished || sortedEpisodes[0], podcast);
+    // The most recent unfinished episode, or the latest; the list shown oldest
+    // first holds the oldest page, so the newest is asked for.
+    const handlePlayLatest = async () => {
+        if (!podcast) return;
+        try {
+            const newest: Episode[] =
+                sortOrder === "newest" ? sortedEpisodes : (await api.getPodcast(podcast.id, { order: "newest", limit: 20 })).episodes;
+            const pick = newest.find((ep) => !ep.progress?.isFinished) ?? newest[0];
+            if (pick) handlePlayEpisode(pick, podcast, newest);
+        } catch (error) {
+            notify.error("Couldn't load the latest episode", { message: error instanceof Error ? error.message : undefined });
         }
     };
 
@@ -127,7 +121,6 @@ export default function PodcastDetailPage() {
                 <PodcastActionBar
                     isSubscribed={isSubscribed}
                     feedUrl={podcast?.feedUrl || previewData?.feedUrl}
-                    colors={colors}
                     isSubscribing={isSubscribing}
                     showDeleteConfirm={showDeleteConfirm}
                     onSubscribe={() => handleSubscribe(previewData)}
@@ -141,25 +134,13 @@ export default function PodcastDetailPage() {
                 />
             </PodcastHero>
 
-            {/* Main Content */}
             <div className="relative flex-1">
-                {/* Color gradient continuation */}
-                <div
-                    className="absolute inset-x-0 top-0 pointer-events-none"
-                    style={{
-                        height: "25vh",
-                        background: colors
-                            ? `linear-gradient(to bottom, ${colors.vibrant}10 0%, ${colors.vibrant}05 40%, transparent 100%)`
-                            : "transparent",
-                    }}
-                />
+                <ColorWash colors={colors} />
 
-                    <div className="relative max-w-[1800px] mx-auto px-4 md:px-8 py-8 section-stack">
-                    {/* Continue Listening */}
+                <div className="relative page-shell py-8 section-stack">
                     {podcast && inProgressEpisodes.length > 0 && (
                         <div>
                             <ContinueListening
-                                podcast={podcast}
                                 inProgressEpisodes={inProgressEpisodes}
                                 sortedEpisodes={sortedEpisodes}
                                 isEpisodePlaying={isEpisodePlaying}
@@ -172,23 +153,19 @@ export default function PodcastDetailPage() {
                         </div>
                     )}
 
-                    {/* Preview Mode */}
                     {!podcast && previewData && (
                         <div>
                             <PreviewEpisodes
                                 previewData={previewData}
-                                colors={colors}
                                 isSubscribing={isSubscribing}
                                 onSubscribe={() => handleSubscribe(previewData)}
                             />
                         </div>
                     )}
 
-                    {/* All Episodes */}
                     {podcast && (
                         <div>
                             <EpisodeList
-                                podcast={podcast}
                                 episodes={sortedEpisodes}
                                 sortOrder={sortOrder}
                                 onSortOrderChange={setSortOrder}
@@ -197,34 +174,30 @@ export default function PodcastDetailPage() {
                                 onPlayPause={(episode) =>
                                     handlePlayPauseEpisode(episode, podcast)
                                 }
-                                onPlay={(episode) => handlePlayEpisode(episode, podcast)}
                                 onMarkComplete={handleMarkEpisodeComplete}
+                                fallbackCoverUrl={podcast?.coverUrl}
+                                total={episodeCount}
+                                updating={episodesUpdating}
+                                onLoadMore={hasMore ? () => loadMore() : undefined}
+                                loadingMore={loadingMore}
                             />
                         </div>
                     )}
 
-                    {/* About - for subscribed podcasts */}
                     {podcast?.description && (
                         <div>
-                            <section>
-                                <div className="flex items-center gap-3 mb-6">
-                                    <span className="w-1 h-6 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                                    <h2 className="text-xl font-bold tracking-tight">About</h2>
-                                    <span className="flex-1 border-t border-white/10" />
-                                </div>
-                                <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
-                                    <div
-                                        className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] [&_a]:text-[#3b82f6] [&_a]:no-underline [&_a:hover]:underline text-sm leading-relaxed"
-                                        dangerouslySetInnerHTML={{
-                                            __html: DOMPurify.sanitize(podcast.description || ""),
-                                        }}
-                                    />
-                                </div>
-                            </section>
+                            <SectionHeader title="About" type="podcast" />
+                            <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
+                                <div
+                                    className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] max-w-3xl text-sm leading-relaxed"
+                                    dangerouslySetInnerHTML={{
+                                        __html: DOMPurify.sanitize(podcast.description),
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
 
-                    {/* Similar Podcasts */}
                     {similarPodcasts.length > 0 && (
                         <div>
                             <SimilarPodcasts podcasts={similarPodcasts} />

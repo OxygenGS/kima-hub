@@ -1,38 +1,8 @@
 /**
- * At-rest encryption for stored credentials: the nine `SystemSettings` API-key
- * columns, `User.twoFactorSecret` and `User.twoFactorRecoveryCodes`.
- *
- * Two things changed here, and the second is the one that matters.
- *
- * **The cipher is now XChaCha20-Poly1305.** It was AES-256-CBC, which is
- * unauthenticated: nothing about a CBC ciphertext says whether it is the one
- * this server wrote. Anyone able to write the database could substitute a
- * blob and, at worst, get a decrypt error; at best for them, flip bits in a
- * plaintext they could guess. Poly1305 makes that a hard failure. The 24-byte
- * nonce is why XChaCha rather than the IETF ChaCha20-Poly1305 that Node ships
- * natively: at 24 bytes a random nonce per encryption has no practical
- * collision risk, so there is no counter to persist and nothing to get wrong.
- *
- * **`decrypt` fails closed.** It used to return its input verbatim when the
- * value did not look encrypted, and again on any error that was not OpenSSL's
- * bad-decrypt. That is a passthrough: write plaintext into
- * `SystemSettings.lidarrUrl`'s neighbours and it was read back as a
- * credential, no key required -- which is precisely the capability encrypting
- * them was meant to remove. Every path out of `decrypt` is now either a
- * verified plaintext or a throw.
- *
- * Callers already expect that. `utils/systemSettings.ts` wraps every field in
- * `safeDecrypt`, which turns a throw into `null` and logs once per field, so a
- * single unreadable credential disables one integration instead of taking the
- * settings load with it.
- *
- * **Existing AES-256-CBC values still read.** They are live in production and
- * cannot be converted without the key and a running server, so `decrypt`
- * recognises the old `ivHex:ciphertextHex` shape and handles it, including the
- * pre-SHA-256 key derivation that predates it. Nothing writes that format any
- * more: a settings field migrates the next time it is saved. `twoFactorSecret`
- * is never rewritten, so the AES path cannot be deleted until something
- * migrates those rows -- see docs/social/ENCRYPTION.md §6.
+ * At-rest encryption for the SystemSettings fields in ENCRYPTED_FIELDS and the
+ * User 2FA secret and recovery codes: XChaCha20-Poly1305 with a random 24-byte
+ * nonce. `decrypt` fails closed; resolveEncryptedSettings turns a throw into
+ * null. Old AES-256-CBC values still read until rewritten; 2FA rows never are.
  */
 import crypto from "crypto";
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -121,13 +91,8 @@ export function encrypt(text: string): string {
 }
 
 /**
- * Decrypt a value written by `encrypt`, or by the AES-256-CBC version that
- * preceded it.
- *
- * Throws on anything else -- a tampered or truncated ciphertext, a value
- * encrypted under a different key, and a value that is in no recognised format
- * at all. That last case is the important one: it used to be returned to the
- * caller as though it were the decrypted plaintext.
+ * Decrypt a value from `encrypt` or the older AES-256-CBC format. Throws on
+ * tampered, truncated, wrong-key or unrecognised input, never returning it as plaintext.
  */
 export function decrypt(text: string): string {
     if (!text) return "";
@@ -152,9 +117,8 @@ export function decrypt(text: string): string {
         return decryptLegacy(text);
     }
 
-    // No recognised format. Previously returned as-is on the theory that it
-    // might be unencrypted data from before this module existed; that made the
-    // column readable-and-writable by anyone with database access and no key.
+    // No recognised format: refuse it, or anyone with database access could write
+    // a readable credential without the key.
     throw new Error(
         "Decryption failed: value is not in a recognised encrypted format. " +
         "If this is a credential stored before encryption existed, re-enter it in Settings."
@@ -169,7 +133,10 @@ function decryptLegacy(text: string): string {
 
     const attempt = (key: Buffer): string => {
         const decipher = crypto.createDecipheriv(LEGACY_ALGORITHM, key, iv);
-        return Buffer.concat([decipher.update(encryptedText), decipher.final()]).toString();
+        // Legacy CBC has no authentication: a wrong derived key can rarely pass padding.
+        // Treat malformed UTF-8 as a failed key attempt rather than returning corrupted secrets.
+        const plain = Buffer.concat([decipher.update(encryptedText), decipher.final()]);
+        return new TextDecoder("utf-8", { fatal: true }).decode(plain);
     };
 
     try {
@@ -187,15 +154,9 @@ function decryptLegacy(text: string): string {
     }
 }
 
-/**
- * Whether a stored value is still in the old AES-256-CBC format.
- *
- * Exported for the migration that has to exist before the legacy branch above
- * can go: settings fields re-encrypt whenever they are saved, but nothing ever
- * rewrites `User.twoFactorSecret`.
- */
-export function isLegacyCiphertext(value: string | null | undefined): boolean {
-    return Boolean(value) && LEGACY_SHAPE.test(value as string);
+/** Whether a value carries either recognised format (`xc1.` or `iv:cipher`). */
+export function isEncryptedFormat(value: string): boolean {
+    return value.startsWith(V2_PREFIX) || LEGACY_SHAPE.test(value);
 }
 
 /**

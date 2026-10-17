@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
 import {
     Play,
     Pause,
@@ -13,8 +12,12 @@ import {
     VolumeX,
     Github,
 } from "lucide-react";
-import { formatTime, formatDuration } from "@/utils/formatTime";
-import { useBranding } from "@/lib/branding-context";
+import { formatTime, formatDuration } from "@/lib/format";
+import { cascadeStyle } from "@/lib/motion";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
+import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
 interface ShareTrack {
     id: string;
@@ -63,7 +66,7 @@ function getCoverUrl(shareData: ShareData): string | null {
     return null;
 }
 
-function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
+function getTracksFromEntity(shareData: ShareData, t: (label: string) => string): ShareTrack[] {
     const entity = shareData.entity;
     if (shareData.entityType === "playlist") {
         return entity.items?.map((item) => item.track).filter(Boolean) || [];
@@ -75,7 +78,7 @@ function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
         return [
             {
                 id: entity.id,
-                title: entity.title || entity.name || "Unknown Track",
+                title: entity.title || entity.name || t("Unknown Track"),
                 duration: entity.duration || 0,
                 album: entity.album,
             },
@@ -84,26 +87,27 @@ function getTracksFromEntity(shareData: ShareData): ShareTrack[] {
     return [];
 }
 
-function getEntityTitle(shareData: ShareData): string {
-    return shareData.entity.name || shareData.entity.title || "Shared Content";
+function getEntityTitle(shareData: ShareData, t: (label: string) => string): string {
+    return shareData.entity.name || shareData.entity.title || t("Shared Content");
 }
 
-function getEntitySubtitle(shareData: ShareData): string {
+function getEntitySubtitle(shareData: ShareData, t: (label: string) => string): string {
     if (shareData.entityType === "playlist") {
         const count = shareData.entity.items?.length || 0;
-        return `${count} track${count !== 1 ? "s" : ""}`;
+        return `${count} ${t(count === 1 ? "track" : "tracks")}`;
     }
     if (shareData.entityType === "album") {
-        return shareData.entity.artist?.name || "Unknown Artist";
+        return shareData.entity.artist?.name || t("Unknown Artist");
     }
     if (shareData.entityType === "track") {
-        return shareData.entity.album?.artist?.name || "Unknown Artist";
+        return shareData.entity.album?.artist?.name || t("Unknown Artist");
     }
     return "";
 }
 
 export default function SharePageClient() {
-    const { branding } = useBranding();
+    const { locale } = useLanguage();
+    const t = useCallback((label: string) => translate(locale, label), [locale]);
     const params = useParams();
     const token = params.token as string;
 
@@ -146,7 +150,7 @@ export default function SharePageClient() {
         };
     }, []);
 
-    const tracks = useMemo(() => data ? getTracksFromEntity(data) : [], [data]);
+    const tracks = useMemo(() => data ? getTracksFromEntity(data, t) : [], [data, t]);
     const currentTrack = tracks[currentTrackIndex];
 
     const getStreamUrl = useCallback(
@@ -250,21 +254,19 @@ export default function SharePageClient() {
 
     const totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
 
-    // Loading
     if (loading) {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-brand/30 border-t-[#fca200] rounded-full animate-spin" />
+                    <GradientSpinner size="md" />
                     <p className="text-xs text-[var(--text-muted)]">
-                        Loading
+                        {t("Loading")}
                     </p>
                 </div>
             </div>
         );
     }
 
-    // Error
     if (error || !data) {
         return (
             <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-4">
@@ -272,15 +274,15 @@ export default function SharePageClient() {
                     <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
                         <Music className="w-5 h-5 text-[var(--text-muted)]" />
                     </div>
-                    <p className="text-sm font-medium text-[var(--text-secondary)] mb-1">
+                    <h1 className="text-xl font-bold tracking-tight text-white">
                         {error?.includes("expired")
-                            ? "Link expired"
+                            ? t("This link has expired")
                             : error?.includes("limit")
-                              ? "Play limit reached"
-                              : "Not found"}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                        {error || "This share link is no longer available."}
+                              ? t("This link has reached its play limit")
+                              : t("Share link not found")}
+                    </h1>
+                    <p className="mt-2 text-sm text-[var(--text-muted)]">
+                        {t("Ask whoever shared it for a new link.")}
                     </p>
                 </div>
             </div>
@@ -302,18 +304,15 @@ export default function SharePageClient() {
                 preload="none"
             />
 
-            {/* Main content */}
             <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 md:py-12">
                 <div className="w-full max-w-lg">
 
-                    {/* Cover art */}
                     <div className="animate-rise relative w-full aspect-square max-w-[280px] mx-auto mb-8 rounded-xl overflow-hidden bg-white/[0.03]" style={{ "--i": 0 } as CSSProperties}>
                         {coverArtUrl ? (
-                            <Image
+                            <CachedImage
                                 src={coverArtUrl}
                                 alt=""
                                 fill
-                                unoptimized
                                 className="object-cover"
                             />
                         ) : (
@@ -323,33 +322,49 @@ export default function SharePageClient() {
                         )}
                     </div>
 
-                    {/* Title and subtitle */}
                     <div className="animate-rise text-center mb-6" style={{ "--i": 1 } as CSSProperties}>
                         <h1 className="text-xl font-bold text-white tracking-tight mb-1 line-clamp-2">
-                            {getEntityTitle(data)}
+                            {getEntityTitle(data, t)}
                         </h1>
                         <p className="text-sm text-[var(--text-muted)]">
-                            {getEntitySubtitle(data)}
+                            {getEntitySubtitle(data, t)}
                             {tracks.length > 1 && totalDuration > 0 && (
                                 <span className="text-[var(--text-muted)]"> -- {formatDuration(totalDuration)}</span>
                             )}
                         </p>
                     </div>
 
-                    {/* Player controls */}
                     {tracks.length > 0 && (
                         <div className="mb-8">
                             {playbackError && (
-                                <p className="text-xs text-red-400/70 text-center mb-3">
-                                    {playbackError}
+                                <p className="text-xs text-danger-light/70 text-center mb-3">
+                                    {t(playbackError)}
                                 </p>
                             )}
 
-                            {/* Progress */}
                             <div
                                 ref={progressBarRef}
                                 className="h-1 bg-white/[0.08] rounded-full cursor-pointer mb-2 group"
                                 onClick={handleProgressClick}
+                                role="slider"
+                                tabIndex={0}
+                                aria-label={t("Playback position")}
+                                aria-valuemin={0}
+                                aria-valuemax={Number.isFinite(duration) ? Math.max(0, Math.floor(duration)) : 0}
+                                aria-valuenow={Number.isFinite(progress) ? Math.max(0, Math.floor(progress)) : 0}
+                                onKeyDown={(event) => {
+                                    const audio = audioRef.current;
+                                    if (!audio || !Number.isFinite(audio.duration)) return;
+                                    const next = event.key === "ArrowRight" ? audio.currentTime + 5
+                                        : event.key === "ArrowLeft" ? audio.currentTime - 5
+                                        : event.key === "Home" ? 0
+                                        : event.key === "End" ? audio.duration
+                                        : null;
+                                    if (next === null) return;
+                                    event.preventDefault();
+                                    audio.currentTime = Math.max(0, Math.min(audio.duration, next));
+                                    setProgress(audio.currentTime);
+                                }}
                             >
                                 <div
                                     className="h-full bg-brand rounded-full transition-[width] duration-100"
@@ -359,15 +374,15 @@ export default function SharePageClient() {
                                 />
                             </div>
 
-                            <div className="flex justify-between text-micro tabular-nums text-[var(--text-muted)] mb-5 tabular-nums">
+                            <div className="flex justify-between text-micro tabular-nums text-[var(--text-muted)] mb-5">
                                 <span>{formatTime(progress)}</span>
                                 <span>{formatTime(duration)}</span>
                             </div>
 
-                            {/* Buttons */}
                             <div className="flex items-center justify-center gap-6">
                                 {tracks.length > 1 && (
                                     <button
+                                        aria-label={t("Previous track")}
                                         onClick={prevTrack}
                                         className="text-[var(--text-muted)] hover:text-white/70 transition-colors"
                                     >
@@ -376,6 +391,7 @@ export default function SharePageClient() {
                                 )}
 
                                 <button
+                                    aria-label={t(isPlaying ? "Pause" : "Play")}
                                     onClick={togglePlay}
                                     className="w-12 h-12 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform"
                                 >
@@ -388,6 +404,7 @@ export default function SharePageClient() {
 
                                 {tracks.length > 1 && (
                                     <button
+                                        aria-label={t("Next track")}
                                         onClick={nextTrack}
                                         disabled={currentTrackIndex >= tracks.length - 1}
                                         className="text-[var(--text-muted)] hover:text-white/70 transition-colors disabled:opacity-20"
@@ -397,9 +414,9 @@ export default function SharePageClient() {
                                 )}
                             </div>
 
-                            {/* Volume */}
                             <div className="flex items-center justify-center gap-2 mt-4">
                                 <button
+                                    aria-label={t(isMuted || volume === 0 ? "Unmute" : "Mute")}
                                     onClick={toggleMute}
                                     className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                                 >
@@ -411,6 +428,7 @@ export default function SharePageClient() {
                                 </button>
                                 <input
                                     type="range"
+                                    aria-label={t("Volume")}
                                     min="0"
                                     max="1"
                                     step="0.01"
@@ -424,7 +442,6 @@ export default function SharePageClient() {
                                 />
                             </div>
 
-                            {/* Now playing indicator */}
                             {currentTrack && tracks.length > 1 && (
                                 <p className="text-micro text-[var(--text-muted)] text-center mt-3 truncate">
                                     {currentTrack.title}
@@ -433,9 +450,8 @@ export default function SharePageClient() {
                         </div>
                     )}
 
-                    {/* Track list */}
                     {tracks.length > 1 && (
-                        <div className="border-t border-white/[0.04] pt-4">
+                        <div className="border-t border-white/[0.04] pt-4" style={cascadeStyle(tracks.length)}>
                             {tracks.map((track, index) => {
                                 const isActive = index === currentTrackIndex;
                                 const trackCoverId = track.album?.coverUrl || coverArtId;
@@ -454,13 +470,13 @@ export default function SharePageClient() {
                                         key={track.id}
                                         onClick={() => playTrack(index)}
                                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                                            index < 8 ? "animate-rise" : ""
+                                            "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]"
                                         } group ${
                                             isActive
                                                 ? "bg-white/[0.04]"
                                                 : "hover:bg-white/[0.02]"
                                         }`}
-                                        style={index < 8 ? { "--i": index } as CSSProperties : undefined}
+                                        style={{ "--i": index } as CSSProperties}
                                     >
                                         <div className="w-8 text-center flex-shrink-0">
                                             {isActive && isPlaying ? (
@@ -480,11 +496,10 @@ export default function SharePageClient() {
 
                                         {trackCoverUrl && (
                                             <div className="relative w-8 h-8 rounded bg-white/[0.03] flex-shrink-0 overflow-hidden">
-                                                <Image
+                                                <CachedImage
                                                     src={trackCoverUrl}
                                                     alt=""
                                                     fill
-                                                    unoptimized
                                                     className="object-cover"
                                                 />
                                             </div>
@@ -503,7 +518,7 @@ export default function SharePageClient() {
                                             )}
                                         </div>
 
-                                        <span className="text-micro tabular-nums text-[var(--text-muted)] flex-shrink-0 tabular-nums">
+                                        <span className="text-micro tabular-nums text-[var(--text-muted)] flex-shrink-0">
                                             {track.duration ? formatTime(track.duration) : ""}
                                         </span>
                                     </button>
@@ -514,11 +529,10 @@ export default function SharePageClient() {
                 </div>
             </div>
 
-            {/* Footer */}
             <div className="px-4 py-6">
                 <div className="max-w-lg mx-auto flex items-center justify-center gap-3">
                     <span className="text-xs text-white/10">
-                        Shared via {branding.name}
+                        {t("Powered by Kima")}
                     </span>
                     <span className="text-white/[0.06]">|</span>
                     <a

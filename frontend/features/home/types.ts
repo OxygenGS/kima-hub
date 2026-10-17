@@ -1,10 +1,4 @@
 /**
- * Home Page Type Definitions
- *
- * Defines all the data structures used throughout the Home page feature
- */
-
-/**
  * Artist entity from the library
  */
 export interface Artist {
@@ -63,7 +57,7 @@ export interface Mix {
 }
 
 /**
- * Popular artist with listener count from Last.fm
+ * Popular artist with listener count from the similarity engine
  */
 export interface PopularArtist {
     id?: string;

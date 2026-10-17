@@ -5,14 +5,19 @@
 #   docker compose -f docker-compose.dev.yml up -d
 #
 # This runs:
-#   - PostgreSQL (port 5433)
-#   - Redis (port 6379)
+#   - PostgreSQL (port 5455, pgvector image to match CI/prod schema needs)
+#   - Redis (port 6390)
 #   - Audio Analyzer with ML models (Enhanced vibe matching)
+#
+# The ports are not the defaults, so this stack can run beside another
+# Postgres or Redis.
 
 services:
     postgres:
-        image: postgres:16-alpine
-        container_name: kima_dev_db
+        # Pinned to the pgvector release verified in production (0.8.6): the
+        # pg16 float tag moves across releases on pull.
+        image: pgvector/pgvector:0.8.6-pg16
+        container_name: kima_v1_pg
         environment:
             POSTGRES_USER: kima
             POSTGRES_PASSWORD: kima
@@ -20,7 +25,7 @@ services:
         volumes:
             - postgres_dev_data:/var/lib/postgresql/data
         ports:
-            - "5433:5432"
+            - "5455:5432"
         restart: unless-stopped
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U kima -d kima"]
@@ -30,9 +35,9 @@ services:
 
     redis:
         image: redis:7-alpine
-        container_name: kima_dev_redis
+        container_name: kima_v1_redis
         ports:
-            - "6380:6379"
+            - "6390:6379"
         restart: unless-stopped
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
@@ -43,7 +48,8 @@ services:
     # Audio Analyzer - Essentia with ML models for Enhanced vibe matching
     audio-analyzer:
         build:
-            context: ./services/audio-analyzer
+            context: .
+            dockerfile: services/audio-analyzer/Dockerfile
         container_name: kima_audio_analyzer
         environment:
             # Connect to host machine's services (or Docker services)
@@ -51,13 +57,11 @@ services:
             DATABASE_URL: postgresql://kima:kima@postgres:5432/kima
             # Music path inside container (mounted from host)
             MUSIC_PATH: /music
-            BATCH_SIZE: 10
-            SLEEP_INTERVAL: 5
             BRPOP_TIMEOUT: 10
             MODEL_IDLE_TIMEOUT: 60
         volumes:
             # Mount your music library - UPDATE THIS PATH
-            - "${MUSIC_PATH:-C:/Users/kevin/Music}:/music:ro"
+            - "${MUSIC_PATH:-./music}:/music:ro"
         depends_on:
             postgres:
                 condition: service_healthy

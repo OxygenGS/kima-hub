@@ -1,12 +1,6 @@
 /**
- * MusicScannerService -- pure logic unit tests
- *
- * Tests the private helper methods on MusicScannerService via a thin
- * subclass that exposes them, and the exported pure utility functions
- * from artistNormalization that the scanner uses heavily.
- *
- * We do NOT test scanLibrary or processAudioFile -- those require real
- * files and a database; they belong to integration tests.
+ * MusicScannerService's helpers, through a subclass that exposes them, and the
+ * artistNormalization utilities it uses.
  */
 
 // All mocks must be before imports
@@ -39,17 +33,40 @@ jest.mock('../../services/artistCountsService', () => ({
 }));
 
 jest.mock('../../services/imageStorage', () => ({
-    checkLocalArtistImage: jest.fn(),
+    findLocalArtistImage: jest.fn(),
+}));
+
+// AcoustID identification stack (imported by musicScanner). featureDetection
+// must be mocked at this boundary: the real one pulls utils/redis -> config,
+// whose zod validation requires env vars this unit suite does not provide.
+jest.mock('../../services/featureDetection', () => ({
+    featureDetection: {
+        getFeatures: jest.fn().mockResolvedValue({
+            musicCNN: false,
+            vibeEmbeddings: false,
+            audiobookshelfEnabled: false,
+            fpcalc: true,
+        }),
+    },
+}));
+
+jest.mock('../../services/acoustidService', () => ({
+    acoustidService: { lookup: jest.fn().mockResolvedValue(null) },
+}));
+
+jest.mock('../../services/fpcalc', () => ({
+    fpcalcService: {
+        isAvailable: jest.fn().mockResolvedValue(false),
+        fingerprintFile: jest.fn().mockResolvedValue(null),
+    },
 }));
 
 // music-metadata is pure ESM; provide a CJS-compatible stub
 jest.mock('music-metadata', () => ({ parseFile: jest.fn() }), { virtual: true });
 
-// p-queue is mapped to a CJS mock in jest.config.js -- no extra mock needed
-
 import { MusicScannerService } from '../musicScanner';
+import { normalizeArtistName } from '../artistIdentity';
 import {
-    normalizeArtistName,
     canonicalizeVariousArtists,
     sanitizeTagString,
     parseArtistFromPath,
@@ -144,7 +161,7 @@ describe('MusicScannerService.normalizeForMatching', () => {
 });
 
 // ---------------------------------------------------------------------------
-// normalizeArtistName (exported from artistNormalization, used by scanner)
+// normalizeArtistName
 // ---------------------------------------------------------------------------
 
 describe('normalizeArtistName', () => {

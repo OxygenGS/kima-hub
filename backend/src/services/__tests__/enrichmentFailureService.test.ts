@@ -1,15 +1,9 @@
 /**
- * EnrichmentFailureService Tests
- *
- * Verifies recordFailure() uses atomic upsert (not find-then-create)
- * and properly resets resolved state on re-failure.
- *
- * Run with: npx jest enrichmentFailureService.test.ts
+ * recordFailure upserts atomically and clears the resolved state on a repeat failure.
  */
 
 import { enrichmentFailureService } from "../enrichmentFailureService";
 
-// Mock Prisma
 jest.mock("../../utils/db", () => ({
     prisma: {
         enrichmentFailure: {
@@ -40,7 +34,7 @@ describe("EnrichmentFailureService", () => {
             metadata: { filePath: "/music/test.flac" },
         };
 
-        it("should use upsert with entityType_entityId composite key", async () => {
+        it("uses upsert with entityType_entityId composite key", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1", ...baseInput });
 
             await enrichmentFailureService.recordFailure(baseInput);
@@ -55,7 +49,7 @@ describe("EnrichmentFailureService", () => {
             });
         });
 
-        it("should NOT use findUnique+create pattern (TOCTOU race)", async () => {
+        it("does not use a findUnique then create (TOCTOU race)", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1", ...baseInput });
 
             await enrichmentFailureService.recordFailure(baseInput);
@@ -66,7 +60,7 @@ describe("EnrichmentFailureService", () => {
             expect(prisma.enrichmentFailure.update).not.toHaveBeenCalled();
         });
 
-        it("should set resolved=false and resolvedAt=null in update branch", async () => {
+        it("sets resolved=false and resolvedAt=null in update branch", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1", ...baseInput });
 
             await enrichmentFailureService.recordFailure(baseInput);
@@ -76,7 +70,7 @@ describe("EnrichmentFailureService", () => {
             expect(call.update.resolvedAt).toBeNull();
         });
 
-        it("should set retryCount=1 and maxRetries=3 in create branch", async () => {
+        it("sets retryCount=1 and maxRetries=3 in create branch", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1", ...baseInput });
 
             await enrichmentFailureService.recordFailure(baseInput);
@@ -86,7 +80,7 @@ describe("EnrichmentFailureService", () => {
             expect(call.create.maxRetries).toBe(3);
         });
 
-        it("should increment retryCount in update branch", async () => {
+        it("increments retryCount in update branch", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1", ...baseInput });
 
             await enrichmentFailureService.recordFailure(baseInput);
@@ -95,7 +89,7 @@ describe("EnrichmentFailureService", () => {
             expect(call.update.retryCount).toEqual({ increment: 1 });
         });
 
-        it("should serialize metadata in both create and update branches", async () => {
+        it("serializes metadata in both create and update branches", async () => {
             const metadata = { filePath: "/music/test.flac", nested: { key: "val" } };
             mockUpsert.mockResolvedValue({ id: "fail-1" });
 
@@ -110,7 +104,7 @@ describe("EnrichmentFailureService", () => {
             expect(call.update.metadata).toEqual(metadata);
         });
 
-        it("should handle null metadata", async () => {
+        it("handles null metadata", async () => {
             mockUpsert.mockResolvedValue({ id: "fail-1" });
 
             await enrichmentFailureService.recordFailure({

@@ -1,18 +1,15 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { SystemSettings } from "../types";
+import { ConnectionTestResult, SystemSettings } from "../types";
 
 const defaultSystemSettings: SystemSettings = {
     lidarrEnabled: true,
     lidarrUrl: "http://localhost:8686",
     lidarrApiKey: "",
-    openaiEnabled: false,
-    openaiApiKey: "",
-    openaiModel: "gpt-4",
     fanartEnabled: false,
     fanartApiKey: "",
-    lastfmApiKey: "",
+    acoustidApiKey: "",
     audiobookshelfEnabled: false,
     audiobookshelfUrl: "http://localhost:13378",
     audiobookshelfApiKey: "",
@@ -26,13 +23,14 @@ const defaultSystemSettings: SystemSettings = {
     musicPath: "/music",
     downloadPath: "/downloads",
     transcodeCacheMaxGb: 10,
+    maxQueueLength: 10000,
     maxCacheSizeMb: 10240,
     autoSync: true,
     autoEnrichMetadata: true,
-    audioAnalyzerWorkers: 2,
     soulseekConcurrentDownloads: 4,
     lidarrQualityProfileId: null,
     lidarrMetadataProfileId: null,
+    lidarrRemoveJunk: true,
     // Download preferences
     downloadSource: "soulseek",
     primaryFailureFallback: "none",
@@ -46,7 +44,7 @@ export function useSystemSettings() {
         defaultSystemSettings
     );
     const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     const isAdmin = user?.role === "admin";
 
@@ -59,17 +57,17 @@ export function useSystemSettings() {
     const loadSystemSettings = async () => {
         try {
             setIsLoading(true);
+            setLoadError(null);
             const [sysData, userData] = await Promise.all([
                 api.getSystemSettings(),
                 api.getSettings(),
             ]);
 
-            // Sanitize null values to empty strings for controlled inputs
+            // Null strings become empty strings for controlled inputs.
             const sanitizeSettings = (settings: Record<string, unknown>): SystemSettings => {
                 const sanitized: Record<string, unknown> = {};
                 for (const key in settings) {
                     const value = settings[key];
-                    // Convert null to empty string for string fields
                     if (value === null && typeof defaultSystemSettings[key as keyof SystemSettings] === 'string') {
                         sanitized[key] = '';
                     } else {
@@ -86,38 +84,23 @@ export function useSystemSettings() {
 
             setSystemSettings(combinedSettings);
         } catch (error) {
-            console.error("Failed to load system settings:", error);
-            // No toast - error will be visible in the UI if settings fail to load
+            setLoadError(error instanceof Error ? error.message : "Failed to load settings");
         } finally {
             setIsLoading(false);
         }
     };
 
     const saveSystemSettings = async (settingsToSave: SystemSettings) => {
-        try {
-            setIsSaving(true);
-            await api.updateSystemSettings(settingsToSave);
-            await api.updateSettings({
-                maxCacheSizeMb: settingsToSave.maxCacheSizeMb,
-            });
-        } catch (error) {
-            console.error("Failed to save system settings:", error);
-            throw error;
-        } finally {
-            setIsSaving(false);
-        }
+        await api.updateSystemSettings(settingsToSave);
+        await api.updateSettings({ maxCacheSizeMb: settingsToSave.maxCacheSizeMb });
     };
 
     const updateSystemSettings = (updates: Partial<SystemSettings>) => {
         setSystemSettings((prev) => ({ ...prev, ...updates }));
     };
 
-    /**
-     * Test a service connection
-     * Returns { success: true, version?: string } or { success: false, error: string }
-     * Caller handles displaying the result inline
-     */
-    const testService = async (service: string): Promise<{ success: boolean; version?: string; error?: string }> => {
+    /** Tests a service connection; the caller shows the result. */
+    const testService = async (service: string): Promise<ConnectionTestResult> => {
         try {
             let result;
             switch (service) {
@@ -127,17 +110,8 @@ export function useSystemSettings() {
                         systemSettings.lidarrApiKey
                     );
                     break;
-                case "openai":
-                    result = await api.testOpenai(
-                        systemSettings.openaiApiKey,
-                        systemSettings.openaiModel
-                    );
-                    break;
                 case "fanart":
                     result = await api.testFanart(systemSettings.fanartApiKey);
-                    break;
-                case "lastfm":
-                    result = await api.testLastfm(systemSettings.lastfmApiKey);
                     break;
                 case "audiobookshelf":
                     result = await api.testAudiobookshelf(
@@ -146,16 +120,13 @@ export function useSystemSettings() {
                     );
                     break;
                 case "soulseek":
-                    result = await api.testSoulseek(
-                        systemSettings.soulseekUsername,
-                        systemSettings.soulseekPassword
-                    );
-                    break;
-                case "spotify":
-                    result = await api.testSpotify(
-                        systemSettings.spotifyClientId,
-                        systemSettings.spotifyClientSecret
-                    );
+                    result = await api.testSoulseek({
+                        mode: systemSettings.soulseekMode === "slskd" ? "slskd" : "p2p",
+                        username: systemSettings.soulseekUsername,
+                        password: systemSettings.soulseekPassword,
+                        slskdUrl: systemSettings.slskdUrl ?? undefined,
+                        slskdApiKey: systemSettings.slskdApiKey ?? undefined,
+                    });
                     break;
                 default:
                     throw new Error(`Unknown service: ${service}`);
@@ -171,8 +142,7 @@ export function useSystemSettings() {
     return {
         systemSettings,
         isLoading,
-        isSaving,
-        setSystemSettings,
+        loadError,
         updateSystemSettings,
         saveSystemSettings,
         testService,

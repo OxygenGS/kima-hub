@@ -7,10 +7,9 @@ name: Pre-release Image
 # then failed eleven nights running without anyone noticing, because nothing
 # watched it and it opened no issue.
 #
-# Two ways in: push the branch named `prerelease`, or press Run workflow on the
-# Actions tab. Either way the image goes ONLY to this repository's GitHub
-# Container Registry. Docker Hub is the public release channel and stays
-# using version tags -- see docker-publish.yml.
+# Run intentionally from the Actions tab with an explicit approval. No branch
+# push may publish pre-release images. Both stable and pre-release images use
+# the fork-owned GitHub Container Registry; only stable version tags update latest.
 #
 # It builds BOTH architectures deliberately. The ARM leg is the fragile one: it
 # compiles PyTorch from source whenever a prebuilt wheel is missing, and that is
@@ -18,8 +17,6 @@ name: Pre-release Image
 # ARM here, before you tag, is the whole reason this workflow exists.
 
 on:
-    push:
-        branches: [prerelease]
     workflow_dispatch:
         inputs:
             tag_suffix:
@@ -43,6 +40,11 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
+
+            - name: Validate candidate fork metadata before image publication
+              run: |
+                  python3 .github/ci/check-release-metadata.py --self-test
+                  python3 .github/ci/check-release-metadata.py --candidate
 
             - name: Set image name
               run: |
@@ -77,16 +79,72 @@ jobs:
 
             - name: Compose tag list
               id: tags
+              shell: bash
+              env:
+                  TAG_SUFFIX: ${{ inputs.tag_suffix }}
               run: |
+                  set -euo pipefail
+                  # GitHub inputs belong in the environment, never raw shell source.
+                  if [ -n "$TAG_SUFFIX" ] && ! [[ "$TAG_SUFFIX" =~ ^[a-z0-9][a-z0-9.-]{0,31}$ ]]; then
+                    echo "Invalid optional tag suffix. Use lowercase letters, digits, dots or hyphens (max 32 chars)." >&2
+                    exit 1
+                  fi
                   TAGS="${GHCR_IMAGE}:prerelease"$'\n'"${GHCR_IMAGE}:prerelease-${{ steps.sha.outputs.short }}"
-                  if [ -n "${{ inputs.tag_suffix }}" ]; then
-                    TAGS="${TAGS}"$'\n'"${GHCR_IMAGE}:prerelease-${{ inputs.tag_suffix }}"
+                  if [ -n "$TAG_SUFFIX" ]; then
+                    TAGS="${TAGS}"$'\n'"${GHCR_IMAGE}:prerelease-${TAG_SUFFIX}"
                   fi
                   {
                     echo 'list<<TAGS_EOF'
                     echo "${TAGS}"
                     echo 'TAGS_EOF'
                   } >> "$GITHUB_OUTPUT"
+
+            # Pre-push mandatory fixable vulnerability gate. Unfixed
+            # Debian advisories still require explicit human acceptance.
+            # Never trigger this publishing workflow without user approval.
+            - name: Build local AMD64 candidate for security scan (no push)
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: ./Dockerfile
+                  push: false
+                  load: true
+                  tags: kima:prerelease-scan
+                  platforms: linux/amd64
+                  build-args: |
+                      NEXT_PUBLIC_BUILD_TYPE=prerelease
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            - name: Install pinned Trivy
+              uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+              with:
+                  version: v0.74.0
+                  cache: true
+
+            # Use the same unfiltered fixable-vulnerability image gate as
+            # CI and stable publishing; keep secrets checking separately.
+            - name: Scan candidate AMD64 image and block fixable HIGH/CRITICAL
+              run: |
+                  trivy image \
+                    --scanners vuln \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 0 \
+                    --format json \
+                    --output "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" \
+                    kima:prerelease-scan
+                  python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+                  python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" amd64
+
+            - name: Scan candidate image for embedded secrets before publication
+              run: |
+                  trivy image \
+                    --scanners secret \
+                    --ignorefile .trivyignore \
+                    --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+                    --exit-code 1 \
+                    --format table \
+                    kima:prerelease-scan
 
             - name: Build and push pre-release
               uses: docker/build-push-action@v5
@@ -95,7 +153,7 @@ jobs:
                   file: ./Dockerfile
                   push: true
                   tags: ${{ steps.tags.outputs.list }}
-                  # Makes the running app show "1.10.0-prerelease" rather than a
+                  # Makes the running app show a prerelease variant of the checked package version, not a
                   # bare version, so nobody mistakes one for a release.
                   build-args: |
                       NEXT_PUBLIC_BUILD_TYPE=prerelease

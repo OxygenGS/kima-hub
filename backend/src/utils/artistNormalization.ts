@@ -1,17 +1,11 @@
-import * as fuzz from "fuzzball";
 
 /**
  * Utility functions for normalizing artist and album names
  * to handle case-sensitivity and other variations
  */
 
-/**
- * Canonical name and MBID for compilation/various artists
- */
-// Exported because services/soulseek.ts imports it. Upstream un-exported this
-// when it removed Soulseek; this line keeps that subsystem.
+/** Canonical name for compilation/various artists. */
 export const VARIOUS_ARTISTS_CANONICAL = "Various Artists";
-
 
 /**
  * Check if an artist name is a variation of "Various Artists"
@@ -47,26 +41,26 @@ export function sanitizeTagString(value: string | null | undefined): string {
     return value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
 }
 
+
+
+// Words that mark another edition of the same album, matched as whole words.
+const EDITION_WORD =
+    /\b(?:deluxe|remaster(?:ed)?|expanded|anniversary|bonus|special|limited|collector'?s?|platinum|edition|version|original|soundtrack|motion picture|explicit|clean|mono|stereo|recording|import|japan(?:ese)?|uk|us)\b/i;
+// Words that mark a different recording, which is a different album even when
+// an edition word sits beside them: "(Live Edition)", "(Acoustic Version)".
+const OTHER_RECORDING =
+    /\b(?:live|remix(?:es|ed)?|mix|radio|acoustic|unplugged|sessions?|demos?|instrumentals?|karaoke|covers?|reworked|reimagined|orchestral|symphonic|stripped)\b/i;
+
+function isEditionMarker(text: string): boolean {
+    return EDITION_WORD.test(text) && !OTHER_RECORDING.test(text);
+}
+
 /**
- * Normalize an artist name for case-insensitive comparison.
- *
- * RE-EXPORTED, not re-implemented. Two functions with this exact name and
- * different behaviour sat on opposite sides of one database column:
- * artistIdentity's WRITES Artist.normalizedName; this module's was used to
- * QUERY it from ~20 call sites, and they disagreed on the ligature fold. "MO"
- * with a slash was stored as "mo" and looked up unfolded, making such artists
- * unfindable by Spotify import and Discover Weekly seeding. One definition
- * removes the failure mode instead of keeping two in step by hand.
- */
-export { normalizeArtistName } from "../services/artistIdentity";
-
-
-
-/**
- * Strip edition/version suffixes from album titles for better search matching
- * "In A Time Lapse (Deluxe Edition)" → "In A Time Lapse"
- * "Abbey Road (2019 Remaster)" → "Abbey Road"
- * "Dark Side of the Moon [Remastered]" → "Dark Side of the Moon"
+ * Strip edition markers from an album title, keeping anything that names a
+ * different recording:
+ * "In A Time Lapse (Deluxe Edition)" -> "In A Time Lapse",
+ * "Abbey Road - 2019 Remaster" -> "Abbey Road",
+ * "Get Born (Live)" stays "Get Born (Live)".
  */
 export function stripAlbumEdition(title: string): string {
     // Guard against ReDoS - skip regex for excessively long inputs
@@ -75,37 +69,24 @@ export function stripAlbumEdition(title: string): string {
     }
 
     return title
-        // Remove parenthetical edition/version markers
-        .replace(
-            /\s*\([^)]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^)]*\)\s*/gi,
-            ""
+        .replace(/\s*\(([^)]*)\)\s*/g, (group, inner) => (isEditionMarker(inner) ? " " : group))
+        .replace(/\s*\[([^\]]*)\]\s*/g, (group, inner) => (isEditionMarker(inner) ? " " : group))
+        .replace(/\s*[-–—:]\s*((?:\d{4}\s+)?[^-–—:]*)$/, (tail, inner) =>
+            /^(?:\d{4}\s+)?(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|mono|stereo)/i.test(inner) && isEditionMarker(inner)
+                ? ""
+                : tail
         )
-        // Remove bracketed edition markers
-        .replace(
-            /\s*\[[^\]]*(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|soundtrack|motion picture|super deluxe|explicit|clean|mono|stereo|remix|live|acoustic|unplugged|sessions?|recording|import|japan|uk|us)\s*[^\]]*\]\s*/gi,
-            ""
-        )
-        // Remove trailing dash content with edition keywords
-        .replace(
-            /\s*[-–—:]\s*(?:\d{4}\s+)?(?:deluxe|remaster|expanded|anniversary|bonus|special|limited|collector|platinum|edition|version|original|mono|stereo|remix|live|acoustic).*$/gi,
-            ""
-        )
-        // Remove trailing year in parentheses (often indicates remaster year)
+        // A trailing year in parentheses is usually a remaster's
         .replace(/\s*\(\d{4}\)\s*$/, "")
-        // Clean up any double spaces or trailing whitespace
         .replace(/\s+/g, " ")
         .trim();
 }
 
 
 /**
- * Parse artist name from folder path patterns
- * Common patterns:
- *   "Artist - Album (Year) FLAC" -> "Artist"
- *   "Artist - Album" -> "Artist"
- *   "Artist.Name-Album.Name-24BIT-FLAC-2023-GROUP" -> "Artist Name"
- *
- * Returns null if no clear artist pattern is found
+ * Artist name from a folder name: "Artist - Album (Year) FLAC" -> "Artist",
+ * "Artist.Name-Album.Name-24BIT-FLAC-2023-GROUP" -> "Artist Name". Null when
+ * no pattern fits.
  */
 export function parseArtistFromPath(folderName: string): string | null {
     if (!folderName || folderName.trim() === '') {
@@ -144,13 +125,8 @@ export function parseArtistFromPath(folderName: string): string | null {
 }
 
 /**
- * Extract artist name from a relative file path by trying multiple strategies:
- * 1. parseArtistFromPath on the album folder name (catches "Artist - Album" patterns)
- * 2. Grandparent folder name (catches standard Artist/Album/Track.ext layout)
- * 3. Filename parsing (catches "Artist - Album - Track - Title.ext" naming)
- *
- * Note: Handles both Unix (/) and Windows (\) path separators.
- * Returns null if no artist can be determined.
+ * Artist from a relative path (either separator): the album folder name, then
+ * the grandparent folder, then "Artist - Album - Track - Title" filenames.
  */
 export function extractArtistFromRelativePath(relativePath: string): string | null {
     if (!relativePath) return null;
@@ -189,14 +165,7 @@ export function extractArtistFromRelativePath(relativePath: string): string | nu
     return null;
 }
 
-/**
- * Extract album title from a relative file path.
- * Uses the immediate parent folder name, which is typically the album folder
- * in standard Artist/Album/Track.ext layouts.
- *
- * Note: Handles both Unix (/) and Windows (\) path separators.
- * Returns null if the file is at the root level (no parent folder).
- */
+/** Album title from a relative path (either separator): the parent folder, or null at the root. */
 export function extractAlbumFromRelativePath(relativePath: string): string | null {
     if (!relativePath) return null;
 

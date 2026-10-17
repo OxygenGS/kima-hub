@@ -1,24 +1,7 @@
 /**
- * Task 7 Step 5 adversarial route tests -- POST /discover/like must be SYMMETRIC
- * to the cleanup claim guard. The find-then-update /like was a non-atomic race:
- * it `findFirst({status:"ACTIVE"})` then bare `update({where:{id}})` with no
- * status condition, so an interleaved cleanup that flipped the row to DELETED
- * (and deleted its files) could be RESURRECTED to LIKED by the bare update,
- * leaving a liked album whose tracks were already gone.
- *
- * The fix (discover.ts:612-624) replaces the bare update with a CONDITIONAL
- * claim -- updateMany({where:{id,status:"ACTIVE"},data:{status:"LIKED",...}}) --
- * and returns 409 / code:"ALBUM_GONE" when the claim matches 0 rows (the row was
- * concurrently removed). This is the most important behavioral change of the
- * task and previously had ZERO test coverage.
- *
- * Doctrine: failure / boundary path FIRST, happy path LAST. Each assertion
- * targets a discriminator that can ONLY be produced by the conditional-claim
- * code path, so the test cannot pass against the legacy bare-update handler:
- *   - count 0 -> HTTP 409 with code "ALBUM_GONE" (the bare update returns 200).
- *   - count 0 -> NO Lidarr tag-removal runs (the guard returns before it).
- *   - count 1 -> HTTP 200 and the claim where-clause was {id,status:"ACTIVE"}
- *     (the bare update used {id} only -- the missing status condition is the bug).
+ * POST /discover/like claims the album only while it is still ACTIVE, so a
+ * concurrent cleanup cannot be undone. A lost claim answers 409 ALBUM_GONE and
+ * skips the Lidarr tag removal. Failure path first.
  */
 
 // All mocks before imports.
@@ -63,7 +46,6 @@ jest.mock('../../middleware/auth', () => ({
 }));
 
 // Module-load-time imports in discover.ts that we do not exercise here.
-jest.mock('../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../workers/queues', () => ({
     discoverQueue: { getJob: jest.fn(), add: jest.fn() },
     scanQueue: { add: jest.fn() },
@@ -95,6 +77,15 @@ import express from 'express';
 import request from 'supertest';
 import discoverRoutes from '../discover';
 import { prisma } from '../../utils/db';
+import { redisClient } from '../../utils/redis';
+import { closeClient } from '../../utils/closeRedisClient';
+
+afterAll(async () => {
+    // The router pulls in services/listenBrainz, which opens the shared Redis
+    // client at import. Left open, Jest finishes the suite and outlives the
+    // process on that socket.
+    await closeClient(redisClient);
+});
 
 function makeApp() {
     const app = express();
@@ -117,7 +108,7 @@ const ACTIVE_DISCOVERY_ALBUM = {
     status: 'ACTIVE',
 };
 
-describe('POST /discover/like -- symmetric claim guard (Task 7 Step 5)', () => {
+describe('POST /discover/like -- symmetric claim guard', () => {
     let app: express.Application;
 
     beforeAll(() => {
@@ -153,20 +144,20 @@ describe('POST /discover/like -- symmetric claim guard (Task 7 Step 5)', () => {
 
         const res = await request(app).post('/discover/like').send({ albumId: ALBUM_ID });
 
-        // DISCRIMINATOR 1: the legacy bare update({where:{id}}) would have
-        // overwritten DELETED->LIKED and returned 200. The claim guard returns 409.
+        // A bare update({where:{id}}) would overwrite DELETED->LIKED and return
+        // 200; the claim guard returns 409.
         expect(res.status).toBe(409);
         expect(res.body.code).toBe('ALBUM_GONE');
 
-        // DISCRIMINATOR 2: the claim where-clause must be gated on status:"ACTIVE",
-        // not {id} alone -- the missing status condition IS the resurrection bug.
+        // The claim must be gated on status:"ACTIVE", not {id} alone, or a
+        // deleted album could be resurrected.
         expect(prisma.discoveryAlbum.updateMany).toHaveBeenCalledWith({
             where: { id: 'da-1', status: 'ACTIVE' },
             data: { status: 'LIKED', likedAt: expect.any(Date) },
         });
 
-        // DISCRIMINATOR 3: the body short-circuits at the guard, so NONE of the
-        // post-claim side effects (Lidarr tag removal, OwnedAlbum upsert) may run.
+        // The handler stops at the guard: no post-claim side effect (Lidarr tag
+        // removal, OwnedAlbum upsert) may run.
         expect(mockRemoveDiscoveryTagByMbid).not.toHaveBeenCalled();
         expect(mockGetArtists).not.toHaveBeenCalled();
         expect(mockRemoveTagsFromArtist).not.toHaveBeenCalled();
@@ -187,7 +178,7 @@ describe('POST /discover/like -- symmetric claim guard (Task 7 Step 5)', () => {
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
 
-        // DISCRIMINATOR: the claim ran with the ACTIVE-gated conditional where.
+        // The claim ran with the ACTIVE-gated where.
         expect(prisma.discoveryAlbum.updateMany).toHaveBeenCalledWith({
             where: { id: 'da-1', status: 'ACTIVE' },
             data: { status: 'LIKED', likedAt: expect.any(Date) },

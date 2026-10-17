@@ -1,34 +1,18 @@
 /**
- * React Query Hooks for API Caching
- *
- * This file provides custom React Query hooks for the most frequently called APIs
- * in the music streaming app. These hooks implement smart caching strategies to:
- * - Reduce unnecessary API calls
- * - Improve perceived performance
- * - Provide automatic background refetching
- * - Handle loading and error states consistently
- *
- * Stale time configuration rationale:
- * - Artist data: 10 minutes (rarely changes)
- * - Album data: 10 minutes (rarely changes)
- * - Library/Home data: 2 minutes (may change as user adds music)
- * - Search results: 5 minutes (relatively static for same query)
- * - Playlists: 1 minute (user may be actively modifying)
+ * TanStack Query hooks for the most-used endpoints. Stale times follow how
+ * often the data changes: artists/albums 10m, search/mixes 5m, library and
+ * home 2m, playlists 1m.
  */
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { PlaylistPreview } from "@/features/home/types";
 
 export const queryKeys = {
-    // Artist queries
     artist: (id: string) => ["artist", id] as const,
 
-    // Album queries
     album: (id: string) => ["album", id] as const,
-    albums: (filters?: Record<string, unknown>) => ["albums", filters] as const,
-
-    // Library queries
-    library: () => ["library"] as const,
     libraryArtists: (params: {
         filter?: string;
         sortBy?: string;
@@ -51,14 +35,7 @@ export const queryKeys = {
     recentlyAdded: (limit?: number) =>
         ["library", "recently-added", limit] as const,
 
-    // Recommendations
     recommendations: (limit?: number) => ["recommendations", limit] as const,
-    similarArtists: (seedArtistId: string, limit?: number) =>
-        ["recommendations", "artists", seedArtistId, limit] as const,
-    similarAlbums: (seedAlbumId: string, limit?: number) =>
-        ["recommendations", "albums", seedAlbumId, limit] as const,
-
-    // Search
     search: (query: string, type?: string, limit?: number) =>
         ["search", query, type, limit] as const,
     discoverSearch: (query: string, type?: string, limit?: number) =>
@@ -66,28 +43,23 @@ export const queryKeys = {
     discoverSimilar: (artist: string, mbid: string) =>
         ["search", "discover", "similar", artist, mbid] as const,
 
-    // Playlists
     playlists: () => ["playlists"] as const,
     playlist: (id: string) => ["playlist", id] as const,
 
-    // Mixes
     mixes: () => ["mixes"] as const,
     mix: (id: string) => ["mix", id] as const,
 
-    // Popular artists
     popularArtists: (limit?: number) => ["popular-artists", limit] as const,
 
-    // Audiobooks
     audiobooks: () => ["audiobooks"] as const,
     audiobook: (id: string) => ["audiobook", id] as const,
 
-    // Podcasts
     podcasts: () => ["podcasts"] as const,
     podcast: (id: string) => ["podcast", id] as const,
     topPodcasts: (limit?: number, genreId?: number) =>
         ["podcasts", "top", limit, genreId] as const,
 
-    // Browse (Deezer playlists/radios)
+    // Browse (Deezer playlists)
     browseAll: () => ["browse", "all"] as const,
 
     // Library radio data
@@ -95,101 +67,6 @@ export const queryKeys = {
     libraryDecades: () => ["library", "decades"] as const,
 };
 
-/**
- * Hook to fetch artist data with automatic library/discovery fallback
- *
- * Tries library first, falls back to discovery if not found.
- * Cache time: 10 minutes (artist data rarely changes)
- *
- * @param id - Artist ID or MusicBrainz ID
- * @returns Query result with artist data
- *
- * @example
- * const { data: artist, isLoading, error } = useArtistQuery("artist-123");
- */
-export function useArtistQuery(id: string | undefined) {
-    return useQuery({
-        queryKey: queryKeys.artist(id || ""),
-        queryFn: async () => {
-            if (!id) throw new Error("Artist ID is required");
-
-            // Try library first
-            try {
-                return await api.getArtist(id);
-            } catch {
-                // Fallback to discovery
-                return await api.getArtistDiscovery(id);
-            }
-        },
-        enabled: !!id,
-        staleTime: 10 * 60 * 1000, // 10 minutes
-        retry: 1,
-    });
-}
-
-/**
- * Hook to fetch album data with automatic library/discovery fallback
- *
- * Cache time: 10 minutes (album data rarely changes)
- *
- * @param id - Album ID or Release Group MBID
- * @returns Query result with album data
- *
- * @example
- * const { data: album, isLoading, error } = useAlbumQuery("album-123");
- */
-export function useAlbumQuery(id: string | undefined) {
-    return useQuery({
-        queryKey: queryKeys.album(id || ""),
-        queryFn: async () => {
-            if (!id) throw new Error("Album ID is required");
-
-            // Try library first
-            try {
-                return await api.getAlbum(id);
-            } catch {
-                // Fallback to discovery
-                return await api.getAlbumDiscovery(id);
-            }
-        },
-        enabled: !!id,
-        staleTime: 10 * 60 * 1000, // 10 minutes
-        retry: 1,
-    });
-}
-
-/**
- * Hook to fetch albums list with optional filters
- *
- * @param params - Filter parameters (artistId, limit, offset)
- * @returns Query result with albums array
- *
- * @example
- * const { data } = useAlbumsQuery({ artistId: "123", limit: 20 });
- */
-export function useAlbumsQuery(params?: {
-    artistId?: string;
-    limit?: number;
-    offset?: number;
-}) {
-    return useQuery({
-        queryKey: queryKeys.albums(params),
-        queryFn: () => api.getAlbums(params),
-        staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-}
-
-/**
- * Hook to fetch recently listened items (Continue Listening)
- *
- * Cache time: 2 minutes (may change frequently)
- *
- * @param limit - Number of items to fetch (default: 10)
- * @returns Query result with recently listened items
- *
- * @example
- * const { data } = useRecentlyListenedQuery(10);
- */
 export function useRecentlyListenedQuery(limit: number = 10) {
     return useQuery({
         queryKey: queryKeys.recentlyListened(limit),
@@ -198,17 +75,6 @@ export function useRecentlyListenedQuery(limit: number = 10) {
     });
 }
 
-/**
- * Hook to fetch recently added artists
- *
- * Cache time: 2 minutes (may change as user adds music)
- *
- * @param limit - Number of items to fetch (default: 10)
- * @returns Query result with recently added artists
- *
- * @example
- * const { data } = useRecentlyAddedQuery(10);
- */
 export function useRecentlyAddedQuery(limit: number = 10) {
     return useQuery({
         queryKey: queryKeys.recentlyAdded(limit),
@@ -220,15 +86,7 @@ export function useRecentlyAddedQuery(limit: number = 10) {
 export type LibraryFilter = "owned" | "discovery" | "all";
 export type SortOption = "name" | "name-desc" | "recent" | "tracks";
 
-interface LibraryArtistsParams {
-    filter?: LibraryFilter;
-    sortBy?: SortOption;
-    limit?: number;
-    page?: number;
-    enabled?: boolean;
-}
-
-interface LibraryAlbumsParams {
+interface LibraryPageParams {
     filter?: LibraryFilter;
     sortBy?: SortOption;
     limit?: number;
@@ -243,18 +101,13 @@ interface LibraryTracksParams {
     enabled?: boolean;
 }
 
-/**
- * Hook to fetch library artists with pagination and filtering
- *
- * Cache time: 2 minutes (may change as user adds music)
- */
 export function useLibraryArtistsQuery({
     filter = "owned",
     sortBy = "name",
     limit = 40,
     page = 1,
     enabled = true,
-}: LibraryArtistsParams = {}) {
+}: LibraryPageParams = {}) {
     const offset = (page - 1) * limit;
     return useQuery({
         queryKey: queryKeys.libraryArtists({ filter, sortBy, limit, offset }),
@@ -267,25 +120,18 @@ export function useLibraryArtistsQuery({
         }),
         staleTime: 2 * 60 * 1000,
         enabled,
-        // Add structural sharing to prevent unnecessary re-renders
         structuralSharing: true,
-        // Use placeholder data for better perceived performance
         placeholderData: (previousData) => previousData,
     });
 }
 
-/**
- * Hook to fetch library albums with pagination and filtering
- *
- * Cache time: 2 minutes (may change as user adds music)
- */
 export function useLibraryAlbumsQuery({
     filter = "owned",
     sortBy = "name",
     limit = 40,
     page = 1,
     enabled = true,
-}: LibraryAlbumsParams = {}) {
+}: LibraryPageParams = {}) {
     const offset = (page - 1) * limit;
     return useQuery({
         queryKey: queryKeys.libraryAlbums({ filter, sortBy, limit, offset }),
@@ -303,11 +149,6 @@ export function useLibraryAlbumsQuery({
     });
 }
 
-/**
- * Hook to fetch library tracks with pagination
- *
- * Cache time: 2 minutes (may change as user adds music)
- */
 export function useLibraryTracksQuery({
     sortBy = "name",
     limit = 40,
@@ -331,17 +172,6 @@ export function useLibraryTracksQuery({
     });
 }
 
-/**
- * Hook to fetch personalized recommendations
- *
- * Cache time: 5 minutes
- *
- * @param limit - Number of recommendations (default: 10)
- * @returns Query result with recommended artists
- *
- * @example
- * const { data } = useRecommendationsQuery(10);
- */
 export function useRecommendationsQuery(limit: number = 10) {
     return useQuery({
         queryKey: queryKeys.recommendations(limit),
@@ -350,66 +180,6 @@ export function useRecommendationsQuery(limit: number = 10) {
     });
 }
 
-/**
- * Hook to fetch similar artists based on a seed artist
- *
- * @param seedArtistId - Artist ID to find similar artists for
- * @param limit - Number of recommendations (default: 20)
- * @returns Query result with similar artists
- *
- * @example
- * const { data } = useSimilarArtistsQuery("artist-123", 20);
- */
-export function useSimilarArtistsQuery(
-    seedArtistId: string | undefined,
-    limit: number = 20,
-) {
-    return useQuery({
-        queryKey: queryKeys.similarArtists(seedArtistId || "", limit),
-        queryFn: async () => {
-            if (!seedArtistId) throw new Error("Seed artist ID is required");
-            return await api.getSimilarArtists(seedArtistId, limit);
-        },
-        enabled: !!seedArtistId,
-        staleTime: 10 * 60 * 1000, // 10 minutes
-    });
-}
-
-/**
- * Hook to fetch similar albums based on a seed album
- *
- * @param seedAlbumId - Album ID to find similar albums for
- * @param limit - Number of recommendations (default: 20)
- * @returns Query result with similar albums
- */
-export function useSimilarAlbumsQuery(
-    seedAlbumId: string | undefined,
-    limit: number = 20,
-) {
-    return useQuery({
-        queryKey: queryKeys.similarAlbums(seedAlbumId || "", limit),
-        queryFn: async () => {
-            if (!seedAlbumId) throw new Error("Seed album ID is required");
-            return await api.getSimilarAlbums(seedAlbumId, limit);
-        },
-        enabled: !!seedAlbumId,
-        staleTime: 10 * 60 * 1000, // 10 minutes
-    });
-}
-
-/**
- * Hook to search library with debouncing
- *
- * Cache time: 5 minutes (search results are relatively static)
- *
- * @param query - Search query string
- * @param type - Type filter (all, artists, albums, tracks, audiobooks, podcasts)
- * @param limit - Number of results per type (default: 20)
- * @returns Query result with search results
- *
- * @example
- * const { data } = useSearchQuery("radiohead", "all", 20);
- */
 export function useSearchQuery(
     query: string,
     type:
@@ -429,17 +199,6 @@ export function useSearchQuery(
     });
 }
 
-/**
- * Hook to search discovery/Last.fm with debouncing
- *
- * @param query - Search query string
- * @param type - Type filter (music, podcasts, all)
- * @param limit - Number of results (default: 20)
- * @returns Query result with discovery search results
- *
- * @example
- * const { data } = useDiscoverSearchQuery("radiohead", "music", 20);
- */
 export function useDiscoverSearchQuery(
     query: string,
     type: "music" | "podcasts" | "all" = "music",
@@ -453,10 +212,6 @@ export function useDiscoverSearchQuery(
     });
 }
 
-/**
- * Hook to fetch musically similar artists for a given artist.
- * Fires only when artistName is non-empty (i.e. after discover results load).
- */
 export function useDiscoverSimilarArtistsQuery(artistName: string, mbid: string = "") {
     return useQuery({
         queryKey: queryKeys.discoverSimilar(artistName, mbid),
@@ -466,16 +221,6 @@ export function useDiscoverSimilarArtistsQuery(artistName: string, mbid: string 
     });
 }
 
-/**
- * Hook to fetch all playlists
- *
- * Cache time: 1 minute (playlists may be actively modified)
- *
- * @returns Query result with playlists array
- *
- * @example
- * const { data: playlists } = usePlaylistsQuery();
- */
 export function usePlaylistsQuery() {
     return useQuery({
         queryKey: queryKeys.playlists(),
@@ -484,15 +229,6 @@ export function usePlaylistsQuery() {
     });
 }
 
-/**
- * Hook to fetch a single playlist
- *
- * @param id - Playlist ID
- * @returns Query result with playlist data
- *
- * @example
- * const { data: playlist } = usePlaylistQuery("playlist-123");
- */
 export function usePlaylistQuery(id: string | undefined) {
     return useQuery({
         queryKey: queryKeys.playlist(id || ""),
@@ -505,16 +241,6 @@ export function usePlaylistQuery(id: string | undefined) {
     });
 }
 
-/**
- * Hook to fetch all mixes (Made For You)
- *
- * Cache time: 5 minutes
- *
- * @returns Query result with mixes array
- *
- * @example
- * const { data: mixes } = useMixesQuery();
- */
 export function useMixesQuery() {
     return useQuery({
         queryKey: queryKeys.mixes(),
@@ -523,12 +249,6 @@ export function useMixesQuery() {
     });
 }
 
-/**
- * Hook to fetch a single mix
- *
- * @param id - Mix ID
- * @returns Query result with mix data
- */
 export function useMixQuery(id: string | undefined) {
     return useQuery({
         queryKey: queryKeys.mix(id || ""),
@@ -541,17 +261,6 @@ export function useMixQuery(id: string | undefined) {
     });
 }
 
-/**
- * Hook to fetch popular artists from Last.fm
- *
- * Cache time: 10 minutes (popular charts don't change frequently)
- *
- * @param limit - Number of artists to fetch (default: 20)
- * @returns Query result with popular artists
- *
- * @example
- * const { data } = usePopularArtistsQuery(20);
- */
 export function usePopularArtistsQuery(limit: number = 20) {
     return useQuery({
         queryKey: queryKeys.popularArtists(limit),
@@ -560,11 +269,6 @@ export function usePopularArtistsQuery(limit: number = 20) {
     });
 }
 
-/**
- * Hook to fetch all audiobooks
- *
- * @returns Query result with audiobooks array
- */
 export function useAudiobooksQuery() {
     return useQuery({
         queryKey: queryKeys.audiobooks(),
@@ -573,12 +277,6 @@ export function useAudiobooksQuery() {
     });
 }
 
-/**
- * Hook to fetch a single audiobook
- *
- * @param id - Audiobook ID
- * @returns Query result with audiobook data
- */
 export function useAudiobookQuery(id: string | undefined) {
     return useQuery({
         queryKey: queryKeys.audiobook(id || ""),
@@ -591,11 +289,6 @@ export function useAudiobookQuery(id: string | undefined) {
     });
 }
 
-/**
- * Hook to fetch all subscribed podcasts
- *
- * @returns Query result with podcasts array
- */
 export function usePodcastsQuery() {
     return useQuery({
         queryKey: queryKeys.podcasts(),
@@ -604,25 +297,30 @@ export function usePodcastsQuery() {
     });
 }
 
+// The most episodes the server returns in one page.
+const EPISODE_PAGE = 200;
+
 /**
- * Hook to fetch a single podcast
- *
- * Returns null if podcast is not found (404), allowing the page to handle preview mode.
- *
- * @param id - Podcast ID
- * @returns Query result with podcast data
+ * Resolves to null when the podcast is not subscribed (404), so the page can show
+ * a preview. Episodes arrive a page at a time; `data.episodes` holds every page
+ * loaded so far and `loadMore` fetches the next.
  */
-export function usePodcastQuery(id: string | undefined) {
+export function usePodcastQuery(
+    id: string | undefined,
+    order: "newest" | "oldest" = "newest"
+) {
     // Numeric IDs are iTunes IDs, not database CUIDs - skip subscription lookup
     const isItunesId = !!id && /^\d+$/.test(id);
-    return useQuery({
-        queryKey: queryKeys.podcast(id || ""),
-        queryFn: async () => {
+    const query = useInfiniteQuery({
+        // The order is part of the key: "oldest" must fetch a different page,
+        // not just re-sort the newest one.
+        queryKey: [...queryKeys.podcast(id || ""), order],
+        queryFn: async ({ pageParam }) => {
             if (!id) throw new Error("Podcast ID is required");
             if (isItunesId) return null; // iTunes ID - go straight to preview mode
 
             try {
-                return await api.getPodcast(id);
+                return await api.getPodcast(id, { order, limit: EPISODE_PAGE, offset: pageParam });
             } catch (error) {
                 // If podcast not found (404), return null to allow preview mode
                 const err = error as { status?: number; message?: string };
@@ -637,19 +335,43 @@ export function usePodcastQuery(id: string | undefined) {
                 throw error;
             }
         },
+        initialPageParam: 0,
+        getNextPageParam: (last, pages) => {
+            const loaded = pages.reduce((n, page) => n + (page?.episodes.length ?? 0), 0);
+            return last && loaded < (last.episodeTotal ?? 0) ? loaded : undefined;
+        },
         enabled: !!id,
         staleTime: 5 * 60 * 1000, // 5 minutes
         retry: false, // Don't retry 404 errors
+        // The other order of the same podcast keeps its page on screen meanwhile;
+        // another podcast does not show this one's.
+        placeholderData: (previousData, previousQuery) =>
+            previousQuery?.queryKey[1] === id ? previousData : undefined,
     });
+
+    // One object per set of pages, so effects keyed on it run when episodes
+    // change, not on every render. An episode published between two page
+    // reads would appear on both; it is kept once.
+    const data = useMemo(() => {
+        const first = query.data?.pages[0];
+        if (!first) return first;
+        const seen = new Set<string>();
+        const episodes = query.data!.pages
+            .flatMap((page) => page?.episodes ?? [])
+            .filter((episode: { id: string }) => !seen.has(episode.id) && !!seen.add(episode.id));
+        return { ...first, episodes };
+    }, [query.data]);
+    return {
+        data,
+        isLoading: query.isLoading,
+        isPlaceholderData: query.isPlaceholderData,
+        refetch: query.refetch,
+        hasMore: query.hasNextPage,
+        loadMore: query.fetchNextPage,
+        loadingMore: query.isFetchingNextPage,
+    };
 }
 
-/**
- * Hook to fetch top podcasts
- *
- * @param limit - Number of podcasts (default: 20)
- * @param genreId - Optional genre ID filter
- * @returns Query result with top podcasts
- */
 export function useTopPodcastsQuery(limit: number = 20, genreId?: number) {
     return useQuery({
         queryKey: queryKeys.topPodcasts(limit, genreId),
@@ -658,43 +380,47 @@ export function useTopPodcastsQuery(limit: number = 20, genreId?: number) {
     });
 }
 
-/**
- * Hook to refresh mixes with cache invalidation
- *
- * @returns Mutation object with mutate function
- *
- * @example
- * const { mutate: refreshMixes, isPending } = useRefreshMixesMutation();
- * refreshMixes();
- */
 export function useRefreshMixesMutation() {
     const queryClient = useQueryClient();
 
     return useMutation({
         mutationFn: () => api.refreshMixes(),
         onSuccess: () => {
-            // Invalidate mixes query to refetch
             queryClient.invalidateQueries({ queryKey: queryKeys.mixes() });
         },
     });
 }
 
-/**
- * Hook to add track to playlist with cache invalidation
- *
- * @returns Mutation object with mutate function
- *
- * @example
- * const { mutate: addToPlaylist } = useAddToPlaylistMutation();
- * addToPlaylist({ playlistId: "123", trackId: "456" });
- */
+type PlaylistCache = Record<string, unknown> | undefined;
+
+function invalidatePlaylist(queryClient: QueryClient, playlistId: string) {
+    queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+}
+
+async function applyOptimisticPlaylistEdit(
+    queryClient: QueryClient,
+    playlistId: string,
+    edit: (old: PlaylistCache) => PlaylistCache,
+) {
+    await queryClient.cancelQueries({ queryKey: queryKeys.playlist(playlistId) });
+    const previous = queryClient.getQueryData(queryKeys.playlist(playlistId));
+    queryClient.setQueryData(queryKeys.playlist(playlistId), edit);
+    return { previous };
+}
+
+function rollbackPlaylistEdit(queryClient: QueryClient, playlistId: string, context: { previous: unknown } | undefined) {
+    if (context?.previous) {
+        queryClient.setQueryData(queryKeys.playlist(playlistId), context.previous);
+    }
+}
+
 export function useAddToPlaylistMutation() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        // Accepts a single trackId or many. Callers building a playlist from a
-        // mix used to loop this hook once per track, which is one HTTP request
-        // each; pass trackIds instead and it is one request.
+        // Accepts a single trackId or many; pass trackIds to add a whole mix in
+        // one request.
         mutationFn: ({
             playlistId,
             trackId,
@@ -707,43 +433,7 @@ export function useAddToPlaylistMutation() {
             trackIds?.length
                 ? api.addTracksToPlaylist(playlistId, trackIds)
                 : api.addTrackToPlaylist(playlistId, trackId!),
-        onSettled: (_, __, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(variables.playlistId),
-            });
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlists(),
-            });
-        },
-    });
-}
-
-/**
- * Hook to create a new playlist with cache invalidation
- *
- * @returns Mutation object with mutate function
- *
- * @example
- * const { mutate: createPlaylist } = useCreatePlaylistMutation();
- * createPlaylist({ name: "My Playlist", isPublic: false });
- */
-export function useCreatePlaylistMutation() {
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: ({
-            name,
-            isPublic,
-        }: {
-            name: string;
-            isPublic?: boolean;
-        }) => api.createPlaylist(name, isPublic),
-        onSuccess: () => {
-            // Invalidate playlists list to show new playlist
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlists(),
-            });
-        },
+        onSettled: (_, __, variables) => invalidatePlaylist(queryClient, variables.playlistId),
     });
 }
 
@@ -758,10 +448,8 @@ export function useRemoveFromPlaylistMutation() {
             playlistId: string;
             trackId: string;
         }) => api.removeTrackFromPlaylist(playlistId, trackId),
-        onMutate: async (variables) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.playlist(variables.playlistId) });
-            const previous = queryClient.getQueryData(queryKeys.playlist(variables.playlistId));
-            queryClient.setQueryData(queryKeys.playlist(variables.playlistId), (old: Record<string, unknown> | undefined) => {
+        onMutate: (variables) =>
+            applyOptimisticPlaylistEdit(queryClient, variables.playlistId, (old) => {
                 if (!old || !Array.isArray(old.items)) return old;
                 return {
                     ...old,
@@ -769,22 +457,9 @@ export function useRemoveFromPlaylistMutation() {
                         (item) => item.track?.id !== variables.trackId
                     ),
                 };
-            });
-            return { previous };
-        },
-        onError: (_err, variables, context) => {
-            if (context?.previous) {
-                queryClient.setQueryData(queryKeys.playlist(variables.playlistId), context.previous);
-            }
-        },
-        onSettled: (_, __, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(variables.playlistId),
-            });
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlists(),
-            });
-        },
+            }),
+        onError: (_err, variables, context) => rollbackPlaylistEdit(queryClient, variables.playlistId, context),
+        onSettled: (_, __, variables) => invalidatePlaylist(queryClient, variables.playlistId),
     });
 }
 
@@ -799,14 +474,7 @@ export function useUpdatePlaylistMutation() {
             playlistId: string;
             data: { name?: string; isPublic?: boolean };
         }) => api.updatePlaylist(playlistId, data),
-        onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(variables.playlistId),
-            });
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlists(),
-            });
-        },
+        onSuccess: (_, variables) => invalidatePlaylist(queryClient, variables.playlistId),
     });
 }
 
@@ -816,7 +484,6 @@ export function useDeletePlaylistMutation() {
     return useMutation({
         mutationFn: (playlistId: string) => api.deletePlaylist(playlistId),
         onSuccess: () => {
-            // Invalidate playlists list
             queryClient.invalidateQueries({
                 queryKey: queryKeys.playlists(),
             });
@@ -837,12 +504,11 @@ export function useMoveTrackInPlaylistMutation() {
             itemId: string;
             afterItemId: string | null;
         }) => api.moveTrackInPlaylist(playlistId, itemId, afterItemId),
-        onMutate: async (variables) => {
-            await queryClient.cancelQueries({ queryKey: queryKeys.playlist(variables.playlistId) });
-            const previous = queryClient.getQueryData(queryKeys.playlist(variables.playlistId));
-            queryClient.setQueryData(queryKeys.playlist(variables.playlistId), (old: Record<string, unknown> | undefined) => {
+        onMutate: (variables) =>
+            applyOptimisticPlaylistEdit(queryClient, variables.playlistId, (old) => {
                 if (!old || !Array.isArray(old.items)) return old;
-                const items = old.items as Array<Record<string, unknown>>;
+                // A copy: the cached list is also `previous`, restored if the move fails.
+                const items = [...(old.items as Array<Record<string, unknown>>)];
                 const idx = items.findIndex((item) => item.id === variables.itemId);
                 if (idx === -1) return old;
                 const [moved] = items.splice(idx, 1);
@@ -857,35 +523,10 @@ export function useMoveTrackInPlaylistMutation() {
                     items.unshift(moved);
                 }
                 return { ...old, items };
-            });
-            return { previous };
-        },
-        onError: (_err, variables, context) => {
-            if (context?.previous) {
-                queryClient.setQueryData(queryKeys.playlist(variables.playlistId), context.previous);
-            }
-        },
-        onSettled: (_, __, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlist(variables.playlistId),
-            });
-            queryClient.invalidateQueries({
-                queryKey: queryKeys.playlists(),
-            });
-        },
+            }),
+        onError: (_err, variables, context) => rollbackPlaylistEdit(queryClient, variables.playlistId, context),
+        onSettled: (_, __, variables) => invalidatePlaylist(queryClient, variables.playlistId),
     });
-}
-
-interface PlaylistPreview {
-    id: string;
-    source: string;
-    type: string;
-    title: string;
-    description: string | null;
-    creator: string;
-    imageUrl: string | null;
-    trackCount: number;
-    url: string;
 }
 
 interface Genre {
@@ -896,15 +537,9 @@ interface Genre {
 
 interface BrowseAllResponse {
     playlists: PlaylistPreview[];
-    radios: PlaylistPreview[];
     genres: Genre[];
 }
 
-/**
- * Hook to fetch all browse content (playlists, radios, genres) from Deezer
- *
- * @returns Query result with all browse content
- */
 export function useBrowseAllQuery() {
     return useQuery({
         queryKey: queryKeys.browseAll(),
@@ -915,9 +550,6 @@ export function useBrowseAllQuery() {
     });
 }
 
-/**
- * Hook to fetch library genre counts for radio stations
- */
 export function useLibraryGenresQuery() {
     return useQuery({
         queryKey: queryKeys.libraryGenres(),
@@ -928,9 +560,6 @@ export function useLibraryGenresQuery() {
     });
 }
 
-/**
- * Hook to fetch library decade counts for radio stations
- */
 export function useLibraryDecadesQuery() {
     return useQuery({
         queryKey: queryKeys.libraryDecades(),

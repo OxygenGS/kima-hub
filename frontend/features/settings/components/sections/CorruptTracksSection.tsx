@@ -4,8 +4,10 @@ import { useState } from "react";
 import { SettingsSection, SettingsRow } from "../ui";
 import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
+import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
 export function CorruptTracksSection() {
     const queryClient = useQueryClient();
@@ -17,8 +19,8 @@ export function CorruptTracksSection() {
         queryFn: () => api.getCorruptTracks(),
     });
 
-    const deleteMutation = useMutation({
-        mutationFn: () => api.deleteCorruptTracks(),
+    const clearMutation = useMutation({
+        mutationFn: () => api.clearCorruptTracks(),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["corrupt-tracks"] });
             setShowConfirm(false);
@@ -36,13 +38,13 @@ export function CorruptTracksSection() {
         >
             <SettingsRow
                 label="Corrupt files detected"
-                description="These files failed audio analysis and may be incomplete or damaged"
+                description="These files could not be read in the last scan and may be incomplete or damaged"
             >
                 <div className="flex items-center gap-3">
                     {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-[var(--text-muted)]" />
+                        <GradientSpinner size="sm" />
                     ) : (
-                        <span className={`text-sm tabular-nums ${count > 0 ? "text-amber-400": "text-[var(--text-muted)]"}`}>
+                        <span className={`text-sm tabular-nums ${count > 0 ? "text-warning": "text-[var(--text-muted)]"}`}>
                             {count} file{count !== 1 ? "s" : ""}
                         </span>
                     )}
@@ -71,7 +73,7 @@ export function CorruptTracksSection() {
                                         key={track.id}
                                         className="flex items-start gap-3 px-3 py-2 bg-white/[0.02] rounded-lg"
                                     >
-                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400/60 mt-0.5 shrink-0" />
+                                        <AlertTriangle className="w-3.5 h-3.5 text-warning/60 mt-0.5 shrink-0" />
                                         <div className="min-w-0 flex-1">
                                             <p className="text-xs font-medium text-[var(--text-secondary)] truncate">
                                                 {track.title}
@@ -90,18 +92,15 @@ export function CorruptTracksSection() {
                     </div>
 
                     <div className="px-4 py-2">
-                        <button
+                        <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => setShowConfirm(true)}
-                            disabled={deleteMutation.isPending}
-                            className="flex items-center gap-2 px-4 py-2 text-xs tabular-nums text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                            isLoading={clearMutation.isPending}
                         >
-                            {deleteMutation.isPending ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                            )}
-                            Remove all corrupt tracks
-                        </button>
+                            {!clearMutation.isPending && <RotateCcw className="w-3.5 h-3.5" />}
+                            Clear the corrupt marks
+                        </Button>
                     </div>
                 </>
             )}
@@ -109,11 +108,11 @@ export function CorruptTracksSection() {
             <ConfirmDialog
                 isOpen={showConfirm}
                 onClose={() => setShowConfirm(false)}
-                onConfirm={() => deleteMutation.mutate()}
-                title="Remove corrupt tracks"
-                message={`This will permanently remove ${count} corrupt track${count !== 1 ? "s" : ""} from your database. The files on disk will not be deleted.`}
-                confirmText="Remove All"
-                variant="danger"
+                onConfirm={() => clearMutation.mutate()}
+                title="Clear the corrupt marks"
+                message={`This clears the corrupt mark on ${count} track${count !== 1 ? "s" : ""}. Nothing is deleted. The next library scan reads each file again and marks any that are still broken.`}
+                confirmText="Clear marks"
+                variant="warning"
             />
         </SettingsSection>
     );

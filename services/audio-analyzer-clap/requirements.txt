@@ -1,22 +1,26 @@
-# CLAP and ML
-laion-clap>=1.1.4
-torch>=2.0.0
-torchaudio>=2.0.0
-# laion_clap imports torchvision.ops.misc (clap_module/utils.py) but does not
-# declare it, so the image fails to build at the model-verification step with
-# "ModuleNotFoundError: No module named 'torchvision'". Pinned alongside torch
-# because the two must agree on their shared C++ ABI.
-torchvision>=0.15.0
-transformers>=4.30.0
-librosa>=0.10.0
+# CLAP and ML -- ONNX only; the shipped images carry no PyTorch (requirements-torch.txt adds it
+# for the torch backend).
+librosa==0.11.0
+soundfile==0.14.0
+
+# ONNX Runtime runs both CLAP encoders (audio and text). Not optional: analyzer.py imports
+# onnx_backend at module load.
+onnxruntime==1.30.0
+
+# The shipped runtime uses only the pinned fast RoBERTa tokenizer JSON.
+# CLAP NumPy audio feature helpers are vendored with the Apache-2.0 notice
+# in audio_features_numpy.py. The transformers package is not installed.
+tokenizers==0.22.1
 
 # Database and queue
 redis>=4.5.0
 psycopg2-binary>=2.9.0
 pgvector>=0.2.0
-bullmq==2.19.5
+# 2.26.0 pins msgpack 1.2.1, the fixed release for GHSA-6v7p-g79w-8964.
+bullmq==2.26.0
+msgpack==1.2.1
 
 # Utilities
-python-dotenv>=1.0.0
-numpy>=1.25.0
+# The all-in-one image's numpy, which the sound-vector parity was measured on.
+numpy==1.24.4
 requests>=2.31.0

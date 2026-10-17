@@ -1,13 +1,12 @@
 "use client";
 
-import { ExternalLink, Trash2, Plus, Loader2, Play, Pause, RefreshCw } from "lucide-react";
-import { cn } from "@/utils/cn";
-import type { ColorPalette } from "@/hooks/useImageColor";
+import { ExternalLink, Trash2, Plus, Play, Pause, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/Button";
 
 interface PodcastActionBarProps {
     isSubscribed: boolean;
     feedUrl?: string;
-    colors: ColorPalette | null;
     isSubscribing: boolean;
     showDeleteConfirm: boolean;
     onSubscribe: () => void;
@@ -36,61 +35,55 @@ export function PodcastActionBar({
 }: PodcastActionBarProps) {
     return (
         <div className="flex items-center gap-3">
-            {/* Play / Pause for subscribed podcasts */}
             {isSubscribed && onPlayLatest && (
                 <button
                     onClick={isPlayingPodcast ? onPause : onPlayLatest}
-                    className="w-10 h-10 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] transition-all flex items-center justify-center hover:scale-105 active:scale-95"
+                    aria-label={isPlayingPodcast ? "pause" : "play the latest episode"}
+                    className="h-12 w-12 rounded-full bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] transition-all flex items-center justify-center hover:scale-105 active:scale-95"
                 >
                     {isPlayingPodcast ? (
-                        <Pause className="w-4 h-4 text-white" />
+                        <Pause className="w-5 h-5 text-[var(--color-on-brand)] fill-current" />
                     ) : (
-                        <Play className="w-4 h-4 text-white ml-0.5" fill="white" />
+                        <Play className="w-5 h-5 text-[var(--color-on-brand)] fill-current ml-0.5" />
                     )}
                 </button>
             )}
 
-            {/* Refresh */}
             {isSubscribed && onRefresh && (
                 <button
                     onClick={onRefresh}
                     disabled={isRefreshing}
                     className="p-2.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all disabled:opacity-50"
-                    title="Check for new episodes"
+                    title="check for new episodes"
+                    aria-label="check for new episodes"
                 >
                     <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
                 </button>
             )}
 
-            {/* Subscribe Button */}
             {!isSubscribed && (
-                <button
+                <Button
+                    variant="primary"
                     onClick={onSubscribe}
-                    disabled={isSubscribing}
-                    className="h-10 px-5 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] transition-all flex items-center gap-2 font-bold text-sm text-white disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+                    isLoading={isSubscribing}
                 >
-                    {isSubscribing ? (
-                        <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Subscribing</span>
-                        </>
-                    ) : (
+                    {isSubscribing ? "Subscribing" : (
                         <>
                             <Plus className="w-4 h-4" />
-                            <span>Subscribe</span>
+                            Subscribe
                         </>
                     )}
-                </button>
+                </Button>
             )}
 
-            {/* RSS Feed Link */}
             {feedUrl && (
                 <a
                     href={feedUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
-                    title="RSS Feed"
+                    title="rss feed"
+                    aria-label="open the rss feed"
                 >
                     <ExternalLink className="w-4 h-4" />
                 </a>
@@ -98,13 +91,13 @@ export function PodcastActionBar({
 
             <div className="flex-1" />
 
-            {/* Remove Podcast */}
             {isSubscribed && (
                 <>
                     {!showDeleteConfirm ? (
                         <button
                             onClick={() => onShowDeleteConfirm(true)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all text-xs tabular-nums"
+                            aria-label="remove podcast"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-danger-light/60 hover:brightness-125 hover:bg-danger/10 border border-transparent hover:border-danger/20 transition-all text-xs tabular-nums"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span className="hidden md:inline">Remove</span>
@@ -116,7 +109,8 @@ export function PodcastActionBar({
                             </span>
                             <button
                                 onClick={onRemove}
-                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/20 transition-all"
+                                aria-label="confirm removing this podcast"
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-danger/20 text-danger-light hover:bg-danger/30 border border-danger/20 transition-all"
                             >
                                 Confirm
                             </button>

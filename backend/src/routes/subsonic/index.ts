@@ -1,12 +1,12 @@
 import { Router, Request, Response } from "express";
-import rateLimit from "express-rate-limit";
+import { createRateLimiter } from "../../middleware/rateLimiter";
 import { subsonicAuth } from "../../middleware/subsonicAuth";
 import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicResponse";
-import { prisma } from "../../utils/db";
 import { scanQueue } from "../../workers/queues";
+import { requestScan } from "../../workers/scanRequest";
 import { config } from "../../config";
 import { requireSubsonicAdmin } from "./userHelpers";
-import { hashApiKey } from "../../services/users/apiKeyStore";
+import { findApiKeyUser } from "../../services/users/apiKeyStore";
 // Every async handler here goes through wrap(): in Express 4 a rejected handler
 // promise produces NO response, so an unwrapped await that throws leaves the
 // client waiting until it times out. getScanStatus and startScan both talk to
@@ -14,18 +14,8 @@ import { hashApiKey } from "../../services/users/apiKeyStore";
 import { wrap } from "./mappers";
 
 /**
- * Bound a queue call so an unreachable Redis answers instead of hanging.
- *
- * wrap() above is not enough on its own, and that distinction cost a real
- * measurement: when Redis is down, ioredis does NOT reject: it queues the
- * command and retries the connection, so `getJobCounts` stays PENDING forever.
- * wrap() can only answer for a promise that settles. Measured against this
- * server with Redis stopped, the request produced no response at all and the
- * client gave up after 25 seconds.
- *
- * A deadline turns "never settles" into a rejection, which wrap() then turns
- * into a Subsonic error. Five seconds is far longer than a healthy local queue
- * read (measured at ~6ms) and far shorter than any client's patience.
+ * Deadline for queue calls: with Redis down ioredis queues commands instead of
+ * rejecting, so without it the request never answers. A healthy read takes ~6 ms.
  */
 const QUEUE_DEADLINE_MS = 5_000;
 
@@ -56,18 +46,14 @@ import { podcastRouter } from "./podcasts";
 
 export const subsonicRouter = Router();
 
-// Rate limit the Subsonic API separately: auth does a DB query on every request
-const subsonicLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 1500, // 1500 req/min per IP — Symfonium fires per-album requests during sync
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Subsonic auth queries the database on every request. 1500 a minute per IP
+// leaves room for clients such as Symfonium that sync one album per request.
+const subsonicLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 1500 });
 subsonicRouter.use(subsonicLimiter);
 
 // Normalize paths: append .view suffix if missing for client compatibility.
 // Some clients (e.g. Musa) send /rest/ping instead of /rest/ping.view.
-subsonicRouter.use((req: Request, res: Response, next) => {
+subsonicRouter.use((req: Request, _res: Response, next) => {
     if (!req.path.endsWith(".view")) {
         req.url = req.path + ".view" + (req.url.includes("?") ? req.url.substring(req.url.indexOf("?")) : "");
     }
@@ -81,27 +67,12 @@ subsonicRouter.all("/tokenInfo.view", wrap(async (req: Request, res: Response) =
         return subsonicError(req, res, SubsonicError.MISSING_PARAM, "Required parameter is missing: apiKey");
     }
 
-    const keyRecord = await prisma.apiKey.findUnique({
-        where: { keyHash: hashApiKey(apiKey) },
-        select: {
-            id: true,
-            user: { select: { username: true } },
-        },
-    });
-
-    if (!keyRecord) {
+    const keyUser = await findApiKeyUser(apiKey);
+    if (!keyUser) {
         return subsonicError(req, res, SubsonicError.INVALID_API_KEY, "Invalid API key");
     }
 
-    prisma.apiKey
-        .update({ where: { id: keyRecord.id }, data: { lastUsed: new Date() } })
-        .catch(() => {});
-
-    return subsonicOk(req, res, {
-        tokenInfo: {
-            username: keyRecord.user.username,
-        },
-    });
+    return subsonicOk(req, res, { tokenInfo: { username: keyUser.username } });
 }));
 
 // All routes require Subsonic auth (applied after rate limit)
@@ -157,23 +128,15 @@ subsonicRouter.all("/getScanStatus.view", wrap(async (req: Request, res: Respons
 }));
 
 subsonicRouter.all("/startScan.view", wrap(async (req: Request, res: Response) => {
-    // The REST equivalent (routes/library/scan.ts) is admin-gated via
-    // requireAdmin; this one had no check at all -- any authenticated
-    // Subsonic user, including a plain non-admin account, could trigger a
-    // full library scan. Uses the shared helper (userHelpers.ts) rather than
-    // a seventh inline copy of the check that produced that gap in the first
-    // place.
+    // Admin only, like the REST scan route.
     if (!requireSubsonicAdmin(req, res)) return;
     if (!config.music.musicPath) {
         return subsonicError(req, res, SubsonicError.GENERIC, "Music path not configured");
     }
 
     await withQueueDeadline(
-        scanQueue.add("scan", {
-            userId: req.user!.id,
-            musicPath: config.music.musicPath,
-        }),
-        "scanQueue.add"
+        requestScan({ userId: req.user!.id, source: "subsonic-scan" }),
+        "requestScan"
     );
 
     const counts = await withQueueDeadline(scanQueue.getJobCounts("active", "waiting", "delayed"), "getJobCounts");

@@ -1,34 +1,38 @@
 "use client";
 
 import Image, { ImageProps } from "next/image";
-import { memo } from "react";
+import { memo, useState } from "react";
 
 interface CachedImageProps extends Omit<ImageProps, "src"> {
     src: string | null | undefined;
     fill?: boolean;
 }
 
-/**
- * Image component with Service Worker caching
- * The SW handles cache-first fetching for /api/library/cover-art/* routes
- */
+/* Cover art is served cache-first by the service worker for /api/library/cover-art/*. */
 const CachedImage = memo(function CachedImage({
     src,
     alt = "",
     ...props
 }: CachedImageProps) {
-    if (!src) {
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+    if (!src || failedSrc === src) {
         return null;
     }
 
-    // Add lazy loading by default for better performance
-    const imageProps = {
-        ...props,
-        loading: props.loading || 'lazy',
-    };
-
-    return <Image src={src} alt={alt} unoptimized {...imageProps} />;
+    return (
+        <Image
+            src={src}
+            alt={alt}
+            unoptimized
+            {...props}
+            loading={props.loading ?? (props.priority || props.preload ? undefined : "lazy")}
+            onError={(e) => {
+                setFailedSrc(src);
+                props.onError?.(e);
+            }}
+        />
+    );
 });
 
 export { CachedImage };
-export type { CachedImageProps };

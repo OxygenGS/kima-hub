@@ -15,6 +15,7 @@ jest.mock("../../utils/db", () => ({
     prisma: {
         userSettings: { findUnique: jest.fn().mockResolvedValue(null) },
         album: { findUnique: jest.fn().mockResolvedValue(null) },
+        track: { findUnique: jest.fn().mockResolvedValue(null) },
     },
 }));
 jest.mock("../../utils/logger", () => ({
@@ -47,5 +48,26 @@ describe("offline album download permission", () => {
             .send({});
         expect(res.status).toBe(404);
         expect(prisma.album.findUnique).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("offline track completion permission", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    const submit = () => request(app).post("/offline/tracks/track-1/complete")
+        .send({ localPath: "track-1.mp3", quality: "low", fileSizeMb: 1 });
+
+    it("rejects completion from a user without download rights before reading the track", async () => {
+        const res = await submit();
+        expect(res.status).toBe(403);
+        expect(prisma.track.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("permits an authorized user to reach ordinary track validation", async () => {
+        const res = await request(app).post("/offline/tracks/track-1/complete")
+            .set("x-test-download-allowed", "true")
+            .send({ localPath: "track-1.mp3", quality: "low", fileSizeMb: 1 });
+        expect(res.status).toBe(404);
+        expect(prisma.track.findUnique).toHaveBeenCalledTimes(1);
     });
 });

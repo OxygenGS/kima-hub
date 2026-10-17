@@ -1,13 +1,7 @@
 /**
- * Multi-strategy search for Soulseek P2P network
- *
- * Strategies ordered from simple to complex based on real-world filename patterns.
- * Simpler queries match more actual filenames and should be tried first:
- * 1. Artist + Title (aggressive normalization) - most likely to match
- * 2. Artist + Title (moderate normalization) - balanced approach
- * 3. Title only (aggressive normalization) - fallback when artist name doesn't match
- * 4. Album + Title - fallback for compilation albums
- * 5. Artist + Album + Title - last resort for highly specific searches
+ * Soulseek search strategies, simplest first since simpler queries match more
+ * filenames: artist + title (aggressive, then moderate normalisation), title
+ * only, album + title, then artist + album + title.
  */
 
 import type { FileSearchResponse } from "../lib/soulseek/messages/from/peer";
@@ -21,35 +15,24 @@ export type SearchFn = (
 interface SearchStrategy {
     name: string;
     buildQuery: (artist: string, track: string, album?: string) => string;
-    priority: number;
 }
 
-/**
- * Strip classical music metadata that doesn't appear in real filenames
- */
+/** Strips classical metadata (movements, catalogue numbers, keys, arrangements) that real filenames lack. */
 function stripClassicalMetadata(title: string): string {
     return title
-        // Remove movement numbers: "I.", "II.", "III.", "IV.", etc.
-        // Matches Roman numerals (I, V, X combinations) followed by period
+        // Movement numbers: "I.", "II.", "IV."
         .replace(/\b[IVX]+\.\s*/g, "")
-        // Replace colons with spaces (used as separators in classical titles)
         .replace(/:\s*/g, " ")
-        // Remove opus/catalog numbers used to identify classical works
-        // Op. (Opus), K. (Köchel), BWV (Bach), RV (Vivaldi), Hob. (Haydn), D. (Schubert), WoO (Beethoven)
+        // Catalogue numbers: Op., K., BWV, RV, Hob., D., WoO.
         .replace(/\b(Op\.|K\.|BWV|RV|Hob\.|D\.|WoO)\s*\d+[a-z]?/gi, "")
-        // Remove key signatures that appear in classical titles
         .replace(/\bin\s+[A-G]\s+(Major|Minor|sharp|flat)/gi, "")
-        // Remove arrangement notes like "(Arr. for Piano from Concerto)"
+        // Arrangement notes: "(Arr. for Piano from Concerto)"
         .replace(/\(Arr\.[^)]+\)/gi, "")
-        // Remove "inspired by" phrases that don't appear in filenames
         .replace(/inspired by[^,]+,?\s*/gi, "")
         .replace(/\s+/g, " ")
         .trim();
 }
 
-/**
- * Strip featuring artists from track titles
- */
 function stripFeaturingArtists(title: string): string {
     return title
         .replace(/\s*[\(\[]?\s*(feat\.|ft\.|featuring|with)\s+[^\)\]]+[\)\]]?\s*/gi, " ")
@@ -58,9 +41,10 @@ function stripFeaturingArtists(title: string): string {
 }
 
 /**
- * Normalize track title with different levels of aggression
+ * A track title as a search string, at three levels of aggression. Matching
+ * against the database uses utils/normalization instead.
  */
-export function normalizeTrackTitle(title: string, level: 'aggressive' | 'moderate' | 'minimal'): string {
+export function normalizeTrackTitleForSearch(title: string, level: 'aggressive' | 'moderate' | 'minimal'): string {
     let normalized = title
         .replace(/\u2026/g, "")
         .replace(/[\u2018\u2019\u2032`]/g, "'")
@@ -102,9 +86,11 @@ export function normalizeTrackTitle(title: string, level: 'aggressive' | 'modera
 }
 
 /**
- * Normalize artist name
+ * Build a search-friendly artist string: case-preserving, drops a leading
+ * "The " (except "The The"), maps "&" to "and", folds smart quotes.
+ * Not the DB lookup normalizer — that is utils/artistNormalization.
  */
-export function normalizeArtistName(artist: string): string {
+export function prepareArtistForSearch(artist: string): string {
     const artistLower = artist.toLowerCase();
 
     // Don't remove "the" for bands like "The The" where it's part of the name
@@ -124,60 +110,51 @@ export function normalizeArtistName(artist: string): string {
         .trim();
 }
 
-/**
- * All available search strategies, ordered by priority (simple to complex)
- */
+/** The search strategies, simplest first. */
 const SEARCH_STRATEGIES: SearchStrategy[] = [
     {
         name: "artist-title-aggressive",
         buildQuery: (artist, track) => {
-            const normalizedArtist = normalizeArtistName(artist);
-            const normalizedTitle = normalizeTrackTitle(track, 'aggressive');
+            const normalizedArtist = prepareArtistForSearch(artist);
+            const normalizedTitle = normalizeTrackTitleForSearch(track, 'aggressive');
             return `${normalizedArtist} ${normalizedTitle}`.trim();
         },
-        priority: 1,
     },
     {
         name: "artist-title-moderate",
         buildQuery: (artist, track) => {
-            const normalizedArtist = normalizeArtistName(artist);
-            const normalizedTitle = normalizeTrackTitle(track, 'moderate');
+            const normalizedArtist = prepareArtistForSearch(artist);
+            const normalizedTitle = normalizeTrackTitleForSearch(track, 'moderate');
             return `${normalizedArtist} ${normalizedTitle}`.trim();
         },
-        priority: 2,
     },
     {
         name: "title-only-aggressive",
-        buildQuery: (artist, track) => {
-            const normalizedTitle = normalizeTrackTitle(track, 'aggressive');
+        buildQuery: (_artist, track) => {
+            const normalizedTitle = normalizeTrackTitleForSearch(track, 'aggressive');
             return normalizedTitle.trim();
         },
-        priority: 3,
     },
     {
         name: "album-title",
-        buildQuery: (artist, track, album) => {
+        buildQuery: (_artist, track, album) => {
             if (!album) return "";
-            const normalizedTitle = normalizeTrackTitle(track, 'moderate');
+            const normalizedTitle = normalizeTrackTitleForSearch(track, 'moderate');
             return `${album} ${normalizedTitle}`.trim();
         },
-        priority: 4,
     },
     {
         name: "artist-album-title",
         buildQuery: (artist, track, album) => {
             if (!album) return "";
-            const normalizedArtist = normalizeArtistName(artist);
-            const normalizedTitle = normalizeTrackTitle(track, 'moderate');
+            const normalizedArtist = prepareArtistForSearch(artist);
+            const normalizedTitle = normalizeTrackTitleForSearch(track, 'moderate');
             return `${normalizedArtist} ${album} ${normalizedTitle}`.trim();
         },
-        priority: 5,
     },
 ];
 
-/**
- * Execute multi-strategy search with fallbacks
- */
+/** Tries each strategy in order until one returns audio files. */
 export async function searchWithStrategies(
     search: SearchFn,
     artistName: string,
@@ -189,14 +166,13 @@ export async function searchWithStrategies(
 ): Promise<FileSearchResponse[]> {
     const audioExtensions = [".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav", ".aac"];
 
-    // Build queries once and filter strategies that produce valid queries
     const applicableStrategies = SEARCH_STRATEGIES
         .map(strategy => ({
             strategy,
             query: strategy.buildQuery(artistName, trackTitle, albumName)
         }))
         .filter(({ query, strategy }) => {
-            // Skip strategies that produce overly long queries (Soulseek best practice)
+            // Soulseek matches long queries poorly
             if (query.length > 100) {
                 sessionLog(
                     "SOULSEEK",
@@ -212,7 +188,6 @@ export async function searchWithStrategies(
     let successfulStrategy: string | null = null;
 
     for (const { strategy, query } of applicableStrategies) {
-        // Log query length and content for debugging
         if (query.length > 80) {
             sessionLog(
                 "SOULSEEK",
@@ -234,7 +209,6 @@ export async function searchWithStrategies(
             });
 
             if (responses && responses.length > 0) {
-                // Count audio files in responses
                 let audioFileCount = 0;
                 for (const response of responses) {
                     for (const file of response.files) {

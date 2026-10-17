@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, useDragControls, type PanInfo } from "framer-motion";
 import { ActivityIconBar, type ActivityType } from "./ActivityIconBar";
 import {
@@ -11,11 +11,33 @@ import {
     TabContent,
 } from "./panel-shared";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { Waypoints, Sparkles, AudioWaveform } from "lucide-react";
+import Link from "next/link";
+import { Waypoints, Sparkles, AudioWaveform, Play, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 type SnapPoint = "peek" | "half" | "full";
 
-const PEEK_HEIGHT = 80;
+/** The closed sheet's handle. */
+const SHEET_PEEK = 28;
+
+function SheetAction({ icon: Icon, label, primary = false, ...props }: { icon: LucideIcon; label: string; primary?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            className={cn(
+                "flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg landscape-short:flex-row landscape-short:justify-center landscape-short:gap-1.5 landscape-short:min-h-11 landscape-short:py-1 border text-[var(--text-primary)] transition-colors focus-visible:outline-none focus-visible:ring-2",
+                primary
+                    ? "bg-[var(--color-brand)]/15 border-[var(--color-brand)]/40 focus-visible:ring-[var(--color-brand)]/60"
+                    : "bg-white/[0.06] hover:bg-white/[0.12] border-white/10 focus-visible:ring-white/40",
+            )}
+            {...props}
+        >
+            <Icon className={cn("w-4 h-4 shrink-0", primary && "fill-current")} />
+            <span className="text-micro font-medium leading-tight text-center">{label}</span>
+        </button>
+    );
+}
 
 export interface VibePanelSheetProps {
     selectedTrackId?: string | null;
@@ -24,6 +46,12 @@ export interface VibePanelSheetProps {
     onTrackOperation?: (op: "vibe" | "similar") => void;
     onStartSongPath?: () => void;
     songPathActive?: boolean;
+    onPlay?: () => void;
+    selectedArtistId?: string | null;
+    /** Leave the space the floating mini player covers (--mini-clearance). */
+    aboveMiniPlayer?: boolean;
+    /** First-visit help, shown under the handle while no track is selected. */
+    intro?: React.ReactNode;
 }
 
 export function VibePanelSheet({
@@ -33,7 +61,13 @@ export function VibePanelSheet({
     onTrackOperation,
     onStartSongPath,
     songPathActive = false,
+    aboveMiniPlayer = false,
+    onPlay,
+    selectedArtistId,
+    intro,
 }: VibePanelSheetProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [snap, setSnap] = useState<SnapPoint>("peek");
     const [activeTab, setActiveTab] = useState<VibeTab>("now-playing");
     const [expandedActivity, setExpandedActivity] = useState<ActivityType | null>(null);
@@ -41,18 +75,36 @@ export function VibePanelSheet({
     const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
     const dragControls = useDragControls();
 
+    const sheetRef = useRef<HTMLDivElement>(null);
+    // Size against the area above the mini player, which the sheet's frame already is.
     useEffect(() => {
-        const update = () => setSheetHeight(window.innerHeight * 0.9);
+        const update = () => {
+            const host = sheetRef.current?.offsetParent as HTMLElement | null;
+            const available = host?.clientHeight ?? window.innerHeight;
+            setSheetHeight(Math.max(SHEET_PEEK * 6, available * 0.94));
+        };
         update();
         window.addEventListener("resize", update);
         return () => window.removeEventListener("resize", update);
-    }, []);
+    }, [aboveMiniPlayer]);
 
+    // The closed sheet shows, under the handle, the selected track's actions or the
+    // first-visit help, at their measured height.
+    const [peekContentHeight, setPeekContentHeight] = useState(0);
+    const hasActions = !!(selectedTrackId && onTrackOperation && onStartSongPath);
+    const hasPeekContent = hasActions || !!intro;
+    const peekContentRef = useCallback((el: HTMLDivElement | null) => {
+        if (!el) return;
+        const observer = new ResizeObserver(() => setPeekContentHeight(el.offsetHeight));
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+    const peekHeight = SHEET_PEEK + (hasPeekContent ? peekContentHeight : 0);
     const snapY = useMemo(() => ({
-        peek: sheetHeight - PEEK_HEIGHT,
+        peek: sheetHeight - peekHeight,
         half: sheetHeight * 0.5,
         full: 0,
-    }), [sheetHeight]);
+    }), [sheetHeight, peekHeight]);
 
     const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
         const currentY = snapY[snap] + info.offset.y;
@@ -81,8 +133,10 @@ export function VibePanelSheet({
     };
 
     return (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-(--z-scene-panel) overflow-hidden" style={{ bottom: aboveMiniPlayer ? "var(--mini-clearance)" : 0 }}>
         <motion.div
-            className="fixed bottom-0 left-0 right-0 z-(--z-scene-panel) bg-[var(--bg-primary)] rounded-t-2xl border-t border-white/10 flex flex-col animate-panel-up"
+            ref={sheetRef}
+            className="pointer-events-auto absolute bottom-0 left-0 right-0 bg-[var(--bg-primary)] rounded-t-2xl border-t border-white/10 flex flex-col"
             style={{ height: sheetHeight }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, y: snapY[snap] }}
@@ -97,7 +151,6 @@ export function VibePanelSheet({
             dragElastic={0.2}
             onDragEnd={handleDragEnd}
         >
-            {/* Drag handle */}
             <div
                 className="flex justify-center py-3 cursor-grab active:cursor-grabbing touch-none shrink-0"
                 onPointerDown={(e) => dragControls.start(e)}
@@ -105,52 +158,51 @@ export function VibePanelSheet({
                 <div className="w-10 h-1 bg-white/20 rounded-full" />
             </div>
 
-            {/* Vibe track actions -- shown when a map dot is selected */}
-            {selectedTrackId && onTrackOperation && onStartSongPath && (
-                <div className="shrink-0 px-3 pb-2 border-b border-white/5">
+            {!hasActions && intro && (
+                <div ref={peekContentRef} className="shrink-0 px-4 pb-3 border-b border-white/5">{intro}</div>
+            )}
+
+            {hasActions && onTrackOperation && onStartSongPath && (
+                <div ref={peekContentRef} className="shrink-0 px-3 pb-2 border-b border-white/5 landscape-short:flex landscape-short:items-center landscape-short:gap-3">
                     {(selectedTrackTitle || selectedTrackArtist) && (
-                        <p className="text-xs text-[var(--text-muted)] truncate mb-2 mt-0.5">
+                        <p className="text-xs text-[var(--text-muted)] truncate mb-2 mt-0.5 landscape-short:m-0 landscape-short:w-44 landscape-short:shrink-0">
                             <span className="text-[var(--text-secondary)]">{selectedTrackTitle}</span>
                             {selectedTrackArtist && (
-                                <> &middot; {selectedTrackArtist}</>
+                                <> &middot; {selectedArtistId
+                                    ? <Link href={`/artist/${selectedArtistId}`} className="underline-offset-2 hover:underline">{selectedTrackArtist}</Link>
+                                    : selectedTrackArtist}</>
                             )}
                         </p>
                     )}
-                    <div className="flex gap-2">
-                        <button
+                    <div className="flex gap-2 landscape-short:min-w-0 landscape-short:flex-1">
+                        {onPlay && <SheetAction primary icon={Play} label={t("Play")} onClick={onPlay} aria-label={t("Play this track")} />}
+                        <SheetAction
+                            icon={Sparkles}
+                            label={t("Match Vibe")}
                             onClick={() => onTrackOperation("vibe")}
-                            aria-label="Match Vibe -- build a queue of similar-sounding tracks"
-                            className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-                        >
-                            <Sparkles className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Match Vibe</span>
-                        </button>
-                        <button
+                            aria-label={t("Match Vibe -- build a queue of similar-sounding tracks")}
+                        />
+                        <SheetAction
+                            icon={AudioWaveform}
+                            label={t("Similar")}
                             onClick={() => onTrackOperation("similar")}
-                            aria-label="Similar -- highlight similar tracks on the map"
-                            className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-                        >
-                            <AudioWaveform className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Similar</span>
-                        </button>
-                        <button
+                            aria-label={t("Similar -- highlight similar tracks on the map")}
+                        />
+                        <SheetAction
+                            icon={Waypoints}
+                            label={t("Song Path")}
                             onClick={onStartSongPath}
-                            aria-label="Song Path -- set this track as the start of a song path, then tap the destination"
-                            className="flex-1 flex flex-col items-center gap-1 min-h-[52px] py-2 px-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40 text-purple-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/60"
-                        >
-                            <Waypoints className="w-4 h-4 shrink-0" />
-                            <span className="text-micro font-medium leading-tight text-center">Song Path</span>
-                        </button>
+                            aria-label={t("Song Path -- set this track as the start of a song path, then tap the destination")}
+                        />
                     </div>
                     {songPathActive && (
-                        <p className="text-micro text-purple-500/70 text-center mt-2 animate-pulse">
-                            Tap another track to complete the song path
+                        <p className="text-micro text-[var(--text-secondary)] text-center mt-2 animate-pulse">
+                            {t("Tap another track to complete the song path")}
                         </p>
                     )}
                 </div>
             )}
 
-            {/* Activity icon bar */}
             <div className="shrink-0">
                 <ActivityIconBar
                     expandedActivity={expandedActivity}
@@ -175,5 +227,6 @@ export function VibePanelSheet({
                 </>
             )}
         </motion.div>
+        </div>
     );
 }

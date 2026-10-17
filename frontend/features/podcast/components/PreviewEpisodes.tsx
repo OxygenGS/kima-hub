@@ -1,15 +1,15 @@
 "use client";
 
 import DOMPurify from "dompurify";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { PodcastPreview } from "../types";
-import type { ColorPalette } from "@/hooks/useImageColor";
-import { formatDuration } from "@/utils/formatTime";
+import { formatDuration } from "@/lib/format";
 import { formatDate } from "../utils";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Button } from "@/components/ui/Button";
 
 interface PreviewEpisodesProps {
     previewData: PodcastPreview;
-    colors: ColorPalette | null;
     isSubscribing: boolean;
     onSubscribe: () => void;
 }
@@ -19,106 +19,89 @@ export function PreviewEpisodes({
     isSubscribing,
     onSubscribe,
 }: PreviewEpisodesProps) {
+    const hasEpisodes =
+        previewData.previewEpisodes &&
+        previewData.previewEpisodes.length > 0;
+
     return (
         <section>
-            <div className="flex items-center gap-3 mb-6">
-                <span className="w-1 h-8 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Latest Episodes</h2>
-                <span className="flex-1 border-t border-white/10" />
-            </div>
+            <SectionHeader title="Latest Episodes" type="podcast" />
 
-            <div className="relative">
-                {previewData.previewEpisodes &&
-                previewData.previewEpisodes.length > 0 ? (
-                    <>
-                        <div className="space-y-0.5">
-                            {previewData.previewEpisodes.map((episode, index) => (
-                                <div
-                                    key={index}
-                                    className="flex items-center gap-4 px-3 py-3 rounded-lg opacity-50 cursor-not-allowed"
-                                >
-                                    <div className="w-8 flex items-center justify-center shrink-0">
-                                        <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                                            {index + 1}
-                                        </span>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="font-bold truncate text-sm text-white tracking-tight">
-                                            {episode.title}
-                                        </h3>
-                                        <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)]">
-                                            <span>{formatDate(episode.publishedAt)}</span>
-                                            {episode.duration > 0 && (
-                                                <>
-                                                    <span className="text-[var(--text-muted)]">|</span>
-                                                    <span>{formatDuration(episode.duration)}</span>
-                                                </>
-                                            )}
-                                        </div>
+            {hasEpisodes ? (
+                // The subscribe fade below covers the episode list only, so the list holds it.
+                <div className="relative">
+                    <div className="space-y-0.5">
+                        {previewData.previewEpisodes!.map((episode, index) => (
+                            <div
+                                key={index}
+                                className="flex items-center gap-4 px-3 py-2 rounded-lg opacity-50 cursor-not-allowed"
+                            >
+                                <div className="w-8 flex items-center justify-center shrink-0">
+                                    <span className="text-xs tabular-nums text-[var(--text-muted)]">
+                                        {index + 1}
+                                    </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold truncate text-sm text-white tracking-tight">
+                                        {episode.title}
+                                    </h3>
+                                    <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)]">
+                                        <span>{formatDate(episode.publishedAt)}</span>
+                                        {episode.duration > 0 && (
+                                            <>
+                                                <span className="text-[var(--text-muted)]">|</span>
+                                                <span>{formatDuration(episode.duration)}</span>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))}
+                    </div>
 
-                        {/* Subscribe overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/80 to-[#0a0a0a] flex items-end justify-center pb-8 pointer-events-none">
-                            <button
-                                onClick={onSubscribe}
-                                disabled={isSubscribing}
-                                className="flex items-center gap-2 pointer-events-auto h-10 px-5 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] transition-all font-bold text-sm text-white disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                {isSubscribing ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>Subscribing</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Plus className="w-4 h-4" />
-                                        <span>Subscribe to Unlock All Episodes</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="relative overflow-hidden rounded-lg border-2 border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-8 text-center">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#3b82f6] to-[#2563eb]" />
-                        <p className="text-xs text-[var(--text-muted)] mb-4">
-                            No episodes available for preview
-                        </p>
-                        <button
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/80 to-[#0a0a0a] flex items-end justify-center pb-8 pointer-events-none">
+                        <Button
+                            variant="primary"
                             onClick={onSubscribe}
-                            disabled={isSubscribing}
-                            className="flex items-center gap-2 mx-auto h-10 px-5 rounded-lg bg-[#3b82f6] hover:bg-[#2563eb] transition-all font-bold text-sm text-white disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+                            isLoading={isSubscribing}
+                            className="pointer-events-auto"
                         >
-                            {isSubscribing ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Subscribing</span>
-                                </>
-                            ) : (
+                            {isSubscribing ? "Subscribing" : (
                                 <>
                                     <Plus className="w-4 h-4" />
-                                    <span>Subscribe</span>
+                                    Subscribe to Unlock All Episodes
                                 </>
                             )}
-                        </button>
+                        </Button>
                     </div>
-                )}
-            </div>
+                </div>
+            ) : (
+                <div className="relative overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-8 text-center">
+                    <p className="text-xs text-[var(--text-muted)] mb-4">
+                        No episodes available for preview
+                    </p>
+                    <Button
+                        variant="primary"
+                        onClick={onSubscribe}
+                        isLoading={isSubscribing}
+                        className="mx-auto"
+                    >
+                        {isSubscribing ? "Subscribing" : (
+                            <>
+                                <Plus className="w-4 h-4" />
+                                Subscribe
+                            </>
+                        )}
+                    </Button>
+                </div>
+            )}
 
-            {/* About Section */}
             {previewData.description && (
                 <div className="mt-8">
-                    <div className="flex items-center gap-3 mb-4">
-                        <span className="w-1 h-6 bg-gradient-to-b from-[#3b82f6] to-[#2563eb] rounded-full shrink-0" />
-                        <h2 className="text-xl font-bold tracking-tight">About</h2>
-                        <span className="flex-1 border-t border-white/10" />
-                    </div>
+                    <SectionHeader title="About" type="podcast" />
                     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-4">
                         <div
-                            className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] [&_a]:text-[#3b82f6] [&_a]:no-underline [&_a:hover]:underline tabular-nums text-xs leading-relaxed"
+                            className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] max-w-3xl text-xs leading-relaxed"
                             dangerouslySetInnerHTML={{
                                 __html: DOMPurify.sanitize(previewData.description || ""),
                             }}

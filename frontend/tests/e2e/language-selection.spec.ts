@@ -1,0 +1,743 @@
+import { expect, test } from "@playwright/test";
+
+test.describe("Interface language", () => {
+    test("switches the public login UI to Dutch and remembers the choice", async ({ page }) => {
+        await page.goto("/login");
+
+        const languageSelect = page.locator("#login-language");
+        await expect(languageSelect).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+
+        await languageSelect.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByRole("button", { name: "Inloggen" })).toBeVisible();
+
+        await page.reload();
+        await expect(languageSelect).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await languageSelect.selectOption("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
+    test("changes the login language with only keyboard controls without submitting credentials", async ({ page }) => {
+        await page.goto("/login");
+
+        // The username field is auto-focused by the real login form.
+        const username = page.locator("#username");
+        const password = page.locator("#password");
+        const language = page.locator("#login-language");
+        await expect(username).toBeFocused();
+
+        await username.fill("synthetic-keyboard-user");
+        await password.fill("synthetic-keyboard-password");
+        await page.keyboard.press("Shift+Tab");
+        await expect(username).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(language).toBeFocused();
+
+        // Changing the native select using keyboard events must change only UI labels.
+        await page.keyboard.press("ArrowDown");
+        await expect(language).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(language).toHaveAttribute("aria-label", "Taal");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(username).toHaveValue("synthetic-keyboard-user");
+        await expect(password).toHaveValue("synthetic-keyboard-password");
+
+        await page.keyboard.press("ArrowUp");
+        await expect(language).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(language).toHaveAttribute("aria-label", "Language");
+        await expect(username).toHaveValue("synthetic-keyboard-user");
+        await expect(password).toHaveValue("synthetic-keyboard-password");
+        await expect(page).toHaveURL(/\/login$/);
+    });
+
+    test("can switch Dutch in a storage-blocked browser for the current tab", async ({ page }) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(window, "localStorage", {
+                configurable: true,
+                get() {
+                    throw new DOMException("Storage disabled", "SecurityError");
+                },
+            });
+        });
+        await page.goto("/login");
+
+        const select = page.locator("#login-language");
+        await expect(select).toHaveValue("en");
+        await select.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await select.selectOption("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await select.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+
+        // Storage is blocked, so the preference should not survive a full reload.
+        await page.reload();
+        await expect(select).toHaveValue("en");
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
+    test("keeps language selection separate from server-side credentials", async ({ page }) => {
+        await page.goto("/login");
+        await page.locator("#login-language").selectOption("nl");
+        await page.locator("#username").fill("example-user");
+        await page.locator("#password").fill("example-password");
+        await page.locator("#login-language").selectOption("en");
+        await expect(page.locator("#username")).toHaveValue("example-user");
+        await expect(page.locator("#password")).toHaveValue("example-password");
+    });
+    test("allows choosing Dutch during first-run setup without an account", async ({ page }) => {
+        await page.goto("/onboarding");
+        const languageSelect = page.locator("#onboarding-language");
+        await expect(languageSelect).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Create Your Admin Account" })).toBeVisible();
+
+        await page.locator("#username").fill("sample-admin");
+        await languageSelect.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.locator("#username")).toHaveValue("sample-admin");
+
+        await page.reload();
+        await expect(languageSelect).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+
+        await page.goto("/login");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+    });
+    test("synchronizes the browser language across existing tabs", async ({ page, context }) => {
+        await page.goto("/login");
+        const secondTab = await context.newPage();
+        await secondTab.goto("/login");
+
+        const firstSelect = page.locator("#login-language");
+        const secondSelect = secondTab.locator("#login-language");
+        await expect(firstSelect).toHaveValue("en");
+        await expect(secondSelect).toHaveValue("en");
+
+        await firstSelect.selectOption("nl");
+        await expect(secondSelect).toHaveValue("nl");
+        await expect(secondTab.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(secondTab.locator("html")).toHaveAttribute("lang", "nl");
+
+        await secondSelect.selectOption("en");
+        await expect(firstSelect).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        await secondTab.close();
+    });
+
+    test("defaults to English for an unrecognized stored language", async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "de");
+        });
+        await page.goto("/login");
+
+        await expect(page.locator("#login-language")).toHaveValue("en");
+        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
+    test("keeps language controls usable in narrow mobile viewports", async ({ page }) => {
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.goto("/login");
+
+        const loginLanguage = page.locator("#login-language");
+        await expect(loginLanguage).toBeVisible();
+        await loginLanguage.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Inloggen" })).toBeVisible();
+
+        await page.goto("/onboarding");
+        const onboardingLanguage = page.locator("#onboarding-language");
+        await expect(onboardingLanguage).toBeVisible();
+        await expect(onboardingLanguage).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
+
+        // Language selection must remain horizontally reachable on mobile.
+        const selectBounds = await onboardingLanguage.boundingBox();
+        expect(selectBounds).not.toBeNull();
+        expect(selectBounds!.x).toBeGreaterThanOrEqual(0);
+        expect(selectBounds!.x + selectBounds!.width).toBeLessThanOrEqual(375);
+    });
+
+    test("changes language on authenticated settings without modifying server preferences", async ({ page }) => {
+        // Mock a regular signed-in account. No real user, token, or backend is needed.
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            const responses: Record<string, unknown> = {
+                "/api/auth/me": {
+                    id: "locale-test-user",
+                    username: "locale-test-user",
+                    role: "user",
+                    canRequestAlbums: false,
+                    canDownloadTracks: false,
+                    onboardingComplete: true,
+                },
+                "/api/settings": {
+                    playbackQuality: "original",
+                    wifiOnly: false,
+                    offlineEnabled: false,
+                    maxCacheSizeMb: 5120,
+                },
+                "/api/api-keys": { apiKeys: [] },
+                "/api/auth/2fa/status": { enabled: false },
+                "/api/system-settings/public-config": { publicUrl: "" },
+            };
+            if (pathname in responses) {
+                await route.fulfill({
+                    status: 200,
+                    contentType: "application/json",
+                    body: JSON.stringify(responses[pathname]),
+                });
+                return;
+            }
+            await route.fulfill({
+                status: 404,
+                contentType: "application/json",
+                body: JSON.stringify({ error: "Unavailable in isolated locale test" }),
+            });
+        });
+        await page.addInitScript(() => {
+            localStorage.setItem("auth_token", "local-test-only-token");
+        });
+
+        await page.goto("/settings#language");
+        const languageSelect = page.locator("#language-select");
+        await expect(languageSelect).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+        await expect(page.locator("#language").getByRole("heading", { name: "Language" })).toBeVisible();
+
+        await languageSelect.selectOption("nl");
+        await expect(page.getByRole("heading", { name: "Instellingen", exact: true })).toBeVisible();
+        await expect(page.locator("#language").getByRole("heading", { name: "Taal" })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await page.reload();
+        await expect(languageSelect).toHaveValue("nl");
+        await expect(page.getByRole("heading", { name: "Instellingen", exact: true })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+
+        await languageSelect.selectOption("en");
+        await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    });
+
+
+
+    test("shows Discover Weekly and unavailable previews in Dutch/English without changing music data or starting downloads", async ({ page }) => {
+        const discoveryWrites: string[] = [];
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "nl");
+            localStorage.setItem("auth_token", "discovery-local-only");
+        });
+        page.on("request", (request) => {
+            const path = new URL(request.url()).pathname;
+            if (path.startsWith("/api/discover/") && request.method() !== "GET") {
+                discoveryWrites.push(request.method() + " " + path);
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const path = new URL(route.request().url()).pathname;
+            const replies: Record<string, unknown> = {
+                "/api/auth/me": {
+                    id: "discovery-locale-user", username: "discovery-locale-user",
+                    role: "user", onboardingComplete: true,
+                    canRequestAlbums: false, canDownloadTracks: false,
+                },
+                "/api/discover/current": {
+                    weekStart: "2026-10-12T12:00:00Z", weekEnd: "2026-10-19T12:00:00Z",
+                    tracks: [{
+                        id: "ci-untouched-song-1", title: "CI Original Discovery Song",
+                        artist: "CI Original Artist", album: "CI Original Album",
+                        albumId: "ci-album-1", isLiked: false, likedAt: null,
+                        similarity: 0.91, tier: "high", coverUrl: null,
+                        available: true, duration: 201,
+                    }],
+                    unavailable: [{
+                        id: "ci-unavailable-1", title: "CI Original Preview Song",
+                        artist: "CI Other Artist", album: "CI Other Album", albumId: "ci-album-2",
+                        similarity: 0.55, tier: "medium", previewUrl: "https://example.invalid/preview",
+                        deezerTrackId: null, deezerAlbumId: null, available: false, attemptNumber: 0,
+                    }],
+                    totalCount: 1, unavailableCount: 1,
+                },
+                "/api/discover/config": {
+                    playlistSize: 10, exclusionMonths: 6, downloadRatio: 1,
+                    enabled: true, lastGeneratedAt: "2026-10-12T12:00:00Z",
+                },
+                "/api/discover/batch-status": { active: false, status: null },
+            };
+            return route.fulfill({
+                status: path in replies ? 200 : 404,
+                contentType: "application/json",
+                body: JSON.stringify(path in replies ? replies[path] : { error: "Not part of isolated locale test" }),
+            });
+        });
+        await page.goto("/discover");
+        await expect(page.getByRole("heading", { name: "Wekelijkse ontdekkingen" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Afspeellijst" })).toBeVisible();
+        await expect(page.getByText("CI Original Discovery Song")).toBeVisible();
+        await expect(page.getByText("CI Original Artist")).toBeVisible();
+        await expect(page.getByRole("button", { name: "leuk vinden CI Original Discovery Song" })).toBeVisible();
+        await page.getByRole("button", { name: "1 album niet beschikbaar" }).click();
+        await expect(page.getByText("Oorspronkelijke aanbeveling")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Voorbeeld afspelen: CI Other Album" })).toBeVisible();
+        await expect(page.getByText("/music/discovery")).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByRole("heading", { name: "Discover Weekly" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Playlist" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "like CI Original Discovery Song" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Play preview: CI Other Album" })).toBeVisible();
+        await expect(page.getByText("CI Original Discovery Song")).toBeVisible();
+        await expect(page.getByText("CI Original Artist")).toBeVisible();
+        expect(discoveryWrites).toEqual([]);
+    });
+
+    test("reads official 1.11 and 1.10.1 release articles in Dutch without changing API decisions", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        const writes: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/whats-new/") && request.method() !== "GET") {
+                writes.push(request.url());
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "ci-release-viewer", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/whats-new/pending") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ releases: [
+                        {
+                            version: "1.10.1", title: "What counts as a play",
+                            summary: "Play counts now track what you've listened to, not what started loading. There's a one-off cleanup for the counts you've already got.",
+                            date: "2026-08-25",
+                            items: [{
+                                kind: "note", key: "plays.repair",
+                                title: "Clean up old play counts", summary: "Original English summary",
+                                body: "Original English cleanup explanation",
+                                links: [{ label: "Open the cleanup", href: "/stats#false-starts" }],
+                            }],
+                        },
+                        {
+                            version: "1.11.0", title: "Kima 1.11",
+                            summary: "Songs match on sound, feel and genre, there's a new vibe map, the enrichment engine is rebuilt, and Last.fm is gone.",
+                            date: "2026-10-12",
+                            note: { from: "Kevin", body: "Original English maintainer note" },
+                            items: [
+                                {
+                                    kind: "note", key: "vibe.engine",
+                                    title: "The new vibe engine", summary: "Original English engine summary",
+                                    body: "Original English engine explanation",
+                                    links: [{ label: "Open the vibe map", href: "/vibe" }],
+                                },
+                                {
+                                    kind: "choice", key: "gpu.accelerate",
+                                    title: "Use an NVIDIA graphics card", summary: "Original English GPU summary",
+                                    body: "Original English GPU explanation",
+                                    discloses: "Kima downloads twelve pinned packages (about 2 GB) from PyPI, checks every file against a fixed fingerprint, and installs them in your data folder, where they take about 3.4 GB. Nothing about your library leaves your server.",
+                                    defaultValue: false,
+                                },
+                            ],
+                        },
+                    ] }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+
+        await page.goto("/");
+        const modal = page.getByRole("dialog", { name: "Kima 1.11" });
+        await expect(modal).toBeVisible();
+        await expect(modal.getByText("Hé allemaal.")).toBeVisible();
+        await expect(modal.getByText("De nieuwe sfeer-engine", { exact: true })).toBeVisible();
+        await expect(modal.getByText("Oude afspeelbeurten opschonen", { exact: true })).toBeVisible();
+
+        await modal.locator('[data-item="vibe.engine"]').click();
+        await expect(modal.getByRole("heading", { name: "De nieuwe sfeer-engine" })).toBeVisible();
+        await expect(modal.getByText(/Voorheen matchte Kima nummers alleen op geluid/)).toBeVisible();
+        await expect(modal.getByRole("link", { name: "Open de sfeermap" })).toHaveAttribute("href", "/vibe");
+
+        await modal.locator("[data-back]").click(); // Responsive label varies between mobile and desktop.
+        await modal.locator('[data-item="gpu.accelerate"]').click();
+        await expect(modal.getByText(/Kima downloadt twaalf vastgepinde pakketten/)).toBeVisible();
+        await expect(modal.getByText(/geen gegevens uit jouw muziekbibliotheek/)).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Inschakelen" })).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Nee, bedankt" })).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(modal.getByRole("heading", { name: "Use an NVIDIA graphics card" })).toBeVisible();
+        await expect(modal.getByText(/Kima downloads twelve pinned packages/)).toBeVisible();
+        expect(writes).toEqual([]);
+    });
+
+    test("localizes a populated Vibe map and WebGL-disabled fallback without rewriting music", async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem("kima-hub-language", "nl");
+            // Emulate a device without WebGL2; the real map component must
+            // still show a localized, accessible fallback without a crash.
+            HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
+                apply(target, thisArg, args) {
+                    if (args[0] === "webgl2") return null;
+                    return Reflect.apply(target, thisArg, args);
+                },
+            });
+        });
+        const mutations: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/vibe/") && request.method() !== "GET") {
+                mutations.push(request.url());
+            }
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "vibe-browser-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/vibe/map") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        trackCount: 1,
+                        tracks: [{
+                            id: "ci-unmodified-track-id",
+                            title: "CI Original Music Title",
+                            artist: "CI Original Artist",
+                            artistId: "ci-artist-id", albumId: "ci-album-id", coverUrl: null,
+                            x: 0.3, y: 0.4, z: 0.5, colour: 0.8,
+                            dominantMood: "moodHappy",
+                            moods: { moodHappy: 0.98 }, energy: 0.15, valence: 0.82,
+                        }],
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+
+        await page.goto("/vibe");
+        const fallback = page.getByTestId("vibe-map-unsupported");
+        await expect(fallback).toContainText("Deze browser kan de kaart niet tekenen");
+        const moods = page.getByRole("group", { name: "Sferen in je bibliotheek" });
+        await expect(moods).toContainText("Opgewekt");
+        // The total count is intentionally outside the mood button group.
+        await expect(page.getByText("1 nummer", { exact: true })).toBeVisible();
+        const search = page.getByRole("combobox", { name: "Nummers of artiesten zoeken" });
+        await search.fill("CI Original Music Title");
+        await expect(page.getByRole("option", { name: /CI Original Music Title/ })).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(fallback).toContainText("This browser cannot draw the map because WebGL");
+        await expect(page.getByRole("group", { name: "Moods in your library" })).toContainText("Upbeat");
+        await expect(page.getByRole("combobox", { name: "Search tracks or artists" })).toHaveValue("CI Original Music Title");
+        await expect(page.getByRole("option", { name: /CI Original Music Title/ })).toBeVisible();
+        expect(mutations).toEqual([]);
+    });
+
+    test("switches the Vibe Map empty-library page EN/NL without modifying music data", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        const mutations: string[] = [];
+        page.on("request", (request) => {
+            if (request.url().includes("/api/vibe/") && request.method() !== "GET") mutations.push(request.url());
+        });
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "vibe-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/vibe/map") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ tracks: [], trackCount: 0 }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        await page.goto("/vibe");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByText("Nog geen nummers met Vibe-analyse")).toBeVisible();
+        await expect(page.getByText(/Voer bibliotheekverrijking uit om je nummers te analyseren/)).toBeVisible();
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByText("No tracks with vibe analysis yet")).toBeVisible();
+        await expect(page.getByText("Run enrichment to analyse your library; tracks appear here as they finish.")).toBeVisible();
+        expect(mutations).toEqual([]);
+    });
+
+    test("localizes real release consent controls without answering or clearing anything", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "release-ci", username: "ci-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/whats-new/pending") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        releases: [{
+                            version: "1.11.0", title: "CI Release Title",
+                            summary: "Original release copy", date: "2026-10-15",
+                            items: [{
+                                kind: "choice", key: "ci.release.choice",
+                                title: "CI Original Choice Title",
+                                summary: "CI Original Choice Summary",
+                                body: "CI Original Body Text",
+                                discloses: "CI Original Disclosure",
+                                defaultValue: false,
+                            }],
+                        }],
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        const destructiveCalls: string[] = [];
+        page.on("request", (request) => {
+            if (/\/api\/whats-new\/.*\/(?:dismiss|choice)|\/api\/enrichment\/wipe/.test(request.url())
+                && request.method() !== "GET") destructiveCalls.push(request.url());
+        });
+
+        await page.goto("/");
+        const modal = page.getByRole("dialog", { name: "CI Release Title" });
+        await expect(modal).toBeVisible();
+        await expect(modal.getByRole("heading", { name: "Nieuw in 1.11" })).toBeVisible();
+        await expect(modal.getByText("CI Original Choice Title", { exact: true })).toBeVisible();
+        await modal.locator('[data-item="ci.release.choice"]').click();
+        await expect(modal.getByRole("button", { name: "Inschakelen" })).toBeVisible();
+        await expect(modal.getByRole("button", { name: "Nee, bedankt" })).toBeVisible();
+        await expect(modal.getByText("Wat je server verlaat:")).toBeVisible();
+        await expect(modal.getByText("CI Original Disclosure")).toBeVisible();
+
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(modal.getByRole("button", { name: "Turn it on" })).toBeVisible();
+        expect(destructiveCalls).toEqual([]);
+    });
+
+    test("keeps TV remote navigation stable while labels and branding follow the UI", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
+        await page.route("**/api/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            if (pathname === "/api/auth/me") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({ id: "tv-ci", username: "tv-listener", role: "user", onboardingComplete: true }),
+                });
+            }
+            if (pathname === "/api/branding") {
+                return route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        name: "CI TV", tagline: "Test branding", logoUrl: "/assets/images/kima.webp",
+                        faviconUrl: "/favicon.ico", hasCustomLogo: true, hasCustomFavicon: false,
+                        accentColor: "#fca200", backgroundColor: "#0a0a0a",
+                    }),
+                });
+            }
+            return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+        });
+        await page.goto("/?tv=1");
+        const tvNav = page.getByRole("navigation", { name: "Tv-navigatie" });
+        await expect(tvNav).toBeVisible();
+        await expect(tvNav.getByRole("link", { name: "Zoeken" })).toHaveAttribute("href", "/search");
+        await expect(tvNav.getByRole("link", { name: "Ontdekken" })).toHaveAttribute("href", "/discover");
+        await expect(page.getByRole("button", { name: "Bibliotheek synchroniseren" })).toBeVisible();
+        await expect(page.locator(".tv-logo")).toContainText("CI TV");
+        await expect(page.locator(".tv-logo img")).toBeVisible();
+
+        // Emulate the same language-change event emitted by the language selector,
+        // and confirm that neither route destinations nor branding are translated.
+        await page.evaluate(() => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        await expect(page.getByRole("navigation", { name: "TV navigation" })
+            .getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
+        await expect(page.getByRole("button", { name: "Sync library" })).toBeVisible();
+        await expect(page.locator(".tv-logo")).toContainText("CI TV");
+    });
+
+    test("translates a public share player and expired-link error without a login", async ({ page }) => {
+        await page.addInitScript(() => {
+            // Keep a manually selected language across subsequent navigations.
+            if (!localStorage.getItem("kima-hub-language")) {
+                localStorage.setItem("kima-hub-language", "nl");
+            }
+        });
+        await page.route("**/api/share/**", async (route) => {
+            const pathname = new URL(route.request().url()).pathname;
+            const expired = pathname === "/api/share/expired-ci-share";
+            await route.fulfill({
+                status: expired ? 410 : 200,
+                contentType: "application/json",
+                body: JSON.stringify(expired
+                    ? { error: "Share link has expired" }
+                    : {
+                        entityType: "playlist",
+                        entity: {
+                            id: "share-playlist-ci", name: "CI Shared Album Name",
+                            items: [
+                                { track: { id: "one", title: "CI Original Track Title", duration: 180,
+                                    album: { title: "CI Original Album", artist: { name: "CI Original Artist" } } } },
+                                { track: { id: "two", title: "Second Original Track", duration: 150,
+                                    album: { title: "CI Original Album", artist: { name: "CI Original Artist" } } } },
+                            ],
+                        },
+                        createdAt: "2025-01-01T00:00:00Z",
+                    }),
+            });
+        });
+
+        await page.goto("/share/public-ci-share");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByRole("heading", { name: "CI Shared Album Name" })).toBeVisible();
+        await expect(page.getByText("CI Original Track Title", { exact: true }).first()).toBeVisible();
+        await expect(page.getByRole("button", { name: "Afspelen" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Vorig nummer" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Volgend nummer" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Afspeelpositie" })).toBeVisible();
+        await expect(page.getByRole("slider", { name: "Volume" })).toBeVisible();
+        await page.goto("/share/expired-ci-share");
+        await expect(page.getByRole("heading", { name: "Deze link is verlopen" })).toBeVisible();
+        await expect(page.getByText("Vraag degene die de muziek deelde om een nieuwe link.")).toBeVisible();
+
+        await page.evaluate(() => localStorage.setItem("kima-hub-language", "en"));
+        await page.reload();
+        await expect(page.locator("html")).toHaveAttribute("lang", "en");
+        await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
+    });
+
+    test("localizes the new v1.11 Stats page without rewriting its period identifiers", async ({ page }) => {
+        const requestedPeriods: string[] = [];
+        await page.route("**/api/**", async (route) => {
+            const url = new URL(route.request().url());
+            const pathname = url.pathname;
+            let body: unknown;
+            if (pathname === "/api/auth/me") {
+                body = {
+                    id: "locale-stats-user", username: "locale-stats-user", role: "user",
+                    canRequestAlbums: false, canDownloadTracks: false, onboardingComplete: true,
+                };
+            } else if (pathname === "/api/stats") {
+                const period = url.searchParams.get("period") ?? "all";
+                requestedPeriods.push(period);
+                body = {
+                    period,
+                    listening: {
+                        plays: 0, estimatedSeconds: 0, distinctTracks: 0,
+                        distinctArtists: 0, distinctAlbums: 0, firstPlay: null,
+                        lastPlay: null, bySource: {}, clock: [], peak: null,
+                        shape: [], drift: [], topArtists: [], topTracks: [],
+                    },
+                    shelf: {
+                        tracks: { total: 0, heard: 0 }, albums: { total: 0, heard: 0 },
+                        artists: { total: 0, heard: 0 },
+                        analysis: { done: 0, pending: 0, failed: 0, total: 0 },
+                        neverPlayed: 0, decades: [],
+                    },
+                    spoken: {
+                        audiobooks: {
+                            seconds: 0, finished: 0, inProgress: 0, setAside: 0,
+                            topAuthors: [], current: null,
+                        },
+                        podcasts: {
+                            seconds: 0, finished: 0, inProgress: 0,
+                            subscriptions: 0, backlog: 0,
+                        },
+                    },
+                    signature: {
+                        concentration: null, albumHabit: null, era: null, key: null,
+                        ownedVsPlayed: [], hourly: [],
+                    },
+                };
+            } else if (pathname === "/api/stats/false-starts") {
+                body = {
+                    totalRows: 3, totalListens: 3, duplicateRows: 0,
+                    collapsibleRows: 0, heard: 1, skipped: 2,
+                    tooShort: 0, unclear: 0, earliest: "2025-01-01T00:00:00Z",
+                    ignored: [],
+                    tracks: [{
+                        trackId: "ci-history-fixture", title: "CI History Fixture",
+                        artist: "CI Artist", durationSeconds: 180, requiredSeconds: 90,
+                        skipped: 2, heard: 1, listens: 3, rows: 3,
+                        shortestRunSeconds: 5, lastAt: "2025-01-01T00:00:00Z",
+                    }],
+                };
+            } else {
+                body = { error: "Unused in isolated Stats localization test" };
+            }
+            await route.fulfill({
+                status: ["/api/stats", "/api/auth/me", "/api/stats/false-starts"].includes(pathname) ? 200 : 404,
+                contentType: "application/json",
+                body: JSON.stringify(body),
+            });
+        });
+        await page.addInitScript(() => {
+            localStorage.setItem("auth_token", "synthetic-stats-token");
+            localStorage.setItem("kima-hub-language", "nl");
+        });
+
+        await page.goto("/stats");
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+        await expect(page.getByRole("tab", { name: "Overzicht" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "nog niets afgespeeld" })).toBeVisible();
+        await page.getByRole("button", { name: "30 dagen" }).click();
+        await expect(page.getByRole("heading", { name: "niets afgespeeld in deze periode" })).toBeVisible();
+        expect(requestedPeriods).toContain("30d");
+        // Period values are backend API identifiers, not translated labels.
+        expect(requestedPeriods).not.toContain("30 dagen");
+
+        // The new Stats chapters and history-cleanup actions must also follow
+        // the browser language, not just the overview heading.
+        await expect(page.getByRole("tablist", { name: "statistiekonderdelen" })).toBeVisible();
+        await page.getByRole("tab", { name: "Luistergeschiedenis opschonen" }).click();
+        await expect(page.getByRole("button", { name: "luistergeschiedenis controleren" })).toBeVisible();
+
+        // A disposable fixture proves dynamic history labels and the caution
+        // before deletion are localized without issuing a destructive API call.
+        await page.getByRole("button", { name: "luistergeschiedenis controleren" }).click();
+        await expect(page.getByText("CI History Fixture", { exact: true })).toBeVisible();
+        await expect(page.getByText("overgeslagen (verwijderbaar)", { exact: true })).toBeVisible();
+        await page.getByRole("checkbox").first().check();
+        await expect(page.getByText("verwijderen wist de overgeslagen afspeelbeurten definitief", { exact: true })).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+    });
+
+});

@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { logger } from "../utils/logger";
+import { prisma } from "../utils/db";
 import {
     scanQueue,
     discoverQueue,
@@ -9,6 +10,7 @@ import { processScan } from "./processors/scanProcessor";
 import { processDiscoverWeekly } from "./processors/discoverProcessor";
 import { processImportJob } from "./processors/importProcessor";
 import { createWorkerConnection } from "./enrichmentQueues";
+import { withTimeout } from "../utils/timeout";
 import { spotifyImportService } from "../services/spotifyImport";
 import {
     startUnifiedEnrichmentWorker,
@@ -18,8 +20,6 @@ import {
     startMoodBucketWorker,
     stopMoodBucketWorker,
 } from "./moodBucketWorker";
-import { downloadQueueManager } from "../services/downloadQueue";
-import { prisma } from "../utils/db";
 import {
     startDiscoverWeeklyCron,
     stopDiscoverWeeklyCron,
@@ -34,11 +34,15 @@ import {
 } from "./librarySyncCron";
 import { runDataIntegrityCheck } from "./dataIntegrity";
 import { simpleDownloadManager } from "../services/simpleDownloadManager";
+import { sweepFailedDownloads } from "../services/lidarrFailures";
 import { queueCleaner } from "../jobs/queueCleaner";
 import { enrichmentStateService } from "../services/enrichmentState";
 
-// Track timeouts for cleanup
-const timeouts: NodeJS.Timeout[] = [];
+// One pending timer per self-rescheduling cycle, so handles never pile up; shutdown clears them.
+const timers = new Map<string, NodeJS.Timeout>();
+function schedule(name: string, run: () => void, ms: number) {
+    timers.set(name, setTimeout(run, ms));
+}
 
 // BullMQ workers for scan and discover queues
 const scanWorker = new Worker("library-scan-v2", processScan, {
@@ -63,54 +67,8 @@ const importWorker = new Worker(
     }
 );
 
-// Register download queue callback for unavailable albums
-downloadQueueManager.onUnavailableAlbum(async (info) => {
-    logger.debug(
-        ` Recording unavailable album: ${info.artistName} - ${info.albumTitle}`
-    );
-
-    if (!info.userId) {
-        logger.debug(` No userId provided, skipping database record`);
-        return;
-    }
-
-    try {
-        // Get week start date from discovery album if it exists
-        const discoveryAlbum = await prisma.discoveryAlbum.findFirst({
-            where: { rgMbid: info.albumMbid },
-            orderBy: { downloadedAt: "desc" },
-        });
-
-        await prisma.unavailableAlbum.create({
-            data: {
-                userId: info.userId,
-                artistName: info.artistName,
-                albumTitle: info.albumTitle,
-                albumMbid: info.albumMbid,
-                artistMbid: info.artistMbid,
-                similarity: info.similarity || 0,
-                tier: info.tier || "unknown",
-                weekStartDate: discoveryAlbum?.weekStartDate || new Date(),
-                attemptNumber: 0,
-            },
-        });
-
-        logger.debug(`   Recorded in database`);
-    } catch (error: any) {
-        // Handle duplicate entries (album already marked as unavailable)
-        if (error.code === "P2002") {
-            logger.debug(`     Album already marked as unavailable`);
-        } else {
-            logger.error(
-                ` Failed to record unavailable album:`,
-                error.message
-            );
-        }
-    }
-});
-
 // Start unified enrichment worker
-// Handles: artist metadata, track tags (Last.fm), audio analysis queueing (Essentia)
+// Handles: artist metadata, track mood tags, audio analysis queueing (Essentia)
 startUnifiedEnrichmentWorker().catch((err) => {
     logger.error("Failed to start unified enrichment worker:", err);
 });
@@ -124,7 +82,7 @@ startMoodBucketWorker().catch((err) => {
 // Event handlers for scan worker
 scanWorker.on("completed", (job, result) => {
     logger.debug(
-        `Scan job ${job.id} completed: +${result.tracksAdded} ~${result.tracksUpdated} -${result.tracksRemoved}`
+        `Scan job ${job.id} completed: +${result.tracksAdded} ~${result.tracksUpdated} missing:${result.tracksMissing}`
     );
 });
 
@@ -133,7 +91,7 @@ scanWorker.on("failed", (job, err) => {
 });
 
 scanWorker.on("active", (job) => {
-    logger.debug(` Scan job ${job.id} started`);
+    logger.debug(`Scan job ${job.id} started`);
 });
 
 scanWorker.on("error", (err) => {
@@ -185,7 +143,7 @@ importWorker.on("error", (err) => {
 
 logger.debug("BullMQ workers registered and event handlers attached");
 
-// Start Discovery Weekly cron scheduler (Sundays at 8 PM)
+// Start Discovery Weekly cron scheduler (Mondays at 5 AM)
 startDiscoverWeeklyCron();
 
 // Start data cleanup cron scheduler (daily at 2 AM)
@@ -197,7 +155,6 @@ startLibrarySyncCron();
 // Running guards to prevent pile-up when tasks take longer than their interval
 let dataIntegrityRunning = false;
 let reconciliationRunning = false;
-let lidarrCleanupRunning = false;
 
 // Self-rescheduling data integrity check (prevents pile-up on slow runs)
 async function runDataIntegrityCycle() {
@@ -209,177 +166,66 @@ async function runDataIntegrityCycle() {
         logger.error("Data integrity check failed:", err);
     } finally {
         dataIntegrityRunning = false;
-        timeouts.push(setTimeout(runDataIntegrityCycle, 24 * 60 * 60 * 1000));
+        schedule("data-integrity", runDataIntegrityCycle, 24 * 60 * 60 * 1000);
     }
 }
 
 // First run 10 seconds after startup
-timeouts.push(setTimeout(runDataIntegrityCycle, 10000));
+schedule("data-integrity", runDataIntegrityCycle, 10000);
 logger.debug("Data integrity check scheduled (every 24 hours, self-rescheduling)");
 
-/**
- * Wrap an async operation with a timeout to prevent indefinite hangs
- * Returns undefined if the operation times out (does not throw)
- */
-async function withTimeout<T>(
-    operation: () => Promise<T>,
-    timeoutMs: number,
-    operationName: string
-): Promise<T | undefined> {
-    let timeoutId: NodeJS.Timeout | undefined;
-    let timedOut = false;
-
-    const timeoutPromise = new Promise<undefined>((resolve) => {
-        timeoutId = setTimeout(() => {
-            timedOut = true;
-            logger.warn(
-                `Operation timed out after ${timeoutMs}ms: ${operationName}`
-            );
-            resolve(undefined);
-        }, timeoutMs);
-    });
-
-    // Hold the operation's promise directly (rather than inline in Promise.race) and
-    // attach a no-op catch to it: if the timeout wins the race, operation() keeps running
-    // unobserved, and a rejection that arrives afterward would otherwise surface as an
-    // unhandled rejection. This swallows that late rejection without affecting the value
-    // raced below.
-    const operationPromise = operation();
-    operationPromise.catch(() => {});
-
-    try {
-        const result = await Promise.race([operationPromise, timeoutPromise]);
-        if (!timedOut && timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        return result;
-    } catch (error) {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        throw error;
-    }
-}
-
-// Self-rescheduling reconciliation cycle (replaces setInterval to prevent pile-up)
-// Each cycle waits for the previous one to fully complete before scheduling the next.
-// This prevents zombie operations from accumulating when operations exceed their timeout.
+// The one place downloads move outside webhooks. Each cycle reads Lidarr once,
+// completes what arrived before judging anything else, then acts on the queue,
+// follows replaced downloads and checks jobs still waiting for one. It schedules
+// the next cycle when it finishes and does nothing while no download is active.
 async function runReconciliationCycle() {
     if (reconciliationRunning) return;
     reconciliationRunning = true;
     try {
+        const activeJobs = await prisma.downloadJob.count({
+            where: { status: { in: ["pending", "processing"] } },
+        });
+        if (activeJobs === 0) return;
+
         const { lidarrService } = await import("../services/lidarr");
-        const snapshot = await withTimeout(
-            () => lidarrService.getReconciliationSnapshot(),
-            30000,
-            "getReconciliationSnapshot"
-        );
-
-        const staleCount = await withTimeout(
-            () => simpleDownloadManager.markStaleJobsAsFailed(snapshot),
-            120000,
-            "markStaleJobsAsFailed"
-        );
-        if (staleCount && staleCount > 0) {
-            logger.debug(
-                `Periodic cleanup: marked ${staleCount} stale download(s) as failed`
-            );
-        }
-
-        const lidarrResult = await withTimeout(
-            () => simpleDownloadManager.reconcileWithLidarr(snapshot),
-            120000,
-            "reconcileWithLidarr"
-        );
-        if (lidarrResult && lidarrResult.reconciled > 0) {
-            logger.debug(
-                `Periodic reconcile: ${lidarrResult.reconciled} job(s) matched in Lidarr`
-            );
-        }
-
-        const localResult = await withTimeout(
-            () => queueCleaner.reconcileWithLocalLibrary(),
-            120000,
-            "reconcileWithLocalLibrary"
-        );
-        if (localResult && localResult.reconciled > 0) {
-            logger.debug(
-                `Periodic reconcile: ${localResult.reconciled} job(s) matched in local library`
-            );
-        }
-
-        const syncResult = await withTimeout(
-            () => simpleDownloadManager.syncWithLidarrQueue(snapshot),
-            120000,
-            "syncWithLidarrQueue"
-        );
-        if (syncResult && syncResult.cancelled > 0) {
-            logger.debug(
-                `Periodic sync: ${syncResult.cancelled} job(s) synced with Lidarr queue`
-            );
+        const snapshot = await withTimeout(lidarrService.getReconciliationSnapshot(), 30000, "Lidarr snapshot timed out");
+        const steps: [string, () => Promise<unknown>][] = [
+            ["complete from Lidarr", () => simpleDownloadManager.reconcileWithLidarr(snapshot)],
+            ["complete from the library", () => queueCleaner.reconcileWithLocalLibrary()],
+            ["judge Lidarr's queue", () => (snapshot ? sweepFailedDownloads(snapshot) : Promise.resolve())],
+            ["follow replaced downloads", () => simpleDownloadManager.syncWithLidarrQueue(snapshot)],
+            ["check waiting jobs", () => simpleDownloadManager.checkWaitingJobs(snapshot)],
+        ];
+        // Each step stands alone: one that fails must not stop the others this cycle.
+        for (const [name, step] of steps) {
+            try {
+                await withTimeout(step(), 120000, `${name} timed out`);
+            } catch (err) {
+                logger.error(`Download reconciliation: ${name} failed:`, err);
+            }
         }
     } catch (err) {
-        logger.error(
-            "Periodic download cleanup/reconciliation failed:",
-            err
-        );
+        logger.error("Download reconciliation failed:", err);
     } finally {
         reconciliationRunning = false;
-        // Schedule next run AFTER this one completes (prevents pile-up)
-        timeouts.push(setTimeout(runReconciliationCycle, 2 * 60 * 1000));
+        schedule("reconciliation", runReconciliationCycle, 2 * 60 * 1000);
     }
 }
 
-// First reconciliation run 2 minutes after startup
-timeouts.push(setTimeout(runReconciliationCycle, 2 * 60 * 1000));
-logger.debug("Stale download cleanup scheduled (every 2 minutes, self-rescheduling)");
+schedule("reconciliation", runReconciliationCycle, 2 * 60 * 1000);
+logger.debug("Download reconciliation scheduled (every 2 minutes, self-rescheduling)");
 
-// Self-rescheduling Lidarr queue cleanup (replaces setInterval to prevent pile-up)
-async function runLidarrCleanupCycle() {
-    if (lidarrCleanupRunning) return;
-    lidarrCleanupRunning = true;
+async function runStuckWorkCycle() {
     try {
-        const result = await withTimeout(
-            () => simpleDownloadManager.clearLidarrQueue(),
-            180000,
-            "clearLidarrQueue"
-        );
-        if (result && result.removed > 0) {
-            logger.debug(
-                `Periodic Lidarr cleanup: removed ${result.removed} stuck download(s)`
-            );
-        }
+        await withTimeout(queueCleaner.recoverStuckWork(), 120000, "stuck work recovery timed out");
     } catch (err) {
-        logger.error("Lidarr queue cleanup failed:", err);
+        logger.error("Stuck work recovery failed:", err);
     } finally {
-        lidarrCleanupRunning = false;
-        // Schedule next run AFTER this one completes (prevents pile-up)
-        timeouts.push(setTimeout(runLidarrCleanupCycle, 5 * 60 * 1000));
+        schedule("stuck-work", runStuckWorkCycle, 2 * 60 * 1000);
     }
 }
 
-// First Lidarr cleanup 5 minutes after startup (initial cleanup at 30s is separate)
-timeouts.push(setTimeout(runLidarrCleanupCycle, 5 * 60 * 1000));
-logger.debug("Lidarr queue cleanup scheduled (every 5 minutes, self-rescheduling)");
-
-// Run initial Lidarr cleanup 30 seconds after startup (to catch any stuck items)
-timeouts.push(
-    setTimeout(async () => {
-        try {
-            logger.debug("Running initial Lidarr queue cleanup...");
-            const result = await simpleDownloadManager.clearLidarrQueue();
-            if (result.removed > 0) {
-                logger.debug(
-                    `Initial cleanup: removed ${result.removed} stuck download(s)`
-                );
-            } else {
-                logger.debug("Initial cleanup: queue is clean");
-            }
-        } catch (err) {
-            logger.error("Initial Lidarr cleanup failed:", err);
-        }
-    }, 30 * 1000) // 30 seconds after startup
-);
+schedule("stuck-work", runStuckWorkCycle, 60 * 1000);
 
 /**
  * Gracefully shutdown all workers and cleanup resources
@@ -410,14 +256,11 @@ export async function shutdownWorkers(): Promise<void> {
     // Stop library auto-sync cron
     stopLibrarySyncCron();
 
-    // Shutdown download queue manager
-    downloadQueueManager.shutdown();
-
     // Clear all timeouts
-    for (const timeout of timeouts) {
+    for (const timeout of timers.values()) {
         clearTimeout(timeout);
     }
-    timeouts.length = 0;
+    timers.clear();
 
     // Close workers first so in-flight jobs complete, then close queues
     await Promise.all([scanWorker.close(), discoverWorker.close(), importWorker.close()]);
@@ -427,4 +270,3 @@ export async function shutdownWorkers(): Promise<void> {
 }
 
 // Export queues for use in other modules
-export { scanQueue, discoverQueue, importQueue };

@@ -53,12 +53,7 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
   loggedIn = false
   downloads: Download[]
 
-  private serverAddress: Address
   private listenPort: number
-  private reconnectAttempts = 0
-  private reconnectTimeout: NodeJS.Timeout | null = null
-  private autoReconnect = true
-  private credentials: { username: string; password: string } | null = null
   private readonly DOWNLOAD_TTL = 5 * 60 * 1000 // 5 minutes
   private downloadCleanupInterval: NodeJS.Timeout | null = null
 
@@ -70,7 +65,6 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
     listenPort = 2234,
   }: { serverAddress?: Address; listenPort?: number } = {}) {
     super()
-    this.serverAddress = serverAddress
     this.listenPort = listenPort
     this.server = new SlskServer(serverAddress)
     this.listen = new SlskListen(listenPort)
@@ -119,10 +113,9 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
 
     this.wirePeerMessageHandlers()
 
-    // Start download cleanup interval
     this.downloadCleanupInterval = setInterval(() => {
       this.cleanupStuckDownloads()
-    }, 60000) // Check every minute
+    }, 60000)
   }
 
   private wireServerHandlers() {
@@ -234,7 +227,6 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
                     download.status = 'downloading'
                     download.events.emit('status', 'downloading', makeDownloadStatusData(download))
 
-                    // send file offset message
                     const fileOffsetBuffer = Buffer.alloc(8)
                     fileOffsetBuffer.writeBigUInt64LE(download.receivedBytes, 0)
                     conn.write(fileOffsetBuffer)
@@ -447,46 +439,6 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
     this.loggedIn = true
   }
 
-  async loginAndRemember(username: string, password: string, timeout?: number) {
-    this.credentials = { username, password }
-    await this.login(username, password, timeout)
-    this.reconnectAttempts = 0
-    this.wireCloseHandler()
-  }
-
-  private wireCloseHandler() {
-    this.server.conn.once('close', () => {
-      this.loggedIn = false
-      if (this.autoReconnect && this.credentials) {
-        this.scheduleReconnect()
-      }
-    })
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimeout) return
-
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 60000)
-    this.reconnectAttempts++
-
-    this.reconnectTimeout = setTimeout(async () => {
-      this.reconnectTimeout = null
-      if (!this.credentials || !this.autoReconnect) return
-
-      try {
-        this.server.removeAllListeners()
-        this.server.destroy()
-        this.server = new SlskServer(this.serverAddress)
-        this.wireServerHandlers()
-        await this.login(this.credentials.username, this.credentials.password)
-        this.reconnectAttempts = 0
-        this.wireCloseHandler()
-      } catch {
-        this.scheduleReconnect()
-      }
-    }, delay)
-  }
-
   search(
     query: string,
     {
@@ -551,7 +503,7 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
       events: (() => {
         const e = new EventEmitter() as SlskDownloadEventEmitter;
         // Default error listener prevents an uncaughtException if the service-layer
-        // listener has not attached yet when an asynchronous error fires (see #192).
+        // listener has not attached yet when an asynchronous error fires.
         e.on('error', (err: any) => {
           logger.warn('[SOULSEEK] Download error (default listener):', err?.message ?? err);
         });
@@ -585,7 +537,7 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
     this.downloads = this.downloads.filter((download) => {
       const downloadWithTime = download as RequestedDownload & { startedAt?: number }
       if (!downloadWithTime.startedAt) {
-        return true // Keep downloads without timestamp (shouldn't happen)
+        return true
       }
 
       const age = now - downloadWithTime.startedAt
@@ -595,9 +547,9 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
         } catch {
           // Ignore cleanup errors
         }
-        return false // Remove from array
+        return false
       }
-      return true // Keep in array
+      return true
     })
 
     const cleaned = before - this.downloads.length
@@ -698,11 +650,11 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
     let peer: SlskPeer
     try {
       peer = await Promise.any([peerA, peerB])
-    } catch (error) {
+    } catch {
       throw new Error(`Could not connect to ${username}`)
     }
 
-    // Destroy the losing peer to prevent socket leak
+    // The peer that lost the race is closed so its socket does not leak.
     const cleanupLoser = async (loserPromise: Promise<SlskPeer>) => {
       try {
         const loser = await loserPromise
@@ -726,11 +678,6 @@ export class SlskClient extends (EventEmitter as new () => TypedEventEmitter<Sls
   }
 
   destroy() {
-    this.autoReconnect = false
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout)
-      this.reconnectTimeout = null
-    }
     if (this.downloadCleanupInterval) {
       clearInterval(this.downloadCleanupInterval)
       this.downloadCleanupInterval = null

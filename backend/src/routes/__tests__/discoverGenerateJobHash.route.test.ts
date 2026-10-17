@@ -1,20 +1,13 @@
 /**
- * Task 9 GATE 1 (part A) -- POST /discover/generate must drop a stale BullMQ
- * job hash before re-enqueuing.
- *
- * The defect: discoverQueue retains completed/failed job hashes
- * (queues.ts removeOnComplete: 100). Re-adding the SAME jobId returns the
- * existing (already-terminal) job WITHOUT enqueuing anything -- a silent no-op
- * (cf. podcast #81). The user clicks "generate", gets a 200 with the old job's
- * id, and nothing ever runs.
- *
- * Doctrine: FAILURE/EDGE paths FIRST, happy path LAST. Each assertion targets the
- * specific discriminator (getJob -> getState -> remove BEFORE add, only on a
- * TERMINAL state) so it cannot pass via a different code path.
+ * POST /discover/generate removes a finished job with the same id before
+ * re-adding, since BullMQ silently ignores a re-add. A running job is left alone.
+ * Failure and edge paths first.
  */
 
+const mockStoredMusicUser = jest.fn();
 jest.mock('../../utils/db', () => ({
     prisma: {
+        user: { findUnique: (...args: unknown[]) => mockStoredMusicUser(...args) },
         discoveryBatch: {
             findFirst: jest.fn(),
         },
@@ -26,7 +19,7 @@ jest.mock('../../utils/logger', () => ({
 }));
 
 jest.mock('../../middleware/auth', () => ({
-    requireMusicPermission: () => (_req: any, _res: any, next: any) => next(),
+    requireMusicPermission: jest.requireActual('../../middleware/auth').requireMusicPermission,
     requireAuthOrToken: (req: any, _res: any, next: any) => {
         req.user = { id: 'user-123' };
         next();
@@ -37,7 +30,6 @@ jest.mock('../../middleware/auth', () => ({
     },
 }));
 
-jest.mock('../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../services/lidarr', () => ({ lidarrService: {} }));
 jest.mock('../../utils/systemSettings', () => ({
     getSystemSettings: jest.fn().mockResolvedValue({}),
@@ -66,6 +58,15 @@ import request from 'supertest';
 import discoverRoutes from '../discover';
 import { prisma } from '../../utils/db';
 import { discoverQueue } from '../../workers/queues';
+import { redisClient } from '../../utils/redis';
+import { closeClient } from '../../utils/closeRedisClient';
+
+afterAll(async () => {
+    // The router pulls in services/listenBrainz, which opens the shared Redis
+    // client at import. Left open, Jest finishes the suite and outlives the
+    // process on that socket.
+    await closeClient(redisClient);
+});
 
 function makeApp() {
     const app = express();
@@ -83,7 +84,7 @@ function fakeJob(state: string) {
     };
 }
 
-describe('POST /discover/generate -- drop stale job hash before re-enqueue (Task 9)', () => {
+describe('POST /discover/generate -- drop stale job hash before re-enqueue', () => {
     let app: express.Application;
 
     beforeAll(() => {
@@ -92,17 +93,16 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue (Task
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockStoredMusicUser.mockReset().mockResolvedValue({
+            role: 'admin', canRequestAlbums: false, canDownloadTracks: false,
+        });
         // No active batch -> the handler proceeds to the enqueue path.
         (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValue(null);
         // add() resolves to a job with an id so the handler can return jobId.
         (discoverQueue.add as jest.Mock).mockResolvedValue({ id: 'new-job-id' });
     });
 
-    // FAILURE PATH (the bug this task exists for): a COMPLETED job hash is still
-    // in Redis. Re-adding the same jobId is a silent no-op unless the stale hash
-    // is removed first. Discriminator: remove() must be called on the existing
-    // job BEFORE add() runs. A handler that skips the removal (the legacy bug)
-    // never calls getJob().remove(), so this fails on the un-fixed code.
+    // A completed job is removed before add().
     it('FAILURE PATH: removes a stale COMPLETED job hash before re-enqueuing', async () => {
         const stale = fakeJob('completed');
         (discoverQueue.getJob as jest.Mock).mockResolvedValue(stale);
@@ -132,11 +132,7 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue (Task
         expect(discoverQueue.add).toHaveBeenCalledTimes(1);
     });
 
-    // EDGE / SAFETY: a NON-terminal (active) job with the same id means a run is
-    // already in flight. removing it would orphan a live generation. The guard
-    // must only remove on completed|failed. Discriminator: remove() NOT called
-    // for an active job. (A naive "remove whatever getJob returns" impl -- the
-    // over-correction -- would wrongly kill the live job and fail here.)
+    // An active job is a run in flight: not removed, not enqueued again.
     it('EDGE: does NOT remove a non-terminal (active) job and does NOT double-enqueue over it', async () => {
         const live = fakeJob('active');
         (discoverQueue.getJob as jest.Mock).mockResolvedValue(live);
@@ -158,14 +154,8 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue (Task
         expect(queued.remove).not.toHaveBeenCalled();
     });
 
-    // CRITIC GAP A: the removal only fixes the no-op if it looks up the SAME
-    // jobId it is about to add. A broken impl that does getJob(<some other id>)
-    // -> remove(), then add(<the real week-keyed id>) would remove the WRONG
-    // hash and re-add the still-present real one -- the production no-op bug
-    // survives, yet every existing assertion (remove called, add called, order)
-    // passes because getJob is mocked to return the stale job regardless of arg.
-    // Pin the contract: the id passed to getJob equals the id passed to add.
-    it('CRITIC GAP A: getJob is looked up with the SAME jobId that add() enqueues', async () => {
+    // getJob looks up the same id add() enqueues.
+    it('getJob is looked up with the SAME jobId that add() enqueues', async () => {
         const stale = fakeJob('completed');
         (discoverQueue.getJob as jest.Mock).mockResolvedValue(stale);
 
@@ -193,4 +183,27 @@ describe('POST /discover/generate -- drop stale job hash before re-enqueue (Task
         // jobId is `discover-weekly-<userId>-<YYYY-MM-DD>` (week key from the helper).
         expect(addArgs[2].jobId).toMatch(/^discover-weekly-user-123-\d{4}-\d{2}-\d{2}$/);
     });
+    it('blocks discovery generation for a default user before queueing work', async () => {
+        mockStoredMusicUser.mockResolvedValue({
+            role: 'user', canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const res = await request(app).post('/discover/generate');
+        expect(res.status).toBe(403);
+        expect(res.body.permission).toBe('canRequestAlbums');
+        expect(discoverQueue.add).not.toHaveBeenCalled();
+        expect(prisma.discoveryBatch.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('allows the generate handler to validate the request after an explicit grant', async () => {
+        mockStoredMusicUser.mockResolvedValue({
+            role: 'user', canRequestAlbums: true, canDownloadTracks: false,
+        });
+        (discoverQueue.getJob as jest.Mock).mockResolvedValue(null);
+        const res = await request(app).post('/discover/generate');
+        expect(res.status).toBe(200);
+        expect(mockStoredMusicUser).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: 'user-123' },
+        }));
+    });
+
 });

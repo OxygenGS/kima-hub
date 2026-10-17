@@ -1,16 +1,19 @@
 import { prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
-import { normalizeArtistName } from "../../utils/artistNormalization";
-import { lastFmService } from "../lastfm";
+import { normalizeArtistName } from "../artistIdentity";
+import { getSimilarArtists } from "../artistSimilarity";
+import { LIBRARY_LOCATION } from "../libraryFilters";
+import { NOT_MISSING } from "../../utils/libraryEligibility";
 import {
     ProgrammaticMix,
+    albumCoverUrls,
+    sampleMix,
     getMixColor,
     randomSample,
     getSeededRandom,
     seededShuffle,
+    TRACK_LIMIT,
 } from "./helpers";
-
-const TRACK_LIMIT = 20;
 
 export async function generateTopTracksMix(
     userId: string
@@ -35,7 +38,7 @@ export async function generateTopTracksMix(
 
     const trackIds = playStats.map((p) => p.trackId);
     const tracks = await prisma.track.findMany({
-        where: { id: { in: trackIds } },
+        where: { id: { in: trackIds }, ...NOT_MISSING },
         include: {
             album: { select: { coverUrl: true } },
         },
@@ -45,10 +48,7 @@ export async function generateTopTracksMix(
         .map((id) => tracks.find((t) => t.id === id))
         .filter((t) => t !== undefined);
 
-    const coverUrls = orderedTracks
-        .filter((t) => t.album.coverUrl)
-        .slice(0, 4)
-        .map((t) => t.album.coverUrl!);
+    const coverUrls = albumCoverUrls(orderedTracks);
 
     return {
         id: "top-tracks",
@@ -67,8 +67,9 @@ export async function generateRediscoverMix(
     today: string
 ): Promise<ProgrammaticMix | null> {
     const allTracks = await prisma.track.findMany({
-        where: {
-            album: { location: "LIBRARY" },
+            where: {
+            ...NOT_MISSING,
+            album: { location: LIBRARY_LOCATION },
         },
         take: 5000,
         include: {
@@ -89,10 +90,7 @@ export async function generateRediscoverMix(
     const shuffled = seededShuffle(underplayedTracks, seed);
 
     const selectedTracks = shuffled.slice(0, TRACK_LIMIT);
-    const coverUrls = selectedTracks
-        .filter((t) => t.album.coverUrl)
-        .slice(0, 4)
-        .map((t) => t.album.coverUrl!);
+    const coverUrls = albumCoverUrls(selectedTracks);
 
     return {
         id: `rediscover-${today}`,
@@ -160,14 +158,14 @@ export async function generateArtistSimilarMix(
     logger.debug(`[ARTIST SIMILAR MIX] Top artist: ${topArtist.name}`);
 
     try {
-        const similarArtists = await lastFmService.getSimilarArtists(
+        const similarArtists = await getSimilarArtists(
             topArtist.mbid || "",
             topArtist.name,
             10
         );
 
         logger.debug(
-            `[ARTIST SIMILAR MIX] Last.fm returned ${similarArtists.length} similar artists`
+            `[ARTIST SIMILAR MIX] similarity source returned ${similarArtists.length} similar artists`
         );
 
         const similarArtistNormalized = similarArtists.map((a) =>
@@ -179,6 +177,7 @@ export async function generateArtistSimilarMix(
                 albums: {
                     include: {
                         tracks: {
+                            where: NOT_MISSING,
                             include: {
                                 album: { select: { coverUrl: true } },
                             },
@@ -207,22 +206,17 @@ export async function generateArtistSimilarMix(
             return null;
         }
 
-        const selectedTracks = randomSample(tracks, TRACK_LIMIT);
-        const coverUrls = selectedTracks
-            .filter((t) => t.album.coverUrl)
-            .slice(0, 4)
-            .map((t) => t.album.coverUrl!);
-
-        return {
-            id: `artist-similar-${topArtistId}`,
-            type: "artist-similar",
-            name: `More Like ${topArtist.name}`,
-            description: `Similar artists you might enjoy`,
-            trackIds: selectedTracks.map((t) => t.id),
-            coverUrls,
-            trackCount: selectedTracks.length,
-            color: getMixColor("artist-similar"),
-        };
+        return sampleMix(
+            {
+                id: `artist-similar-${topArtistId}`,
+                type: "artist-similar",
+                name: `More Like ${topArtist.name}`,
+                description: `Similar artists you might enjoy`,
+                colorType: "artist-similar",
+            },
+            tracks,
+            TRACK_LIMIT
+        );
     } catch (error) {
         logger.error("Failed to generate artist similar mix:", error);
         return null;
@@ -234,7 +228,7 @@ export async function generateRandomDiscoveryMix(
     today: string
 ): Promise<ProgrammaticMix | null> {
     const totalAlbums = await prisma.album.count({
-        where: { tracks: { some: {} } },
+        where: { tracks: { some: NOT_MISSING } },
     });
 
     if (totalAlbums < 10) return null;
@@ -242,7 +236,7 @@ export async function generateRandomDiscoveryMix(
     const seed = getSeededRandom(`random-${today}`) % totalAlbums;
 
     const randomAlbums = await prisma.album.findMany({
-        where: { tracks: { some: {} } },
+        where: { tracks: { some: NOT_MISSING } },
         include: {
             tracks: {
                 include: {

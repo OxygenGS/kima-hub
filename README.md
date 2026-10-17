@@ -8,6 +8,7 @@
 
 This fork introduces several improvements over the original Kima Hub:
 
+- **Planned combined v1.11 release (unpublished):** Official upstream Kima Hub v1.11 functionality plus English/Dutch user-interface selection, server-side fork permission controls and extra AIO hardening. Track its acceptance in [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7). The currently published stable fork image remains `ghcr.io/oxygengs/kima-hub:v1.10.0`; do not pull a not-yet-created v1.11.0 image.
 - **Granular music permissions:** Administrators can independently control whether users may request albums or download individual tracks.
 - **Server-side authorization:** Protected download endpoints enforce permissions independently of frontend visibility.
 - **Instance branding:** Administrators can customize the application name, tagline, colors, logo, and favicon.
@@ -17,7 +18,7 @@ This fork introduces several improvements over the original Kima Hub:
 
 ### Security and Validation
 
-Development validation included 1,193 passing automated tests, targeted authorization checks, and a successful database migration test using a copy of existing production data.
+Development CI for the combined v1.11 candidate now runs frontend/backend suites, EN/NL browser checks, role-based authorization, native AMD64/ARM64 AIO smoke, and independent original-image v1.10/v1.11 upgrade/rollback tests **only on disposable synthetic data**. See [release acceptance](docs/v111-release-acceptance.md) and [open assembled-image security findings](docs/v111-image-security-review.md). These checks do not approve a public release or cover a privately managed installation.
 
 These results do not constitute an independent security audit or guarantee that all vulnerabilities have been eliminated.
 
@@ -318,7 +319,7 @@ Open http://localhost:3030 to complete setup. The AIO image includes the fronten
 
 ### Update with Docker Compose or Dockge
 
-1. Make a verified **PostgreSQL backup** and save your Compose configuration before updating. Image rollback alone does not reverse database migrations.
+1. Back up the **entire stopped AIO `/data` volume** (not just PostgreSQL) and save the Compose/Dockge configuration. Follow the [safe AIO update and independent rollback guide](docs/safe-aio-updates.md). An old image cannot safely open a migrated database.
 2. Check the [releases](https://github.com/OxygenGS/kima-hub/releases) for a new stable version.
 3. Change the `image:` tag in your existing Compose stack to that version. Keep the same `/data` volume, music mounts and environment settings.
 4. In **Dockge**, save the edited Compose configuration and use its pull/redeploy workflow. With Docker Compose, run:
@@ -331,7 +332,9 @@ docker compose ps
 
 5. Confirm the container is healthy, then test sign-in, music playback and existing settings.
 
-**Never run `docker compose down -v` on an installation containing data you want to keep.** Avoid using a floating `latest` tag in production if you want controlled, reproducible updates.
+**Preserve the existing Compose project name and /data volume when updating with Dockge or Compose.** A renamed Dockge stack or Compose project may create a different named volume even when the YAML still says `kima_data`, making an existing installation appear empty. Check the actual volume name before changing the stack name or moving its directory. **Back up the complete /data volume, including database and stored encryption/session secrets, plus your Compose file, before a major upgrade.** A PostgreSQL-only backup is not a complete AIO recovery plan. Test any rollback against a separately restored pre-upgrade volume; merely switching back to an older image cannot undo database migrations.
+
+**Never run `docker compose down -v` on an installation containing data you want to keep.** The provided `docker-compose.prod.yml` and `docker-compose.server.yml` pin `v1.10.0` by default until a newer fork release is approved; choose an explicit `VERSION` to upgrade. Avoid floating `latest` tags in production for controlled, reproducible updates.
 
 ### One-container Docker example
 

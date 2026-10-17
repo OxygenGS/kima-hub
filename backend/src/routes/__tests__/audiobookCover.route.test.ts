@@ -1,17 +1,7 @@
 /**
- * GET /audiobooks/:id/cover -- the unauthenticated file read.
- *
- * The route built `${req.params.id}.jpg` onto the music root and sendFile'd the
- * result. Express decodes %2F in a route param AFTER matching, so an id of
- * "..%2F..%2F..%2Fetc%2Fx" is real traversal by the time the handler sees it.
- * This route carries no auth -- auth in audiobooks.ts is applied per-route and
- * this is not one of them, and nothing authenticates ahead of the
- * /api/audiobooks mount -- so it was an unauthenticated read of any .jpg the
- * process could reach.
- *
- * This test writes a real file outside the music root and asks for it through
- * the route. No filesystem mocking: the point is whether the process will
- * actually hand over a file it should not, so the file is really there.
+ * GET /audiobooks/:id/cover is unauthenticated and must not serve a file outside
+ * the covers folder; Express decodes %2F in a param after matching. A real file
+ * outside the root is planted and requested.
  */
 
 jest.mock("../../utils/db", () => ({
@@ -65,12 +55,12 @@ jest.mock("../../middleware/rateLimiter", () => ({
     apiLimiter: (_req: any, _res: any, next: any) => next(),
 }));
 
-jest.mock("../../services/notificationService", () => ({
-    notificationService: { notifySystem: jest.fn() },
-}));
-
 jest.mock("../../config", () => ({
-    config: { music: { musicPath: "/music" } },
+    config: {
+        music: {
+            musicPath: require("path").join(require("os").tmpdir(), `kima-cover-music-${process.pid}`),
+        },
+    },
 }));
 
 import express from "express";
@@ -80,8 +70,13 @@ import os from "os";
 import path from "path";
 import audiobookRoutes from "../../routes/audiobooks";
 import { prisma } from "../../utils/db";
+import { config } from "../../config";
 
-// Where the unguarded join would have landed: the route appends ".jpg" itself.
+const MUSIC = config.music.musicPath;
+const ALBUM_COVER = path.join(MUSIC, "Artist", "Album", "cover.jpg");
+const ALBUM_COVER_BODY = "an album cover inside the music folder";
+
+// Where a path that escapes the music root would land: the route appends ".jpg" itself.
 const PROBE_BODY = "if you can read this, the traversal worked";
 const probeFile = path.join(os.tmpdir(), `kima-cover-traversal-${process.pid}.jpg`);
 
@@ -93,7 +88,7 @@ const probeFile = path.join(os.tmpdir(), `kima-cover-traversal-${process.pid}.jp
  */
 function traversingId(): string {
     const withoutExt = probeFile.replace(/\.jpg$/, "");
-    const relative = path.relative("/music/cover-cache/audiobooks", withoutExt);
+    const relative = path.relative(path.join(MUSIC, "cover-cache", "audiobooks"), withoutExt);
     return encodeURIComponent(relative);
 }
 
@@ -110,10 +105,13 @@ describe("GET /audiobooks/:id/cover", () => {
     beforeAll(() => {
         app = makeApp();
         fs.writeFileSync(probeFile, PROBE_BODY);
+        fs.mkdirSync(path.dirname(ALBUM_COVER), { recursive: true });
+        fs.writeFileSync(ALBUM_COVER, ALBUM_COVER_BODY);
     });
 
     afterAll(() => {
         fs.rmSync(probeFile, { force: true });
+        fs.rmSync(MUSIC, { recursive: true, force: true });
     });
 
     beforeEach(() => {
@@ -134,11 +132,17 @@ describe("GET /audiobooks/:id/cover", () => {
     });
 
     it("does not record an out-of-root path back onto the audiobook row", async () => {
-        // The unguarded version wrote whatever it resolved into
-        // localCoverPath, which would have persisted the escape.
         await request(app).get(`/${traversingId()}/cover`);
 
         expect(prisma.audiobook.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses an id that reaches another folder inside the music root", async () => {
+        const id = encodeURIComponent(path.join("..", "..", "Artist", "Album", "cover"));
+        const res = await request(app).get(`/${id}/cover`);
+
+        expect(res.status).toBe(404);
+        expect(res.text).not.toContain(ALBUM_COVER_BODY);
     });
 
     it("still answers 404 for an ordinary id with no cover on disk", async () => {

@@ -1,33 +1,41 @@
 /**
- * Lidarr Webhook Handler (Event Sourcing)
- *
- * Handles Lidarr webhooks using event sourcing pattern:
- * 1. Store webhook event in database (with deduplication)
- * 2. Respond immediately with 200 OK
- * 3. Process event asynchronously
- *
- * This ensures:
- * - No webhook events are lost
- * - Can replay missed events
- * - Survives server restarts
+ * Lidarr webhooks: each event is stored (deduplicated), answered 200 at once
+ * and processed asynchronously, so events survive restarts and can be replayed.
  */
 
-import { Router } from "express";
-import { scanQueue } from "../workers/queues";
-import { simpleDownloadManager } from "../services/simpleDownloadManager";
-import { queueCleaner } from "../jobs/queueCleaner";
+import { Router, type NextFunction, type Request, type Response } from "express";
+import { processStoredEvent } from "../services/webhookHandlers";
+import { WEBHOOK_SECRET_HEADER } from "../services/lidarrWebhookSetup";
+import { webhookLimiter } from "../middleware/rateLimiter";
 import { getSystemSettings } from "../utils/systemSettings";
-import { prisma } from "../utils/db";
+import { isLidarrConfigured } from "../services/lidarrClient";
 import { logger } from "../utils/logger";
 import crypto from "crypto";
 import { webhookEventStore } from "../services/webhookEventStore";
-import { webhookEventsTotal, webhookProcessingDuration } from "../utils/metrics";
 
 const router = Router();
 let webhookSecretWarned = false;
 
-// GET /webhooks/lidarr/verify - Webhook verification endpoint
-router.get("/lidarr/verify", (req, res) => {
+/** Marks requests that carry the configured secret; the limiter lets those through. */
+async function checkWebhookSecret(req: Request, res: Response, next: NextFunction) {
+    res.locals.webhookVerified = false;
+    try {
+        const secret = (await getSystemSettings())?.lidarrWebhookSecret;
+        const provided = req.get(WEBHOOK_SECRET_HEADER);
+        if (secret && provided) {
+            const a = Buffer.from(provided);
+            const b = Buffer.from(secret);
+            res.locals.webhookVerified = a.length === b.length && crypto.timingSafeEqual(a, b);
+        }
+    } catch (error: any) {
+        logger.error("[WEBHOOK] Could not read the webhook secret:", error.message);
+    }
+    next();
+}
+
+router.use(checkWebhookSecret, webhookLimiter);
+
+router.get("/lidarr/verify", (_req, res) => {
     logger.debug("[WEBHOOK] Verification request received");
     res.json({
         status: "ok",
@@ -37,16 +45,10 @@ router.get("/lidarr/verify", (req, res) => {
     });
 });
 
-// POST /webhooks/lidarr - Handle Lidarr webhooks
 router.post("/lidarr", async (req, res) => {
     try {
-        // Check if Lidarr is enabled before processing any webhooks
         const settings = await getSystemSettings();
-        if (
-            !settings?.lidarrEnabled ||
-            !settings?.lidarrUrl ||
-            !settings?.lidarrApiKey
-        ) {
+        if (!isLidarrConfigured(settings)) {
             logger.debug(
                 `[WEBHOOK] Lidarr webhook received but Lidarr is disabled. Ignoring.`
             );
@@ -57,32 +59,16 @@ router.post("/lidarr", async (req, res) => {
             });
         }
 
-        // Verify the webhook secret IF one is configured. When it's unset we accept
-        // the request (warn once) rather than reject: the secret is optional by
-        // design and Lidarr ships webhooks without one, so a hard 401 would break the
-        // default integration. Abuse of the unauthenticated path is bounded instead
-        // by the dedicated webhookLimiter applied at the mount (see index.ts).
         if (settings.lidarrWebhookSecret) {
-            const providedSecret = req.headers["x-webhook-secret"] as string;
-
-            if (
-                !providedSecret ||
-                providedSecret.length !== settings.lidarrWebhookSecret.length ||
-                !crypto.timingSafeEqual(
-                    Buffer.from(providedSecret),
-                    Buffer.from(settings.lidarrWebhookSecret)
-                )
-            ) {
-                logger.debug(
-                    `[WEBHOOK] Lidarr webhook received with invalid or missing secret`
-                );
+            if (!res.locals.webhookVerified) {
+                logger.debug(`[WEBHOOK] Lidarr webhook received with invalid or missing secret`);
                 return res.status(401).json({
                     error: "Unauthorized - Invalid webhook secret",
                 });
             }
         } else if (!webhookSecretWarned) {
             logger.warn(
-                "[WEBHOOK] Lidarr webhooks accepted without a lidarrWebhookSecret configured (rate-limited). Set lidarrWebhookSecret in settings to require authentication."
+                "[WEBHOOK] Lidarr webhooks are accepted without a secret and rate-limited. Saving the Lidarr settings gives Lidarr one."
             );
             webhookSecretWarned = true;
         }
@@ -90,202 +76,20 @@ router.post("/lidarr", async (req, res) => {
         const eventType = req.body.eventType;
         logger.debug(`[WEBHOOK] Lidarr event: ${eventType}`);
 
-        // Log payload in debug mode only
         if (process.env.DEBUG_WEBHOOKS === "true") {
             logger.debug(`   Payload:`, JSON.stringify(req.body, null, 2));
         }
 
-        // STEP 1: Store webhook event immediately (with deduplication)
-        const storedEvent = await webhookEventStore.storeEvent(
-            "lidarr",
-            eventType,
-            req.body
-        );
+        const { event, created } = await webhookEventStore.storeEvent("lidarr", eventType, req.body);
+        res.json({ success: true, eventId: event.id });
 
-        // STEP 2: Respond immediately (don't wait for processing)
-        res.json({ success: true, eventId: storedEvent.id });
-
-        // STEP 3: Process event asynchronously
-        processWebhookEvent(storedEvent.id, eventType, req.body).catch((error) => {
-            logger.error(`[WEBHOOK] Failed to process event ${storedEvent.id}:`, error.message);
-        });
+        if (created) {
+            void processStoredEvent(event.id, eventType, req.body);
+        }
     } catch (error: any) {
         logger.error("Webhook error:", error.message);
         res.status(500).json({ error: "Webhook processing failed" });
     }
 });
-
-/**
- * Process webhook event asynchronously
- */
-async function processWebhookEvent(
-    eventId: string,
-    eventType: string,
-    payload: any
-): Promise<void> {
-    const startTime = Date.now();
-    let status = 'success';
-
-    try {
-        let correlationId: string | undefined;
-
-        switch (eventType) {
-            case "Grab":
-                correlationId = await handleGrab(payload);
-                break;
-
-            case "Download":
-            case "AlbumDownload":
-            case "TrackRetag":
-            case "Rename":
-                correlationId = await handleDownload(payload);
-                break;
-
-            case "ImportFailure":
-            case "DownloadFailed":
-            case "DownloadFailure":
-                correlationId = await handleImportFailure(payload);
-                break;
-
-            case "Health":
-            case "HealthIssue":
-            case "HealthRestored":
-            case "Test":
-                break;
-
-            default:
-                logger.debug(`   Unhandled event: ${eventType}`);
-        }
-
-        await webhookEventStore.markProcessed(eventId, correlationId);
-    } catch (error: any) {
-        status = 'failed';
-        logger.error(`[WEBHOOK] Event processing failed:`, error.message);
-        await webhookEventStore.markFailed(eventId, error.message);
-    } finally {
-        const duration = (Date.now() - startTime) / 1000;
-        webhookEventsTotal.inc({ event_type: eventType, status });
-        webhookProcessingDuration.observe({ event_type: eventType }, duration);
-    }
-}
-
-/**
- * Handle Grab event (download started by Lidarr)
- * Returns correlation ID (download job ID) if matched
- */
-async function handleGrab(payload: any): Promise<string | undefined> {
-    const downloadId = payload.downloadId;
-    const albumMbid =
-        payload.albums?.[0]?.foreignAlbumId || payload.albums?.[0]?.mbId;
-    const albumTitle = payload.albums?.[0]?.title;
-    const artistName = payload.artist?.name;
-    const lidarrAlbumId = payload.albums?.[0]?.id;
-
-    logger.debug(`   Album: ${artistName} - ${albumTitle}`);
-    logger.debug(`   Download ID: ${downloadId}`);
-    logger.debug(`   MBID: ${albumMbid}`);
-
-    if (!downloadId) {
-        logger.debug(`   Missing downloadId, skipping`);
-        return undefined;
-    }
-
-    const result = await simpleDownloadManager.onDownloadGrabbed(
-        downloadId,
-        albumMbid || "",
-        albumTitle || "",
-        artistName || "",
-        lidarrAlbumId || 0
-    );
-
-    if (result.matched) {
-        queueCleaner.start();
-        return result.jobId;
-    }
-
-    return undefined;
-}
-
-/**
- * Handle Download event (download complete + imported)
- * Returns correlation ID (download job ID) if matched
- */
-async function handleDownload(payload: any): Promise<string | undefined> {
-    const downloadId = payload.downloadId;
-    const albumTitle = payload.album?.title || payload.albums?.[0]?.title;
-    const artistName = payload.artist?.name;
-    const albumMbid =
-        payload.album?.foreignAlbumId || payload.albums?.[0]?.foreignAlbumId;
-    const lidarrAlbumId = payload.album?.id || payload.albums?.[0]?.id;
-
-    logger.debug(`   Album: ${artistName} - ${albumTitle}`);
-    logger.debug(`   Download ID: ${downloadId}`);
-    logger.debug(`   Album MBID: ${albumMbid}`);
-    logger.debug(`   Lidarr Album ID: ${lidarrAlbumId}`);
-
-    if (!downloadId) {
-        logger.debug(`   Missing downloadId, skipping`);
-        return undefined;
-    }
-
-    const result = await simpleDownloadManager.onDownloadComplete(
-        downloadId,
-        albumMbid,
-        artistName,
-        albumTitle,
-        lidarrAlbumId
-    );
-
-    if (result.jobId) {
-        const downloadJob = await prisma.downloadJob.findUnique({
-            where: { id: result.jobId },
-            select: { userId: true, id: true },
-        });
-
-        logger.debug(
-            `   Triggering incremental scan for: ${artistName} - ${albumTitle}`
-        );
-        await scanQueue.add("scan", {
-            userId: downloadJob?.userId || null,
-            source: "lidarr-webhook",
-            artistName: artistName,
-            albumMbid: albumMbid,
-            downloadId: result.jobId,
-        });
-
-        return result.jobId;
-    } else {
-        logger.debug(`   No matching job, triggering scan anyway...`);
-        await scanQueue.add("scan", {
-            type: "full",
-            source: "lidarr-import-external",
-        });
-        return undefined;
-    }
-}
-
-/**
- * Handle import failure with automatic retry
- * Returns correlation ID (download job ID) if job found
- */
-async function handleImportFailure(payload: any): Promise<string | undefined> {
-    const downloadId = payload.downloadId;
-    const albumMbid =
-        payload.album?.foreignAlbumId || payload.albums?.[0]?.foreignAlbumId;
-    const albumTitle = payload.album?.title || payload.release?.title;
-    const reason = payload.message || "Import failed";
-
-    logger.debug(`   Album: ${albumTitle}`);
-    logger.debug(`   Download ID: ${downloadId}`);
-    logger.debug(`   Reason: ${reason}`);
-
-    if (!downloadId) {
-        logger.debug(`   Missing downloadId, skipping`);
-        return undefined;
-    }
-
-    const result = await simpleDownloadManager.onImportFailed(downloadId, reason, albumMbid);
-    return result.jobId;
-}
 
 export default router;

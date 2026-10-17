@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Response } from "express";
 import { logger } from "../utils/logger";
 import { safeError } from "../utils/errors";
 import { requireAuth, requireAdmin } from "../middleware/auth";
@@ -6,13 +6,12 @@ import { enrichmentService } from "../services/enrichment";
 import { prisma } from "../utils/db";
 import {
   getEnrichmentProgress,
-  runFullEnrichment,
-  reRunArtistsOnly,
-  reRunMoodTagsOnly,
-  reRunAudioAnalysisOnly,
-  resetAllEnrichmentData,
-  triggerEnrichmentNow,
+  invalidateEnrichmentProgress,
+  retryFailedAndBlocked,
+  redecideEverything,
+  startEnrichmentNow,
 } from "../workers/unifiedEnrichment";
+import { wipeEnrichment } from "../services/enrichmentRestart";
 import { enrichmentStateService } from "../services/enrichmentState";
 import { enrichmentFailureService } from "../services/enrichmentFailureService";
 import {
@@ -21,7 +20,6 @@ import {
 } from "../utils/systemSettings";
 import { rateLimiter } from "../services/rateLimiter";
 import { redisClient } from "../utils/redis";
-import { repairBrokenCovers } from "../services/imageBackfill";
 import {
   DuplicateMbidError,
   reassignAlbumRgMbid,
@@ -31,13 +29,26 @@ import { artistSortName } from "../services/artistIdentity";
 
 const router = Router();
 
-router.use(requireAuth);
+/** Answer 404 when a Prisma update hit a row that was deleted meanwhile (P2025). */
+function respondIfDeleted(res: Response, error: unknown, entity: string): boolean {
+  if (typeof error !== "object" || error === null || (error as { code?: string }).code !== "P2025") {
+    return false;
+  }
+  res.status(404).json({
+    error: `${entity[0].toUpperCase()}${entity.slice(1)} not found`,
+    message: `The ${entity} may have been deleted`,
+  });
+  return true;
+}
+
+// Authentication is per-route: a path that matches no route must 404, not 401,
+// so the settings UI sees "no such control", not "log in".
 
 /**
  * GET /enrichment/progress
  * Get comprehensive enrichment progress (artists, track tags, audio analysis)
  */
-router.get("/progress", async (req, res) => {
+router.get("/progress", requireAuth, async (_req, res) => {
   try {
     const progress = await getEnrichmentProgress();
     res.json(progress);
@@ -51,10 +62,16 @@ router.get("/progress", async (req, res) => {
  * GET /enrichment/status
  * Get detailed enrichment state (running, paused, etc.)
  */
-router.get("/status", async (req, res) => {
+router.get("/status", requireAuth, async (_req, res) => {
   try {
     const state = await enrichmentStateService.getState();
-    res.json(state || { status: "idle", currentPhase: null });
+    const base = state || { status: "idle", currentPhase: null };
+    // Surface a hang to the UI: status says running but lastActivity has not
+    // moved for over 15 minutes.
+    const hung =
+      base.status === "running" &&
+      (await enrichmentStateService.detectHang());
+    res.json({ ...base, hung: hung === true });
   } catch (error) {
     logger.error("Get enrichment status error:", error);
     res.status(500).json({ error: "Failed to get status" });
@@ -65,7 +82,7 @@ router.get("/status", async (req, res) => {
  * POST /enrichment/pause
  * Pause the enrichment process
  */
-router.post("/pause", requireAdmin, async (req, res) => {
+router.post("/pause", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const state = await enrichmentStateService.pause();
     res.json({
@@ -81,7 +98,7 @@ router.post("/pause", requireAdmin, async (req, res) => {
  * POST /enrichment/resume
  * Resume a paused enrichment process
  */
-router.post("/resume", requireAdmin, async (req, res) => {
+router.post("/resume", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const state = await enrichmentStateService.resume();
     res.json({
@@ -97,7 +114,7 @@ router.post("/resume", requireAdmin, async (req, res) => {
  * POST /enrichment/stop
  * Stop the enrichment process
  */
-router.post("/stop", requireAdmin, async (req, res) => {
+router.post("/stop", requireAuth, requireAdmin, async (_req, res) => {
   try {
     const state = await enrichmentStateService.stop();
     res.json({
@@ -110,125 +127,64 @@ router.post("/stop", requireAdmin, async (req, res) => {
 });
 
 /**
- * POST /enrichment/full
- * Trigger full enrichment (re-enriches everything regardless of status)
- * Admin only
+ * POST /enrichment/retry-failed-and-blocked
+ * Re-queue every stage question still owed an answer. Nothing is reset: done
+ * answers are not re-asked and terminal ones wait for a human. Admin only.
  */
-router.post("/full", requireAdmin, async (req, res) => {
+router.post("/retry-failed-and-blocked", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    // This runs in the background
-    runFullEnrichment().catch((err) => {
-      logger.error("Full enrichment error:", err);
-    });
+    const work = await retryFailedAndBlocked();
+    invalidateEnrichmentProgress();
 
     res.json({
-      message: "Full enrichment started",
-      description:
-        "All artists, track tags, and audio analysis will be re-processed",
+      message: "Failed and blocked work re-queued",
+      description: `${work.length} stage questions handed to the queue`,
+      queued: work.length,
     });
   } catch (error) {
-    logger.error("Trigger full enrichment error:", error);
-    res.status(500).json({ error: "Failed to start full enrichment" });
+    logger.error("Retry failed and blocked error:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to re-queue failed and blocked work" });
   }
 });
 
 /**
- * POST /enrichment/reset-artists
- * Reset only artist enrichment (keeps mood tags and audio analysis intact)
- * Admin only - selective re-enrichment for large libraries
+ * POST /enrichment/re-decide-everything
+ * Re-open every stage question so the sweep asks again. Deletes no answers and
+ * never re-runs AcoustID on a track that has a recordingMbid. Admin only.
  */
-router.post("/reset-artists", requireAdmin, async (req, res) => {
+router.post("/re-decide-everything", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const result = await reRunArtistsOnly();
+    const { reopened } = await redecideEverything();
+    invalidateEnrichmentProgress();
 
     res.json({
-      message: "Artist enrichment reset",
-      description: `${result.count} artists queued for re-enrichment`,
-      count: result.count,
+      message: "Every stage question re-opened",
+      description: `${reopened} stage records reopened`,
+      reopened,
     });
   } catch (error) {
-    logger.error("Reset artists error:", error);
-    res.status(500).json({ error: "Failed to reset artist enrichment" });
+    logger.error("Re-decide everything error:", error);
+    res.status(500).json({ error: "Failed to re-decide everything" });
   }
 });
 
 /**
- * POST /enrichment/reset-mood-tags
- * Reset only mood tags (keeps artist metadata and audio analysis intact)
- * Admin only - selective re-enrichment for large libraries
+ * POST /enrichment/wipe-and-rerun
+ * Clear what the enrichment steps worked out and run them again from the start
+ * (services/enrichmentRestart.ts). The library, file identities and everything
+ * people made stay. Admin only.
  */
-router.post("/reset-mood-tags", requireAdmin, async (req, res) => {
+router.post("/wipe-and-rerun", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const result = await reRunMoodTagsOnly();
-
-    res.json({
-      message: "Mood tags reset",
-      description: `${result.count} tracks queued for mood tag re-enrichment`,
-      count: result.count,
-    });
+    const wiped = await wipeEnrichment();
+    invalidateEnrichmentProgress();
+    void startEnrichmentNow();
+    res.json(wiped);
   } catch (error) {
-    logger.error("Reset mood tags error:", error);
-    res.status(500).json({ error: "Failed to reset mood tags" });
-  }
-});
-
-/**
- * POST /enrichment/reset-audio-analysis
- * Reset only audio analysis (keeps artist metadata and mood tags intact)
- * Admin only - selective re-enrichment for large libraries
- */
-router.post("/reset-audio-analysis", requireAdmin, async (req, res) => {
-  try {
-    const queued = await reRunAudioAnalysisOnly();
-
-    res.json({
-      message: "Audio analysis reset",
-      description: `${queued} tracks queued for audio re-analysis`,
-      count: queued,
-    });
-  } catch (error) {
-    logger.error("Reset audio analysis error:", error);
-    res.status(500).json({ error: "Failed to reset audio analysis" });
-  }
-});
-
-/**
- * POST /enrichment/repair-covers
- * Scan for broken native cover paths and clear them for re-fetch.
- * Affected artists are reset to pending so enrichment will re-fetch images.
- * Admin only
- */
-router.post("/repair-covers", requireAdmin, async (req, res) => {
-  try {
-    const result = await repairBrokenCovers();
-
-    res.json({
-      message: "Cover art repair complete",
-      description: `Cleared ${result.artistsRepaired} artist images and ${result.albumsRepaired} album covers for re-fetch. Run enrichment or library scan to re-download.`,
-      ...result,
-    });
-  } catch (error) {
-    logger.error("Repair covers error:", error);
-    res.status(500).json({ error: "Failed to repair covers" });
-  }
-});
-
-/**
- * POST /enrichment/reset-all
- * Reset ALL enrichment data -- analysis, embeddings, mood tags, failures
- * Preserves artist metadata (bios, images)
- * Admin only
- */
-router.post("/reset-all", requireAdmin, async (req, res) => {
-  try {
-    const result = await resetAllEnrichmentData();
-    res.json({
-      message: "All enrichment data reset",
-      ...result,
-    });
-  } catch (error) {
-    logger.error("Reset all enrichment error:", error);
-    res.status(500).json({ error: "Failed to reset enrichment data" });
+    logger.error("Wipe and re-run enrichment error:", error);
+    res.status(500).json({ error: "Failed to wipe and re-run enrichment" });
   }
 });
 
@@ -237,9 +193,9 @@ router.post("/reset-all", requireAdmin, async (req, res) => {
  * Trigger incremental enrichment (only processes pending items)
  * Fast sync that picks up new content without re-processing everything
  */
-router.post("/sync", async (req, res) => {
+router.post("/sync", requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const result = await triggerEnrichmentNow();
+    const result = await startEnrichmentNow();
 
     res.json({
       message: "Incremental sync started",
@@ -252,40 +208,10 @@ router.post("/sync", async (req, res) => {
 });
 
 /**
- * GET /enrichment/settings
- * Get enrichment settings for current user
- */
-router.get("/settings", async (req, res) => {
-  try {
-    const userId = req.user!.id;
-    const settings = await enrichmentService.getSettings(userId);
-    res.json(settings);
-  } catch (error) {
-    logger.error("Get enrichment settings error:", error);
-    res.status(500).json({ error: "Failed to get settings" });
-  }
-});
-
-/**
- * PUT /enrichment/settings
- * Update enrichment settings for current user
- */
-router.put("/settings", async (req, res) => {
-  try {
-    const userId = req.user!.id;
-    const settings = await enrichmentService.updateSettings(userId, req.body);
-    res.json(settings);
-  } catch (error) {
-    logger.error("Update enrichment settings error:", error);
-    res.status(500).json({ error: "Failed to update settings" });
-  }
-});
-
-/**
  * POST /enrichment/artist/:id
  * Enrich a single artist
  */
-router.post("/artist/:id", async (req, res) => {
+router.post("/artist/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user!.id;
     const settings = await enrichmentService.getSettings(userId);
@@ -324,7 +250,7 @@ router.post("/artist/:id", async (req, res) => {
  * POST /enrichment/album/:id
  * Enrich a single album
  */
-router.post("/album/:id", async (req, res) => {
+router.post("/album/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user!.id;
     const settings = await enrichmentService.getSettings(userId);
@@ -360,43 +286,11 @@ router.post("/album/:id", async (req, res) => {
 });
 
 /**
- * POST /enrichment/start
- * Start library-wide enrichment (runs in background)
- * Delegates to the unified enrichment worker for consistent state tracking,
- * failure recording, and pause/stop support.
- */
-router.post("/start", async (req, res) => {
-  try {
-    const systemSettings = await prisma.systemSettings.findUnique({
-      where: { id: "default" },
-      select: { autoEnrichMetadata: true },
-    });
-
-    if (!systemSettings?.autoEnrichMetadata) {
-      return res.status(400).json({
-        error: "Enrichment is not enabled. Enable it in settings first.",
-      });
-    }
-
-    // Run via unified worker (handles state, failures, notifications)
-    runFullEnrichment().catch((err) => {
-      logger.error("Background enrichment failed:", err);
-    });
-
-    res.json({
-      success: true,
-      message: "Library enrichment started in background",
-    });
-  } catch (error) {
-    safeError(res, "Start library enrichment", error);
-  }
-});
-
-/**
  * GET /enrichment/failures
- * Get all enrichment failures with filtering
+ * Enrichment failures with filtering: track stages from TrackStage, artists and
+ * podcasts from the ledger, in the EnrichmentFailure shape.
  */
-router.get("/failures", async (req, res) => {
+router.get("/failures", requireAuth, async (req, res) => {
   try {
     const { entityType, includeSkipped, includeResolved, limit, offset } =
       req.query;
@@ -420,7 +314,7 @@ router.get("/failures", async (req, res) => {
  * GET /enrichment/failures/counts
  * Get failure counts by type
  */
-router.get("/failures/counts", async (req, res) => {
+router.get("/failures/counts", requireAuth, async (_req, res) => {
   try {
     const counts = await enrichmentFailureService.getFailureCounts();
     res.json(counts);
@@ -434,7 +328,7 @@ router.get("/failures/counts", async (req, res) => {
  * POST /enrichment/retry
  * Retry specific failed items
  */
-router.post("/retry", requireAdmin, async (req, res) => {
+router.post("/retry", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { ids } = req.body;
 
@@ -474,10 +368,12 @@ router.post("/retry", requireAdmin, async (req, res) => {
         )
       : new Set<string>();
 
-    const trackFailureIds = new Set<string>([
-      ...(idsByType.get("track") ?? []),
-      ...(idsByType.get("audio") ?? []),
-    ]);
+      const trackFailureIds = new Set<string>([
+        ...(idsByType.get("track") ?? []),
+        ...(idsByType.get("audio") ?? []),
+        ...(idsByType.get("vibe") ?? []),
+        ...(idsByType.get("scan") ?? []),
+      ]);
     const existingTrackIds =
       trackFailureIds.size > 0
         ? new Set(
@@ -494,8 +390,7 @@ router.post("/retry", requireAdmin, async (req, res) => {
     let skipped = 0;
     const toResolve: string[] = [];
     const artistIdsToReset: string[] = [];
-    const trackTagIdsToReset: string[] = [];
-    const audioIdsToReset: string[] = [];
+    const stageReopenIds: string[] = [];
 
     for (const failure of failures) {
       if (!failure) continue;
@@ -508,33 +403,28 @@ router.post("/retry", requireAdmin, async (req, res) => {
           artistIdsToReset.push(failure.entityId);
           queued++;
         }
-      } else if (failure.entityType === "track") {
+      } else {
+        // Track-stage failure (track/audio/vibe/scan): retrying reopens the
+        // question on the stage record (pending, fresh attempt, error cleared)
+        // and the queue re-asks it. The record is what the engine decides from,
+        // so no Track columns are reset.
         if (!existingTrackIds.has(failure.entityId)) {
           toResolve.push(failure.id);
           skipped++;
         } else {
-          trackTagIdsToReset.push(failure.entityId);
-          queued++;
-        }
-      } else if (failure.entityType === "audio") {
-        if (!existingTrackIds.has(failure.entityId)) {
-          toResolve.push(failure.id);
-          skipped++;
-        } else {
-          audioIdsToReset.push(failure.entityId);
+          stageReopenIds.push(failure.id);
           queued++;
         }
       }
     }
 
-    // One batch update per type instead of one per failure. Each is isolated
-    // so a failure resetting one type doesn't block the others (mirrors the
-    // previous per-failure try/catch's "don't re-throw, keep going" behavior).
+    // One batch update per kind. Each is isolated so a failure resetting one
+    // kind doesn't block the others.
     try {
       if (artistIdsToReset.length > 0) {
         await prisma.artist.updateMany({
           where: { id: { in: artistIdsToReset } },
-          data: { enrichmentStatus: "pending" },
+          data: { enrichmentStatus: "pending", enrichmentFailures: 0 },
         });
       }
     } catch (error) {
@@ -542,28 +432,11 @@ router.post("/retry", requireAdmin, async (req, res) => {
     }
 
     try {
-      if (trackTagIdsToReset.length > 0) {
-        await prisma.track.updateMany({
-          where: { id: { in: trackTagIdsToReset } },
-          data: { lastfmTags: [] },
-        });
+      if (stageReopenIds.length > 0) {
+        await enrichmentFailureService.retryStageFailures(stageReopenIds);
       }
     } catch (error) {
-      logger.error("Failed to reset track tags for retry:", error);
-    }
-
-    try {
-      if (audioIdsToReset.length > 0) {
-        await prisma.track.updateMany({
-          where: { id: { in: audioIdsToReset } },
-          data: {
-            analysisStatus: "pending",
-            analysisRetryCount: 0,
-          },
-        });
-      }
-    } catch (error) {
-      logger.error("Failed to reset audio analysis for retry:", error);
+      logger.error("Failed to reopen stage records for retry:", error);
     }
 
     try {
@@ -586,80 +459,11 @@ router.post("/retry", requireAdmin, async (req, res) => {
 });
 
 /**
- * POST /enrichment/skip
- * Skip specific failures (won't retry automatically)
- */
-router.post("/skip", requireAdmin, async (req, res) => {
-  try {
-    const { ids } = req.body;
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "Must provide array of failure IDs" });
-    }
-
-    const count = await enrichmentFailureService.skipFailures(ids);
-    res.json({
-      message: `Skipped ${count} failures`,
-      count,
-    });
-  } catch (error) {
-    safeError(res, "Skip enrichment failures", error);
-  }
-});
-
-/**
- * DELETE /enrichment/failures
- * Clear all unresolved failures (optionally filtered by type)
- */
-router.delete("/failures", requireAdmin, async (req, res) => {
-  try {
-    const entityType = req.query.entityType as
-      | "artist"
-      | "track"
-      | "audio"
-      | undefined;
-
-    if (entityType && !["artist", "track", "audio"].includes(entityType)) {
-      return res.status(400).json({ error: "Invalid entityType" });
-    }
-
-    const count = await enrichmentFailureService.clearAllFailures(entityType);
-
-    res.json({
-      message: `Cleared ${count} failure${count !== 1 ? "s" : ""}`,
-      count,
-    });
-  } catch (error) {
-    safeError(res, "Clear enrichment failures", error);
-  }
-});
-
-/**
- * DELETE /enrichment/failures/:id
- * Delete a specific failure record
- */
-router.delete("/failures/:id", requireAdmin, async (req, res) => {
-  try {
-    const count = await enrichmentFailureService.deleteFailures([
-      req.params.id,
-    ]);
-    res.json({
-      message: "Failure deleted",
-      count,
-    });
-  } catch (error) {
-    safeError(res, "Delete enrichment failure", error);
-  }
-});
-
-/**
  * PUT /enrichment/artists/:id/metadata
  * Update artist metadata manually (non-destructive overrides)
  * User edits are stored as overrides; canonical data preserved for API lookups
  */
-router.put("/artists/:id/metadata", requireAdmin, async (req, res) => {
+router.put("/artists/:id/metadata", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { name, bio, genres, heroUrl, mbid } = req.body;
   
@@ -671,13 +475,8 @@ router.put("/artists/:id/metadata", requireAdmin, async (req, res) => {
         updateData.displayName = name;
         hasOverrides = true;
 
-        // sortName means "where this artist files alphabetically" -- an
-        // override changes that, so it has to move with displayName rather
-        // than staying derived from the canonical name alone. Clearing the
-        // override (empty/null) files it back under the canonical name,
-        // which this handler doesn't otherwise read, so fetch it only for
-        // that branch -- the common case (setting a real override) needs
-        // no extra query.
+        // sortName follows displayName. Clearing the override files the artist under
+        // its canonical name, fetched only in that case.
         const effectiveName =
           typeof name === "string" && name.trim() !== ""
             ? name
@@ -755,7 +554,7 @@ router.put("/artists/:id/metadata", requireAdmin, async (req, res) => {
  * Update album metadata manually (non-destructive overrides)
  * User edits are stored as overrides; canonical data preserved for API lookups
  */
-router.put("/albums/:id/metadata", requireAdmin, async (req, res) => {
+router.put("/albums/:id/metadata", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { title, year, genres, coverUrl, rgMbid } = req.body;
   
@@ -767,14 +566,8 @@ router.put("/albums/:id/metadata", requireAdmin, async (req, res) => {
         updateData.displayTitle = title;
         hasOverrides = true;
 
-        // sortName means "where this album files alphabetically" -- same
-        // reasoning as the artist fix (23a2283): it has to move with
-        // displayTitle, not stay derived from the canonical title alone, or
-        // an override files under the title it was meant to replace.
-        // artistSortName is text-generic despite the name (fold/lower/
-        // collapse/strip-article only, nothing artist-specific), the same
-        // way kima_sort_name is on the SQL side -- reused here rather than
-        // duplicated.
+        // sortName follows displayTitle, like the artist override. artistSortName is
+        // text-generic, so it serves albums too.
         const effectiveTitle =
           typeof title === "string" && title.trim() !== ""
             ? title
@@ -787,11 +580,8 @@ router.put("/albums/:id/metadata", requireAdmin, async (req, res) => {
         updateData.sortName = artistSortName(effectiveTitle);
       }
       if (year !== undefined) {
-        // Clearing the field in the editor sends null, not undefined: the input does
-        // parseInt("") -> NaN, and JSON.stringify turns NaN into null. That passed the
-        // !== undefined check and put NaN into an Int? column, which Prisma rejects and
-        // the catch below reported as 500 -- for the ordinary act of emptying a field.
-        // Null now means "remove the override", which is what the user asked for.
+        // An emptied field arrives as null (parseInt("") is NaN, which JSON sends as
+        // null) and removes the override.
         const parsedYear = year === null || year === "" ? null : parseInt(year, 10);
         if (parsedYear !== null && Number.isNaN(parsedYear)) {
           return res.status(400).json({ error: "year must be a number" });
@@ -860,7 +650,7 @@ router.put("/albums/:id/metadata", requireAdmin, async (req, res) => {
  * Update track metadata manually (non-destructive overrides)
  * User edits are stored as overrides; canonical data preserved
  */
-router.put("/tracks/:id/metadata", requireAdmin, async (req, res) => {
+router.put("/tracks/:id/metadata", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { title, trackNo } = req.body;
 
@@ -917,7 +707,7 @@ router.put("/tracks/:id/metadata", requireAdmin, async (req, res) => {
  * POST /enrichment/artists/:id/reset
  * Reset artist metadata to canonical values (clear all user overrides)
  */
-router.post("/artists/:id/reset", async (req, res) => {
+router.post("/artists/:id/reset", requireAuth, async (req, res) => {
   try {
     // Check if artist exists first
     const existingArtist = await prisma.artist.findUnique({
@@ -969,13 +759,9 @@ router.post("/artists/:id/reset", async (req, res) => {
       artist,
     });
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2025") {
-      return res.status(404).json({
-        error: "Artist not found",
-        message: "The artist may have been deleted",
-      });
+    if (!respondIfDeleted(res, error, "artist")) {
+      safeError(res, "Reset artist metadata", error);
     }
-    safeError(res, "Reset artist metadata", error);
   }
 });
 
@@ -983,7 +769,7 @@ router.post("/artists/:id/reset", async (req, res) => {
  * POST /enrichment/albums/:id/reset
  * Reset album metadata to canonical values (clear all user overrides)
  */
-router.post("/albums/:id/reset", async (req, res) => {
+router.post("/albums/:id/reset", requireAuth, async (req, res) => {
   try {
     // Check if album exists first
     const existingAlbum = await prisma.album.findUnique({
@@ -1034,13 +820,9 @@ router.post("/albums/:id/reset", async (req, res) => {
       album,
     });
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2025") {
-      return res.status(404).json({
-        error: "Album not found",
-        message: "The album may have been deleted",
-      });
+    if (!respondIfDeleted(res, error, "album")) {
+      safeError(res, "Reset album metadata", error);
     }
-    safeError(res, "Reset album metadata", error);
   }
 });
 
@@ -1048,7 +830,7 @@ router.post("/albums/:id/reset", async (req, res) => {
  * POST /enrichment/tracks/:id/reset
  * Reset track metadata to canonical values (clear all user overrides)
  */
-router.post("/tracks/:id/reset", async (req, res) => {
+router.post("/tracks/:id/reset", requireAuth, async (req, res) => {
   try {
     // Check if track exists first
     const existingTrack = await prisma.track.findUnique({
@@ -1091,13 +873,9 @@ router.post("/tracks/:id/reset", async (req, res) => {
       track,
     });
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2025") {
-      return res.status(404).json({
-        error: "Track not found",
-        message: "The track may have been deleted",
-      });
+    if (!respondIfDeleted(res, error, "track")) {
+      safeError(res, "Reset track metadata", error);
     }
-    safeError(res, "Reset track metadata", error);
   }
 });
 
@@ -1105,7 +883,7 @@ router.post("/tracks/:id/reset", async (req, res) => {
  * GET /enrichment/concurrency
  * Get current enrichment concurrency configuration
  */
-router.get("/concurrency", async (req, res) => {
+router.get("/concurrency", requireAuth, async (_req, res) => {
   try {
     const settings = await getSystemSettings();
     const concurrency = settings?.enrichmentConcurrency || 1;
@@ -1130,7 +908,7 @@ router.get("/concurrency", async (req, res) => {
  * PUT /enrichment/concurrency
  * Update enrichment concurrency configuration
  */
-router.put("/concurrency", requireAdmin, async (req, res) => {
+router.put("/concurrency", requireAuth, requireAdmin, async (req, res) => {
   try {
     const { concurrency } = req.body;
 

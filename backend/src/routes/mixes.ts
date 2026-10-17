@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { asyncHandler } from "../middleware/asyncHandler";
 import { logger } from "../utils/logger";
 import { requireAuthOrToken, requireAdmin } from "../middleware/auth";
-import { programmaticPlaylistService } from "../services/programmaticPlaylists";
+import { programmaticPlaylistService } from "../services/mixes";
 import {
     moodBucketService,
     VALID_MOODS,
@@ -21,6 +20,47 @@ const getRequestUserId = (req: any): string | null => {
     return req.user?.id || req.session?.userId || null;
 };
 
+const MIXES_CACHE_TTL = 3600; // 1 hour
+
+function mixesCacheKey(userId: string): string {
+    return `mixes:${userId}`;
+}
+
+/** All of the user's mixes: Redis first, regenerated and cached on a miss. */
+async function getMixesForUser(userId: string): Promise<any[]> {
+    const cached = await redisClient.get(mixesCacheKey(userId));
+    if (cached) {
+        return JSON.parse(cached);
+    }
+
+    const mixes = await programmaticPlaylistService.generateAllMixes(userId);
+    await redisClient.setex(
+        mixesCacheKey(userId),
+        MIXES_CACHE_TTL,
+        JSON.stringify(mixes)
+    );
+    return mixes;
+}
+
+/** Full track rows for the given ids, in the order the ids list them. */
+async function loadTracksInMixOrder(trackIds: string[]): Promise<any[]> {
+    const tracks = await prisma.track.findMany({
+        where: { id: { in: trackIds } },
+        include: {
+            album: {
+                include: {
+                    artist: {
+                        select: { id: true, name: true, mbid: true },
+                    },
+                },
+            },
+        },
+    });
+    return trackIds
+        .map((id) => tracks.find((t) => t.id === id))
+        .filter((t: any) => t !== undefined);
+}
+
 router.get("/", async (req, res) => {
     try {
         const userId = getRequestUserId(req);
@@ -28,294 +68,14 @@ router.get("/", async (req, res) => {
             return res.status(401).json({ error: "Not authenticated" });
         }
 
-        // Check cache first (mixes are expensive to compute)
-        const cacheKey = `mixes:${userId}`;
-        const cached = await redisClient.get(cacheKey);
-
-        if (cached) {
-            return res.json(JSON.parse(cached));
-        }
-
-        // Generate all mixes
-        const mixes = await programmaticPlaylistService.generateAllMixes(
-            userId
-        );
-
-        // Cache for 1 hour
-        await redisClient.setex(cacheKey, 3600, JSON.stringify(mixes));
-
-        res.json(mixes);
+        res.json(await getMixesForUser(userId));
     } catch (error) {
         logger.error("Get mixes error:", error);
         res.status(500).json({ error: "Failed to get mixes" });
     }
 });
 
-router.post("/mood", async (req, res) => {
-    try {
-        const userId = getRequestUserId(req);
-        if (!userId) {
-            return res.status(401).json({ error: "Not authenticated" });
-        }
-
-        const params = req.body;
-
-        // Validate parameters
-        const validKeys = [
-            // Basic audio features
-            "valence",
-            "energy",
-            "danceability",
-            "acousticness",
-            "instrumentalness",
-            "arousal",
-            "bpm",
-            "keyScale",
-            // ML mood predictions
-            "moodHappy",
-            "moodSad",
-            "moodRelaxed",
-            "moodAggressive",
-            "moodParty",
-            "moodAcoustic",
-            "moodElectronic",
-            // Other
-            "limit",
-        ];
-        for (const key of Object.keys(params)) {
-            if (!validKeys.includes(key)) {
-                return res
-                    .status(400)
-                    .json({ error: `Invalid parameter: ${key}` });
-            }
-        }
-
-        const mix = await programmaticPlaylistService.generateMoodOnDemand(
-            userId,
-            params
-        );
-
-        if (!mix) {
-            return res.status(400).json({
-                error: "Not enough tracks matching your criteria",
-                suggestion:
-                    "Try widening your parameters or wait for more tracks to be analyzed",
-            });
-        }
-
-        // Load full track details
-        const tracks = await prisma.track.findMany({
-            where: {
-                id: { in: mix.trackIds },
-            },
-            include: {
-                album: {
-                    include: {
-                        artist: {
-                            select: {
-                                id: true,
-                                name: true,
-                                mbid: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
-
-        // Preserve mix order
-        const orderedTracks = mix.trackIds
-            .map((id: string) => tracks.find((t) => t.id === id))
-            .filter((t: any) => t !== undefined);
-
-        logger.debug(
-            `[MIXES] Generated mood-on-demand mix with ${mix.trackCount} tracks`
-        );
-
-        res.json({
-            ...mix,
-            tracks: orderedTracks,
-        });
-    } catch (error) {
-        logger.error("Generate mood mix error:", error);
-        res.status(500).json({ error: "Failed to generate mood mix" });
-    }
-});
-
-/**
- * Available mood presets for the UI
- */
-router.get("/mood/presets", asyncHandler(async (req, res) => {
-    // Presets use ML mood predictions for more accurate matching
-    // These mirror the logic used in programmatic mixes (Chill Mix, Party Mix, etc.)
-    const presets = [
-        {
-            id: "happy",
-            name: "Happy & Upbeat",
-            color: "from-yellow-400 to-orange-500",
-            params: {
-                moodHappy: { min: 0.5 },
-                moodSad: { max: 0.4 },
-                energy: { min: 0.4 },
-            },
-        },
-        {
-            id: "sad",
-            name: "Melancholic",
-            color: "from-blue-600 to-indigo-700",
-            params: {
-                moodSad: { min: 0.5 },
-                moodHappy: { max: 0.4 },
-                keyScale: "minor",
-            },
-        },
-        {
-            id: "chill",
-            name: "Chill & Relaxed",
-            color: "from-teal-400 to-cyan-500",
-            params: {
-                moodRelaxed: { min: 0.5 },
-                moodAggressive: { max: 0.3 },
-                energy: { max: 0.55 },
-            },
-        },
-        {
-            id: "energetic",
-            name: "High Energy",
-            color: "from-red-500 to-orange-600",
-            params: {
-                arousal: { min: 0.6 },
-                energy: { min: 0.65 },
-                moodRelaxed: { max: 0.4 },
-            },
-        },
-        {
-            id: "focus",
-            name: "Focus Mode",
-            color: "from-purple-600 to-violet-700",
-            params: {
-                instrumentalness: { min: 0.5 },
-                moodRelaxed: { min: 0.3 },
-                energy: { min: 0.2, max: 0.6 },
-            },
-        },
-        {
-            id: "dance",
-            name: "Dance Party",
-            color: "from-pink-500 to-rose-600",
-            params: {
-                moodParty: { min: 0.5 },
-                danceability: { min: 0.6 },
-                energy: { min: 0.5 },
-            },
-        },
-        {
-            id: "acoustic",
-            name: "Acoustic Vibes",
-            color: "from-amber-500 to-yellow-600",
-            params: {
-                moodAcoustic: { min: 0.5 },
-                moodElectronic: { max: 0.4 },
-            },
-        },
-        {
-            id: "dark",
-            name: "Dark & Moody",
-            color: "from-gray-700 to-slate-800",
-            params: {
-                moodAggressive: { min: 0.4 },
-                moodHappy: { max: 0.4 },
-                keyScale: "minor",
-            },
-        },
-        {
-            id: "romantic",
-            name: "Romantic",
-            color: "from-rose-500 to-pink-600",
-            params: {
-                moodRelaxed: { min: 0.3 },
-                moodAggressive: { max: 0.3 },
-                acousticness: { min: 0.3 },
-                energy: { max: 0.6 },
-            },
-        },
-        {
-            id: "workout",
-            name: "Workout Beast",
-            color: "from-green-500 to-emerald-600",
-            params: {
-                arousal: { min: 0.6 },
-                energy: { min: 0.7 },
-                moodRelaxed: { max: 0.4 },
-                bpm: { min: 110 },
-            },
-        },
-        {
-            id: "sleepy",
-            name: "Sleep & Unwind",
-            color: "from-indigo-400 to-purple-500",
-            params: {
-                moodRelaxed: { min: 0.5 },
-                energy: { max: 0.35 },
-                moodAggressive: { max: 0.2 },
-            },
-        },
-        {
-            id: "confident",
-            name: "Confidence Boost",
-            color: "from-amber-400 to-orange-500",
-            params: {
-                moodHappy: { min: 0.4 },
-                moodParty: { min: 0.3 },
-                energy: { min: 0.5 },
-                danceability: { min: 0.5 },
-            },
-        },
-    ];
-
-    res.json(presets);
-}));
-
-/**
- * Save user's mood mix preferences
- * These preferences are used to generate "Your Mood Mix" in the mix rotation
- */
-router.post("/mood/save-preferences", async (req, res) => {
-    try {
-        const userId = getRequestUserId(req);
-        if (!userId) {
-            return res.status(401).json({ error: "Not authenticated" });
-        }
-
-        const params = req.body;
-
-        // Validate that at least some params are provided
-        if (!params || Object.keys(params).length === 0) {
-            return res
-                .status(400)
-                .json({ error: "No mood parameters provided" });
-        }
-
-        // Save to user record
-        await prisma.user.update({
-            where: { id: userId },
-            data: { moodMixParams: params },
-        });
-
-        // Invalidate mix cache so the new mood mix appears
-        const cacheKey = `mixes:${userId}`;
-        await redisClient.del(cacheKey);
-
-        logger.debug(`[MIXES] Saved mood mix preferences for user ${userId}`);
-
-        res.json({ success: true, message: "Mood preferences saved" });
-    } catch (error) {
-        logger.error("Save mood preferences error:", error);
-        res.status(500).json({ error: "Failed to save mood preferences" });
-    }
-});
-
-router.get("/mood/buckets/presets", async (req, res) => {
+router.get("/mood/buckets/presets", async (_req, res) => {
     try {
         const presets = await moodBucketService.getMoodPresets();
         res.json(presets);
@@ -336,7 +96,18 @@ router.get("/mood/buckets/:mood", async (req, res) => {
             });
         }
 
-        const mix = await moodBucketService.getMoodMix(mood);
+        // Skip what this user was already served, then remember the ids this
+        // mix actually went out with, so the next one doesn't repeat them.
+        const userId = getRequestUserId(req);
+        const remembered = userId
+            ? await moodBucketService.getRememberedTrackIds(userId, mood)
+            : [];
+
+        const mix = await moodBucketService.getMoodMix(
+            mood,
+            MOOD_MIX_LIMIT,
+            remembered
+        );
 
         if (!mix) {
             return res.status(400).json({
@@ -345,24 +116,11 @@ router.get("/mood/buckets/:mood", async (req, res) => {
             });
         }
 
-        // Load full track details
-        const tracks = await prisma.track.findMany({
-            where: { id: { in: mix.trackIds } },
-            include: {
-                album: {
-                    include: {
-                        artist: {
-                            select: { id: true, name: true, mbid: true },
-                        },
-                    },
-                },
-            },
-        });
+        if (userId) {
+            await moodBucketService.recordServedTracks(userId, mood, mix.trackIds);
+        }
 
-        // Preserve mix order
-        const orderedTracks = mix.trackIds
-            .map((id: string) => tracks.find((t) => t.id === id))
-            .filter((t: any) => t !== undefined);
+        const orderedTracks = await loadTracksInMixOrder(mix.trackIds);
 
         res.json({
             ...mix,
@@ -412,27 +170,9 @@ router.post("/mood/buckets/:mood/save", async (req, res) => {
         }
 
         // Invalidate mixes cache so home page refetches
-        const cacheKey = `mixes:${userId}`;
-        await redisClient.del(cacheKey);
+        await redisClient.del(mixesCacheKey(userId));
 
-        // Load full track details for immediate playback
-        const tracks = await prisma.track.findMany({
-            where: { id: { in: savedMix.trackIds } },
-            include: {
-                album: {
-                    include: {
-                        artist: {
-                            select: { id: true, name: true, mbid: true },
-                        },
-                    },
-                },
-            },
-        });
-
-        // Preserve mix order
-        const orderedTracks = savedMix.trackIds
-            .map((id: string) => tracks.find((t) => t.id === id))
-            .filter((t: any) => t !== undefined);
+        const orderedTracks = await loadTracksInMixOrder(savedMix.trackIds);
 
         logger.debug(
             `[MIXES] Saved mood bucket mix for user ${userId}: ${mood} (${savedMix.trackCount} tracks)`
@@ -482,18 +222,17 @@ router.post("/refresh", async (req, res) => {
             return res.status(401).json({ error: "Not authenticated" });
         }
 
-        // Clear cache
-        const cacheKey = `mixes:${userId}`;
-        await redisClient.del(cacheKey);
-
-        // Regenerate mixes with random selection (not date-based)
+        // Regenerate with random selection (not date-based) and replace the cache
+        await redisClient.del(mixesCacheKey(userId));
         const mixes = await programmaticPlaylistService.generateAllMixes(
             userId,
             true
         );
-
-        // Cache for 1 hour
-        await redisClient.setex(cacheKey, 3600, JSON.stringify(mixes));
+        await redisClient.setex(
+            mixesCacheKey(userId),
+            MIXES_CACHE_TTL,
+            JSON.stringify(mixes)
+        );
 
         res.json({ message: "Mixes refreshed", mixes });
     } catch (error) {
@@ -511,17 +250,7 @@ router.post("/:id/save", async (req, res) => {
         const mixId = req.params.id;
         const customName = req.body.name;
 
-        // Get the mix with track details
-        const cacheKey = `mixes:${userId}`;
-        let mixes;
-
-        const cached = await redisClient.get(cacheKey);
-        if (cached) {
-            mixes = JSON.parse(cached);
-        } else {
-            mixes = await programmaticPlaylistService.generateAllMixes(userId);
-            await redisClient.setex(cacheKey, 3600, JSON.stringify(mixes));
-        }
+        const mixes = await getMixesForUser(userId);
 
         const mix = mixes.find((m: any) => m.id === mixId);
 
@@ -558,15 +287,8 @@ router.post("/:id/save", async (req, res) => {
             },
         });
 
-        // Add all tracks to the playlist.
-        //
-        // `rank` is the authoritative order and is UNIQUE per playlist with an
-        // empty-string default, so writing only `sort` left every row at "" and
-        // the unique index rejected all but the first -- silently, because
-        // createMany's default skipDuplicates behaviour swallows it. A saved mix
-        // would report its full track count while storing one track. The
-        // playlist is created empty immediately above, so positional ranks are
-        // correct here without consulting an existing maximum.
+        // `rank` is unique per playlist, so every item needs its own; the playlist
+        // was just created empty, so positional ranks are correct.
         const playlistItems = mix.trackIds.map(
             (trackId: string, index: number) => ({
                 playlistId: playlist.id,
@@ -603,17 +325,7 @@ router.get("/:id", async (req, res) => {
         }
         const mixId = req.params.id;
 
-        // Get all mixes (from cache if available)
-        const cacheKey = `mixes:${userId}`;
-        let mixes;
-
-        const cached = await redisClient.get(cacheKey);
-        if (cached) {
-            mixes = JSON.parse(cached);
-        } else {
-            mixes = await programmaticPlaylistService.generateAllMixes(userId);
-            await redisClient.setex(cacheKey, 3600, JSON.stringify(mixes));
-        }
+        const mixes = await getMixesForUser(userId);
 
         // Find the specific mix
         const mix = mixes.find((m: any) => m.id === mixId);
@@ -622,32 +334,7 @@ router.get("/:id", async (req, res) => {
             return res.status(404).json({ error: "Mix not found" });
         }
 
-        // Load full track details
-        const tracks = await prisma.track.findMany({
-            where: {
-                id: {
-                    in: mix.trackIds,
-                },
-            },
-            include: {
-                album: {
-                    include: {
-                        artist: {
-                            select: {
-                                id: true,
-                                name: true,
-                                mbid: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
-
-        // Preserve mix order
-        const orderedTracks = mix.trackIds
-            .map((id: string) => tracks.find((t) => t.id === id))
-            .filter((t: any) => t !== undefined);
+        const orderedTracks = await loadTracksInMixOrder(mix.trackIds);
 
         res.json({
             ...mix,

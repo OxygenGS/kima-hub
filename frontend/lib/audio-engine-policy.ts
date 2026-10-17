@@ -13,7 +13,7 @@ export type EngineStatus =
     | "blocked"
     | "error";
 
-export type PauseClass = "user" | "system";
+type PauseClass = "user" | "system";
 
 export type TimerId = "nudge-settle" | "reload-settle" | "load-deadline";
 
@@ -155,8 +155,7 @@ type TransitionResult = { snapshot: EngineSnapshot; effects: Effect[] };
  * Start the nudge rung. Increments attempts and arms the nudge-settle timer.
  * Does NOT mutate the input.
  */
-function startNudgeRung(snap: EngineSnapshot, now: number): TransitionResult {
-    void now;
+function startNudgeRung(snap: EngineSnapshot): TransitionResult {
     const newAttempts = snap.attempts + 1;
     return {
         snapshot: {
@@ -174,16 +173,8 @@ function startNudgeRung(snap: EngineSnapshot, now: number): TransitionResult {
     };
 }
 
-/**
- * Start the reload rung. Does NOT increment attempts (caller already did via
- * startNudgeRung, or this is a direct escalation from native-error).
- * Applies the park policy: if hidden, park instead of calling play.
- */
-function startReloadRung(
-    snap: EngineSnapshot,
-    resumeAt: number,
-    _now: number,
-): TransitionResult {
+/** Starts the reload rung without counting an attempt (the caller did). Parks instead of playing when hidden. */
+function startReloadRung(snap: EngineSnapshot, resumeAt: number): TransitionResult {
     if (!snap.src) {
         return {
             snapshot: {
@@ -257,16 +248,10 @@ function enterError(
 }
 
 /**
- * Escalate: pick nudge first, then reload, then error.
- * Increments attempts before nudge rung (counted once per rung pair).
- * For direct escalation (native-error) that skips nudge, attempts++ is
- * also done here to keep the semantics consistent.
+ * Escalate: nudge, then reload, then error. Attempts increment once per
+ * nudge/reload pair, including a native-error that skips straight to reload.
  */
-function escalate(
-    snap: EngineSnapshot,
-    now: number,
-    skipNudge: boolean,
-): TransitionResult {
+function escalate(snap: EngineSnapshot, skipNudge: boolean): TransitionResult {
     if (snap.attempts >= RECOVERY.maxAttempts) {
         return enterError(snap, "Playback stalled repeatedly", 99);
     }
@@ -276,10 +261,10 @@ function escalate(
         if (withAttempts.attempts >= RECOVERY.maxAttempts) {
             return enterError(withAttempts, "Playback stalled repeatedly", 99);
         }
-        return startReloadRung(withAttempts, snap.currentTime, now);
+        return startReloadRung(withAttempts, snap.currentTime);
     }
 
-    return startNudgeRung(snap, now);
+    return startNudgeRung(snap);
 }
 
 export function transition(
@@ -351,7 +336,7 @@ export function transition(
                         ...snap,
                         intent: "play",
                         error: null,
-                        status: snap.src ? "loading" : "idle",
+                        status: "idle",
                     },
                     effects: [{ kind: "claim-session" }, { kind: "call-play" }],
                 };
@@ -426,7 +411,7 @@ export function transition(
                     currentTime: currentTime,
                     duration: duration,
                 };
-                const result = escalate(updated, event.now, true);
+                const result = escalate(updated, true);
                 return result;
             }
 
@@ -519,7 +504,7 @@ export function transition(
                         effects: [...cancelBothTimers(), { kind: "emit-error" }],
                     };
                 }
-                const result = startReloadRung(updated, snap.currentTime, event.now);
+                const result = startReloadRung(updated, snap.currentTime);
                 return result;
             }
 
@@ -603,7 +588,7 @@ export function transition(
                 // Starved -- buffering deadline.
                 if (timeSinceProgress >= RECOVERY.bufferingDeadlineMs) {
                     nextSnap = { ...nextSnap, status: "buffering" };
-                    const result = escalate(nextSnap, event.now, false);
+                    const result = escalate(nextSnap, false);
                     return result;
                 }
                 // Not at deadline yet -- just classify.
@@ -615,7 +600,7 @@ export function transition(
 
             // readyState >= 3: stall deadline.
             if (timeSinceProgress >= RECOVERY.stallDeadlineMs) {
-                const result = escalate(nextSnap, event.now, false);
+                const result = escalate(nextSnap, false);
                 return result;
             }
 
@@ -632,7 +617,7 @@ export function transition(
                 if (snap.attempts >= RECOVERY.maxAttempts) {
                     return enterError(snap, "Playback stalled repeatedly", 99);
                 }
-                const result = startReloadRung(snap, snap.currentTime, event.now);
+                const result = startReloadRung(snap, snap.currentTime);
                 return result;
             }
 
@@ -646,7 +631,7 @@ export function transition(
                     return enterError(snap, "Playback stalled repeatedly", 99);
                 }
                 // Start nudge rung for next cycle.
-                const result = startNudgeRung(snap, event.now);
+                const result = startNudgeRung(snap);
                 return result;
             }
 
@@ -656,7 +641,7 @@ export function transition(
                     return { snapshot: snap, effects: [] };
                 }
                 const updated: EngineSnapshot = { ...snap, status: "buffering" };
-                return escalate(updated, event.now, false);
+                return escalate(updated, false);
             }
 
             return { snapshot: snap, effects: [] };
@@ -668,12 +653,9 @@ export function transition(
                 return { snapshot: snap, effects: [] };
             }
 
-            // A pause landed while this play() call was in flight. pause-requested
-            // always flips status to "paused" synchronously (cls-independent --
-            // even a cross-tab "system" pause does this, see pause-requested
-            // above), so a rejection arriving after that point is reporting on a
-            // play() attempt the user/session has since superseded. Resurrecting
-            // playback here would revert the pause.
+            // A pause landed while play() was in flight; pause-requested sets
+            // "paused" synchronously, so this rejection is for a superseded play()
+            // and resuming here would undo the pause.
             if (snap.status === "paused") {
                 return { snapshot: snap, effects: [] };
             }
@@ -704,7 +686,7 @@ export function transition(
                             99,
                         );
                     }
-                    const result = startReloadRung(updated, snap.currentTime, event.now);
+                    const result = startReloadRung(updated, snap.currentTime);
                     return result;
                 }
                 return enterError(snap, "Playback stalled repeatedly", 99);
@@ -764,16 +746,9 @@ export function transition(
         }
 
         case "gapless-swapped": {
-            // The controller already swapped elements and is playing -- this is
-            // a pure bookkeeping transition only (no set-src-and-load/call-play).
-            //
-            // NOT ported from upstream 0c0d594d: making this intent-aware, so a
-            // pause tapped exactly at the boundary is not reverted. That change
-            // reads snap.intent here, and on this line intent is not reliably
-            // "play" during a genuine advance -- applying it paused every
-            // gapless swap, which the controller's own gapless test caught. It
-            // needs the controller half of that commit, which is not part of
-            // this release.
+            // The controller already swapped elements and is playing; bookkeeping
+            // only. Not intent-aware: snap.intent is not reliably "play" here, and
+            // reading it paused every gapless swap.
             return {
                 snapshot: {
                     ...snap,

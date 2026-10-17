@@ -32,6 +32,35 @@ function ensureCoversDir(subdir: string): string {
     return dirPath;
 }
 
+/** The path under the covers directory, or null when it escapes that directory. */
+function resolveInCoversDir(relativePath: string): string | null {
+    const basePath = getCoversBasePath();
+    const resolvedBase = path.resolve(basePath);
+    const fullPath = path.resolve(basePath, relativePath);
+    if (!fullPath.startsWith(resolvedBase + path.sep) && fullPath !== resolvedBase) {
+        return null;
+    }
+    return fullPath;
+}
+
+/**
+ * Read-only cover paths must stay inside the physical covers directory, not
+ * merely inside it lexically. A symlink can otherwise make a native: URL or
+ * cached resized filename open a private file outside that directory.
+ * Unlike resolveInCoversDir, this helper requires an existing regular file.
+ */
+export function getCanonicalCoverFilePath(filePath: string): string | null {
+    try {
+        const root = fs.realpathSync(getCoversBasePath());
+        const actual = fs.realpathSync(filePath);
+        if (!actual.startsWith(root + path.sep)) return null;
+        if (!fs.statSync(actual).isFile()) return null;
+        return actual;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Download an image from URL and save locally
  * Returns the native path (e.g., "native:artists/artistId.jpg") or null on failure
@@ -86,49 +115,26 @@ export async function downloadAndStoreImage(
 }
 
 /**
- * Get the full filesystem path for a native image path
+ * Get the full filesystem path for a native image path, or null when it is not
+ * a native path, escapes the covers directory, or points at no file.
  */
 export function getLocalImagePath(nativePath: string): string | null {
     if (!nativePath.startsWith("native:")) return null;
 
-    const relativePath = nativePath.replace("native:", "");
-    const basePath = getCoversBasePath();
-    const resolvedBase = path.resolve(basePath);
-    const fullPath = path.resolve(basePath, relativePath);
-
-    if (!fullPath.startsWith(resolvedBase + path.sep) && fullPath !== resolvedBase) {
-        return null;
-    }
-
-    if (!fs.existsSync(fullPath)) return null;
-    return fullPath;
+    const fullPath = resolveInCoversDir(nativePath.replace("native:", ""));
+    return fullPath ? getCanonicalCoverFilePath(fullPath) : null;
 }
 
-/**
- * Check if a native image path points to an existing file on disk.
- * Returns false for non-native paths, null, or missing files.
- */
+/** Whether a native image path points to an existing file on disk. */
 export function nativeFileExists(nativePath: string | null | undefined): boolean {
-    if (!nativePath || !nativePath.startsWith("native:")) return false;
-
-    const relativePath = nativePath.replace("native:", "");
-    const basePath = getCoversBasePath();
-    const resolvedBase = path.resolve(basePath);
-    const fullPath = path.resolve(basePath, relativePath);
-
-    if (!fullPath.startsWith(resolvedBase + path.sep) && fullPath !== resolvedBase) {
-        return false;
-    }
-
-    return fs.existsSync(fullPath);
+    return nativePath ? getLocalImagePath(nativePath) !== null : false;
 }
-
 
 /**
  * Check for a local artist image file in the artist's music directory.
  * Copies to the image cache if found and returns a native path.
  */
-export async function checkLocalArtistImage(
+async function checkLocalArtistImage(
     musicPath: string,
     artistDirName: string,
     artistId: string
@@ -160,11 +166,29 @@ export async function checkLocalArtistImage(
                 logger.debug(`[ImageStorage] Local artist image found: ${filePath}`);
                 return `native:${ARTIST_IMAGES_DIR}/${artistId}${ext}`;
             }
-        } catch {}
+        } catch {
+            // Most candidate names do not exist; try the next.
+        }
     }
     return null;
 }
 
+/**
+ * An artist image in a folder above one of the artist's tracks (`relativeTrackPath`,
+ * relative to the music folder), nearest folder first.
+ */
+export async function findLocalArtistImage(
+    musicPath: string,
+    relativeTrackPath: string,
+    artistId: string
+): Promise<string | null> {
+    const parts = relativeTrackPath.split(path.sep);
+    for (let i = parts.length - 2; i >= 0; i--) {
+        const found = await checkLocalArtistImage(musicPath, parts.slice(0, i + 1).join(path.sep), artistId);
+        if (found) return found;
+    }
+    return null;
+}
 
 /**
  * Check if a URL is a native local path
@@ -211,14 +235,5 @@ export function getResizedImagePath(nativePath: string, width: number): string |
 
     const relativePath = nativePath.replace("native:", "");
     const parsed = path.parse(relativePath);
-    const resizedRelative = path.join(parsed.dir, `${parsed.name}_w${width}.jpg`);
-    const basePath = getCoversBasePath();
-    const resolvedBase = path.resolve(basePath);
-    const fullPath = path.resolve(basePath, resizedRelative);
-
-    if (!fullPath.startsWith(resolvedBase + path.sep) && fullPath !== resolvedBase) {
-        return null;
-    }
-
-    return fullPath;
+    return resolveInCoversDir(path.join(parsed.dir, `${parsed.name}_w${width}.jpg`));
 }
