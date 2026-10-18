@@ -1,0 +1,133 @@
+name: Experimental waveform FFmpeg resource guards (NO PUBLISH)
+on:
+  push:
+    branches: [feature/v111-waveform-resource-guards]
+    paths:
+      - "backend/**"
+      - ".github/workflows/check-v111-waveform-resource-guards.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: system-ffmpeg-safeguard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-audio:
+    name: Validate lockfile, system MP3 transcoding and backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_ffmpeg_exp
+        ports:
+          - 5439:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_ffmpeg_exp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5439/v111_ffmpeg_exp
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that bundled legacy FFmpeg is gone from backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pkg=json.loads(Path("backend/package.json").read_text())
+          lock=json.loads(Path("backend/package-lock.json").read_text())
+          assert "@ffmpeg-installer/ffmpeg" not in pkg["dependencies"]
+          assert "@ffmpeg-installer/ffmpeg" not in lock["packages"][""]["dependencies"]
+          assert not any(x.startswith("node_modules/@ffmpeg-installer/") for x in lock["packages"])
+          for path in ("backend/src/services/audioStreaming.ts", "backend/src/routes/library/waveform.ts", "backend/src/utils/configValidator.ts"):
+              source=Path(path).read_text()
+              assert '@ffmpeg-installer/ffmpeg' not in source, path
+              assert 'ffmpeg.setFfmpegPath' not in source, path
+          print("No bundled legacy FFmpeg dependency or hard-pinned binary: PASS")
+          PY
+      - name: Install distribution FFmpeg on lightweight GitHub runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Assert Debian FFmpeg works as MP3 encoder and ffprobe decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg
+          command -v ffprobe
+          mkdir -p "$RUNNER_TEMP/system-ffmpeg-smoke"
+          ffmpeg -hide_banner -nostdin -loglevel error -f lavfi \
+            -i 'sine=frequency=440:duration=2' -c:a libmp3lame \
+            "$RUNNER_TEMP/system-ffmpeg-smoke/output.mp3"
+          ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1 \
+            "$RUNNER_TEMP/system-ffmpeg-smoke/output.mp3" | grep -Fx 'codec_name=mp3'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Lockfile consistency and dependency installation
+        run: npm ci
+        working-directory: backend
+      - name: Generate Prisma client and migrate disposable database
+        working-directory: backend
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Compile actual v1.11 backend
+        run: npm run build
+        working-directory: backend
+      - name: Audio streaming regression tests
+        run: npm test -- --runInBand --runTestsByPath src/services/__tests__/audioStreaming.test.ts src/routes/library/__tests__/waveform.test.ts
+        working-directory: backend
+      - name: Assert normal application version remains unchanged
+        run: python3 .github/ci/check-release-metadata.py --candidate
+
+  bookworm-audio:
+    name: Native ${{ matrix.arch }} Debian 12 FFmpeg runtime compatibility
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - name: Check distro FFmpeg MP3 encode, ffprobe and waveform PCM decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/${{ matrix.arch }} debian:bookworm-slim \
+            /bin/sh -ec '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq >/dev/null
+              apt-get install -qq -y --no-install-recommends ffmpeg >/dev/null
+              ffmpeg -version | head -n 1
+              ffmpeg -hide_banner -nostdin -loglevel error -f lavfi \
+                -i "sine=frequency=440:duration=2" -c:a libmp3lame /tmp/test.mp3
+              ffprobe -v error -show_entries stream=codec_name \
+                -of default=noprint_wrappers=1 /tmp/test.mp3 | grep -Fx "codec_name=mp3"
+              ffmpeg -hide_banner -nostdin -loglevel error \
+                -i /tmp/test.mp3 -ac 1 -ar 4000 -f s16le /tmp/waveform.raw
+              test -s /tmp/waveform.raw
+              printf "Debian 12 native audio path: PASS\n"
+            '
