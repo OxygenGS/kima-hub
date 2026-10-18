@@ -789,7 +789,7 @@ fi
 
 # Experimental opt-in: drop to a dedicated UID after privileged DB bootstrap.
 # Do NOT change permissions/ownership for /music or all historical /data.
-if [ "\${KIMA_NONROOT_ANALYZERS:-0}" = "1" ]; then
+if [ "${KIMA_NONROOT_ANALYZERS:-0}" = "1" ]; then
     for dir in /music /app/audio-analyzer /app/audio-analyzer-clap /app/models; do
         if ! gosu kimaaudio test -r "$dir" || ! gosu kimaaudio test -x "$dir"; then
             echo "Non-root analyzer cannot read $dir; original mounts were not changed" >&2

@@ -111,7 +111,7 @@ for name, allow_db, required in (
     print(f"Supervised {name}: inherited secret-environment boundary PASS")
 PY
 
-if [ "\${AIO_SMOKE_NONROOT_ANALYZERS:-0}" = "1" ]; then
+if [ "${AIO_SMOKE_NONROOT_ANALYZERS:-0}" = "1" ]; then
     docker exec -i "$name" python3 - <<'PY'
 from pathlib import Path
 import pwd
