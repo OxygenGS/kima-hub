@@ -98,3 +98,36 @@ jobs:
         working-directory: backend
       - name: Assert normal application version remains unchanged
         run: python3 .github/ci/check-release-metadata.py --candidate
+
+  bookworm-audio:
+    name: Native ${{ matrix.arch }} Debian 12 FFmpeg runtime compatibility
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - name: Check distro FFmpeg MP3 encode, ffprobe and waveform PCM decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/${{ matrix.arch }} debian:bookworm-slim \
+            /bin/sh -ec '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq >/dev/null
+              apt-get install -qq -y --no-install-recommends ffmpeg >/dev/null
+              ffmpeg -version | head -n 1
+              ffmpeg -hide_banner -nostdin -loglevel error -f lavfi \
+                -i "sine=frequency=440:duration=2" -c:a libmp3lame /tmp/test.mp3
+              ffprobe -v error -show_entries stream=codec_name \
+                -of default=noprint_wrappers=1 /tmp/test.mp3 | grep -Fx "codec_name=mp3"
+              ffmpeg -hide_banner -nostdin -loglevel error \
+                -i /tmp/test.mp3 -ac 1 -ar 4000 -f s16le /tmp/waveform.raw
+              test -s /tmp/waveform.raw
+              printf "Debian 12 native audio path: PASS\n"
+            '
