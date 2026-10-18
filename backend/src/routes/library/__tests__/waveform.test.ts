@@ -407,7 +407,9 @@ describe("GET /tracks/:id/waveform", () => {
         expect(res.body.peaks).toHaveLength(PEAK_COUNT);
         expect(res.body.count).toBe(PEAK_COUNT);
         // Verify the Cache-Control header is set.
-        expect(res.headers["cache-control"]).toBe("public, max-age=86400");
+        expect(res.headers["cache-control"]).toBe("private, max-age=86400");
+        expect(res.headers["vary"]).toContain("Authorization");
+        expect(res.headers["vary"]).toContain("Cookie");
     });
 
     it("Redis cache-HIT returns cached payload without spawning ffmpeg", async () => {

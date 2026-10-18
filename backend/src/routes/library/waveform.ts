@@ -298,9 +298,12 @@ router.get("/tracks/:id/waveform", async (req, res) => {
             track.fileModified,
         );
 
-        // Allow clients and CDNs to cache the response for a day; the
-        // server-side Redis entry stays warm for 30 days.
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        // This is an authenticated endpoint: shared CDN/proxy caches must not
+        // reuse a waveform response for a different user or an anonymous request.
+        // Browser-private caching is still allowed; Redis handles server-side reuse.
+        res.setHeader("Cache-Control", "private, max-age=86400");
+        res.vary("Authorization");
+        res.vary("Cookie");
         return res.json(payload);
     } catch (error) {
         logger.error("[WAVEFORM] Unhandled error:", error);
