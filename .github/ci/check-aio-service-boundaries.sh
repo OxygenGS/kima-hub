@@ -77,7 +77,7 @@ for name, allow_db, required in (
         capture_output=True, text=True, check=False,
     )
     pid = result.stdout.strip()
-    if not pid.isdecimal():
+    if not pid.isdecimal() or int(pid) <= 1:
         if required:
             raise AssertionError(f"Required supervised service missing: {name}")
         print(f"Optional analyzer not running: {name}")
