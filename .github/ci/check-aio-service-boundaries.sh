@@ -59,4 +59,55 @@ assert effective_uid == expected_uid and effective_uid != 0, (
 print(f"Supervised frontend PID {pid_str} runs as unprivileged kimaweb UID {effective_uid}: PASS")
 '
 
+# Use actual /proc/environ, not static supervisor text. Secrets must not
+# leak into unrelated child processes even though root supervisor holds them.
+docker exec -i "$name" python3 - <<'PY'
+import subprocess
+from pathlib import Path
+
+for name, allow_db, required in (
+    ("postgres", False, True),
+    ("redis", False, True),
+    ("frontend", False, True),
+    ("audio-analyzer", True, False),
+    ("audio-analyzer-clap", True, False),
+):
+    result = subprocess.run(
+        ["supervisorctl", "-c", "/etc/supervisor/supervisord.conf", "pid", name],
+        capture_output=True, text=True, check=False,
+    )
+    pid = result.stdout.strip()
+    if not pid.isdecimal() or int(pid) <= 1:
+        if required:
+            raise AssertionError(f"Required supervised service missing: {name}")
+        print(f"Optional analyzer not running: {name}")
+        continue
+    env_file = f"/proc/{pid}/environ"
+    # /proc/<pid>/environ is ptrace-gated on Docker hosts. Read as the
+    # actual service UID when root lacks CAP_SYS_PTRACE; never print values.
+    try:
+        raw_env = Path(env_file).read_bytes()
+    except PermissionError:
+        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb"}.get(name)
+        if user is None:
+            raise
+        raw_env = subprocess.run(
+            ["gosu", user, "cat", env_file], check=True, capture_output=True,
+        ).stdout
+    env = raw_env.split(b"\0")
+    keys = {entry.split(b"=", 1)[0].decode("utf-8", "replace")
+            for entry in env if b"=" in entry}
+    forbidden = {
+        "SESSION_SECRET", "SETTINGS_ENCRYPTION_KEY",
+        "ADMIN_RESET_PASSWORD", "DB_PASSWORD",
+    }
+    if not allow_db:
+        forbidden.add("DATABASE_URL")
+    unexpected = sorted(keys.intersection(forbidden))
+    assert not unexpected, f"Forbidden secret environment keys for {name}: {unexpected}"
+    if allow_db:
+        assert "DATABASE_URL" in keys, f"Analyzer {name} lost its database connection"
+    print(f"Supervised {name}: inherited secret-environment boundary PASS")
+PY
+
 echo "AIO local service and frontend privilege boundaries: PASS"

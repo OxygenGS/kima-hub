@@ -10,6 +10,10 @@ The combined Draft #7 incorporates the removal of the legacy bundled FFmpeg 4.1.
 
 The experimental assembled images still report **295/294 HIGH and 8/8 CRITICAL** (AMD64/ARM64; none with a Trivy-listed fix). The risk/privilege acceptance gate remains open; passing CI does not resolve it.
 
+## Additional AIO process-secret containment evidence
+
+The final combined Draft #7 source now includes secret-minimization for supervised child processes, following a [full non-publishing native AMD64/ARM64 experiment (9/9 green)](https://github.com/OxygenGS/kima-hub/actions/runs/39154014014). Enabled process environment keys, authenticated audio/EN-NL/UI and volume lifecycle were verified; on AMD64, the original upstream v1.10/v1.11 image migration and independent rollback passed. The optional CLAP analyzer was disabled in the disposable runtime smoke and is not represented as live-tested there. **Non-root conversion of the backend and analyzers, real-install cold restore, manual device accessibility, license/security review and explicit release approval remain OPEN.** This does not change published rc2 or remove outstanding Debian package findings.
+
 ## Gate A — reproducible code and permission boundaries
 
 | Check | Acceptance evidence | Status |
