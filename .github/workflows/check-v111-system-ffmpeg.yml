@@ -17,7 +17,28 @@ jobs:
   validate-audio:
     name: Validate lockfile, system MP3 transcoding and backend tests
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_ffmpeg_exp
+        ports:
+          - 5439:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_ffmpeg_exp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5439/v111_ffmpeg_exp
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - name: Check that bundled legacy FFmpeg is gone from backend
@@ -64,6 +85,11 @@ jobs:
       - name: Lockfile consistency and dependency installation
         run: npm ci
         working-directory: backend
+      - name: Generate Prisma client and migrate disposable database
+        working-directory: backend
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
       - name: Compile actual v1.11 backend
         run: npm run build
         working-directory: backend
