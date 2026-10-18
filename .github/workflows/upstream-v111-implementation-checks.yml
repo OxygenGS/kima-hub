@@ -258,7 +258,7 @@ jobs:
       - name: Boot and exercise disposable merged v1.11 AIO
         shell: bash
         timeout-minutes: 35
-        run: bash .github/ci/v111-aio-runtime-smoke.sh
+        run: AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
       - name: Original v1.10 AIO image upgrade and independent rollback (disposable)
         shell: bash
         timeout-minutes: 35
@@ -351,7 +351,7 @@ jobs:
         timeout-minutes: 35
         run: |
           test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
-          bash .github/ci/v111-aio-runtime-smoke.sh
+          AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
       - name: Install pinned Trivy for assembled arm64 AIO inspection
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:

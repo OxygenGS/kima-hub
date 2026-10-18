@@ -24,6 +24,12 @@
 - Both native builds, real authentication/streaming and persistent-volume restart passed. AMD64 additionally passed disposable original upstream v1.10 and v1.11 copied-image upgrades and independent rollback. All experimental Docker images were **CI-local only** and were **not published**.
 - **Known residual risk:** this is environment-variable minimization only. The backend and analyzers still inherit root; some secrets remain accessible to their root processes, and the eight CRITICAL package findings per architecture remain unresolved for explicit security disposition. The published rc2 digest contains the older runtime. Final combined Draft #7 HEAD CI must succeed again before any separately approved candidate.
 
+## CLAP enabled-by-default native runtime gate
+
+- [Experimental 9/9 image validation #39157328832](https://github.com/OxygenGS/kima-hub/actions/runs/39157328832) proved the actual default CLAP supervised service stays RUNNING across fresh boot and persistent-volume restart on AMD64/ARM64, and process-level backend-session secret exclusion is enforced. The disposable upgrade/rollback rehearsal on AMD64 still passed.
+- Combined Draft #7 now runs the **same CLAP-on** native AIO smoke in regular CI, not just in a temporary experiment. New combined-PR-head CI is mandatory before selecting a candidate.
+- The existing rc2 digest has none of these later changes. CLAP liveness does not establish ML-result accuracy; actual default-option usability/manual device acceptance, root process privileges and eight CRITICAL Debian findings per architecture remain open gates. No publishing/merge/host installation authorized.
+
 ## Technical acceptance before the next candidate or stable release
 
 - [ ] Re-run/review all relevant CI on the **final merged source/workflow commit**. Exact application/runtime source `ec44b98` passed [PR checks 7/7](https://github.com/OxygenGS/kima-hub/actions/runs/39067956900), [native 9/9](https://github.com/OxygenGS/kima-hub/actions/runs/39067956892), [EN/NL](https://github.com/OxygenGS/kima-hub/actions/runs/39067956881) and [security](https://github.com/OxygenGS/kima-hub/actions/runs/39067956882); identical-runtime [full E2E](https://github.com/OxygenGS/kima-hub/actions/runs/39032005018) also passed. **Subsequent stable publisher/documentation-only revisions require their own final-head gate validation.**
