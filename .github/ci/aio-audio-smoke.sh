@@ -113,6 +113,29 @@ codec="$(docker exec "$name" ffprobe -v error -select_streams a:0 \
 test "$codec" = mp3
 echo "PASS: MP3 is independently recognized by ffprobe"
 
+echo "---- Real waveform decode through authenticated HTTP API ----"
+waveform="$url/api/library/tracks/$track/waveform"
+status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$waveform")"
+assert_status 401 "$status" "Anonymous waveform denied"
+status="$(curl -sS --max-time 45 -o "$tmp/waveform.json" -w '%{http_code}' \
+    -H "Authorization: Bearer $admin_token" "$waveform")"
+assert_status 200 "$status" "Authenticated real FFmpeg waveform"
+python3 - "$tmp/waveform.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+peaks = payload["peaks"]
+assert payload["count"] == 400 and len(peaks) == 400, payload
+assert all(isinstance(x, (int, float)) and 0 <= x <= 1 for x in peaks)
+assert max(peaks) > 0.5, "Non-silent fixture decoded as silence"
+print("PASS: system FFmpeg decoded non-silent PCM into 400 normalized waveform peaks")
+PY
+curl -fsS --max-time 20 -H "Authorization: Bearer $admin_token" \
+    "$waveform" -o "$tmp/waveform-cached.json"
+cmp "$tmp/waveform.json" "$tmp/waveform-cached.json"
+echo "PASS: cached waveform API response matches first computation"
+
+
 echo "---- Stream-scoped ticket and negative authorization cases ----"
 ticket="$(curl -fsS --max-time 20 -X POST \
     -H "Authorization: Bearer $admin_token" \
