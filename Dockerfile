@@ -411,6 +411,22 @@ WORKDIR /app
 # Copy healthcheck script
 COPY frontend/healthcheck.js /app/healthcheck.js
 
+# The AIO supervisor needs database/session credentials for backend startup.
+# Do not pass those inherited values into postgres, redis, frontend, or the
+# audio analyzers (the analyzers need DATABASE_URL only).
+RUN cat > /app/strip-aio-service-secrets.sh << 'EOF'
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    --no-db) unset DATABASE_URL; shift ;;
+    --keep-db) shift ;;
+    *) echo "Invalid AIO service environment mode" >&2; exit 64 ;;
+esac
+unset SESSION_SECRET SETTINGS_ENCRYPTION_KEY ADMIN_RESET_PASSWORD DB_PASSWORD
+exec "$@"
+EOF
+RUN chmod 755 /app/strip-aio-service-secrets.sh
+
 # Create supervisord config - logs to stdout/stderr for Docker visibility
 RUN cat > /etc/supervisor/conf.d/kima.conf << 'EOF'
 [supervisord]
@@ -421,7 +437,7 @@ pidfile=/var/run/supervisord.pid
 user=root
 
 [program:postgres]
-command=/usr/lib/postgresql/16/bin/postgres -D /data/postgres -c listen_addresses=localhost
+command=/app/strip-aio-service-secrets.sh --no-db /usr/lib/postgresql/16/bin/postgres -D /data/postgres -c listen_addresses=localhost
 user=postgres
 autostart=true
 autorestart=true
@@ -432,7 +448,7 @@ stderr_logfile_maxbytes=0
 priority=10
 
 [program:redis]
-command=/usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
+command=/app/strip-aio-service-secrets.sh --no-db /usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
 user=redis
 autostart=true
 autorestart=true
@@ -459,7 +475,7 @@ priority=30
 [program:frontend]
 # Web UI serves port 3030 but does not require root. Its generated Next cache is owned by kimaweb.
 user=kimaweb
-command=/bin/bash -c "sleep 10 && cd /app/frontend && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3030"
+command=/app/strip-aio-service-secrets.sh --no-db /bin/bash -c "sleep 10 && cd /app/frontend && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3030"
 autostart=true
 autorestart=true
 stdout_logfile=/dev/stdout
@@ -470,7 +486,7 @@ environment=NODE_ENV="production",BACKEND_URL="http://localhost:3006",PORT="3030
 priority=40
 
 [program:audio-analyzer]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && KIMA_GPU_FOR=analysis /app/audio-analyzer-clap/gpu_env.sh python3 analyzer.py"
+command=/app/strip-aio-service-secrets.sh --keep-db /bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && KIMA_GPU_FOR=analysis /app/audio-analyzer-clap/gpu_env.sh python3 analyzer.py"
 autostart=true
 autorestart=true
 startretries=3
@@ -483,7 +499,7 @@ environment=REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",MAX_ANALYZE_S
 priority=50
 
 [program:audio-analyzer-clap]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer-clap && ./gpu_env.sh python3 analyzer.py"
+command=/app/strip-aio-service-secrets.sh --keep-db /bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer-clap && ./gpu_env.sh python3 analyzer.py"
 autostart=true
 autorestart=true
 startretries=3
