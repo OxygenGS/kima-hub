@@ -44,6 +44,9 @@ start_aio() {
     if [ "${AIO_SMOKE_WITH_CLAP:-0}" != "1" ]; then
         options+=(-e DISABLE_CLAP=true)
     fi
+    if [ "${AIO_SMOKE_NONROOT_ANALYZERS:-0}" = "1" ]; then
+        options+=(-e KIMA_NONROOT_ANALYZERS=1)
+    fi
     docker run -d --name "$name" \
         --memory=6g \
         -p 127.0.0.1:3130:3030 \

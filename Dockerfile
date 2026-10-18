@@ -110,6 +110,7 @@ RUN apt-get install -y --no-install-recommends \
 
 # Create directories
 RUN groupadd --system kimaweb && useradd --system --gid kimaweb --home-dir /app/frontend --shell /usr/sbin/nologin kimaweb \
+    && groupadd --system kimaaudio && useradd --system --create-home --gid kimaaudio --home-dir /home/kimaaudio --shell /usr/sbin/nologin kimaaudio \
     && mkdir -p /app/backend /app/frontend /app/audio-analyzer /app/models \
     /data/postgres /data/redis /run/postgresql /var/log/supervisor \
     && chown -R postgres:postgres /data/postgres /run/postgresql
@@ -784,6 +785,40 @@ conf = re.sub(
 open('/etc/supervisor/conf.d/kima.conf', 'w').write(conf)
 "
     echo "CLAP audio analyzer disabled (DISABLE_CLAP=${DISABLE_CLAP})"
+fi
+
+# Experimental opt-in: drop to a dedicated UID after privileged DB bootstrap.
+# Do NOT change permissions/ownership for /music or all historical /data.
+if [ "\${KIMA_NONROOT_ANALYZERS:-0}" = "1" ]; then
+    for dir in /music /app/audio-analyzer /app/audio-analyzer-clap /app/models; do
+        if ! gosu kimaaudio test -r "$dir" || ! gosu kimaaudio test -x "$dir"; then
+            echo "Non-root analyzer cannot read $dir; original mounts were not changed" >&2
+            exit 1
+        fi
+    done
+    mkdir -p /data/gpu-onnx
+    chown kimaaudio:kimaaudio /data/gpu-onnx
+    if ! gosu kimaaudio test -w /data/gpu-onnx; then
+        echo "Non-root analyzer cannot write GPU state directory" >&2
+        exit 1
+    fi
+    python3 - <<'PY'
+from pathlib import Path
+p = Path('/etc/supervisor/conf.d/kima.conf')
+conf = p.read_text()
+pairs = (
+    ('KIMA_GPU_FOR=analysis /app/audio-analyzer-clap/gpu_env.sh python3 analyzer.py',
+     'KIMA_GPU_FOR=analysis /app/audio-analyzer-clap/gpu_env.sh gosu kimaaudio env HOME=/home/kimaaudio PYTHONDONTWRITEBYTECODE=1 python3 analyzer.py'),
+    ('cd /app/audio-analyzer-clap && ./gpu_env.sh python3 analyzer.py',
+     'cd /app/audio-analyzer-clap && ./gpu_env.sh gosu kimaaudio env HOME=/home/kimaaudio PYTHONDONTWRITEBYTECODE=1 python3 analyzer.py'),
+)
+for original, changed in pairs:
+    if conf.count(original) != 1:
+        raise SystemExit('Unexpected analyzer supervisor command')
+    conf = conf.replace(original, changed)
+p.write_text(conf)
+PY
+    echo "Experiment: audio analyzers will drop to kimaaudio after DB readiness"
 fi
 
 echo "Starting Kima..."

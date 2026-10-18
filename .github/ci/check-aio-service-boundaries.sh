@@ -88,7 +88,8 @@ for name, allow_db, required in (
     try:
         raw_env = Path(env_file).read_bytes()
     except PermissionError:
-        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb"}.get(name)
+        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb",
+                "audio-analyzer": "kimaaudio", "audio-analyzer-clap": "kimaaudio"}.get(name)
         if user is None:
             raise
         raw_env = subprocess.run(
@@ -109,5 +110,26 @@ for name, allow_db, required in (
         assert "DATABASE_URL" in keys, f"Analyzer {name} lost its database connection"
     print(f"Supervised {name}: inherited secret-environment boundary PASS")
 PY
+
+if [ "\${AIO_SMOKE_NONROOT_ANALYZERS:-0}" = "1" ]; then
+    docker exec -i "$name" python3 - <<'PY'
+from pathlib import Path
+import pwd
+import subprocess
+expected = pwd.getpwnam("kimaaudio").pw_uid
+assert expected != 0
+for service in ("audio-analyzer", "audio-analyzer-clap"):
+    result = subprocess.run(
+        ["supervisorctl", "-c", "/etc/supervisor/supervisord.conf", "pid", service],
+        capture_output=True, text=True, check=False,
+    )
+    pid = result.stdout.strip()
+    assert pid.isdecimal() and int(pid) > 1, f"{service} missing: {pid!r}"
+    uid_line = next(s for s in Path(f"/proc/{pid}/status").read_text().splitlines() if s.startswith("Uid:"))
+    effective = int(uid_line.split()[2])
+    assert effective == expected, f"{service}: unexpected effective UID {effective}"
+    print(f"{service} effective UID {effective}, non-root: PASS")
+PY
+fi
 
 echo "AIO local service and frontend privilege boundaries: PASS"
