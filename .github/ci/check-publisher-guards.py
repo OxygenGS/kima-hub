@@ -137,6 +137,118 @@ def check_native_prerelease(text: str) -> None:
         raise ValueError("A prerelease may never publish latest")
 
 
+
+def stable_job_section(text: str, name: str) -> str:
+    """Return the exact YAML block for one stable publisher job."""
+    import re
+    marker = f"    {name}:\n"
+    if text.count(marker) != 1:
+        raise ValueError(f"Expected exactly one stable job: {name}")
+    rest = text.split(marker, 1)[1]
+    following = re.search(r"(?m)^    [a-z][a-z0-9-]*:\s*$", rest)
+    return rest[:following.start()] if following else rest
+
+
+def check_native_stable(text: str) -> None:
+    """Both native images must be scanned before publishing a stable OCI index."""
+    if 'tags:\n            - "v*"' not in text or "check-release-metadata.py --tag" not in text:
+        raise ValueError("Stable release must originate from an explicitly created validated SemVer tag")
+    if "group: stable-publish-all-tags" not in text or "cancel-in-progress: false" not in text:
+        raise ValueError("Stable tag publications must be serialized and non-cancelling")
+    if "docker/setup-qemu-action@" in text or "push: true" in text:
+        raise ValueError("QEMU or unscanned direct push in stable publisher")
+    validate = stable_job_section(text, "validate-release")
+    native = stable_job_section(text, "native-build")
+    assemble = stable_job_section(text, "assemble")
+    release = stable_job_section(text, "create-release")
+    for required in (
+        'check-release-metadata.py --tag "$VERSION"',
+        'git merge-base --is-ancestor "$GITHUB_SHA"',
+        'echo "source=$(git rev-parse HEAD)"',
+    ):
+        if required not in validate:
+            raise ValueError(f"Missing stable version/ancestry identity: {required}")
+    for required in (
+        "arch: amd64", "runner: ubuntu-latest", "arch: arm64",
+        "runner: ubuntu-24.04-arm", "runs-on: ${{ matrix.runner }}",
+        "fail-fast: false", "needs: [validate-release]",
+        "push: false", "load: true", "platforms: linux/${{ matrix.arch }}",
+        "tags: kima:stable-scan",
+        "org.opencontainers.image.revision=${{ needs.validate-release.outputs.source }}",
+    ):
+        if required not in native:
+            raise ValueError(f"Missing native build or source identity: {required}")
+    build = native.find("name: Build and load native stable image without publishing")
+    vuln = native.find("name: Block fixable HIGH and CRITICAL on exact native image")
+    secrets = native.find("name: Block secrets embedded in exact native image")
+    login = native.find("uses: docker/login-action@v3")
+    stage = native.find("name: Push only the verified native staging image")
+    if min(build, vuln, secrets, login, stage) < 0 or not build < vuln < secrets < login < stage:
+        raise ValueError("Native image must be built and scanned twice before any staging push")
+    vuln_body, secret_body, staging_body = native[vuln:secrets], native[secrets:login], native[stage:]
+    for required in (
+        "trivy image", "--scanners vuln", "--severity HIGH,CRITICAL", "--format json",
+        "--exit-code 0", "kima:stable-scan", "evaluate-image-vulnerabilities.py --self-test",
+        '"$ARCH"',
+    ):
+        if required not in vuln_body:
+            raise ValueError(f"Missing mandatory native CVE gate: {required}")
+    for required in ("trivy image", "--scanners secret", "--exit-code 1", "kima:stable-scan"):
+        if required not in secret_body:
+            raise ValueError(f"Missing secret gate: {required}")
+    for required in ('docker tag kima:stable-scan "$stage"', 'docker push "$stage"'):
+        if required not in staging_body:
+            raise ValueError(f"Staging not the identical scanned local image: {required}")
+    if "--ignorefile" in vuln_body or "--ignore-unfixed" in vuln_body or "|| true" in vuln_body:
+        raise ValueError("Native vulnerability gate may not suppress vulnerabilities")
+    if "--ignore-unfixed" in secret_body or "|| true" in secret_body:
+        raise ValueError("Native secret gate may not suppress findings")
+    for required in (
+        "needs: [validate-release, native-build]",
+        'docker buildx imagetools create -t "$stable"',
+        'docker buildx imagetools inspect --raw "$stable"',
+        '"linux","amd64"', '"linux","arm64"',
+        'docker buildx imagetools inspect "$stable" >/dev/null 2>&1',
+        "Refusing to overwrite existing stable tag", "sha256:",
+    ):
+        if required not in assemble:
+            raise ValueError(f"Missing stable OCI-index verification: {required}")
+    if assemble.find("Refusing to overwrite existing stable tag") > assemble.find('docker buildx imagetools create -t "$stable"'):
+        raise ValueError("Stable tag overwrite rejection happens too late")
+    if "needs: [assemble, validate-release]" not in release:
+        raise ValueError("GitHub release must wait for validated multiarch image")
+    import re
+    for command in text.splitlines():
+        if any(token in command for token in ("imagetools create", "docker tag ", "tags:")):
+            if re.search(r":latest(?:['\"\s]|$)", command):
+                raise ValueError("Stable tag workflow may not publish latest without distinct consent")
+
+
+def stable_self_test() -> None:
+    root = Path(__file__).resolve().parents[2]
+    original = (root / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+    check_native_stable(original)
+    for old, new in (
+        ("arch: arm64", "arch: unsupported"),
+        ("--scanners vuln", "--scanners fs"),
+        ("--scanners secret", "--scanners vuln"),
+        ("--exit-code 1", "--exit-code 0"),
+        ("needs: [validate-release, native-build]", "needs: [validate-release]"),
+        ('docker tag kima:stable-scan "$stage"', 'docker tag unscanned:image "$stage"'),
+        ("push: false", "push: true"),
+    ):
+        modified = original.replace(old, new, 1)
+        if modified == original:
+            raise AssertionError(f"Missing negative-test anchor: {old}")
+        try:
+            check_native_stable(modified)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Unsafe stable publishing mutation accepted: {old}")
+    print("Native stable publisher safety tests: PASS")
+
+
 def native_self_test() -> None:
     """Mutating the real native workflow must make this guard reject it."""
     root = Path(__file__).resolve().parents[2]
@@ -197,10 +309,10 @@ def main() -> int:
     try:
         self_test()
         root = Path(__file__).resolve().parents[2]
-        for filename, settings in RELEASES.items():
-            body = (root / ".github" / "workflows" / filename).read_text(encoding="utf-8")
-            check_workflow(body, *settings)
-            print(f"PASS: {filename} blocks patchable image vulnerabilities and embedded secrets")
+        stable = (root / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")
+        check_native_stable(stable)
+        stable_self_test()
+        print("PASS: stable image validates both native architectures without QEMU or latest")
         native_self_test()
         print("PASS: prerelease.yml enforces native AMD64+ARM64 pre-push scans and gated index")
     except (OSError, ValueError, AssertionError) as error:
