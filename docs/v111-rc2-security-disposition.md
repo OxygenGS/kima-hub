@@ -47,6 +47,12 @@ These observations use the official [Debian Security Tracker](https://security-t
 
 For the three Mbed TLS findings, Debian [`librist4`](https://packages.debian.org/bookworm/librist4) depends on `libmbedcrypto7`, and [`libavformat59`](https://packages.debian.org/bookworm/libs/libavformat59) depends on `librist4`. Purging a suspect library in isolation will break legitimate FFmpeg package dependencies. No cross-release `apt` mixing or package removal without a full runtime compatibility test.
 
+## Additional shipped FFmpeg binary — independent hardening experiment (NOT in rc2)
+
+Source inspection of the **exact rc2 application runtime** found that backend `src/services/audioStreaming.ts` imports `@ffmpeg-installer/ffmpeg` and configures `fluent-ffmpeg` to use its bundled binary for MP3 transcode. The release backend lockfile has `@ffmpeg-installer/linux-x64` version `4.1.0` and `@ffmpeg-installer/linux-arm64` version `4.1.4` as optional architecture packages, **in addition** to distro-managed Debian FFmpeg `7:5.1.9-0+deb12u1`. Python audio analysis independently invokes the Debian `ffmpeg` and `ffprobe` commands. A Debian package-level Trivy scan cannot by itself prove the security posture of this bundled standalone executable, and no CVE exploitability is claimed.
+
+A **separate no-publish experimental branch** `feature/v111-ffmpeg-runtime-hardening` replaces the backend's extra FFmpeg binary dependency with the system FFmpeg, retaining `fluent-ffmpeg` and `libmp3lame` usage. The experiment runs isolated lockfile, TypeScript, Jest and MP3/ffprobe checks; the current [experimental run history](https://github.com/OxygenGS/kima-hub/actions/workflows/check-v111-system-ffmpeg.yml) must be fully reviewed. **No experimental application changes are part of PR #7 or the published rc2 image.** Even after passing lightweight CI, a change like this requires new native AMD64/ARM64 assembled-image tests, real audio seek/transcoding and independent migration/rollback; a newly published candidate would need separate authorization before treating this as release source.
+
 ## Privilege and secret boundaries — confirmed source, incomplete runtime mitigation
 
 - Dockerfile supervisor runs as **root**; its `postgres` and `redis` programs explicitly drop privileges, and frontend explicitly uses `kimaweb`. Real published-image smoke logged a non-root `kimaweb` frontend process.
