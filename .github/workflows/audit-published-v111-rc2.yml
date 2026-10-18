@@ -62,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit
-          docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'dpkg-query -W -f="${binary:Package}\t${Version}\n"' > audit/installed-debian-packages.tsv
+          docker run --rm --network none --entrypoint /usr/bin/dpkg-query kima-rc2-security:local -W '-f=${binary:Package}\t${Version}\n' > audit/installed-debian-packages.tsv
           docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'cat /etc/supervisor/conf.d/kima.conf' > audit/supervisor.conf
           docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'test -s /app/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0'
           python3 - <<'PY'
