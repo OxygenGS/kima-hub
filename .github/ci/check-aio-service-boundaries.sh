@@ -61,7 +61,7 @@ print(f"Supervised frontend PID {pid_str} runs as unprivileged kimaweb UID {effe
 
 # Use actual /proc/environ, not static supervisor text. Secrets must not
 # leak into unrelated child processes even though root supervisor holds them.
-docker exec "$name" python3 - <<'PY'
+docker exec -i "$name" python3 - <<'PY'
 import subprocess
 from pathlib import Path
 
