@@ -13,6 +13,23 @@ This document belongs to the independent **verification branch**, not the source
 - **Published rc2 image audit PASSED 2/2:** [run #39101135942](https://github.com/OxygenGS/kima-hub/actions/runs/39101135942) downloaded the **exact immutable index** separately on native AMD64 and ARM64, checked each image's architecture/source label and shipped Apache-2.0 license, saved installed Debian packages and the supervisor process-user inventory, and rescanned both actual images with Trivy v0.74.0 (no unfixed suppression). **AMD64: 295 HIGH / 8 CRITICAL; ARM64: 294 HIGH / 8 CRITICAL; zero records listed a FixedVersion.** Downloadable `rc2-published-security-amd64` and `rc2-published-security-arm64` artifacts include full JSON, critical-issue TSV, package list and process configuration. 8 CRITICAL records per architecture are scanner findings, **not** eight verified exploitable attack paths. Passing the no-fix-listed gate is not security acceptance.
 - This is **not** a representative independent installation backup rehearsal; all automated restore tests used synthetic test data.
 
+## Immutable rc2 package evidence
+
+Extracted directly from both downloadable [published-image audit artifacts](https://github.com/OxygenGS/kima-hub/actions/runs/39101135942), not from an older source-built container. **Both architectures show Debian 12.15 and the same eight critical package/CVE/version pairs**, all in the Debian OS target (rather than Python/Node package targets):
+
+| Binary package | Installed version in **both** published images | CRITICAL records |
+| --- | --- | ---: |
+| `libaom3` | `3.6.0-1+deb12u3` | 1 |
+| `libglib2.0-0` | `2.74.6-2+deb12u9` | 1 |
+| `libmbedcrypto7` | `2.28.3-1` | 3 |
+| `libsqlite3-0` | `3.40.1-2+deb12u2` | 1 |
+| `libxml2` | `2.9.14+dfsg-1.3~deb12u6` | 1 |
+| `zlib1g` | `1:1.2.13.dfsg-1` | 1 |
+
+Also installed: Debian `ffmpeg` version `7:5.1.9-0+deb12u1`. The backend streaming implementation `backend/src/services/audioStreaming.ts` uses a **separately bundled** `@ffmpeg-installer/ffmpeg` binary to transcode to MP3 with `libmp3lame`. The Python `services/audio-analyzer/analyzer.py` uses Debian `ffprobe` and `ffmpeg` to decode the **first audio stream** to PCM with explicit `-vn -sn -dn`. No AV1 *encoding* call is present in those inspected paths, lowering direct exposure to the libaom AV1-encoding-specific CVE, but does **not** rule out other codec, parser, protocol, transitive or unreviewed call paths. No binary library has been removed.
+
+Debian's description of [CVE-2026-34873](https://security-tracker.debian.org/tracker/CVE-2026-34873) specifies Mbed TLS **3.5.0 through 4.0.0**, while this binary is **2.28.3-1**. Debian's own Bookworm package tracker nevertheless labels the source vulnerable. The disagreement is flagged for investigation; neither claim overrides the other without code-level applicability proof. Debian also explicitly marks [CVE-2023-45853](https://security-tracker.debian.org/tracker/CVE-2023-45853) as **ignored** for its Bookworm zlib build because the affected MiniZip contribution was not compiled into the distribution package. This justifies investigating a targeted scanner disposition, not a blanket allowlist for zlib or separately bundled MiniZip copies.
+
 ## Eight original CRITICAL scanner records and Debian advisories
 
 These observations use the official [Debian Security Tracker](https://security-tracker.debian.org/tracker/), checked on 18 October 2026. Severity is the **scanner's** rating; Debian's distribution/security response can differ.
