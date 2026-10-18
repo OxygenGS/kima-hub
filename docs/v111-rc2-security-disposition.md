@@ -59,6 +59,23 @@ The validated application files and the added audio E2E test were then integrate
 
 **Scope separation:** the public rc2 image at immutable digest `sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56` is **unchanged** and **does not contain this FFmpeg code change**. The newer full-image builds were CI-local only, with **no push, new candidate image, stable tag or rollout**. Risk dispositions for unresolved Debian findings and root backend/analyzers still remain open. Do not call this a published-image vulnerability remediation or final security approval.
 
+## Exact published rc3 security audit (18 October 2026)
+
+**Confirmed published rc3:** `ghcr.io/oxygengs/kima-hub:prerelease-v111-rc3`, immutable multiarch index `ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843`, source revision `41a2d0db6488ce2ebb67978c3ec7512f8918673e`. The [manual prerelease publisher #39162085989 (attempt 2)](https://github.com/OxygenGS/kima-hub/actions/runs/39162085989) succeeded after one ARM64 GHCR upload `unknown blob` transient failure; the unsuccessful initial attempt did not publish a complete rc3 index. Both native images were scanned for fixable HIGH/CRITICAL and secrets before GHCR staging. This is a prerelease only; `main`, stable `v1.11.0`, `:latest` and independently operated installations were not changed.
+
+**Independent *published-image*, exact-digest security audit [#39164715193](https://github.com/OxygenGS/kima-hub/actions/runs/39164715193): PASSED 2/2 on native AMD64 and ARM64.** The audit pulled the **actual indexed rc3 image**, checked its architecture and OCI source label, required the shipped vendored audio helper license, captured Debian package and supervisor-user inventories, and rescanned the pulled image without suppressing unfixed vulnerabilities:
+
+| Exact published rc3 image | HIGH | CRITICAL | Trivy-listed FixedVersion |
+| --- | ---: | ---: | ---: |
+| AMD64 | **295** | **8** | **0** |
+| ARM64 | **294** | **8** | **0** |
+
+The independent auditor recorded that `backend`, `audio-analyzer` and `audio-analyzer-clap` all **inherit root**; `postgres`, `redis`, `kimaweb` retain their unprivileged users. The detailed audit artifacts are named `rc3-published-security-amd64` and `rc3-published-security-arm64` and include the Trivy JSON, critical issue TSV, package inventory and effective supervisor-user settings. Scan counts identify alerts, not eight established exploitable paths; **zero listed fixed package versions does not equal risk acceptance**.
+
+[Separate published-image functional verification #39164715280](https://github.com/OxygenGS/kima-hub/actions/runs/39164715280) was launched against the **same immutable digest**, with default CLAP enabled, both real architectures, admin/listener/audio/EN-NL and independent legacy-volume migration/rollback on AMD64. Its final status must be confirmed separately. Do **not** call rc3 independently end-to-end accepted until those jobs complete successfully.
+
+**Stable release gate remains NO-GO:** record maintainer risk ownership/mitigation for the eight CRITICAL package entries, root backend/analyzer privileges, complete licensing, manual real-device/a11y acceptance, representative independently restored cold backup and separate stable-tag/merge authorization. No private production installation has been touched.
+
 ## Additional CLAP-enabled native CI evidence — current Draft #7
 
 The earlier published rc2 is **unchanged** and has no CLAP-on proof from this addendum. The separately executed [native AIO CLAP-enabled experiment #39157328832](https://github.com/OxygenGS/kima-hub/actions/runs/39157328832) passed **9/9** against `3f21f93`: the CLAP service reached supervised `RUNNING` on both AMD64/ARM64 on fresh boot and restart, with direct `/proc` process environment checks confirming the intended credential exclusion. Authenticated API/audio, EN/NL UI, native image scans and AMD64 independent upstream v1.10/v1.11 data-copy upgrade/rollback also passed. This does **not** establish AI inference-result quality or remove root process privileges.
