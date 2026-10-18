@@ -11,6 +11,13 @@
 - **Published/default Compose stays v1.10.0** until the stable image is actually approved and exists. Never ship Compose defaults that point to an unpublished tag.
 - **One release, not three apps:** [Draft #5](https://github.com/OxygenGS/kima-hub/pull/5) (languages) and [Draft #6](https://github.com/OxygenGS/kima-hub/pull/6) (upstream work) are preparatory histories. The combined [Draft #7](https://github.com/OxygenGS/kima-hub/pull/7) already includes both through linear Git ancestry and now targets `main` directly; merge **#7 once** after approval, rather than separately merging all three.
 
+## System FFmpeg hardening in combined draft
+
+- The release branch incorporates the experiment from [commit `e82cf6f`](https://github.com/OxygenGS/kima-hub/commit/e82cf6f4186945bbb3ee1c93ce5d33f151353c97): backend no longer installs separate static FFmpeg 4.1.x binaries, and streaming plus waveform generation use system FFmpeg, which the AIO Dockerfile already installs.
+- [Experimental full AIO verification #39128491602](https://github.com/OxygenGS/kima-hub/actions/runs/39128491602) passed **9/9**, including real MP3 transcoding, byte-range seek, FFmpeg waveform extraction, native AMD64/ARM64 image build, full UI/backend/security checks, and disposable original v1.10/v1.11 upgrade with independent rollback on AMD64. Its tested image was **never published**.
+- The assembled experimental images still report **295 HIGH/8 CRITICAL (AMD64) and 294 HIGH/8 CRITICAL (ARM64)** with zero explicitly available fixes from Trivy. These alerts and root backend/analyzer privileges **remain release blockers for security disposition**, regardless of passing CI.
+- The published rc2 still contains the earlier runtime; **its immutable digest does not represent the system-FFmpeg change**. Run and review fresh CI on this combined Draft #7 HEAD before any release candidate is proposed. No approval to publish, merge, promote `:latest`, or deploy follows from this verification.
+
 ## Technical acceptance before the next candidate or stable release
 
 - [ ] Re-run/review all relevant CI on the **final merged source/workflow commit**. Exact application/runtime source `ec44b98` passed [PR checks 7/7](https://github.com/OxygenGS/kima-hub/actions/runs/39067956900), [native 9/9](https://github.com/OxygenGS/kima-hub/actions/runs/39067956892), [EN/NL](https://github.com/OxygenGS/kima-hub/actions/runs/39067956881) and [security](https://github.com/OxygenGS/kima-hub/actions/runs/39067956882); identical-runtime [full E2E](https://github.com/OxygenGS/kima-hub/actions/runs/39032005018) also passed. **Subsequent stable publisher/documentation-only revisions require their own final-head gate validation.**

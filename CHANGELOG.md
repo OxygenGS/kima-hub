@@ -14,6 +14,7 @@ This changelog documents changes made to Kima Hub — Oxygen's Fork, independent
 - Kept fork-owned user music-request/download permissions and configurable instance branding.
 
 ### Security and reliability
+- Removed the separate legacy `@ffmpeg-installer/ffmpeg` static binaries (including older 4.1.x Linux builds). Streaming, transcoding and waveform generation now resolve distribution-managed system FFmpeg, with optional `FFMPEG_PATH` for custom installs. Native AMD64/ARM64 full AIO builds and actual authenticated audio/seek/waveform tests passed [isolated experiment CI 9/9](https://github.com/OxygenGS/kima-hub/actions/runs/39128491602), including v1.10 and v1.11 independent rollback on AMD64. The full release-PR commit and any eventual published image require their own verification.
 - AIO backend, Redis and PostgreSQL bound to container loopback; PostgreSQL role uses a persistent per-installation random credential with SCRAM and an upgrade-safe legacy-password migration.
 - Dedicated unprivileged Next.js frontend process; backend and analyzers require separate non-root compatibility review.
 - Removed vulnerable Transformers runtime dependency from ONNX CLAP while retaining tested model/audio parity, with pinned tokenizer and Apache-licensed NumPy helper attribution.

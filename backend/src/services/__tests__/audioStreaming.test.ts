@@ -42,7 +42,6 @@ jest.mock("fluent-ffmpeg", () => {
     return mock;
 });
 
-jest.mock("@ffmpeg-installer/ffmpeg", () => ({ path: "/fake/ffmpeg" }));
 
 // ---------------------------------------------------------------------------
 // Helpers

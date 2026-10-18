@@ -4,6 +4,12 @@
 
 The intended release combines EN/NL language work (#5), upstream v1.11 integration (#6) and the final fork application (#7). **Draft #7 now directly targets `main` and already contains the commits from #5 and #6 through shared ancestry.** It is the *single* combined release PR; do not separately merge the preparatory PRs. Green isolated CI and published testimage evidence are not authorization to publish stable or upgrade any private installation.
 
+## Current system FFmpeg hardening evidence
+
+The combined Draft #7 incorporates the removal of the legacy bundled FFmpeg 4.1.x backend dependency and uses the distribution FFmpeg for transcoding and waveform decoding. [Full experimental image CI #39128491602](https://github.com/OxygenGS/kima-hub/actions/runs/39128491602) passed **9/9** on native AMD64/ARM64, including real authenticated 400-peak waveform, MP3, seeking and isolated original v1.10/v1.11 upgrades plus rollback. This was a **nonpublished** image. Final combined-PR-head validation remains necessary; the published rc2 image is from the older runtime, and no stable or candidate release has been authorized for the updated runtime.
+
+The experimental assembled images still report **295/294 HIGH and 8/8 CRITICAL** (AMD64/ARM64; none with a Trivy-listed fix). The risk/privilege acceptance gate remains open; passing CI does not resolve it.
+
 ## Gate A — reproducible code and permission boundaries
 
 | Check | Acceptance evidence | Status |

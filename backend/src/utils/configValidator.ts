@@ -1,13 +1,12 @@
 import * as fs from "fs";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { logger } from "./logger";
 import * as path from "path";
 import { AppError, ErrorCode, ErrorCategory } from "./errors";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import { getSystemSettings } from "./systemSettings";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface MusicConfig {
     musicPath: string;
@@ -113,22 +112,18 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
     }
 
     try {
-        // Check if bundled FFmpeg binary exists
-        if (!fs.existsSync(ffmpegPath.path)) {
-            throw new Error(`Bundled FFmpeg not found at: ${ffmpegPath.path}`);
-        }
-
-        // Verify it's executable by running version check
-        const { stdout } = await execAsync(`"${ffmpegPath.path}" -version`);
+        // The AIO provides distro-managed FFmpeg; respect an operator-supplied
+        // executable path in non-AIO installs, without shell interpolation.
+        const ffmpegExecutable = process.env.FFMPEG_PATH || "ffmpeg";
+        const { stdout } = await execFileAsync(ffmpegExecutable, ["-version"]);
         if (!stdout.includes("ffmpeg version")) {
-            throw new Error("Invalid ffmpeg output");
+            throw new Error("Invalid FFmpeg output");
         }
-
-        logger.debug(`FFmpeg detected (bundled): ${stdout.split("\n")[0]}`);
-        logger.debug(`   FFmpeg path: ${ffmpegPath.path}`);
+        logger.debug(`FFmpeg detected (system): ${stdout.split("\\n")[0]}`);
+        logger.debug(`   FFmpeg command: ${ffmpegExecutable}`);
     } catch (err: any) {
         logger.warn(
-            "  Bundled FFmpeg not available. Transcoding will not be available."
+            "  System FFmpeg not available. Transcoding will not be available."
         );
         logger.warn(`   Error: ${err.message}`);
         logger.warn("   Original quality streaming will still work.");
