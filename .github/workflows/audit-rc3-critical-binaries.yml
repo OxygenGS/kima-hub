@@ -1,0 +1,99 @@
+name: Audit rc3 CRITICAL binary applicability (NO PUBLISH)
+
+# Read-only binary-specific evidence. No CVE suppression or registry writes.
+on:
+  push:
+    branches: [feature/prerelease-f31e589-verification]
+    paths: [.github/workflows/audit-rc3-critical-binaries.yml]
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE: ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843
+  SOURCE_SHA: 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+
+jobs:
+  binary-evidence:
+    name: Check actual ${{ matrix.arch }} Debian binaries
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Free runner disk for pulled prerelease image
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull exact published digest and assert source and architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$IMAGE"
+          docker tag "$IMAGE" kima-rc3-critical:local
+          test "$(docker image inspect kima-rc3-critical:local --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-rc3-critical:local --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE_SHA"
+      - name: Check source-package vs actual binary reachability facts (no CVE suppression)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          docker run --rm --network none -i -e ARCH="$ARCH" --entrypoint python3 kima-rc3-critical:local - <<'PY' > "audit/rc3-critical-binaries-$ARCH.json"
+          import ctypes
+          import json
+          import os
+          import subprocess
+
+          def version(pkg):
+              result = subprocess.run(
+                  ['dpkg-query', '-W', '-f=${Version}', pkg],
+                  check=False, capture_output=True, text=True,
+              )
+              return result.stdout if result.returncode == 0 else None
+
+          zlib_files = subprocess.check_output(['dpkg', '-L', 'zlib1g'], text=True).splitlines()
+          minizip_paths = [
+              path for path in zlib_files
+              if 'minizip' in path.lower() or path.endswith('/zip.c')
+          ]
+          zlib = ctypes.CDLL('libz.so.1')
+          exposes_minizip_zip_entrypoint = hasattr(zlib, 'zipOpenNewFileInZip4_64')
+          result = {
+              'published_architecture': os.environ['ARCH'],
+              'published_source_revision': '41a2d0db6488ce2ebb67978c3ec7512f8918673e',
+              'immutable_multiarch_digest': 'sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843',
+              'zlib1g_binary_version': version('zlib1g'),
+              'zlib1g_installed_minizip_paths': minizip_paths,
+              'libz_exports_affected_minizip_zip_entrypoint': exposes_minizip_zip_entrypoint,
+              'libmbedcrypto7_binary_version': version('libmbedcrypto7'),
+              'separate_libmbedtls14_package_version': version('libmbedtls14'),
+              'findings_disposition': 'EVIDENCE ONLY: human owner must reconcile with Debian tracker and assess any independently bundled MiniZip or other reachable vulnerable routines.',
+              'preserve_all_trivy_cves': True,
+          }
+          print(json.dumps(result, indent=2, sort_keys=True))
+          assert not minizip_paths, 'Debian zlib1g unexpectedly includes an installed MiniZip file'
+          assert not exposes_minizip_zip_entrypoint, 'libz.so.1 unexpectedly exports the affected MiniZip entrypoint'
+          PY
+          cat "audit/rc3-critical-binaries-$ARCH.json" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Binary-specific zlib evidence PASS; other CRITICAL records remain open'
+      - name: Retain exact published-image binary evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rc3-critical-binary-applicability-${{ matrix.arch }}
+          path: audit/
+          if-no-files-found: warn
+          retention-days: 14
