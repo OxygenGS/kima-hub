@@ -1,0 +1,401 @@
+name: Experimental CLAP-enabled native AIO (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/v111-clap-live-smoke]
+
+permissions:
+  contents: read
+
+# CI builds two full Docker images for every draft commit. Only the newest
+# commit can be merged, so superseded runs should release their runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-security:
+    name: Fixable dependency vulnerabilities and committed secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Trivy scanner
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Block fixable HIGH/CRITICAL findings and secrets
+        run: |
+          trivy fs \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --exit-code 1 \
+            --format table \
+            .
+      - name: Report container configuration findings for human review
+        if: always()
+        run: |
+          trivy config \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format table \
+            . >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+
+  fork-safety:
+    name: Verify fork guards survived v1.11 source merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert fork-specific security, branding and locale wiring
+        run: bash .github/ci/check-v111-security-guards.sh
+      - name: Validate proposed fork version and publishing guard
+        run: |
+          python3 .github/ci/check-release-metadata.py --self-test
+          python3 .github/ci/check-release-metadata.py --candidate
+          python3 .github/ci/check-publisher-guards.py
+
+  frontend:
+    name: Updated v1.11 frontend typecheck lint and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        working-directory: frontend
+        run: npm run typecheck
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+      - name: Unit and translation parity checks
+        working-directory: frontend
+        run: npx vitest run
+
+  backend:
+    name: Updated v1.11 backend Prisma and TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5435/isolated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+      - name: Verify fork and upstream Prisma types
+        working-directory: backend
+        run: |
+          npx prisma validate
+          npx prisma generate
+      - name: Typecheck v1.11 backend source (must be fixed before release)
+        working-directory: backend
+        run: npm run typecheck
+
+  language-browser:
+    name: EN/NL browser switching on v1.11 implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Verify login/onboarding and language preferences
+        working-directory: frontend
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npx playwright test --config playwright.public-locale.config.ts
+      - name: Attach browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-implementation-language-errors
+          path: frontend/test-results/
+          retention-days: 7
+
+  music-permissions-http:
+    name: Real middleware and HTTP acquisition permission regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_music_tests
+        ports:
+          - 5437:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_music_tests"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5437/v111_music_tests
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend and generate current Prisma Client
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Verify actual role checks and request handling with Jest / Supertest
+        working-directory: backend
+        run: npm test -- --runInBand --runTestsByPath src/middleware/__tests__/musicPermissions.test.ts src/routes/__tests__/downloadsCreate.route.test.ts src/routes/__tests__/auth.route.test.ts src/routes/__tests__/discoverGenerateJobHash.route.test.ts src/routes/__tests__/discoverRetryUnavailable.route.test.ts src/routes/__tests__/soulseekPermissions.route.test.ts src/routes/__tests__/releasesDownloadPermissions.route.test.ts src/routes/__tests__/offlinePermissions.route.test.ts src/routes/subsonic/__tests__/downloadPermissions.route.test.ts src/routes/subsonic/__tests__/compatAlwaysAnswers.route.test.ts src/routes/__tests__/shareCoverPermissions.route.test.ts src/routes/__tests__/share.route.test.ts src/routes/__tests__/shareStreamContainment.route.test.ts src/services/__tests__/imageStorage.test.ts src/routes/library/__tests__/trackPath.test.ts src/routes/__tests__/canonicalMusicStreams.route.test.ts
+
+  all-backend-tests:
+    name: Full v1.11 backend Jest suite on disposable Postgres and Redis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: v111_full_backend
+        ports:
+          - 5438:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d v111_full_backend"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5438/v111_full_backend
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install and migrate disposable full-suite database
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npx prisma generate
+          npx prisma migrate deploy
+      - name: Run all backend Jest tests with upstream v1.11 code
+        working-directory: backend
+        run: npm test -- --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
+
+  aio-image-build:
+    name: Build actual v1.11 AIO Docker image (strictly no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    needs: [frontend, backend, fork-safety]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fork Compose examples (do not deploy)
+        run: bash .github/ci/check-fork-compose.sh
+      - name: Free runner disk for ONNX models and full AIO layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build full merged v1.11 image locally (no registry, no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: kima-hub:aio-ci-smoke
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=ci-smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Boot and exercise disposable merged v1.11 AIO
+        shell: bash
+        timeout-minutes: 35
+        run: AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Original v1.10 AIO image upgrade and independent rollback (disposable)
+        shell: bash
+        timeout-minutes: 35
+        run: bash .github/ci/aio-real-image-rehearsal.sh
+      - name: Original v1.11 AIO image upgrade and independent rollback (disposable)
+        shell: bash
+        timeout-minutes: 35
+        run: bash .github/ci/aio-v111-real-image-rehearsal.sh
+      - name: Install pinned Trivy for assembled amd64 AIO inspection
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Record actual amd64 image HIGH/CRITICAL vulnerability findings
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            --output "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" \
+            kima-hub:aio-ci-smoke
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py \
+            "$RUNNER_TEMP/v111-image-vulnerabilities-amd64.json" amd64
+      - name: Scan assembled amd64 AIO for embedded secrets
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners secret \
+            --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 \
+            --format table \
+            kima-hub:aio-ci-smoke
+      - name: Inventory amd64 critical Debian packages and direct consumers
+        run: |
+          python3 .github/ci/inventory-critical-image-packages.py --self-test
+          docker run --rm -i --entrypoint python3 kima-hub:aio-ci-smoke - \
+            < .github/ci/inventory-critical-image-packages.py \
+            > "$RUNNER_TEMP/v111-critical-runtime-packages-amd64.json"
+      - name: Retain amd64 critical-package dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-critical-runtime-packages-amd64
+          path: ${{ runner.temp }}/v111-critical-runtime-packages-amd64.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain amd64 image scan evidence for manual release review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-aio-image-vulnerabilities-amd64
+          path: ${{ runner.temp }}/v111-image-vulnerabilities-amd64.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  arm64-image-build:
+    name: Build v1.11 AIO linux/arm64 image (no push)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    needs: [frontend, backend, fork-safety]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fork Compose examples
+        run: bash .github/ci/check-fork-compose.sh
+      - name: Free disk for ONNX models and AIO layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build native ARM64 AIO locally, never publish
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+          load: true
+          tags: kima-hub:aio-ci-smoke
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=ci-smoke-arm64
+          cache-from: type=gha,scope=v111-arm64
+          cache-to: type=gha,mode=max,scope=v111-arm64
+      - name: Assert actual image architecture and run disposable ARM64 AIO smoke
+        shell: bash
+        timeout-minutes: 35
+        run: |
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
+          AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Install pinned Trivy for assembled arm64 AIO inspection
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Record actual arm64 image HIGH/CRITICAL vulnerability findings
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            --output "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" \
+            kima-hub:aio-ci-smoke
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py \
+            "$RUNNER_TEMP/v111-image-vulnerabilities-arm64.json" arm64
+      - name: Scan assembled arm64 AIO for embedded secrets
+        timeout-minutes: 15
+        run: |
+          trivy image \
+            --scanners secret \
+            --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 \
+            --format table \
+            kima-hub:aio-ci-smoke
+      - name: Inventory arm64 critical Debian packages and direct consumers
+        run: |
+          python3 .github/ci/inventory-critical-image-packages.py --self-test
+          docker run --rm -i --entrypoint python3 kima-hub:aio-ci-smoke - \
+            < .github/ci/inventory-critical-image-packages.py \
+            > "$RUNNER_TEMP/v111-critical-runtime-packages-arm64.json"
+      - name: Retain arm64 critical-package dependency evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-critical-runtime-packages-arm64
+          path: ${{ runner.temp }}/v111-critical-runtime-packages-arm64.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Retain arm64 image scan evidence for manual release review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-aio-image-vulnerabilities-arm64
+          path: ${{ runner.temp }}/v111-image-vulnerabilities-arm64.json
+          if-no-files-found: warn
+          retention-days: 14

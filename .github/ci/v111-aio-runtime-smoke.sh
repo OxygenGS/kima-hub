@@ -39,13 +39,32 @@ cleanup() {
 trap cleanup EXIT
 
 start_aio() {
+    local options=()
+    # Only the experiment opts into actual CLAP service startup.
+    if [ "${AIO_SMOKE_WITH_CLAP:-0}" != "1" ]; then
+        options+=(-e DISABLE_CLAP=true)
+    fi
     docker run -d --name "$name" \
         --memory=6g \
         -p 127.0.0.1:3130:3030 \
         -v "$data":/data \
         -v "$music":/music \
-        -e DISABLE_CLAP=true \
+        "${options[@]}" \
         "$image" >/dev/null
+}
+assert_clap_started() {
+    if [ "${AIO_SMOKE_WITH_CLAP:-0}" != "1" ]; then return; fi
+    local state=""
+    for i in $(seq 1 40); do
+        state="$(docker exec "$name" supervisorctl -c /etc/supervisor/supervisord.conf status audio-analyzer-clap 2>&1 || true)"
+        if [[ "$state" == *" RUNNING "* ]]; then
+            echo "PASS: CLAP analyzer active with default AIO configuration"
+            return
+        fi
+        sleep 3
+    done
+    echo "FAIL: CLAP analyzer did not enter RUNNING state: $state" >&2
+    return 1
 }
 wait_ready() {
     local healthy=false
@@ -67,6 +86,7 @@ wait_ready() {
 echo "---- Boot actual fresh merged v1.11 AIO with empty data and music ----"
 start_aio
 wait_ready
+assert_clap_started
 bash .github/ci/check-aio-service-boundaries.sh "$name"
 
 echo "---- Confirm vendored CLAP audio license ships with runtime ----"
@@ -137,6 +157,7 @@ docker stop -t 45 "$name" >/dev/null
 docker rm "$name" >/dev/null
 start_aio
 wait_ready
+assert_clap_started
 bash .github/ci/check-aio-service-boundaries.sh "$name"
 secret_after="$(docker exec "$name" sha256sum /data/secrets/session_secret | cut -d' ' -f1)"
 test "$secret_before" = "$secret_after"
