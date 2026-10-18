@@ -36,6 +36,6 @@ The container entrypoint and supervisor initially need elevated privileges to pr
 - Prove full real audio transcoding, 400-point waveform, music scan and analyzer processing, both CPU-only and relevant optional GPU pathways.
 - Re-run the native AMD64 and ARM64 **full AIO image** suites and original upstream v1.10/v1.11 copied-volume upgrades and independent rollback, image vulnerability scans and shipped-license checks.
 - Document any design requiring host-side ownership changes as a separate operator migration step with rollback; it cannot be silently included in v1.11.0.
-- Only integrate after clear compatibility evidence. Any new candidate image requires **separate user authorization**. Do not touch CT 101 or privately operated installations.
+- Only integrate after clear compatibility evidence. Any new candidate image requires **separate user authorization**. Do not inspect or modify any independently operated installation.
 
 **Decision:** root process privileges are an unresolved release security gate; this plan establishes dependencies and tests rather than falsely marking the gate resolved. Human/maintainer risk acceptance or tested mitigation is still required before the stable release decision.
