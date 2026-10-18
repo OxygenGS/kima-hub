@@ -1,0 +1,118 @@
+name: Audit published v1.11 rc2 image without rebuilding
+
+# Independent inspection of the exact published multi-arch index, with no
+# Dockerfile build, image push, tag changes, merge or production deployment.
+on:
+  push:
+    branches:
+      - feature/prerelease-f31e589-verification
+    paths:
+      - .github/workflows/audit-published-v111-rc2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: audit-published-rc2-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/oxygengs/kima-hub@sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56
+  SOURCE_SHA: ec44b98d9f69175b08bd2c6c88b0fb6552d6581c
+
+jobs:
+  audit-published:
+    name: Inspect published ${{ matrix.arch }} image and record OS findings
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 70
+    steps:
+      - name: Free runner disk space for exact published image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull exact immutable image and verify architecture and source identity
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$IMAGE"
+          docker tag "$IMAGE" kima-rc2-security:local
+          test "$(docker image inspect kima-rc2-security:local --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-rc2-security:local --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE_SHA"
+          echo "Published image and source label verified: $ARCH" >> "$GITHUB_STEP_SUMMARY"
+      - name: Record packaged libraries, process identities and shipped vendored license
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'dpkg-query -W -f="${binary:Package}\t${Version}\n"' > audit/installed-debian-packages.tsv
+          docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'cat /etc/supervisor/conf.d/kima.conf' > audit/supervisor.conf
+          docker run --rm --network none --entrypoint /bin/sh kima-rc2-security:local -c 'test -s /app/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0'
+          python3 - <<'PY'
+          import configparser
+          from pathlib import Path
+          cfg = configparser.ConfigParser(interpolation=None)
+          cfg.read("audit/supervisor.conf")
+          with Path("audit/process-users.tsv").open("w") as out:
+              out.write("program\tconfigured_user\tstatus\n")
+              for section in cfg.sections():
+                  if not section.startswith("program:"):
+                      continue
+                  user = cfg.get(section, "user", fallback="root (inherits root supervisor)")
+                  out.write(f"{section[8:]}\t{user}\t{'ROOT HARDENING OPEN' if user.startswith('root') else 'non-root'}\n")
+          print(Path("audit/process-users.tsv").read_text())
+          PY
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Scan the pulled published image (do not suppress unfixed findings)
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
+            --format json --output audit/trivy-vulnerabilities.json kima-rc2-security:local
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          data=json.loads(Path("audit/trivy-vulnerabilities.json").read_text())
+          findings=[v for r in data.get("Results",[]) for v in (r.get("Vulnerabilities") or [])]
+          counts=Counter(v.get("Severity") for v in findings)
+          fixed=[v for v in findings if v.get("FixedVersion")]
+          print(f"HIGH={counts['HIGH']}; CRITICAL={counts['CRITICAL']}; fix-listed={len(fixed)}")
+          with open("audit/critical-findings.tsv","w") as out:
+              out.write("package\tcve\tinstalled_version\tfixed_version\tstatus\n")
+              for v in findings:
+                  if v.get("Severity")=="CRITICAL":
+                      out.write("\t".join(str(v.get(k) or "") for k in
+                          ("PkgName","VulnerabilityID","InstalledVersion","FixedVersion","Status"))+"\n")
+          with open("audit/summary.txt","w") as out:
+              out.write(f"HIGH={counts['HIGH']} CRITICAL={counts['CRITICAL']} fix-listed={len(fixed)}\n")
+          PY
+          cat audit/summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence (even when scanner reports a problem)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc2-published-security-${{ matrix.arch }}
+          path: audit/
+          retention-days: 14
+          if-no-files-found: error
