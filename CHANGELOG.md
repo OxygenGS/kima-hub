@@ -6,7 +6,7 @@ This changelog documents changes made to Kima Hub — Oxygen's Fork, independent
 
 ## OxygenGS fork v1.11.0 — release preparation (unpublished)
 
-**Release status: Draft PRs #5, #6 and #7; no new GHCR image/tag exists.** This is OxygenGS's combined release target, not the official upstream tag and not authorization to deploy.
+**Release status: Draft combined PR #7 remains unmerged; stable OxygenGS `v1.11.0` is NOT released.** The isolated `ghcr.io/oxygengs/kima-hub:prerelease-v111-rc2` was published from app/runtime source `ec44b98d9f69175b08bd2c6c88b0fb6552d6581c`, then independently verified on both platforms by immutable OCI index digest `sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56` ([publisher](https://github.com/OxygenGS/kima-hub/actions/runs/39069358767), [real published-image verification](https://github.com/OxygenGS/kima-hub/actions/runs/39070979565)). Subsequent commits change release workflows/documentation, not the validated application runtime. Neither this candidate nor the pending stable tag authorizes production deployment.
 
 ### Added
 - Integrated official upstream Kima v1.11.0 features including Stats, Discover Weekly, Vibe Map, updated audio and library processing.
@@ -18,7 +18,8 @@ This changelog documents changes made to Kima Hub — Oxygen's Fork, independent
 - Dedicated unprivileged Next.js frontend process; backend and analyzers require separate non-root compatibility review.
 - Removed vulnerable Transformers runtime dependency from ONNX CLAP while retaining tested model/audio parity, with pinned tokenizer and Apache-licensed NumPy helper attribution.
 - Added structural and real HTTP permission tests, native AMD64/ARM64 AIO build/smoke, synthetic EN/NL browser and user-role tests, and disposable genuine upstream v1.10/v1.11 copy-upgrade plus independent rollback.
-- Added Trivy source/dependency and assembled-image scans. **Image-security acceptance is still OPEN:** prior scans reported eight CRITICAL OS-package records on each architecture; green CI is not proof of a safe release.
+- Added Trivy source/dependency and native assembled-image scans. **Image-security acceptance remains OPEN:** exact published-rc2 audit [#39101135942](https://github.com/OxygenGS/kima-hub/actions/runs/39101135942) found 295/294 HIGH and 8 CRITICAL per AMD64/ARM64; no Trivy-listed fix versions. Backend and two analyzers still inherit root, unlike the non-root frontend/Redis/PostgreSQL.
+- The proposed stable publisher now uses native AMD64/ARM64 runners and scans each actual image before staging; final multiarch manifest is built only after both pass. The versioned tag and `:latest` are **separate** publication decisions: stable tag creation does not automatically move `:latest`.
 
 ### Release gates outstanding
 - Exact final-head CI including image security, manual cross-device EN/NL accessibility and playback, independent representative cold backup/restore, and security/license review.

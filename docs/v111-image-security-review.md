@@ -41,6 +41,10 @@ The latest fully completed combined test [#38963824375](https://github.com/Oxyge
 - The CI inventory script now records the transitive installed-package paths from priority vulnerable packages to FFmpeg on *both* CPU architectures, allowing any attempted mitigation to be compared with the original image.
 - **Mitigation decision remains open:** compare a supported base with patched packages, or build/minimize only the required FFmpeg features in an isolated disposable test image. Neither a partial cross-distribution package upgrade nor unconditional `apt purge` is approved. Any alternative must pass ARM64/AMD64 builds, library/audio parity, authentication, and original-image copy-upgrade with independent rollback before considering candidate publication.
 
+## Current published rc2 evidence — 18 October 2026
+
+The historical image scans above are not the final published artifact. The exact rc2 GHCR OCI digest `sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56` was [published](https://github.com/OxygenGS/kima-hub/actions/runs/39069358767), [independently runtime-verified](https://github.com/OxygenGS/kima-hub/actions/runs/39070979565), then [scanned by pulling both real platform images](https://github.com/OxygenGS/kima-hub/actions/runs/39101135942). **AMD64: 295 HIGH / 8 CRITICAL; ARM64: 294 HIGH / 8 CRITICAL; neither has Trivy-listed FixedVersion fields.** Exact affected package versions and the non-root/frontend versus root/backend/analyzer inventory are recorded in the [rc2 security disposition](https://github.com/OxygenGS/kima-hub/blob/feature/prerelease-f31e589-verification/docs/v111-rc2-security-disposition.md). CVE triage is OPEN; this is not security approval.
+
 ## Security gate and next actions
 
 - The development CI now runs a source-level fixable HIGH/CRITICAL + secrets scan. The AIO-image jobs also produce the full vulnerability JSON for both architectures.
