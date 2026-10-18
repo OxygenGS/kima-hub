@@ -37,6 +37,12 @@ jobs:
           assert 'ffmpeg.setFfmpegPath' not in source
           print("No bundled legacy FFmpeg dependency or hard-pinned binary: PASS")
           PY
+      - name: Install distribution FFmpeg on lightweight GitHub runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Assert Debian FFmpeg works as MP3 encoder and ffprobe decoder
         shell: bash
         run: |
