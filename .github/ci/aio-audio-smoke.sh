@@ -117,9 +117,13 @@ echo "---- Real waveform decode through authenticated HTTP API ----"
 waveform="$url/api/library/tracks/$track/waveform"
 status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$waveform")"
 assert_status 401 "$status" "Anonymous waveform denied"
-status="$(curl -sS --max-time 45 -o "$tmp/waveform.json" -w '%{http_code}' \
+status="$(curl -sS --max-time 45 -o "$tmp/waveform.json" -D "$tmp/waveform.headers" -w '%{http_code}' \
     -H "Authorization: Bearer $admin_token" "$waveform")"
 assert_status 200 "$status" "Authenticated real FFmpeg waveform"
+grep -qi '^cache-control: private, max-age=86400' "$tmp/waveform.headers"
+grep -qi '^vary:.*authorization' "$tmp/waveform.headers"
+grep -qi '^vary:.*cookie' "$tmp/waveform.headers"
+echo "PASS: authenticated waveform must not enter shared HTTP caches"
 python3 - "$tmp/waveform.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:

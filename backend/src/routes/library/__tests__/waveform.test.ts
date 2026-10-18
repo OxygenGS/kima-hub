@@ -56,7 +56,7 @@ import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { prisma } from "../../../utils/db";
 import { redisClient } from "../../../utils/redis";
-import { computeWaveformPeaks, PEAK_COUNT } from "../waveform";
+import { computeWaveformPeaks, PEAK_COUNT, WAVEFORM_FFMPEG_TIMEOUT_MS } from "../waveform";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -277,6 +277,59 @@ describe("computeWaveformPeaks", () => {
         expect(whole).toEqual(expectedPeaks(samples));
     });
 
+    it("disables ffmpeg network protocols, stdin and non-audio streams", async () => {
+        makeFakeProcess([makePcm([123, -456, 789])]);
+        await computeWaveformPeaks("/music/track.mp3");
+        const [executable, args, options] = (spawn as jest.Mock).mock.calls[0];
+        expect(executable).toBe(process.env.FFMPEG_PATH || "ffmpeg");
+        expect(args).toEqual(expect.arrayContaining([
+            "-nostdin", "-protocol_whitelist", "file,pipe", "-vn", "-sn", "-dn",
+        ]));
+        expect(args.indexOf("-protocol_whitelist")).toBeLessThan(args.indexOf("-i"));
+        expect(options.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    });
+
+    it("rejects a failed decode even after ffmpeg produced partial PCM", async () => {
+        makeFakeProcess([makePcm([32767, 100, -100])], 1);
+        await expect(computeWaveformPeaks("/music/truncated.mp3"))
+            .rejects.toThrow("ffmpeg exited 1");
+    });
+
+    it("bounds an unresponsive ffmpeg process and kills it", async () => {
+        jest.useFakeTimers();
+        try {
+            const ff = new EventEmitter() as EventEmitter & {
+                stdout: EventEmitter; stderr: EventEmitter; kill: jest.Mock;
+            };
+            ff.stdout = new EventEmitter();
+            ff.stderr = new EventEmitter();
+            ff.kill = jest.fn();
+            (spawn as jest.Mock).mockReturnValue(ff);
+            const result = computeWaveformPeaks("/music/hanging.mp3");
+            const assertion = expect(result).rejects.toThrow("ffmpeg waveform timed out");
+            jest.advanceTimersByTime(WAVEFORM_FFMPEG_TIMEOUT_MS);
+            await assertion;
+            expect(ff.kill).toHaveBeenCalledWith("SIGKILL");
+            // Late close after force-kill must not change the settled result.
+            ff.emit("close", null);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("handles a malformed ffmpeg stdout stream error without crashing", async () => {
+        const ff = new EventEmitter() as EventEmitter & {
+            stdout: EventEmitter; stderr: EventEmitter;
+        };
+        ff.stdout = new EventEmitter();
+        ff.stderr = new EventEmitter();
+        (spawn as jest.Mock).mockReturnValue(ff);
+        const result = computeWaveformPeaks("/music/spawn-error.mp3");
+        ff.emit("error", new Error("spawn ENOENT"));
+        await expect(result).rejects.toThrow("spawn ENOENT");
+        ff.emit("close", -1);
+    });
+
     it("rejects when ffmpeg exits with non-zero code and no data", async () => {
         makeFakeProcess([], 1);
 
@@ -354,7 +407,9 @@ describe("GET /tracks/:id/waveform", () => {
         expect(res.body.peaks).toHaveLength(PEAK_COUNT);
         expect(res.body.count).toBe(PEAK_COUNT);
         // Verify the Cache-Control header is set.
-        expect(res.headers["cache-control"]).toBe("public, max-age=86400");
+        expect(res.headers["cache-control"]).toBe("private, max-age=86400");
+        expect(res.headers["vary"]).toContain("Authorization");
+        expect(res.headers["vary"]).toContain("Cookie");
     });
 
     it("Redis cache-HIT returns cached payload without spawning ffmpeg", async () => {
