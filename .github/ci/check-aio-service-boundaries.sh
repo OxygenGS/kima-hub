@@ -82,7 +82,19 @@ for name, allow_db, required in (
             raise AssertionError(f"Required supervised service missing: {name}")
         print(f"Optional analyzer not running: {name}")
         continue
-    env = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    env_file = f"/proc/{pid}/environ"
+    # /proc/<pid>/environ is ptrace-gated on Docker hosts. Read as the
+    # actual service UID when root lacks CAP_SYS_PTRACE; never print values.
+    try:
+        raw_env = Path(env_file).read_bytes()
+    except PermissionError:
+        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb"}.get(name)
+        if user is None:
+            raise
+        raw_env = subprocess.run(
+            ["gosu", user, "cat", env_file], check=True, capture_output=True,
+        ).stdout
+    env = raw_env.split(b"\0")
     keys = {entry.split(b"=", 1)[0].decode("utf-8", "replace")
             for entry in env if b"=" in entry}
     forbidden = {
