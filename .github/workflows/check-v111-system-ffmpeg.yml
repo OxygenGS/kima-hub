@@ -1,0 +1,67 @@
+name: Experimental system FFmpeg migration check (NO PUBLISH)
+on:
+  push:
+    branches: [feature/v111-ffmpeg-runtime-hardening]
+    paths:
+      - "backend/**"
+      - ".github/workflows/check-v111-system-ffmpeg.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: system-ffmpeg-safeguard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-audio:
+    name: Validate lockfile, system MP3 transcoding and backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check that bundled legacy FFmpeg is gone from backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          pkg=json.loads(Path("backend/package.json").read_text())
+          lock=json.loads(Path("backend/package-lock.json").read_text())
+          assert "@ffmpeg-installer/ffmpeg" not in pkg["dependencies"]
+          assert "@ffmpeg-installer/ffmpeg" not in lock["packages"][""]["dependencies"]
+          assert not any(x.startswith("node_modules/@ffmpeg-installer/") for x in lock["packages"])
+          source=Path("backend/src/services/audioStreaming.ts").read_text()
+          assert '@ffmpeg-installer/ffmpeg' not in source
+          assert 'ffmpeg.setFfmpegPath' not in source
+          print("No bundled legacy FFmpeg dependency or hard-pinned binary: PASS")
+          PY
+      - name: Assert Debian FFmpeg works as MP3 encoder and ffprobe decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg
+          command -v ffprobe
+          mkdir -p "$RUNNER_TEMP/system-ffmpeg-smoke"
+          ffmpeg -hide_banner -nostdin -loglevel error -f lavfi \
+            -i 'sine=frequency=440:duration=2' -c:a libmp3lame \
+            "$RUNNER_TEMP/system-ffmpeg-smoke/output.mp3"
+          ffprobe -v error -show_entries stream=codec_name -of default=noprint_wrappers=1 \
+            "$RUNNER_TEMP/system-ffmpeg-smoke/output.mp3" | grep -Fx 'codec_name=mp3'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Lockfile consistency and dependency installation
+        run: npm ci
+        working-directory: backend
+      - name: Compile actual v1.11 backend
+        run: npm run build
+        working-directory: backend
+      - name: Audio streaming regression tests
+        run: npm test -- --runInBand --runTestsByPath src/services/__tests__/audioStreaming.test.ts
+        working-directory: backend
+      - name: Assert normal application version remains unchanged
+        run: python3 .github/ci/check-release-metadata.py --candidate

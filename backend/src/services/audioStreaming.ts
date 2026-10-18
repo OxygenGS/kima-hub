@@ -6,14 +6,14 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { prisma } from "../utils/db";
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import PQueue from "p-queue";
 import { AppError, ErrorCode, ErrorCategory } from "../utils/errors";
 import { parseRangeHeader } from "../utils/rangeParser";
 import { parseFile } from "music-metadata";
 
-// Set FFmpeg path to bundled binary
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+// Use the system FFmpeg (the AIO already installs a maintained Debian ffmpeg).
+// fluent-ffmpeg resolves FFMPEG_PATH when explicitly set, otherwise the PATH.
+// Avoid shipping a second legacy static FFmpeg binary from npm.
 
 // Quality settings
 const QUALITY_SETTINGS = {
