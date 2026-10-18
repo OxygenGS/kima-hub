@@ -3,7 +3,6 @@ import { spawn } from "child_process";
 import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { logger } from "../../utils/logger";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import { resolveWithinMusicRoot } from "./trackPath";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +65,7 @@ function inFlightKey(trackId: string, mtime: Date): string {
  */
 export function computeWaveformPeaks(filePath: string): Promise<number[]> {
     return new Promise((resolve, reject) => {
-        const ff = spawn(ffmpegPath.path, [
+        const ff = spawn(process.env.FFMPEG_PATH || "ffmpeg", [
             "-hide_banner",
             "-loglevel", "error",
             "-i", filePath,

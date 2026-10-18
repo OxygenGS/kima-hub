@@ -32,9 +32,10 @@ jobs:
           assert "@ffmpeg-installer/ffmpeg" not in pkg["dependencies"]
           assert "@ffmpeg-installer/ffmpeg" not in lock["packages"][""]["dependencies"]
           assert not any(x.startswith("node_modules/@ffmpeg-installer/") for x in lock["packages"])
-          source=Path("backend/src/services/audioStreaming.ts").read_text()
-          assert '@ffmpeg-installer/ffmpeg' not in source
-          assert 'ffmpeg.setFfmpegPath' not in source
+          for path in ("backend/src/services/audioStreaming.ts", "backend/src/routes/library/waveform.ts", "backend/src/utils/configValidator.ts"):
+              source=Path(path).read_text()
+              assert '@ffmpeg-installer/ffmpeg' not in source, path
+              assert 'ffmpeg.setFfmpegPath' not in source, path
           print("No bundled legacy FFmpeg dependency or hard-pinned binary: PASS")
           PY
       - name: Install distribution FFmpeg on lightweight GitHub runner
@@ -67,7 +68,7 @@ jobs:
         run: npm run build
         working-directory: backend
       - name: Audio streaming regression tests
-        run: npm test -- --runInBand --runTestsByPath src/services/__tests__/audioStreaming.test.ts
+        run: npm test -- --runInBand --runTestsByPath src/services/__tests__/audioStreaming.test.ts src/routes/library/__tests__/waveform.test.ts
         working-directory: backend
       - name: Assert normal application version remains unchanged
         run: python3 .github/ci/check-release-metadata.py --candidate
