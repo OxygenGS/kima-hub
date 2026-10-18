@@ -82,6 +82,18 @@ The earlier published rc2 is **unchanged** and has no CLAP-on proof from this ad
 
 The matching smoke checks were incorporated into the combined [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7) at `41a2d0d` as permanent **CLAP-on native CI**. The combined-PR test runs are [PR #39160008303](https://github.com/OxygenGS/kima-hub/actions/runs/39160008303), [native #39160008342](https://github.com/OxygenGS/kima-hub/actions/runs/39160008342), [EN/NL #39160008368](https://github.com/OxygenGS/kima-hub/actions/runs/39160008368), and [security #39160008292](https://github.com/OxygenGS/kima-hub/actions/runs/39160008292). Their completion must be checked on the exact current SHA before any further candidate. The 8 CRITICAL Debian scanner findings on **both** architectures and the backend/analyzers' root privileges still require explicit documented security disposition and human release-owner sign-off. This is additional evidence, not approval or a registry publication.
 
+## Exact published rc3 binary-level evidence — zlib/MiniZip (18 October 2026)
+
+**Independent immutable-digest native [binary audit 2/2 PASSED #39167206438](https://github.com/OxygenGS/kima-hub/actions/runs/39167206438).** This extra strictly read-only workflow pulled the already published `ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843`, verified each `linux/amd64` / `linux/arm64` image's OCI source label against `41a2d0d`, and inspected the actual Debian binaries rather than only source-package names. Both platforms satisfied explicit checks that:
+
+1. `dpkg -L zlib1g` lists **no MiniZip files** within that binary package.
+2. Loaded `libz.so.1` does **not export** the affected MiniZip `zipOpenNewFileInZip4_64` entrypoint.
+3. The installed `zlib1g`, `libmbedcrypto7` and separately named `libmbedtls14` package versions (if installed) are recorded in per-architecture JSON artifacts, without a CVE suppression rule.
+
+These binary observations align with [Debian's explicit Bookworm disposition for CVE-2023-45853](https://security-tracker.debian.org/tracker/CVE-2023-45853): its vulnerable `contrib/minizip` code is **not built** into the relevant Bookworm `src:zlib` binary packages; Debian fixes the independently packaged MiniZip separately. This is strong evidence to present for **reviewer-approved non-applicability of the single `zlib1g` scanner record**, **not** a blanket approval of bundled or statically linked independent MiniZip implementations. A missing exported symbol alone does not prove the absence of every copy of the source code. Keep the original 8 CRITICAL scanner counts visible until the release owner records their decision.
+
+The same audit **does not** clear the Mbed TLS record(s): `libmbedcrypto7` binary-version facts only support comparing advisory affected version ranges and actual exported/linked callers. [Debian still marks CVE-2025-47917 Bookworm vulnerable/EOL](https://security-tracker.debian.org/tracker/CVE-2025-47917). No library version was changed or removed and no new image was published.
+
 ## Current official Debian advisory reconciliation — 18 October 2026
 
 This is an **evidence review of the eight previously identified rc2 CRITICAL scanner entries**, not a fresh Trivy run, new package inventory, vulnerability suppression policy, patch or final risk acceptance. The integrated source at `a980e0e` has [9/9 native AIO CI passing](https://github.com/OxygenGS/kima-hub/actions/runs/39146108653) with the **same 295/294 HIGH and 8/8 CRITICAL** package-record counts. Debian's tracker labels refer to **source-package vulnerability status**, which can differ from whether the vulnerable function is built into or reachable through the binary actually shipped.

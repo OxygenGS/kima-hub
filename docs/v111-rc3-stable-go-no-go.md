@@ -25,6 +25,11 @@ Do not substitute the earlier `rc2` digest or a mutable `:prerelease` alias for 
 - [x] Independent [published-image full security inventory #39164715193: 2/2](https://github.com/OxygenGS/kima-hub/actions/runs/39164715193): architecture/source labels and shipped vendored license found; Trivy reports **AMD64 295 HIGH/8 CRITICAL; ARM64 294 HIGH/8 CRITICAL; 0 scanner-listed FixedVersion**. This is an accurate *inventory*, **not** security acceptance.
 - [x] Dockerfile/package release versions, two npm lockfile roots and changelog agree on 1.11.0. Stable tag `v1.11.0` absent as checked in this session.
 
+### New immutable-image binary applicability evidence
+
+- [x] [Additional native published-rc3 binary inspection 2/2 passed](https://github.com/OxygenGS/kima-hub/actions/runs/39167206438): `zlib1g` contains no MiniZip installed paths and the shipped `libz.so.1` does not export the known vulnerable MiniZip zip entrypoint on either architecture. This corroborates [Debian's Bookworm CVE-2023-45853 non-built code explanation](https://security-tracker.debian.org/tracker/CVE-2023-45853). Package-specific evidence **requires a human recorded disposition**; scanner findings stay visible.
+- [x] Recorded `libmbedcrypto7` and `libmbedtls14` inventory facts on both rc3 native platforms; **not** a finding waiver or proof that other Mbed TLS call paths are safe.
+
 ## Blocking decisions before public stable publication
 
 - [ ] **OS risk disposition, security reviewer and owner:** decide each of the eight Debian CRITICAL scanner findings, including documented potential non-applicability vs actual linked/reachable code and compensating controls. Do not suppress findings or interpret `FixedVersion` absent as safe. See [detailed Debian advisory analysis](v111-rc2-security-disposition.md) and the exact rc3 audit evidence. Assign reviewer/date and record explicit accept/remediate/escalate disposition.
