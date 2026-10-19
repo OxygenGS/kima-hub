@@ -26,6 +26,10 @@ The fork uses `services/audio-analyzer/convert_musicnn.py` for ONNX conversion a
 
 All eleven model filenames also occur in UPF's officially published ONNX directories, and [our read-only native-source numerical comparison #39208570035](https://github.com/OxygenGS/kima-hub/actions/runs/39208570035) confirmed cosine 1.0 for **200-d embedding outputs** and all ten head results within 1.43×10⁻⁶ on synthetic inputs. This is a compatibility observation, **not rights permission**. Ask UPF explicitly whether redistributing **its unmodified first-party ONNX versions** is allowed even if redistribution of our independently converted model weights is not. This may provide a compliant model path if the rights owner approves.
 
+## New native application evidence for the rights-holder request
+
+The official UPF ONNX files have now been tested **inside full, disposable AMD64 and ARM64 Kima Hub AIO containers**, not only with an isolated CPU inference script. We [verified the first-party SHA256 hashes of all eleven models](https://github.com/OxygenGS/kima-hub/actions/runs/39211009167) and [ran the application successfully on both platforms](https://github.com/OxygenGS/kima-hub/actions/runs/39211515100) with the official files and a 200-dimensional `embeddings` output selector. Both tests published **no model files or container images**. This evidence supports the feasibility of replacing independently converted ONNX copies with unmodified official files, **but a written grant or clear applicable license for third-party Docker redistribution remains essential**. The prepared email below explicitly asks UPF for that permission. It remains **unsent**.
+
 ## Ready-to-send request (requires manual sending)
 
 **To:** mtg-info@upf.edu  
