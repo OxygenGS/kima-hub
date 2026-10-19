@@ -1,46 +1,31 @@
 /**
- * Metadata Enrichment Service
- *
- * Enriches artist/album/track metadata using multiple sources:
- * - MusicBrainz: MBIDs, release dates, track info
- * - Last.fm: Genres, tags, similar artists, bio
- * - Cover Art Archive: Album artwork
- * - Discogs: Additional metadata (optional)
- *
- * Features:
- * - Optional/opt-in (bandwidth intensive)
- * - Rate limiting to respect API limits
- * - Confidence scoring for matches
- * - Manual override support
+ * Album metadata enrichment from MusicBrainz: release group identity, then
+ * genres, label and original year from its catalogue.
  */
 
 import { logger } from "../utils/logger";
-import { hasRealMbid } from "./artistIdentity";
+import { isMbid } from "./artistIdentity";
+import { titlesAgree } from "./albumIdentity";
+import { resolveArtistMbidFromDiscography } from "./artistCorrection";
 import { prisma } from "../utils/db";
-import { lastFmService } from "./lastfm";
 import { musicBrainzService } from "./musicbrainz";
-import { imageProviderService } from "./imageProvider";
+import { topVoted } from "../utils/votes";
+import { failureCause } from "../utils/outcome";
+import { findAlbumArtwork, findArtistArtwork } from "./artwork";
 import { downloadAndStoreImage, isNativePath } from "./imageStorage";
 import {
     DuplicateMbidError,
     reassignAlbumRgMbid,
     reassignArtistMbid,
 } from "./mbidReassign";
+import { getSimilarArtists } from "./artistSimilarity";
+import { wikidataService } from "./wikidata";
 
 interface EnrichmentSettings {
     enabled: boolean;
-    autoEnrichOnScan: boolean;
     sources: {
         musicbrainz: boolean;
-        lastfm: boolean;
-        coverArtArchive: boolean;
     };
-    rateLimit: {
-        maxRequestsPerMinute: number;
-        respectApiLimits: boolean;
-    };
-    overwriteExisting: boolean;
-    matchingConfidence: "strict" | "moderate" | "loose";
 }
 
 interface ArtistEnrichmentData {
@@ -69,18 +54,9 @@ interface AlbumEnrichmentData {
 class EnrichmentService {
     private defaultSettings: EnrichmentSettings = {
         enabled: false, // Opt-in by default
-        autoEnrichOnScan: false,
         sources: {
             musicbrainz: true,
-            lastfm: true,
-            coverArtArchive: true,
         },
-        rateLimit: {
-            maxRequestsPerMinute: 30,
-            respectApiLimits: true,
-        },
-        overwriteExisting: false,
-        matchingConfidence: "moderate",
     };
 
     /**
@@ -93,7 +69,6 @@ class EnrichmentService {
         });
 
         if (user?.enrichmentSettings) {
-            // enrichmentSettings is already a JSON object from Prisma
             let userSettings: any;
             if (typeof user.enrichmentSettings === "string") {
                 userSettings = JSON.parse(user.enrichmentSettings);
@@ -101,7 +76,6 @@ class EnrichmentService {
                 userSettings = user.enrichmentSettings;
             }
 
-            // IMPORTANT: Always merge with defaults to ensure all fields exist
             return {
                 ...this.defaultSettings,
                 ...userSettings,
@@ -109,34 +83,10 @@ class EnrichmentService {
                     ...this.defaultSettings.sources,
                     ...(userSettings.sources || {}),
                 },
-                rateLimit: {
-                    ...this.defaultSettings.rateLimit,
-                    ...(userSettings.rateLimit || {}),
-                },
             };
         }
 
         return this.defaultSettings;
-    }
-
-    /**
-     * Update enrichment settings for a user
-     */
-    async updateSettings(
-        userId: string,
-        settings: Partial<EnrichmentSettings>
-    ): Promise<EnrichmentSettings> {
-        const current = await this.getSettings(userId);
-        const updated = { ...current, ...settings };
-
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                enrichmentSettings: JSON.stringify(updated) as any,
-            },
-        });
-
-        return updated;
     }
 
     /**
@@ -157,10 +107,7 @@ class EnrichmentService {
         });
 
         if (!artist) {
-            // Return null, don't throw. The method already returns null for "nothing to
-            // enrich" and the route has a 404 branch waiting for it -- but a throw sailed
-            // past that branch into the catch-all and answered 500, so asking to enrich a
-            // row deleted by a concurrent scan looked like a server fault.
+            // Null reaches the route's 404 branch; a throw would answer 500.
             logger.debug(`Artist ${artistId} not found; nothing to enrich`);
             return null;
         }
@@ -174,77 +121,58 @@ class EnrichmentService {
         // Step 1: Get/verify MBID from MusicBrainz
         if (
             config.sources.musicbrainz &&
-            !hasRealMbid(artist.mbid)
+            !isMbid(artist.mbid)
         ) {
-            try {
-                const mbResults = await musicBrainzService.searchArtist(
-                    artist.name,
-                    1
-                );
-                if (mbResults.length > 0) {
-                    enrichmentData.mbid = mbResults[0].id;
-                    enrichmentData.confidence += 0.4;
-                    logger.debug(`  Found MBID: ${enrichmentData.mbid}`);
-                }
-            } catch (error) {
-                logger.error(` MusicBrainz lookup failed:`, error);
+            const found = await resolveArtistMbidFromDiscography(
+                artist.id,
+                artist.name
+            );
+            if (found.kind === "answered") {
+                enrichmentData.mbid = found.value.mbid;
+                enrichmentData.confidence += 0.4;
+                logger.debug(`  Found MBID: ${enrichmentData.mbid} (${found.evidence.by})`);
+            } else if (found.kind === "absent") {
+                logger.debug(`  No verified MusicBrainz match for ${artist.name}`);
+            } else {
+                logger.error(`  MusicBrainz lookup ${found.kind}: ${failureCause(found)}`);
             }
         }
 
-        // Step 2: Get artist info from Last.fm
-        if (config.sources.lastfm) {
-            try {
-                const artistMbid = enrichmentData.mbid || artist.mbid;
-                const lastfmInfo = await lastFmService.getArtistInfo(
-                    artist.name,
-                    hasRealMbid(artistMbid)
-                        ? artistMbid
-                        : undefined
-                );
-
-                if (lastfmInfo) {
-                    enrichmentData.bio = lastfmInfo.bio?.summary;
-                    enrichmentData.tags =
-                        lastfmInfo.tags?.tag?.map((t: any) => t.name) || [];
-                    enrichmentData.genres = enrichmentData.tags?.slice(0, 3); // Top 3 tags as genres
-                    enrichmentData.confidence += 0.3;
-                    logger.debug(
-                        `  Found Last.fm data: ${
-                            enrichmentData.tags?.length || 0
-                        } tags`
-                    );
-
-                    // Get similar artists
-                    const artistMbidForSimilar = enrichmentData.mbid || artist.mbid;
-                    const similar = await lastFmService.getSimilarArtists(
-                        hasRealMbid(artistMbidForSimilar)
-                            ? artistMbidForSimilar
-                            : "",
-                        artist.name,
-                        10
-                    );
-                    enrichmentData.similarArtists = similar.map(
-                        (a: any) => a.name
-                    );
-                    logger.debug(`  Found ${similar.length} similar artists`);
-                }
-            } catch (error) {
-                logger.error(
-                    `  ✗ Last.fm lookup failed:`,
-                    error instanceof Error ? error.message : error
-                );
-            }
-        }
-
-        // Step 3: Get artist image from multiple sources (Deezer → Fanart → MusicBrainz → Last.fm)
+        // Step 2: bio from Wikidata, similar artists from the local
+        // centroid / ListenBrainz path — runs unconditionally, there is no
+        // per-source toggle for it.
         try {
             const artistMbid = enrichmentData.mbid || artist.mbid;
-            const imageResult = await imageProviderService.getArtistImage(
-                artist.name,
-                hasRealMbid(artistMbid)
-                    ? artistMbid
-                    : undefined
-            );
+            if (isMbid(artistMbid)) {
+                const wd = await wikidataService.getArtistInfo(
+                    artist.name,
+                    artistMbid
+                );
+                if (wd?.summary) {
+                    enrichmentData.bio = wd.summary;
+                    enrichmentData.confidence += 0.3;
+                }
+                const similar = await getSimilarArtists(
+                    artistMbid,
+                    artist.name,
+                    10
+                );
+                enrichmentData.similarArtists = similar.map(
+                    (a) => a.name
+                );
+                logger.debug(`  Found ${similar.length} similar artists`);
+            }
+        } catch (error) {
+            logger.error(` Similarity/bio lookup failed:`, error);
+        }
+
+        // Step 3: Get artist image from multiple sources (Deezer → Fanart → MusicBrainz)
+        try {
+            const artistMbid = enrichmentData.mbid || artist.mbid;
+            const imageResult = await findArtistArtwork({
+                name: artist.name,
+                mbid: isMbid(artistMbid) ? artistMbid : undefined,
+            });
 
             if (imageResult) {
                 enrichmentData.heroUrl = imageResult.url;
@@ -289,8 +217,6 @@ class EnrichmentService {
         });
 
         if (!album) {
-            // Same as enrichArtist above: null reaches the route's existing 404 branch,
-            // a throw did not.
             logger.debug(`Album ${albumId} not found; nothing to enrich`);
             return null;
         }
@@ -303,31 +229,34 @@ class EnrichmentService {
             confidence: 0,
         };
 
-        // Step 1: Try to find MBID
+        // Identify the release group via the artist's discography (needs a real artist
+        // MBID) or a title-checked search, then take genres, label and original year
+        // from its catalogue in one cached two-request chain.
         if (config.sources.musicbrainz) {
-            try {
-                // If artist has MBID, search their discography
-                if (
-                    album.artist.mbid &&
-                    hasRealMbid(album.artist.mbid)
-                ) {
-                    const releaseGroups =
-                        await musicBrainzService.getReleaseGroups(
-                            album.artist.mbid,
-                            ["album", "ep"],
-                            50
-                        );
-
-                    // Try to match by title
-                    const match = releaseGroups.find(
-                        (rg: any) =>
-                            rg.title.toLowerCase() ===
-                                album.title.toLowerCase() ||
-                            rg.title.toLowerCase().replace(/[^a-z0-9]/g, "") ===
-                                album.title
-                                    .toLowerCase()
-                                    .replace(/[^a-z0-9]/g, "")
+            if (
+                album.artist.mbid &&
+                isMbid(album.artist.mbid)
+            ) {
+                const discography =
+                    await musicBrainzService.getReleaseGroups(
+                        album.artist.mbid,
+                        ["album", "ep"],
+                        50
                     );
+
+                if (discography.kind === "answered") {
+                    // Match titles with titlesAgree: exact, punctuation-insensitive, then without
+                    // edition markers, since MusicBrainz files a deluxe or remaster as a release
+                    // inside a plainly named group. The album keeps its own title either way.
+                    const wanted = album.title;
+                    const match =
+                        discography.value.find(
+                            (rg: any) =>
+                                rg.title.toLowerCase() === wanted.toLowerCase()
+                        ) ||
+                        discography.value.find((rg: any) =>
+                            titlesAgree(rg.title, wanted)
+                        );
 
                     if (match) {
                         enrichmentData.rgMbid = match.id;
@@ -337,73 +266,84 @@ class EnrichmentService {
                             : undefined;
                         enrichmentData.confidence += 0.5;
                         logger.debug(`  Found MBID: ${enrichmentData.rgMbid}`);
-
-                        // Try to get label info from first release
-                        try {
-                            const rgDetails =
-                                await musicBrainzService.getReleaseGroup(
-                                    match.id
-                                );
-                            if (rgDetails?.releases?.[0]?.id) {
-                                const releaseId = rgDetails.releases[0].id;
-                                const releaseInfo =
-                                    await musicBrainzService.getRelease(
-                                        releaseId
-                                    );
-                                if (
-                                    releaseInfo?.["label-info"]?.[0]?.label
-                                        ?.name
-                                ) {
-                                    enrichmentData.label =
-                                        releaseInfo["label-info"][0].label.name;
-                                    logger.debug(
-                                        `  Found label: ${enrichmentData.label}`
-                                    );
-                                }
-                            }
-                        } catch (error) {
-                            logger.debug(`Could not fetch label info`);
-                        }
                     }
-                }
-            } catch (error) {
-                logger.error(` MusicBrainz lookup failed:`, error);
-            }
-        }
-
-        // Step 2: Get album info from Last.fm
-        if (config.sources.lastfm) {
-            try {
-                const lastfmInfo = await lastFmService.getAlbumInfo(
-                    album.artist.name,
-                    album.title
-                );
-
-                if (lastfmInfo) {
-                    enrichmentData.tags =
-                        lastfmInfo.tags?.tag?.map((t: any) => t.name) || [];
-                    enrichmentData.genres = enrichmentData.tags?.slice(0, 3);
-                    enrichmentData.trackCount =
-                        lastfmInfo.tracks?.track?.length;
-                    enrichmentData.confidence += 0.3;
+                } else if (discography.kind === "absent") {
                     logger.debug(
-                        `  Found Last.fm data: ${
-                            enrichmentData.tags?.length || 0
-                        } tags`
+                        `  MusicBrainz has no release-groups for ${album.artist.name}`
+                    );
+                } else {
+                    logger.error(
+                        `  Discography lookup ${discography.kind}: ${failureCause(discography)}`
                     );
                 }
-            } catch (error) {
-                logger.error(` Last.fm lookup failed:`, error);
+            }
+
+            // Untagged libraries have placeholder artist ids, so the discography path never
+            // runs for them; search by name instead. The search's best hit is unchecked, so
+            // it must pass titlesAgree too, or confident wrong ids get stamped on albums.
+            if (!enrichmentData.rgMbid) {
+                const hit = await musicBrainzService.searchAlbum(
+                    album.title,
+                    album.artist.name
+                );
+
+                if (
+                    hit.kind === "answered" &&
+                    titlesAgree(hit.value.title, album.title)
+                ) {
+                    enrichmentData.rgMbid = hit.value.id;
+                    enrichmentData.confidence += 0.3;
+                    logger.debug(
+                        `  Found MBID by search: ${enrichmentData.rgMbid} ("${hit.value.title}")`
+                    );
+                } else if (hit.kind === "answered") {
+                    logger.debug(
+                        `  Rejected search hit "${hit.value.title}" for "${album.title}" — titles do not agree`
+                    );
+                } else if (hit.kind === "absent") {
+                    logger.debug(`  No MusicBrainz hit for "${album.title}"`);
+                } else {
+                    logger.debug(
+                        `  MusicBrainz album search ${hit.kind}: ${failureCause(hit)}`
+                    );
+                }
+            }
+
+            if (enrichmentData.rgMbid) {
+                const chain = await musicBrainzService.getAlbumCatalogue(
+                    enrichmentData.rgMbid
+                );
+                if (chain.kind === "answered") {
+                    if (chain.value.genres.length > 0) {
+                        enrichmentData.genres = topVoted(chain.value.genres, 5);
+                    }
+                    if (chain.value.label) {
+                        enrichmentData.label = chain.value.label;
+                        logger.debug(`  Found label: ${enrichmentData.label}`);
+                    }
+                    if (
+                        chain.value.originalYear != null &&
+                        !enrichmentData.releaseDate
+                    ) {
+                        enrichmentData.releaseDate = new Date(
+                            `${chain.value.originalYear}-01-01`
+                        );
+                    }
+                } else if (chain.kind !== "absent") {
+                    logger.debug(
+                        `  Album catalogue ${chain.kind}: ${failureCause(chain)}`
+                    );
+                }
             }
         }
 
-        // Step 3: Get cover art from multiple sources (Deezer → MusicBrainz → Fanart)
+        // Get cover art from multiple sources (Deezer → MusicBrainz → Fanart)
         try {
-            const coverResult = await imageProviderService.getAlbumCover(
-                album.artist.name,
-                album.title,
-                enrichmentData.rgMbid
-            );
+            const coverResult = await findAlbumArtwork({
+                rgMbid: enrichmentData.rgMbid,
+                artistName: album.artist.name,
+                albumTitle: album.title,
+            });
 
             if (coverResult) {
                 enrichmentData.coverUrl = coverResult.url;
@@ -412,7 +352,7 @@ class EnrichmentService {
             }
         } catch (error) {
             logger.error(
-                `  ✗ Cover art lookup failed:`,
+                `  ✗ Album cover lookup failed:`,
                 error instanceof Error ? error.message : error
             );
         }
@@ -457,9 +397,8 @@ class EnrichmentService {
                     where: { id: artistId },
                     select: { heroUrl: true },
                 });
-                if (current?.heroUrl && isNativePath(current.heroUrl)) {
-                    // Keep existing local image, skip external URL
-                } else {
+                // An existing local image wins over an external URL.
+                if (!current?.heroUrl || !isNativePath(current.heroUrl)) {
                     const localPath = await downloadAndStoreImage(
                         data.heroUrl,
                         artistId,
@@ -524,10 +463,8 @@ class EnrichmentService {
             }
         }
         if (data.releaseDate) {
-            // Store original release date in dedicated field
-            updateData.originalYear = data.releaseDate.getFullYear();
-            // Also update year for backward compatibility (but originalYear takes precedence)
-            updateData.year = data.releaseDate.getFullYear();
+            updateData.originalYear = data.releaseDate.getUTCFullYear();
+            updateData.year = data.releaseDate.getUTCFullYear();
         }
         if (data.label) updateData.label = data.label;
         if (data.genres && data.genres.length > 0) {

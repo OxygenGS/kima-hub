@@ -1,15 +1,7 @@
 /**
- * Auth Route Integration Tests
- *
- * Uses supertest against a minimal Express app (no Redis, no session store)
- * with mocked Prisma. Tests the observable behavior of each auth route:
- * correct status codes, response shapes, and -- crucially -- that the routes
- * behave identically for "wrong password" and "nonexistent user" to prevent
- * username enumeration.
- *
- * Does NOT test JWT library internals (that's jsonwebtoken's job). Tests that
- * the routes react correctly when given invalid tokens, expired tokens, and
- * tokens with mismatched tokenVersion.
+ * Auth routes on a minimal app with mocked Prisma: status codes, response
+ * shapes, identical answers for a wrong password and an unknown user, and
+ * invalid, expired or revoked tokens.
  */
 
 // All mocks must be before imports -- jest.mock is hoisted
@@ -295,16 +287,7 @@ describe('Admin-only routes', () => {
 
     it('POST /auth/create-user with role injection is rejected (invalid role)', async () => {
         const adminUser = { ...BASE_USER, role: 'admin' };
-        (prisma.user.findUnique as jest.Mock)
-            .mockResolvedValueOnce(adminUser) // auth lookup
-            .mockResolvedValueOnce(adminUser) // existing username check
-            .mockResolvedValueOnce(null); // username check returns null = available
-
-        // Re-mock: first call for admin auth, second for username check
         (prisma.user.findUnique as jest.Mock).mockResolvedValue(adminUser);
-        (prisma.user.findUnique as jest.Mock)
-            .mockResolvedValueOnce(adminUser)  // requireAdmin auth lookup
-            .mockResolvedValueOnce(null);      // username availability check
 
         (prisma.user.create as jest.Mock).mockResolvedValue({
             ...BASE_USER,
@@ -326,87 +309,59 @@ describe('Admin-only routes', () => {
     });
 });
 
-// ── Per-user music permissions ─────────────────────────────────────────────────
+// ── POST /auth/change-password ────────────────────────────────────────────────
 
-describe('PATCH /auth/users/:id/permissions', () => {
+describe('POST /auth/change-password', () => {
     let app: express.Application;
-    const token = (role: string) => generateToken({
-        id: BASE_USER.id,
-        username: BASE_USER.username,
-        role,
-        tokenVersion: 1,
-    });
-
     beforeAll(() => { app = createTestApp(); });
-    beforeEach(() => {
-        jest.clearAllMocks();
-        // Reset pending mockResolvedValueOnce implementations from other suites.
-        (prisma.user.findUnique as jest.Mock).mockReset();
-        (prisma.user.update as jest.Mock).mockReset();
-        clearUserCache();
-    });
+    beforeEach(() => { jest.clearAllMocks(); clearUserCache(); });
 
-    it('rejects a non-admin even if permission values are valid', async () => {
-        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'user' });
-        const res = await request(app)
-            .patch('/auth/users/another-user/permissions')
-            .set('Authorization', `Bearer ${token('user')}`)
-            .send({ canRequestAlbums: true });
-        expect(res.status).toBe(403);
-        expect(prisma.user.update).not.toHaveBeenCalled();
-    });
+    it('answers a wrong current password with 400, not the signed-out 401', async () => {
+        const token = jwt.sign(
+            { userId: 'user-abc-123', username: 'testuser', role: 'user', tokenVersion: 1 },
+            TEST_SECRET,
+            { expiresIn: '24h' },
+        );
+        // mockReset: an earlier test can leave a queued one-off answer behind.
+        (prisma.user.findUnique as jest.Mock).mockReset().mockResolvedValue({
+            ...BASE_USER,
+            passwordHash: await hashedPassword('right-password'),
+        });
 
-    it.each([
-        {},
-        { canRequestAlbums: 'true' },
-        { canDownloadTracks: 1 },
-        { role: 'admin' },
-    ])('rejects malformed permission updates: %p', async (body) => {
-        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
         const res = await request(app)
-            .patch('/auth/users/another-user/permissions')
-            .set('Authorization', `Bearer ${token('admin')}`)
-            .send(body);
+            .post('/auth/change-password')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ currentPassword: 'wrong-password', newPassword: 'new-password-1' });
+
         expect(res.status).toBe(400);
-        expect(prisma.user.update).not.toHaveBeenCalled();
+        expect(res.body.error).toBe('Current password is incorrect');
     });
 
-    it('updates only allowed permission fields', async () => {
-        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
-        (prisma.user.update as jest.Mock).mockResolvedValue({
-            id: 'another-user',
-            username: 'listener',
-            role: 'user',
-            canRequestAlbums: true,
-            canDownloadTracks: false,
+    it('keeps this device signed in with tokens for the new version and refuses the old ones', async () => {
+        const oldToken = jwt.sign(
+            { userId: BASE_USER.id, username: BASE_USER.username, role: 'user', tokenVersion: 1 },
+            TEST_SECRET,
+            { expiresIn: '24h' },
+        );
+        const stored = { ...BASE_USER, role: 'user', tokenVersion: 1, passwordHash: await hashedPassword('right-password') };
+        (prisma.user.findUnique as jest.Mock).mockReset().mockImplementation(async () => stored);
+        (prisma.user.update as jest.Mock).mockReset().mockImplementation(async () => {
+            stored.tokenVersion = 2;
+            return { id: stored.id, username: stored.username, role: stored.role, tokenVersion: 2 };
         });
+
         const res = await request(app)
-            .patch('/auth/users/another-user/permissions')
-            .set('Authorization', `Bearer ${token('admin')}`)
-            .send({ canRequestAlbums: true });
+            .post('/auth/change-password')
+            .set('Authorization', `Bearer ${oldToken}`)
+            .send({ currentPassword: 'right-password', newPassword: 'new-password-1' });
+
         expect(res.status).toBe(200);
-        expect(res.body.canRequestAlbums).toBe(true);
-        expect(prisma.user.update).toHaveBeenCalledWith({
-            where: { id: 'another-user' },
-            data: { canRequestAlbums: true },
-            select: {
-                id: true,
-                username: true,
-                role: true,
-                canRequestAlbums: true,
-                canDownloadTracks: true,
-            },
-        });
-    });
-
-    it('reports a missing user as 404', async () => {
-        (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...BASE_USER, role: 'admin' });
-        (prisma.user.update as jest.Mock).mockRejectedValue({ code: 'P2025' });
-        const res = await request(app)
-            .patch('/auth/users/missing/permissions')
-            .set('Authorization', `Bearer ${token('admin')}`)
-            .send({ canDownloadTracks: true });
-        expect(res.status).toBe(404);
+        expect((jwt.verify(res.body.token, TEST_SECRET) as { tokenVersion: number }).tokenVersion).toBe(2);
+        expect(typeof res.body.refreshToken).toBe('string');
+        const withNew = await request(app).get('/auth/me').set('Authorization', `Bearer ${res.body.token}`);
+        expect(withNew.status).toBe(200);
+        const withOld = await request(app).get('/auth/me').set('Authorization', `Bearer ${oldToken}`);
+        expect(withOld.status).toBe(401);
     });
 });
 
@@ -432,14 +387,8 @@ describe('DELETE /auth/account', () => {
     });
 
     it('stops the deleted account authenticating immediately, not 30 seconds later', async () => {
-        // The defect this pins: `loadUser` caches the user row for 30s and never
-        // re-checks existence, so deleting the row is not enough -- the token of
-        // the account just deleted keeps working until the TTL lapses. The admin
-        // delete route fixes it by invalidating the cache and says so in a
-        // comment; the self-delete route added below it did not.
-        //
-        // Written as a sequence rather than a spy because the observable that
-        // matters is "does this token still work", not "was a function called".
+        // loadUser caches the user for 30s, so self-delete must clear the cache
+        // or the deleted account's token keeps working.
         const token = tokenFor('user');
         (prisma.user.findUnique as jest.Mock).mockResolvedValue(BASE_USER);
         (prisma.user.delete as jest.Mock).mockResolvedValue({});
@@ -447,11 +396,6 @@ describe('DELETE /auth/account', () => {
             async (fn: (tx: unknown) => Promise<unknown>) =>
                 fn({
                     user: { count: jest.fn().mockResolvedValue(2), delete: prisma.user.delete },
-                    // v1 still has UserMoodMix and DiscoveryBatch, and the route
-                    // clears both by hand before deleting the user because
-                    // neither declares a cascading relation. Upstream's version
-                    // of this test omits them because upstream removed both
-                    // tables with the mood-mix and discovery tear-outs.
                     userMoodMix: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
                     discoveryBatch: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
                 })

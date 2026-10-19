@@ -1,28 +1,92 @@
 # Kima All-in-One Docker Image (Hardened)
 # Contains: Backend, Frontend, PostgreSQL, Redis, Audio Analyzer (Essentia AI)
-# Usage: docker run -d -p 3030:3030 -v /path/to/music:/music kima/kima
+# OxygenGS fork: image is published as ghcr.io/oxygengs/kima-hub only after explicit release approval.
+# Published stable as of this Draft: ghcr.io/oxygengs/kima-hub:v1.10.0 (combined v1.11.0 remains unpublished).
+# Do not use upstream chevron7locked/kima images as a substitute for the OxygenGS fork.
+
+# ============================================================
+# CLAP ONNX BUILDER STAGE
+# Exports hf_audio.onnx (sha256 37df17afb9881569c4f50e5b691167aa54586418059701a74a54934514969972)
+# from the PUBLIC laion/clap-htsat-unfused checkpoint with a pinned toolchain.
+# Same pins give the same bytes on amd64 and arm64.
+# The sha gate below fails the build on any drift -- upstream checkpoint
+# revision, toolchain version, or export script change.
+FROM python:3.11-slim AS clap-onnx-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+
+# Toolchain pins that reproduce the shipped export (torch 2.8.0 cpu +
+# transformers 4.57.6 + onnx; numpy<2 for the exporter stack).
+RUN pip3 install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple \
+    'torch==2.8.0' 'transformers==4.57.6' 'onnx' 'numpy<2'
+COPY services/audio-analyzer-clap/export_onnx.py .
+# Public checkpoint (revision 8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a),
+# sha-gated so a moved/rewritten upstream file fails the build.
+# NOTE: mkdir -p ckpt is required — curl -o does NOT create parent dirs
+# (error 23 "Failed to open the file ... No such file or directory").
+# All three files must live INSIDE ckpt/ — from_pretrained('ckpt') finds
+# weights only in the snapshot dir, not alongside it.
+RUN mkdir -p ckpt \
+    && curl -fL --retry 5 --retry-delay 5 --retry-all-errors -o ckpt/pytorch_model.bin \
+        'https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a/pytorch_model.bin' \
+    && echo '1cd3c601bc4afe0fa87be3de4c13dd2cfadd249fac1e29acf74a9b296c3219bb  ckpt/pytorch_model.bin' | sha256sum -c - \
+    && curl -fL --retry 5 --retry-delay 5 --retry-all-errors -o ckpt/config.json \
+        'https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a/config.json' \
+    && echo '9efb9557bc804f2ca6e394486af2e45dfed0b18554909735a99c6220b84e4288  ckpt/config.json' | sha256sum -c - \
+    && curl -fL --retry 5 --retry-delay 5 --retry-all-errors -o ckpt/preprocessor_config.json \
+        'https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a/preprocessor_config.json' \
+    && echo '9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753  ckpt/preprocessor_config.json' | sha256sum -c -
+RUN python3 export_onnx.py --src ckpt --out hf_audio.onnx \
+    && echo '37df17afb9881569c4f50e5b691167aa54586418059701a74a54934514969972  hf_audio.onnx' | sha256sum -c - \
+    && echo '[builder] hf_audio.onnx exported and sha-verified'
+
+# ============================================================
+# MUSICNN MODELS (vendored ONNX + reference answers)
+# MusiCNN and its ten heads ship as converted ONNX checked into the repo
+# (services/audio-analyzer/models/), together with the reference answers
+# recorded from the validated pipeline. The build gate below runs the vendored
+# graphs on this image's own ONNX Runtime and fails unless they answer within
+# 1e-4 of the reference pass -- a tampered or drifted weights file fails the
+# build. The frozen TensorFlow originals (pb/) and the converter
+# (convert_musicnn.py) stay in the repo so anyone can re-derive the ONNX and
+# re-verify; they are no longer part of any image build.
 
 FROM node:24-slim
 
+# Point-release the base layer before anything is installed: the node:24-slim
+# digest on the build cache predates the current bookworm security updates
+# (trivy found 42 fixable HIGH/CRIT in the Debian layer of rc-* images).
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* && apt-get update
+
 # Add PostgreSQL 16 repository (Debian Bookworm only has PG15 by default)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get install -y --no-install-recommends \
     gnupg lsb-release curl ca-certificates && \
     echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
     apt-get update
 
 # Install system dependencies including Python for audio analysis
+# pgvector pinned to the 0.8.x series (0.8.6 verified running): ef_search /
+# iterative_scan behaviour is version-sensitive and an unpinned PGDG package
+# floats across releases on rebuild.
 RUN apt-get install -y --no-install-recommends \
     postgresql-16 \
     postgresql-contrib-16 \
-    postgresql-16-pgvector \
+    postgresql-16-pgvector=0.8.* \
     redis-server \
     supervisor \
     ffmpeg \
+    libchromaprint-tools \
     tini \
     openssl \
     bash \
     gosu \
+    # Existing PostgreSQL 16 /data volumes may have been initialized with
+    # en_US.utf8. The runtime must provide that exact libc locale before
+    # starting the migrated database, not silently change database collations.
+    locales \
     # Python for audio analyzer
     python3 \
     python3-pip \
@@ -30,10 +94,23 @@ RUN apt-get install -y --no-install-recommends \
     # Build tools (needed for some Python packages)
     build-essential \
     python3-dev \
+    pkg-config \
+    # Essentia source build: headers for the build, runtime libs kept after purge
+    libeigen3-dev \
+    libfftw3-dev \
+    libyaml-dev \
+    libsamplerate0-dev \
+    libfftw3-single3 \
+    libsamplerate0 \
+    libyaml-0-2 \
+    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen en_US.UTF-8 \
+    && locale -a | grep -Fxq 'en_US.utf8' \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories
-RUN mkdir -p /app/backend /app/frontend /app/audio-analyzer /app/models \
+RUN groupadd --system kimaweb && useradd --system --gid kimaweb --home-dir /app/frontend --shell /usr/sbin/nologin kimaweb \
+    && mkdir -p /app/backend /app/frontend /app/audio-analyzer /app/models \
     /data/postgres /data/redis /run/postgresql /var/log/supervisor \
     && chown -R postgres:postgres /data/postgres /run/postgresql
 
@@ -47,46 +124,54 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     redis \
     psycopg2-binary \
     'pgvector>=0.2.0' \
-    'python-dotenv>=1.0.0' \
     'requests>=2.31.0' \
-    'bullmq==2.19.5' \
-    'yt-dlp>=2024.12.0'
+    # 2.26.0 is the latest 2.x binding (Worker API the analyzer imports); its
+    # msgpack==1.2.1 pin is the GHSA-6v7p-g79w-8964 fixed release.
+    'bullmq==2.26.0' \
+    'yt-dlp>=2024.12.0' \
+    # Floor the transitive msgpack: <1.2.1 carries GHSA-6v7p-g79w-8964.
+    'msgpack>=1.2.1'
 
-# ML dependencies -- torch/torchaudio for CLAP, tensorflow/essentia for MusiCNN
-# CPU-only torch: install first via the CPU index so downstream packages
-# (laion-clap, transformers) reuse the already-installed CPU wheels.
-# tensorflow-cpu + essentia-tensorflow: no Linux ARM64 wheels exist upstream,
-# so MusiCNN audio analysis is unavailable on ARM64. CLAP still works.
-#
-# Pins omit the +cpu local version suffix so the same spec resolves on both
-# architectures. On amd64 the CPU index serves torch==2.5.1+cpu and PEP 440
-# matches without the local tag; on arm64 the same index serves torch==2.5.1
-# without any local tag -- the +cpu suffix only appears from torch 2.6.0+.
-# All three packages must be pinned together so pip resolves a compatible
-# set; unpinning torchaudio causes it to drift to newer versions with
-# mismatched torch ABI (the cause of #165 in v1.7.9).
+# ML dependencies -- ONNX Runtime for CLAP (audio + text) and MusiCNN.
+# Exact versions: the sound vectors and the MusiCNN parity were validated on these, and a
+# rebuild must not drift onto others (onnxruntime 1.30.0, librosa 0.11.0, soundfile 0.14.0).
+# The PyTorch stack (torch/torchaudio/torchvision/laion-clap) is NOT installed:
+# since v1.11.0 the shipped images run the ONNX CLAP backend (CLAP_BACKEND=onnx,
+# the analyzer default) and are torch-free. The legacy torch backend remains
+# available in code; restore it with services/audio-analyzer-clap/requirements-torch.txt.
+# The runtime no longer installs transformers. An Apache-licensed subset
+# of the validated NumPy mel functions lives in audio_features_numpy.py;
+# tokenizers==0.22.1 loads the hash-pinned offline RoBERTa JSON.
+# The ONNX fixture/parity build gate rejects altered audio outputs.
+# Build-stage ONNX export remains pinned independently (not copied to runtime).
 RUN pip3 install --no-cache-dir --break-system-packages \
-    --index-url https://download.pytorch.org/whl/cpu \
-    --extra-index-url https://pypi.org/simple \
-    'torch==2.5.1' \
-    'torchaudio==2.5.1' \
-    'torchvision==0.20.1' \
-    && pip3 install --no-cache-dir --break-system-packages \
-    'laion-clap>=1.1.4' \
-    'librosa>=0.10.0' \
-    'transformers==5.8.1'
-# transformers pinned exact: newer releases reference torch.float8_e8m0fnu
-# (added in torch 2.7) at import and crash against the pinned torch==2.5.1.
-# 5.8.1 is the version running in prod against this torch. Bump only with torch.
+    'onnxruntime==1.30.0' \
+    'tokenizers==0.22.1' \
+    'librosa==0.11.0' \
+    'soundfile==0.14.0'
 
-# tensorflow-cpu + essentia-tensorflow (AMD64 only -- no ARM64 wheels upstream)
-RUN pip3 install --no-cache-dir --break-system-packages \
-    'tensorflow-cpu>=2.13.0,<2.14.0' \
-    && pip3 install --no-cache-dir --break-system-packages --no-deps \
-    essentia-tensorflow \
-    || echo "[ARM64] tensorflow-cpu/essentia-tensorflow unavailable -- MusiCNN analysis disabled"
+# Essentia for the signal analysis and MusiCNN's input features; MusiCNN itself runs on
+# ONNX Runtime, so no TensorFlow is installed. Essentia publishes Linux wheels for
+# x86_64 only: it is built from source at the dev1389 pin (upstream commit 36ec3d92)
+# on every architecture, so amd64 and arm64 run the same build. The source build
+# matches the wheel's answers to 1e-6 on library tracks; the gate below proves it
+# works on this image before anything ships. A failed build here fails the image.
+RUN pip3 install --no-cache-dir --break-system-packages 'numpy==1.24.4' 'six' 'pyyaml' \
+    && curl -fsSL --retry 5 -o /tmp/essentia.tar.gz \
+        'https://github.com/MTG/essentia/archive/36ec3d929402d491cbbb1120c54631e8c205b0ff.tar.gz' \
+    && mkdir /tmp/essentia-src && tar xzf /tmp/essentia.tar.gz -C /tmp/essentia-src --strip-components=1 \
+    && cd /tmp/essentia-src \
+    && python3 waf configure --mode=release --with-python \
+    && python3 waf -j"$(nproc)" \
+    && python3 waf install \
+    && ldconfig \
+    && LIB="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')" \
+    && if [ -d /usr/local/lib/python3/dist-packages/essentia ] && [ ! -e "$LIB/essentia" ]; then \
+        mv /usr/local/lib/python3/dist-packages/essentia "$LIB/"; fi \
+    && python3 -c 'import essentia; print("essentia importable:", essentia.__version__)' \
+    && cd / && rm -rf /tmp/essentia-src /tmp/essentia.tar.gz
 
-# Keep scipy/pandas aligned with tensorflow's numpy constraint in the shared Python env.
+# numpy 1.24.4 is what Essentia, the MusiCNN gate and the CLAP parity were validated with.
 # Force exact wheel versions to avoid resolver drift leaving incompatible pandas/scipy.
 RUN pip3 uninstall -y pandas scipy numpy || true \
     && pip3 install --no-cache-dir --break-system-packages --force-reinstall \
@@ -94,60 +179,107 @@ RUN pip3 uninstall -y pandas scipy numpy || true \
     'scipy==1.10.1' \
     'pandas==2.0.3'
 
-# Fail fast during build if CLAP/Transformers dependency resolution regresses.
-RUN python3 -c "import numpy, scipy, pandas, torch, torchaudio, laion_clap; from transformers import BertModel; print(f'CLAP deps OK: torch={torch.__version__} torchaudio={torchaudio.__version__} numpy={numpy.__version__} scipy={scipy.__version__} pandas={pandas.__version__}')"
+# Fail fast during build if the CLAP ONNX runtime stack imports cleanly.
+RUN python3 -c "import numpy, scipy, pandas, onnxruntime, librosa, tokenizers; print(f'CLAP ONNX deps OK: ort={onnxruntime.__version__} tokenizers={tokenizers.__version__} numpy={numpy.__version__}')" 
 
 # Cleanup
 RUN pip cache purge \
     && find /usr -name "*.pyc" -delete \
     && find /usr -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
-# Download all ML models in a single layer (~800MB total)
-# IMPORTANT: Using MusiCNN models to match analyzer.py expectations
-RUN echo "Downloading ML models..." && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/autotagging/msd/msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_happy-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_happy/mood_happy-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_sad-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_sad/mood_sad-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_relaxed-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_relaxed/mood_relaxed-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_aggressive-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_aggressive/mood_aggressive-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_party-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_party/mood_party-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_acoustic-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_acoustic/mood_acoustic-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/mood_electronic-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/mood_electronic/mood_electronic-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/danceability-msd-musicnn-1.pb \
-        "https://essentia.upf.edu/models/classification-heads/danceability/danceability-msd-musicnn-1.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/deam-msd-musicnn-2.pb \
-        "https://essentia.upf.edu/models/classification-heads/deam/deam-msd-musicnn-2.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /app/models/emomusic-msd-musicnn-2.pb \
-        "https://essentia.upf.edu/models/classification-heads/emomusic/emomusic-msd-musicnn-2.pb" && \
-    curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o /tmp/clap_full.pt \
-        "https://huggingface.co/lukewys/laion_clap/resolve/main/music_audioset_epoch_15_esc_90.14.pt" && \
-    python3 -c "import torch; ckpt = torch.load('/tmp/clap_full.pt', map_location='cpu', weights_only=False); torch.save({'state_dict': ckpt['state_dict']}, '/app/models/music_audioset_epoch_15_esc_90.14.pt')" && \
-    rm /tmp/clap_full.pt && \
-    echo "All ML models downloaded" && \
-    ls -lh /app/models/
+# MusiCNN and its heads as vendored ONNX, checked on this image's own ONNX
+# Runtime against the vendored reference answers. The answers stay in the image:
+# the analyzer checks its GPU session against them at every start.
+COPY services/audio-analyzer/models/ /app/models/
+COPY services/audio-analyzer/convert_musicnn.py services/audio-analyzer/musicnn_onnx.py /tmp/musicnn-gate/
+RUN cd /tmp/musicnn-gate && python3 convert_musicnn.py gate /app/models /app/models/musicnn-answers.npz \
+    && rm -rf /tmp/musicnn-gate
 
-# Copy audio analyzer scripts
-COPY services/audio-analyzer/analyzer.py /app/audio-analyzer/
+# analyzer.py imports classifier and musicnn_onnx at load.
+COPY services/audio-analyzer/analyzer.py services/audio-analyzer/classifier.py services/audio-analyzer/musicnn_onnx.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer/
 
 # ============================================
 # CLAP ANALYZER SETUP (Vibe Similarity)
 # ============================================
 WORKDIR /app/audio-analyzer-clap
 
-# Copy CLAP analyzer script
+# Copy the CLAP analyzer -- BOTH runtime modules. analyzer.py imports
+# onnx_backend at module load (unconditional), so an image that copies only
+# analyzer.py cannot start its CLAP analyzer at all: it dies with
+# "ModuleNotFoundError: No module named 'onnx_backend'" before doing any work.
+# verify_runtime.py + test_fixtures ride along for the build-time parity gate.
 COPY services/audio-analyzer-clap/analyzer.py /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/onnx_backend.py /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/clap_mel.py services/audio-analyzer-clap/audio_features_numpy.py /app/audio-analyzer-clap/
+# Preserve the upstream Apache-2.0 license alongside shipped vendored code.
+COPY services/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0 /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/verify_runtime.py /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/gpu_runtime.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer-clap/
+COPY services/audio-analyzer-clap/gpu_env.sh /app/audio-analyzer-clap/
+RUN chmod +x /app/audio-analyzer-clap/gpu_env.sh
+COPY services/audio-analyzer-clap/test_fixtures/ /app/audio-analyzer-clap/test_fixtures/
+
+# Prove the analyzer is importable in the image, so a missing file fails the
+# build instead of shipping a dead analyzer. Needs no model weights.
+RUN cd /app/audio-analyzer-clap &&     python3 -c "import onnx_backend; print('[CLAP] onnx_backend importable')"
+
+# ============================================================
+# CLAP ONNX WEIGHTS -- PUBLIC SOURCES ONLY, SHA-GATED
+#
+# hf_audio.onnx comes from the builder stage (deterministic export of the
+# public laion/clap-htsat-unfused checkpoint, revision 8fa0f1c6..., sha-gated
+# there). text_model.onnx is byte-identical to Xenova/clap-htsat-unfused's
+# public ONNX text export (sha 6df7c51f...). The graph has no attention-mask
+# input, so onnx_backend encodes each prompt unpadded; that matches the masked
+# HF text embedding (test_text_parity.py).
+# A tampered or moved upstream file FAILS THE BUILD on checksum mismatch.
+RUN mkdir -p /app/audio-analyzer-clap/models \
+    && curl -fL --retry 5 --retry-delay 5 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 \
+        -o /app/audio-analyzer-clap/models/text_model.onnx \
+        'https://huggingface.co/Xenova/clap-htsat-unfused/resolve/main/onnx/text_model.onnx' \
+    && echo '6df7c51f2d78e236a03f2b816e613d538c815639d13644fe7c2124f439da9648  /app/audio-analyzer-clap/models/text_model.onnx' | sha256sum -c - \
+    && ls -lh /app/audio-analyzer-clap/models/
+COPY --from=clap-onnx-builder /build/hf_audio.onnx /app/audio-analyzer-clap/models/hf_audio.onnx
+
+# ============================================================
+# OFFLINE HUGGINGFACE CACHE (boot without network)
+# The runtime lazily loads two HF artifacts at first use:
+#   clap_mel.ClapMelExtractor (reads the laion preprocessor_config.json only)
+#   RobertaTokenizer.from_pretrained('roberta-base')  (text tokenizer)
+# Without a baked cache the first embedding requires huggingface.co to be up.
+# Pin the exact revisions; sha-gate every file.
+RUN LAION='https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a' \
+    && ROB='https://huggingface.co/roberta-base/resolve/e2da8e2f811d1448a5b465c236feacd80ffbac7b' \
+    && LDIR='/root/.cache/huggingface/hub/models--laion--clap-htsat-unfused' \
+    && RDIR='/root/.cache/huggingface/hub/models--roberta-base' \
+    && mkdir -p "$LDIR/snapshots/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a" "$LDIR/refs" \
+              "$RDIR/snapshots/e2da8e2f811d1448a5b465c236feacd80ffbac7b" "$RDIR/refs" \
+    && printf '%s' '8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a' > "$LDIR/refs/main" \
+    && printf '%s' 'e2da8e2f811d1448a5b465c236feacd80ffbac7b' > "$RDIR/refs/main" \
+    && curl -fsSL --retry 5 --retry-all-errors -o "$LDIR/snapshots/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a/preprocessor_config.json" "$LAION/preprocessor_config.json" \
+    && echo '9739f58296aa6f9ac18008fd0150fb2649bc554985fbde86d0a4041c882ac753  '"$LDIR"'/snapshots/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a/preprocessor_config.json' | sha256sum -c - \
+    && LS="$LDIR/snapshots/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a" RS="$RDIR/snapshots/e2da8e2f811d1448a5b465c236feacd80ffbac7b" \
+    && curl -fsSL --retry 5 --retry-all-errors -o "$RS/vocab.json" "$ROB/vocab.json" \
+    && echo '9e7f63c2d15d666b52e21d250d2e513b87c9b713cfa6987a82ed89e5e6e50655  '"$RS"'/vocab.json' | sha256sum -c - \
+    && curl -fsSL --retry 5 --retry-all-errors -o "$RS/merges.txt" "$ROB/merges.txt" \
+    && echo '1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5  '"$RS"'/merges.txt' | sha256sum -c - \
+    && curl -fsSL --retry 5 --retry-all-errors -o "$RS/tokenizer.json" "$ROB/tokenizer.json" \
+    && echo '847bbeab6174d66a88898f729d52fa8d355fafe1bea101cf960dd404581df70e  '"$RS"'/tokenizer.json' | sha256sum -c - \
+    && curl -fsSL --retry 5 --retry-all-errors -o "$RS/tokenizer_config.json" "$ROB/tokenizer_config.json" \
+    && echo '994f46754c5bf4014f1aa92d34b1374319c3a6b3f702105cd5b742beaecd18ce  '"$RS"'/tokenizer_config.json' | sha256sum -c -
+
+# ============================================================
+# BUILD-TIME PARITY GATE
+# Embed the tracked fixtures through the image's own runtime stack (offline --
+# HF_HUB_OFFLINE=1 proves the baked cache suffices) and require cosine
+# >= 0.999 against expected_onnx_embeddings.npy, which was produced by the
+# VALIDATED pipeline. Any preprocessing/toolchain drift fails the build.
+# Also exercises the text encoder end to end.
+RUN cd /app/audio-analyzer-clap \
+    && HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 verify_runtime.py
 
 # Create database readiness check script
-RUN <<'DOCKER_SCRIPT'
-cat > /app/wait-for-db.sh <<'EOF'
+RUN cat > /app/wait-for-db.sh << 'EOF'
 #!/bin/bash
 TIMEOUT=${1:-120}
 COUNTER=0
@@ -177,7 +309,7 @@ if [ -f /data/.schema_ready ]; then
 fi
 
 while [ $COUNTER -lt $TIMEOUT ]; do
-    if PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
+    if PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost -U kima -d kima -c "SELECT 1 FROM \"Track\" LIMIT 1" > /dev/null 2>&1; then
         echo "[wait-for-db] ✓ Database is ready and schema exists!"
         exit 0
     fi
@@ -192,10 +324,9 @@ done
 
 echo "[wait-for-db] ERROR: Database schema not ready after ${TIMEOUT}s"
 echo "[wait-for-db] Listing available tables:"
-PGPASSWORD="${KIMA_DB_PASSWORD:?}" psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
+PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost -U kima -d kima -c "\dt" 2>&1 || echo "Could not list tables"
 exit 1
 EOF
-DOCKER_SCRIPT
 
 RUN chmod +x /app/wait-for-db.sh && \
     sed -i 's/\r$//' /app/wait-for-db.sh
@@ -220,7 +351,6 @@ RUN npm run build && \
     rm -rf src tests __tests__ tsconfig*.json
 
 COPY backend/docker-entrypoint.sh ./
-COPY backend/healthcheck.js ./healthcheck-backend.js
 
 # Create log directory (cache will be in /data volume)
 RUN mkdir -p /app/backend/logs
@@ -248,36 +378,59 @@ ENV NEXT_PUBLIC_BACKEND_URL=http://127.0.0.1:3006
 ARG NEXT_PUBLIC_BUILD_TYPE=""
 ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 
-RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build
-
-# Remove development dependencies after the production frontend build.
-# Keep runtime packages such as Next.js, React and React DOM.
-RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
-
-# ============================================
-# POSTGRESQL LEGACY LOCALE COMPATIBILITY
-# ============================================
-# Existing PostgreSQL 16 volumes from the upstream pgvector image may have
-# lc_messages, lc_time, lc_numeric and lc_monetary set to en_US.utf8.
-# A slim runtime lacks that locale unless explicitly generated.
-# Install this AFTER all expensive ML/frontend builds to reuse cached layers.
-RUN apt-get update && apt-get install -y --no-install-recommends locales \
-    && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen en_US.UTF-8 \
-    && locale -a | grep -qi 'en_US.utf8' \
-    && rm -rf /var/lib/apt/lists/*
+# Drop dev dependencies after the build: the runtime needs only next + react,
+# and the dev tree ships advisories the app never executes (the braces chain).
+RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build \
+    && npm prune --omit=dev && npm cache clean --force \
+    && chown -R kimaweb:kimaweb /app/frontend/.next
 
 # ============================================
 # SECURITY HARDENING
 # ============================================
 # Remove dangerous tools and build dependencies AFTER all builds are complete
 # Keep: bash (supervisor), gosu (postgres user switching), python3 (audio analyzer)
-RUN apt-get purge -y --auto-remove build-essential python3-dev 2>/dev/null || true && \
+# npm/npx are build-time tools: the node image ships its own copy at
+# /usr/local/lib/node_modules/npm, and trivy scored that tree CRITICAL (tar,
+# undici, ip-address). Nothing in the running app may invoke npm — the
+# supervisor launches node/next/prisma directly — so the tree is deleted.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg 2>/dev/null || true && \
+    apt-get purge -y --auto-remove build-essential python3-dev pkg-config \
+        libeigen3-dev libfftw3-dev libyaml-dev libsamplerate0-dev 2>/dev/null || true && \
     rm -f /usr/bin/wget /bin/wget 2>/dev/null || true && \
     rm -f /usr/bin/curl /bin/curl 2>/dev/null || true && \
     rm -f /usr/bin/nc /bin/nc /usr/bin/ncat /usr/bin/netcat 2>/dev/null || true && \
     rm -f /usr/bin/ftp /usr/bin/tftp /usr/bin/telnet 2>/dev/null || true && \
     rm -rf /var/lib/apt/lists/*
+
+# Application processes use private, non-root identities. The initial
+# database bootstrap and root Supervisor remain privileged. Root-generated
+# credentials are read by the launcher before dropping the service UID.
+RUN groupadd --system kimabackend \
+    && useradd --system --gid kimabackend --create-home --home-dir /home/kimabackend --shell /usr/sbin/nologin kimabackend \
+    && groupadd --system kimaaudio \
+    && useradd --system --gid kimaaudio --create-home --home-dir /home/kimaaudio --shell /usr/sbin/nologin kimaaudio \
+    && groupadd --system kimaruntime \
+    && usermod -a -G kimaruntime kimabackend \
+    && usermod -a -G kimaruntime kimaaudio \
+    && mkdir -p /app/nonroot-hf /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
+    && cp -a /root/.cache/huggingface/hub /app/nonroot-hf/hub \
+    && chown -R root:root /app/nonroot-hf \
+    && chmod -R a+rX,go-w /app/nonroot-hf \
+    && chown -R kimaaudio:kimaaudio /home/kimaaudio \
+    && chown -R kimabackend:kimabackend /home/kimabackend \
+    && chmod 750 /home/kimaaudio /home/kimabackend
+# The tokenizer cache is public, pinned and read-only; never widen /root.
+ENV HF_HOME=/app/nonroot-hf \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    CLAP_ROBERTA_TOKENIZER_JSON=/app/nonroot-hf/hub/models--roberta-base/snapshots/e2da8e2f811d1448a5b465c236feacd80ffbac7b/tokenizer.json
+COPY runtime/nonroot_services.py /app/nonroot-services.py
+RUN chmod 644 /app/nonroot-services.py \
+    && gosu kimaaudio test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
+    && gosu kimabackend test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
+    && gosu kimaaudio test -w /home/kimaaudio/.cache/numba \
+    && gosu kimabackend test -w /home/kimabackend/.cache/numba
 
 # ============================================
 # CONFIGURATION
@@ -285,11 +438,26 @@ RUN apt-get purge -y --auto-remove build-essential python3-dev 2>/dev/null || tr
 WORKDIR /app
 
 # Copy healthcheck script
-COPY healthcheck-prod.js /app/healthcheck.js
+COPY frontend/healthcheck.js /app/healthcheck.js
+
+# The AIO supervisor needs database/session credentials for backend startup.
+# Do not pass those inherited values into postgres, redis, frontend, or the
+# audio analyzers (the analyzers need DATABASE_URL only).
+RUN cat > /app/strip-aio-service-secrets.sh << 'EOF'
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    --no-db) unset DATABASE_URL; shift ;;
+    --keep-db) shift ;;
+    *) echo "Invalid AIO service environment mode" >&2; exit 64 ;;
+esac
+unset SESSION_SECRET SETTINGS_ENCRYPTION_KEY ADMIN_RESET_PASSWORD DB_PASSWORD
+exec "$@"
+EOF
+RUN chmod 755 /app/strip-aio-service-secrets.sh
 
 # Create supervisord config - logs to stdout/stderr for Docker visibility
-RUN <<'DOCKER_SCRIPT'
-cat > /etc/supervisor/conf.d/kima.conf <<'EOF'
+RUN cat > /etc/supervisor/conf.d/kima.conf << 'EOF'
 [supervisord]
 nodaemon=true
 logfile=/dev/null
@@ -298,7 +466,7 @@ pidfile=/var/run/supervisord.pid
 user=root
 
 [program:postgres]
-command=/usr/lib/postgresql/16/bin/postgres -D /data/postgres
+command=/app/strip-aio-service-secrets.sh --no-db /usr/lib/postgresql/16/bin/postgres -D /data/postgres -c listen_addresses=localhost
 user=postgres
 autostart=true
 autorestart=true
@@ -309,7 +477,7 @@ stderr_logfile_maxbytes=0
 priority=10
 
 [program:redis]
-command=/usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
+command=/app/strip-aio-service-secrets.sh --no-db /usr/bin/redis-server --bind 127.0.0.1 -::1 --protected-mode yes --dir /data/redis --appendonly yes
 user=redis
 autostart=true
 autorestart=true
@@ -321,7 +489,7 @@ priority=20
 
 [program:backend]
 command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/backend && node dist/index.js"
-environment=TZ="UTC",HOST="127.0.0.1"
+environment=TZ="UTC"
 autostart=true
 autorestart=true
 startretries=3
@@ -334,7 +502,9 @@ directory=/app/backend
 priority=30
 
 [program:frontend]
-command=/bin/bash -c "sleep 10 && cd /app/frontend && npm start"
+# Web UI serves port 3030 but does not require root. Its generated Next cache is owned by kimaweb.
+user=kimaweb
+command=/app/strip-aio-service-secrets.sh --no-db /bin/bash -c "sleep 10 && cd /app/frontend && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3030"
 autostart=true
 autorestart=true
 stdout_logfile=/dev/stdout
@@ -345,7 +515,7 @@ environment=NODE_ENV="production",BACKEND_URL="http://localhost:3006",PORT="3030
 priority=40
 
 [program:audio-analyzer]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && python3 analyzer.py"
+command=/app/strip-aio-service-secrets.sh --keep-db /bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer && KIMA_GPU_FOR=analysis /app/audio-analyzer-clap/gpu_env.sh python3 analyzer.py"
 autostart=true
 autorestart=true
 startretries=3
@@ -354,11 +524,11 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BATCH_SIZE="10",SLEEP_INTERVAL="5",MAX_ANALYZE_SECONDS="90",BRPOP_TIMEOUT="5",MODEL_IDLE_TIMEOUT="300",NUM_WORKERS="2",THREADS_PER_WORKER="1"
+environment=REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",MAX_ANALYZE_SECONDS="90",BRPOP_TIMEOUT="5",MODEL_IDLE_TIMEOUT="300",NUM_WORKERS="2",THREADS_PER_WORKER="1"
 priority=50
 
 [program:audio-analyzer-clap]
-command=/bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer-clap && python3 analyzer.py"
+command=/app/strip-aio-service-secrets.sh --keep-db /bin/bash -c "/app/wait-for-db.sh 120 && cd /app/audio-analyzer-clap && ./gpu_env.sh python3 analyzer.py"
 autostart=true
 autorestart=true
 startretries=3
@@ -367,23 +537,21 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
-environment=DATABASE_URL="postgresql://kima:kima@localhost:5432/kima",REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",SLEEP_INTERVAL="5",NUM_WORKERS="1",MODEL_IDLE_TIMEOUT="300",INTERNAL_API_SECRET="kima-internal-aio"
+environment=REDIS_URL="redis://localhost:6379",MUSIC_PATH="/music",BACKEND_URL="http://localhost:3006",MODEL_IDLE_TIMEOUT="300"
 priority=60
 EOF
-DOCKER_SCRIPT
 
 # Fix Windows line endings in supervisor config
 RUN sed -i 's/\r$//' /etc/supervisor/conf.d/kima.conf
 
 # Create startup script with root check
-RUN <<'DOCKER_SCRIPT'
-cat > /app/start.sh <<'EOF'
+RUN cat > /app/start.sh << 'EOF'
 #!/bin/bash
 set -e
 
-# Security check: Warn if running internal services as root
-# Note: This container runs multiple services, some require root for initial setup
-# but individual services (postgres, backend processes) run as non-root users
+# AIO startup requires root for persistent volume preparation and the initial
+# PostgreSQL role/migration bootstrap. Supervisord drops privileges for the
+# frontend, PostgreSQL and Redis. This build also drops backend/analyzer UIDs.
 
 echo ""
 echo "============================================================"
@@ -445,31 +613,57 @@ if [ ! -f /data/postgres/PG_VERSION ]; then
     gosu postgres $PG_BIN/initdb -D /data/postgres
 
     # Configure PostgreSQL
-    # AIO services connect to PostgreSQL from inside this container only.
-    # Keep newly initialized databases off the container network interface.
-    # Existing /data volumes retain their original configuration for upgrade safety.
+    echo "host all all 127.0.0.1/32 scram-sha-256" >> /data/postgres/pg_hba.conf
+    echo "host all all ::1/128 scram-sha-256" >> /data/postgres/pg_hba.conf
     echo "listen_addresses='localhost'" >> /data/postgres/postgresql.conf
 fi
 
-# Generate credentials once per persistent /data volume, before any DB clients start.
+# Preserve a unique AIO database credential alongside the full /data backup.
+# Never regenerate it on an ordinary restart. A pre-fork volume receives one
+# on first upgrade; PostgreSQL's role is then updated before Prisma starts.
 mkdir -p /data/secrets
 chmod 700 /data/secrets
-umask 077
-if [ -f /data/secrets/postgres_password ]; then
-    KIMA_DB_PASSWORD=$(cat /data/secrets/postgres_password)
-else
-    KIMA_DB_PASSWORD=$(openssl rand -hex 32)
-    printf '%s\n' "$KIMA_DB_PASSWORD" > /data/secrets/postgres_password
+if [ ! -f /data/secrets/database_password ]; then
+    secret_tmp="$(mktemp /data/secrets/.database_password.XXXXXXXX)"
+    if ! openssl rand -hex 32 > "$secret_tmp"; then
+        rm -f "$secret_tmp"
+        echo "FATAL: Cannot generate the database credential" >&2
+        exit 1
+    fi
+    chmod 600 "$secret_tmp"
+    mv "$secret_tmp" /data/secrets/database_password
 fi
-if ! [[ "$KIMA_DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
-    echo 'ERROR: invalid persistent PostgreSQL credential' >&2
+chmod 600 /data/secrets/database_password
+DB_PASSWORD="$(cat /data/secrets/database_password)"
+if [[ ! "$DB_PASSWORD" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "FATAL: Invalid persisted AIO database credential; refusing to change the database role" >&2
     exit 1
 fi
-chmod 600 /data/secrets/postgres_password
-export KIMA_DB_PASSWORD
+
+# Enforce authenticated localhost PostgreSQL access ahead of legacy trust
+# rules, including on restored upstream volumes. Preserve original HBA rules
+# below this managed preface for diagnosis; reject all non-loopback TCP.
+if ! grep -Fq '# oxygen-aio-pg-hba-guard-v1' /data/postgres/pg_hba.conf; then
+    hba_tmp="$(mktemp /data/postgres/.pg_hba.conf.XXXXXXXX)"
+    cat > "$hba_tmp" <<'HBA'
+# oxygen-aio-pg-hba-guard-v1
+local all postgres peer
+local all all peer
+host all all 127.0.0.1/32 scram-sha-256
+host all all ::1/128 scram-sha-256
+host all all 0.0.0.0/0 reject
+host all all ::0/0 reject
+host replication all 0.0.0.0/0 reject
+host replication all ::0/0 reject
+HBA
+    cat /data/postgres/pg_hba.conf >> "$hba_tmp"
+    chown postgres:postgres "$hba_tmp"
+    chmod 600 "$hba_tmp"
+    mv "$hba_tmp" /data/postgres/pg_hba.conf
+fi
 
 # Start PostgreSQL temporarily to create database and user
-gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w start
+gosu postgres $PG_BIN/pg_ctl -D /data/postgres -o "-c listen_addresses=localhost" -w start
 
 # Migrate from Lidify -> Kima: rename old database and user if they exist
 if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" | grep -q 1; then
@@ -482,7 +676,6 @@ if gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'lidify'" |
     # Rename the user if it exists
     if gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'lidify'" | grep -q 1; then
         gosu postgres psql -c "ALTER USER lidify RENAME TO kima;"
-        echo "Legacy database role renamed; password rotated below."
         echo "✓ User renamed: lidify -> kima"
     fi
 fi
@@ -490,10 +683,14 @@ fi
 # Create user and database if they don't exist (fresh install)
 gosu postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname = 'kima'" | grep -q 1 || \
     gosu postgres psql -c "CREATE USER kima;"
-# Generated hex only, so SQL quoting is safe; rotate existing legacy passwords too.
-gosu postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE kima WITH PASSWORD '${KIMA_DB_PASSWORD}';"
 gosu postgres psql -tc "SELECT 1 FROM pg_database WHERE datname = 'kima'" | grep -q 1 || \
     gosu postgres psql -c "CREATE DATABASE kima OWNER kima;"
+
+# Pass the generated 64-character hex value over stdin (never as a psql
+# command-line argument). Reapplying the same password is restart-safe.
+gosu postgres psql -d postgres -v ON_ERROR_STOP=1 >/dev/null <<SQL
+ALTER ROLE kima WITH PASSWORD '$DB_PASSWORD';
+SQL
 
 # Create pgvector extension as superuser (required before migrations)
 echo "Creating pgvector extension..."
@@ -501,7 +698,7 @@ gosu postgres psql -d kima -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # Run Prisma migrations
 cd /app/backend
-export DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima"
+export DATABASE_URL="postgresql://kima:${DB_PASSWORD}@localhost:5432/kima"
 echo "Running Prisma migrations..."
 ls -la prisma/migrations/ || echo "No migrations directory!"
 
@@ -511,17 +708,17 @@ MIGRATIONS_EXIST=$(gosu postgres psql -d kima -tAc "SELECT EXISTS (SELECT FROM i
 # Check if User table exists (indicates existing data)
 USER_TABLE_EXIST=$(gosu postgres psql -d kima -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'User')" 2>/dev/null || echo "f")
 
-# Handle rename migration for existing databases
-echo "Checking if rename migration needs to be marked as applied..."
-if gosu postgres psql -d kima -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SystemSettings' AND column_name='soulseekFallback');" 2>/dev/null | grep -q 't'; then
-    echo "Old column exists, marking migration as applied..."
-    gosu postgres psql -d kima -c "INSERT INTO \"_prisma_migrations\" (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) VALUES (gen_random_uuid(), '', NOW(), '20250101000000_rename_soulseek_fallback', '', NULL, NOW(), 1) ON CONFLICT DO NOTHING;" 2>/dev/null || true
-fi
+# Resolve the soulseekFallback column split before migrate deploy, idempotent:
+# on databases carrying legacy fake _prisma_migrations rows, deploy alone would
+# skip the corrective migration. `|| true` keeps this compat step off the
+# boot-critical path; the migration itself logs via RAISE NOTICE.
+echo "Resolving soulseekFallback column split (idempotent)..."
+gosu postgres psql -d kima -f /app/backend/prisma/migrations/20260916000000_resolve_soulseek_fallback_split/migration.sql 2>&1 || true
 
 if [ "$MIGRATIONS_EXIST" = "t" ]; then
     # Normal migration flow - migrations table exists
     echo "Migration history found, running migrate deploy..."
-    if ! npx prisma migrate deploy 2>&1; then
+    if ! node node_modules/prisma/build/index.js migrate deploy 2>&1; then
         echo "FATAL: Database migration failed! Check logs above."
         exit 1
     fi
@@ -530,16 +727,16 @@ elif [ "$USER_TABLE_EXIST" = "t" ]; then
     echo "Existing database detected without migration history."
     echo "Creating baseline from current schema..."
     # Mark the init migration as already applied (baseline)
-    npx prisma migrate resolve --applied 20241130000000_init 2>&1 || true
+    node node_modules/prisma/build/index.js migrate resolve --applied 20251130000000_init 2>&1 || true
     # Now run any subsequent migrations
-    if ! npx prisma migrate deploy 2>&1; then
+    if ! node node_modules/prisma/build/index.js migrate deploy 2>&1; then
         echo "FATAL: Migration after baseline failed!"
         exit 1
     fi
 else
     # Fresh database - run migrations normally
     echo "Fresh database detected, running initial migrations..."
-    if ! npx prisma migrate deploy 2>&1; then
+    if ! node node_modules/prisma/build/index.js migrate deploy 2>&1; then
         echo "FATAL: Initial migration failed. Check database connection and schema."
         exit 1
     fi
@@ -566,16 +763,6 @@ gosu postgres $PG_BIN/pg_ctl -D /data/postgres -w stop
 mkdir -p /data/cache/covers /data/cache/transcodes /data/secrets
 
 # Load or generate persistent secrets
-# Persist the AIO internal API secret alongside the existing encryption keys.
-if [ -f /data/secrets/internal_api_secret ]; then
-    INTERNAL_API_SECRET=$(cat /data/secrets/internal_api_secret)
-else
-    INTERNAL_API_SECRET=$(openssl rand -hex 32)
-    printf '%s\n' "$INTERNAL_API_SECRET" > /data/secrets/internal_api_secret
-fi
-chmod 600 /data/secrets/internal_api_secret
-export INTERNAL_API_SECRET
-
 if [ -f /data/secrets/session_secret ]; then
     SESSION_SECRET=$(cat /data/secrets/session_secret)
     echo "Loaded existing SESSION_SECRET"
@@ -599,30 +786,18 @@ fi
 # Write environment file for backend
 cat > /app/backend/.env << ENVEOF
 NODE_ENV=production
-DATABASE_URL=postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima
+DATABASE_URL=postgresql://kima:${DB_PASSWORD}@localhost:5432/kima
 REDIS_URL=redis://localhost:6379
+# The AIO frontend proxies API requests to loopback; do not expose the backend on container networks.
+HOST=127.0.0.1
 PORT=3006
 MUSIC_PATH=/music
 TRANSCODE_CACHE_PATH=/data/cache/transcodes
 SESSION_SECRET=$SESSION_SECRET
 SETTINGS_ENCRYPTION_KEY=$SETTINGS_ENCRYPTION_KEY
-INTERNAL_API_SECRET=$INTERNAL_API_SECRET
 DISABLE_CLAP=${DISABLE_CLAP:-}
 ENVEOF
-
-# Update the built-in supervisor program environment before launching services.
-# Generated credentials use lowercase hex and cannot inject supervisor syntax.
-python3 - <<'PY'
-from pathlib import Path
-import os
-p = Path('/etc/supervisor/conf.d/kima.conf')
-s = p.read_text()
-s = s.replace('postgresql://kima:kima@localhost:5432/kima',
-              'postgresql://kima:' + os.environ['KIMA_DB_PASSWORD'] + '@localhost:5432/kima')
-s = s.replace('INTERNAL_API_SECRET="kima-internal-aio"',
-              'INTERNAL_API_SECRET="' + os.environ['INTERNAL_API_SECRET'] + '"')
-p.write_text(s)
-PY
+chmod 600 /app/backend/.env
 
 # Optionally disable CLAP audio analyzer (for low-memory deployments)
 if [ "${DISABLE_CLAP:-false}" = "true" ] || [ "${DISABLE_CLAP:-0}" = "1" ]; then
@@ -640,17 +815,15 @@ open('/etc/supervisor/conf.d/kima.conf', 'w').write(conf)
     echo "CLAP audio analyzer disabled (DISABLE_CLAP=${DISABLE_CLAP})"
 fi
 
+python3 /app/nonroot-services.py configure
 echo "Starting Kima..."
 exec env \
     NODE_ENV=production \
-    DATABASE_URL="postgresql://kima:${KIMA_DB_PASSWORD}@localhost:5432/kima" \
+    DATABASE_URL="$DATABASE_URL" \
     SESSION_SECRET="$SESSION_SECRET" \
     SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
-    KIMA_DB_PASSWORD="$KIMA_DB_PASSWORD" \
-    INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
 EOF
-DOCKER_SCRIPT
 
 # Fix Windows line endings (CRLF -> LF) and make executable
 RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh

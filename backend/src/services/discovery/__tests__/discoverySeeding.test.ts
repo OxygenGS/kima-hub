@@ -1,4 +1,4 @@
-import { DiscoverySeeding, SeedArtist } from '../discoverySeeding';
+import { DiscoverySeeding } from '../discoverySeeding';
 import { prisma } from '../../../utils/db';
 import { lidarrService } from '../../lidarr';
 
@@ -230,7 +230,7 @@ describe('DiscoverySeeding', () => {
         });
 
         it('should handle empty listening history by falling back to library', async () => {
-            // getFallbackSeedArtists now uses artist.findMany with included albums
+            // getFallbackSeedArtists reads artist.findMany with album track counts.
             const artists = [
                 { id: 'artist-1', name: 'Library Artist One', mbid: 'lib-mbid-1', albums: [{ _count: { tracks: 5 } }] },
                 { id: 'artist-2', name: 'Library Artist Two', mbid: 'lib-mbid-2', albums: [{ _count: { tracks: 3 } }] },
@@ -344,51 +344,6 @@ describe('DiscoverySeeding', () => {
             // Should have 3 unique artists despite 5 tracks (artist-1 appears 3 times)
             expect(result).toHaveLength(3);
             expect(result.map((a) => a.name)).toEqual(['Same Artist', 'Different Artist', 'Third Artist']);
-        });
-    });
-
-    describe('isArtistInLibrary', () => {
-        it('should return true when artist found by MBID with albums', async () => {
-            (mockPrisma.artist.findFirst as jest.Mock).mockResolvedValue({
-                id: 'artist-1',
-                mbid: 'valid-mbid',
-                albums: [{ id: 'album-1' }],
-            });
-
-            const result = await seeding.isArtistInLibrary('valid-mbid');
-
-            expect(result).toBe(true);
-            expect(mockPrisma.artist.findFirst).toHaveBeenCalledWith({
-                where: { mbid: 'valid-mbid' },
-                include: { albums: { take: 1 } },
-            });
-        });
-
-        it('should return false when artist found by MBID but has no albums', async () => {
-            (mockPrisma.artist.findFirst as jest.Mock).mockResolvedValue({
-                id: 'artist-1',
-                mbid: 'valid-mbid',
-                albums: [],
-            });
-
-            const result = await seeding.isArtistInLibrary('valid-mbid');
-
-            expect(result).toBe(false);
-        });
-
-        it('should return false when artist not found', async () => {
-            (mockPrisma.artist.findFirst as jest.Mock).mockResolvedValue(null);
-
-            const result = await seeding.isArtistInLibrary('unknown-mbid');
-
-            expect(result).toBe(false);
-        });
-
-        it('should skip temp- MBIDs and return false', async () => {
-            const result = await seeding.isArtistInLibrary('temp-12345');
-
-            expect(result).toBe(false);
-            expect(mockPrisma.artist.findFirst).not.toHaveBeenCalled();
         });
     });
 

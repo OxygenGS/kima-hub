@@ -1,72 +1,114 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
+import { cn } from "@/lib/cn";
+import { useAudioState } from "@/lib/audio-context";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useSettingsData } from "@/features/settings/hooks/useSettingsData";
 import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
 import {
     SettingsLayout,
     SidebarItem
 } from "@/features/settings/components/ui";
 
-// Section components
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
+import { LanguageSection } from "@/features/settings/components/sections/LanguageSection";
+import { BrandingSection } from "@/features/settings/components/sections/BrandingSection";
 import { SubsonicSection } from "@/features/settings/components/sections/SubsonicSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
+import { ScrobblingSection } from "@/features/settings/components/sections/ScrobblingSection";
 import { DownloadPreferencesSection } from "@/features/settings/components/sections/DownloadPreferencesSection";
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
 import { AudiobookshelfSection } from "@/features/settings/components/sections/AudiobookshelfSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
-import { AIServicesSection } from "@/features/settings/components/sections/AIServicesSection";
+import { ArtworkSection } from "@/features/settings/components/sections/ArtworkSection";
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
 import { CacheSection } from "@/features/settings/components/sections/CacheSection";
 import { UserManagementSection } from "@/features/settings/components/sections/UserManagementSection";
-import { BrandingSection } from "@/features/settings/components/sections/BrandingSection";
 import { CorruptTracksSection } from "@/features/settings/components/sections/CorruptTracksSection";
+import { Button } from "@/components/ui/Button";
 
-// Define sidebar items
 const sidebarItems: SidebarItem[] = [
     { id: "account", label: "Account" },
+    { id: "language", label: "Language" },
+    { id: "branding", label: "Branding", adminOnly: true },
     { id: "subsonic", label: "Native Apps" },
     { id: "playback", label: "Playback" },
+    { id: "scrobbling", label: "Scrobbling" },
     { id: "download-preferences", label: "Download Preferences", adminOnly: true },
     { id: "lidarr", label: "Download Services", adminOnly: true },
     { id: "audiobookshelf", label: "Media Servers", adminOnly: true },
     { id: "soulseek", label: "P2P Networks", adminOnly: true },
-    { id: "ai-services", label: "AI & Artwork", adminOnly: true },
+    { id: "artwork", label: "Artwork", adminOnly: true },
     { id: "storage", label: "Storage", adminOnly: true },
     { id: "cache", label: "Library Enrichment", adminOnly: true },
     { id: "corrupt-tracks", label: "Corrupt Tracks", adminOnly: true },
     { id: "users", label: "Users", adminOnly: true },
-    { id: "branding", label: "Branding", adminOnly: true },
 ];
 
 export default function SettingsPage() {
     const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+    const { locale } = useLanguage();
+    const translatedSidebarItems = useMemo(
+        () => sidebarItems.map((item) => ({ ...item, label: translate(locale, item.label) })),
+        [locale],
+    );
     const [isSaving, setIsSaving] = useState(false);
     const [testingServices, setTestingServices] = useState<Record<string, boolean>>({});
     const saveStatus = useInlineStatus();
 
     const isAdmin = user?.role === "admin";
 
-    // User settings hook
     const {
         settings: userSettings,
+        isLoading: userLoading,
+        loadError: userLoadError,
         updateSettings: updateUserSettings,
         saveSettings: saveUserSettings,
+        loadSettings: reloadUserSettings,
     } = useSettingsData();
 
-    // System settings hook (only used if admin)
     const {
         systemSettings,
+        isLoading: systemLoading,
+        loadError: systemLoadError,
         updateSystemSettings,
         saveSystemSettings,
         testService,
+        loadSystemSettings,
     } = useSystemSettings();
 
-    // Handle initial hash for section scrolling
+    const loadError = userLoadError ?? (isAdmin ? systemLoadError : null);
+    const isLoaded = !userLoading && (!isAdmin || !systemLoading);
+
+    // The token is saved on its own, so only the editable settings count as unsaved.
+    const snapshot = useCallback(
+        ({ hasListenbrainzToken: _token, ...editable }: typeof userSettings) =>
+            JSON.stringify([editable, isAdmin ? systemSettings : null]),
+        [isAdmin, systemSettings],
+    );
+    const current = isLoaded && !loadError ? snapshot(userSettings) : null;
+    const [saved, setSaved] = useState<string | null>(null);
+    if (current !== null && saved === null) setSaved(current);
+    const isDirty = current !== null && saved !== null && current !== saved;
+    const isMobile = useIsMobile();
+    const isTablet = useIsTablet();
+    const hasPhoneChrome = isMobile || isTablet;
+    const { currentTrack, currentAudiobook, currentPodcast } = useAudioState();
+    const hasMiniPlayer = !!(currentTrack || currentAudiobook || currentPodcast);
+
+    const retryLoad = useCallback(() => {
+        setSaved(null);
+        reloadUserSettings();
+        if (isAdmin) loadSystemSettings();
+    }, [isAdmin, reloadUserSettings, loadSystemSettings]);
+
     useEffect(() => {
         if (typeof window !== "undefined") {
             const hash = window.location.hash.substring(1);
@@ -81,7 +123,6 @@ export default function SettingsPage() {
         }
     }, []);
 
-    // Unified save function
     const handleSaveAll = useCallback(async () => {
         setIsSaving(true);
         saveStatus.setLoading();
@@ -106,13 +147,13 @@ export default function SettingsPage() {
         setIsSaving(false);
 
         if (hasError) {
-            saveStatus.setError("Failed to save");
+            saveStatus.setError("Couldn't save");
         } else {
+            setSaved(snapshot(userSettings));
             saveStatus.setSuccess("Saved");
         }
-    }, [userSettings, systemSettings, isAdmin, saveUserSettings, saveSystemSettings, saveStatus]);
+    }, [userSettings, systemSettings, isAdmin, saveUserSettings, saveSystemSettings, saveStatus, snapshot]);
 
-    // Test service wrapper
     const handleTestService = useCallback(async (service: string) => {
         setTestingServices(prev => ({ ...prev, [service]: true }));
         try {
@@ -123,42 +164,85 @@ export default function SettingsPage() {
     }, [testService]);
 
     if (authLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     if (!isAuthenticated) {
         return null;
     }
 
+    if (loadError) {
+        return (
+            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
+                <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6">
+                    <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                        Settings could not be loaded
+                    </h2>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">{loadError}</p>
+                    <Button
+                        variant="primary"
+                        onClick={retryLoad}
+                        className="mt-4"
+                    >
+                        Try again
+                    </Button>
+                </div>
+            </SettingsLayout>
+        );
+    }
+
+    if (!isLoaded) {
+        return (
+            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
+                <div className="flex justify-center py-24" aria-busy="true">
+                    <GradientSpinner size="md" />
+                </div>
+            </SettingsLayout>
+        );
+    }
+
     return (
-        <SettingsLayout sidebarItems={sidebarItems} isAdmin={isAdmin}>
-                {/* Account Section */}
+        <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
             <div className="section-stack">
                 <AccountSection />
+                <LanguageSection />
+                {isAdmin && <BrandingSection />}
 
-                {/* Native Apps - Subsonic */}
                 <SubsonicSection />
 
-                {/* Playback Section */}
                 <PlaybackSection
                     value={userSettings.playbackQuality}
                     onChange={(quality) => updateUserSettings({ playbackQuality: quality })}
+                    // Server-wide, so the row only appears for an admin. Passing
+                    // no handler is what hides it.
+                    maxQueueLength={isAdmin ? systemSettings.maxQueueLength : undefined}
+                    onMaxQueueLength={
+                        isAdmin
+                            ? (maxQueueLength) => updateSystemSettings({ maxQueueLength })
+                            : undefined
+                    }
                 />
 
-                {/* Admin-only sections */}
+                <ScrobblingSection
+                    configured={!!userSettings.hasListenbrainzToken}
+                    onSaved={(hasListenbrainzToken) => updateUserSettings({ hasListenbrainzToken })}
+                    liveSharing={
+                        userSettings.liveSharingAvailable
+                            ? {
+                                  checked: userSettings.shareLiveListening !== false,
+                                  onChange: (shareLiveListening) => updateUserSettings({ shareLiveListening }),
+                              }
+                            : undefined
+                    }
+                />
+
                 {isAdmin && (
                     <>
-                        {/* Download Preferences */}
                         <DownloadPreferencesSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
                         />
 
-                        {/* Download Services - Lidarr */}
                         <LidarrSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
@@ -166,7 +250,6 @@ export default function SettingsPage() {
                             isTesting={testingServices.lidarr || false}
                         />
 
-                        {/* Media Servers - Audiobookshelf */}
                         <AudiobookshelfSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
@@ -174,7 +257,6 @@ export default function SettingsPage() {
                             isTesting={testingServices.audiobookshelf || false}
                         />
 
-                        {/* P2P Networks - Soulseek */}
                         <SoulseekSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
@@ -182,57 +264,49 @@ export default function SettingsPage() {
                             isTesting={testingServices.soulseek || false}
                         />
 
-                        {/* AI Services */}
-                        <AIServicesSection
+                        <ArtworkSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
                             onTest={handleTestService}
-                            isTesting={testingServices.openai || testingServices.fanart || false}
+                            isTesting={testingServices.fanart || false}
                         />
 
-                        {/* Storage */}
                         <StoragePathsSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={false}
                         />
 
-                        {/* Cache & Automation */}
                         <CacheSection
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
                         />
 
-                        {/* Corrupt Tracks */}
                         <CorruptTracksSection />
 
-                        {/* User Management */}
                         <UserManagementSection />
-
-                        {/* Per-instance, administrator-managed white-label theme */}
-                        <BrandingSection />
                     </>
                 )}
             </div>
 
-                {/* Save Button - Fixed at bottom */}
-                <div className="sticky bottom-0 pt-8 pb-8 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)] to-transparent">
-                    <div className="relative">
-                        <button
-                            onClick={handleSaveAll}
-                            disabled={isSaving}
-                            className="w-full bg-brand text-brand-contrast font-bold py-3 px-4 rounded-lg
-                                hover:bg-brand-hover active:scale-[0.98] transition-all
-                                disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSaving ? "Saving..." : "Save Changes"}
-                        </button>
-                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2">
-                            <InlineStatus {...saveStatus.props} />
-                        </div>
-                    </div>
+            {(isDirty || saveStatus.props.status !== "idle") && (
+                <div
+                    className={cn(
+                        "sticky z-(--z-raised) mt-8 flex items-center justify-end gap-4 rounded-lg border border-white/10 bg-[#111] px-4 py-3",
+                        (!hasPhoneChrome || !hasMiniPlayer) && "bottom-4",
+                        hasPhoneChrome && hasMiniPlayer && "bottom-[94px]",
+                    )}
+                >
+                    <InlineStatus {...saveStatus.props} />
+                    {isDirty && (
+                        <>
+                            <span className="mr-auto text-sm text-[var(--text-secondary)]">Unsaved changes</span>
+                            <Button variant="primary" onClick={handleSaveAll} disabled={isSaving}>
+                                {isSaving ? "Saving..." : "Save changes"}
+                            </Button>
+                        </>
+                    )}
                 </div>
+            )}
         </SettingsLayout>
     );
 }

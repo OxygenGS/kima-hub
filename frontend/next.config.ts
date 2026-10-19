@@ -1,10 +1,12 @@
 import type { NextConfig } from "next";
+
 const nextConfig: NextConfig = {
     turbopack: {
         root: __dirname,
     },
     
-    // Allow dev origins for local network testing
+    // Dev-server origins. Add your own (e.g. a LAN/tailnet address you browse
+    // from) via KIMA_DEV_ORIGINS="host1,http://host2:3030" — never hard-coded here.
     allowedDevOrigins: [
         "http://127.0.0.1:3030",
         "http://127.0.0.1",
@@ -12,6 +14,7 @@ const nextConfig: NextConfig = {
         "http://localhost:3030",
         "http://localhost",
         "localhost",
+        ...(process.env.KIMA_DEV_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     ],
     
     images: {
@@ -24,16 +27,6 @@ const nextConfig: NextConfig = {
             {
                 protocol: "https",
                 hostname: "e-cdns-images.dzcdn.net",
-                pathname: "/**",
-            },
-            {
-                protocol: "https",
-                hostname: "lastfm.freetls.fastly.net",
-                pathname: "/**",
-            },
-            {
-                protocol: "https",
-                hostname: "lastfm-img2.akamaized.net",
                 pathname: "/**",
             },
             {
@@ -93,19 +86,23 @@ const nextConfig: NextConfig = {
                     },
                     {
                         key: "Content-Security-Policy",
-                        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn-images.dzcdn.net https://e-cdns-images.dzcdn.net https://lastfm.freetls.fastly.net https://lastfm-img2.akamaized.net https://assets.pippa.io https://is1-ssl.mzstatic.com; media-src 'self' blob:; connect-src 'self' ws: wss:; font-src 'self'; frame-ancestors 'none'; worker-src 'self' blob:",
+                        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://cdn-images.dzcdn.net https://e-cdns-images.dzcdn.net https://assets.pippa.io https://is1-ssl.mzstatic.com; media-src 'self' blob:; connect-src 'self' ws: wss:; font-src 'self'; frame-ancestors 'none'; worker-src 'self' blob:",
                     },
                 ],
             },
         ];
     },
-    // Proxy API requests to backend (for Docker all-in-one container)
-    // Use NEXT_PUBLIC_BACKEND_URL if set (build-time), otherwise default to localhost:3006
-    // At runtime, Next.js will proxy /api/* requests to the backend
-    // NOTE: /api/events is excluded -- it uses a dedicated API route (app/api/events/route.ts)
-    // that properly streams SSE without buffering.
+    async redirects() {
+        return [
+            { source: "/setup", destination: "/login", permanent: true },
+            { source: "/import/spotify", destination: "/import/playlist", permanent: true },
+        ];
+    },
+    // /api/* goes to the backend. Images set NEXT_PUBLIC_BACKEND_URL; the
+    // fallback is the local dev backend (backend/.env PORT=3111). /api/events
+    // is excluded: app/api/events/route.ts streams it without buffering.
     async rewrites() {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:3006";
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:3111";
 
         return [
             {
@@ -124,13 +121,13 @@ const nextConfig: NextConfig = {
     },
 };
 
-const config = async (): Promise<NextConfig> => {
-    if (process.env.ANALYZE === 'true') {
-        const { default: bundleAnalyzer } = await import('@next/bundle-analyzer');
-        return bundleAnalyzer({ enabled: true })(nextConfig);
+// The bundle analyzer is a devDependency, stripped from production images.
+// Next awaits a promise-returning config export, so load it lazily: prod
+// boots never reference the package. ANALYZE=true (dev) gets the report.
+export default async function config(): Promise<NextConfig> {
+    if (process.env.ANALYZE === "true") {
+        const { default: withBundleAnalyzer } = await import("@next/bundle-analyzer");
+        return withBundleAnalyzer({ enabled: true })(nextConfig);
     }
-
     return nextConfig;
-};
-
-export default config;
+}

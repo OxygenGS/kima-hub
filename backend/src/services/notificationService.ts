@@ -6,6 +6,7 @@ type NotificationType =
     | "system"
     | "download_complete"
     | "download_failed"
+    | "download_waiting"
     | "playlist_ready"
     | "import_complete"
     | "error";
@@ -16,6 +17,12 @@ interface CreateNotificationParams {
     title: string;
     message?: string;
     metadata?: Record<string, any>;
+    /** One row per user per key: a new alert replaces the old one, and an
+     * identical repeat is dropped. */
+    groupKey?: string;
+    /** With a group key: an identical repeat still comes back unread. For outcomes
+     * of something the user just did, where the repeat is the answer they wait for. */
+    renotify?: boolean;
 }
 
 class NotificationService {
@@ -23,17 +30,30 @@ class NotificationService {
      * Create a new notification for a user
      */
     async create(params: CreateNotificationParams) {
-        const { userId, type, title, message, metadata } = params;
+        const { userId, type, title, message, metadata, groupKey, renotify } = params;
 
-        const notification = await prisma.notification.create({
-            data: {
-                userId,
-                type,
-                title,
-                message,
-                metadata,
-            },
-        });
+        let notification;
+        if (groupKey) {
+            const where = { userId_groupKey: { userId, groupKey } };
+            const existing = await prisma.notification.findUnique({ where });
+            const identical =
+                existing &&
+                existing.type === type &&
+                existing.title === title &&
+                existing.message === (message ?? null) &&
+                JSON.stringify(existing.metadata ?? null) === JSON.stringify(metadata ?? null);
+            if (!renotify && identical) return existing;
+            const fields = { type, title, message: message ?? null, metadata };
+            notification = await prisma.notification.upsert({
+                where,
+                create: { userId, groupKey, ...fields },
+                update: { ...fields, read: false, cleared: false, createdAt: new Date() },
+            });
+        } else {
+            notification = await prisma.notification.create({
+                data: { userId, type, title, message, metadata },
+            });
+        }
 
         eventBus.emit({
             type: "notification",
@@ -50,6 +70,48 @@ class NotificationService {
             `[NOTIFICATION] Created: ${type} - ${title} for user ${userId}`
         );
         return notification;
+    }
+
+    /** The same alert for every admin. */
+    async notifyAdmins(params: Omit<CreateNotificationParams, "userId">) {
+        const admins = await prisma.user.findMany({ where: { role: "admin" }, select: { id: true } });
+        for (const admin of admins) {
+            await this.create({ ...params, userId: admin.id });
+        }
+    }
+
+    /**
+     * Delete every user's alert under a group key, once its cause is gone
+     */
+    async resolve(groupKey: string) {
+        const rows = await prisma.notification.findMany({
+            where: { groupKey },
+            select: { id: true, userId: true },
+        });
+        if (rows.length === 0) return;
+        await prisma.notification.deleteMany({ where: { groupKey } });
+        for (const row of rows) {
+            eventBus.emit({
+                type: "notification:cleared",
+                userId: row.userId,
+                payload: { id: row.id },
+            });
+        }
+    }
+
+    /** Delete a user's rows under a key prefix beyond the newest `keep`. */
+    async trimGroup(userId: string, keyPrefix: string, keep: number) {
+        const stale = await prisma.notification.findMany({
+            where: { userId, groupKey: { startsWith: keyPrefix } },
+            orderBy: { createdAt: "desc" },
+            skip: keep,
+            select: { id: true },
+        });
+        if (stale.length === 0) return;
+        await prisma.notification.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } });
+        for (const row of stale) {
+            eventBus.emit({ type: "notification:cleared", userId, payload: { id: row.id } });
+        }
     }
 
     /**
@@ -84,20 +146,24 @@ class NotificationService {
      * Mark a notification as read
      */
     async markAsRead(id: string, userId: string) {
-        return prisma.notification.updateMany({
+        const result = await prisma.notification.updateMany({
             where: { id, userId },
             data: { read: true },
         });
+        eventBus.emit({ type: "notification:read", userId, payload: { id } });
+        return result;
     }
 
     /**
      * Mark all notifications as read for a user
      */
     async markAllAsRead(userId: string) {
-        return prisma.notification.updateMany({
+        const result = await prisma.notification.updateMany({
             where: { userId, cleared: false },
             data: { read: true },
         });
+        eventBus.emit({ type: "notification:read", userId, payload: {} });
+        return result;
     }
 
     /**
@@ -135,29 +201,6 @@ class NotificationService {
 
         return result;
     }
-
-    /**
-     * Delete old cleared notifications (cleanup job)
-     */
-    async deleteOldCleared(daysOld = 30) {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - daysOld);
-
-        const result = await prisma.notification.deleteMany({
-            where: {
-                cleared: true,
-                createdAt: { lt: cutoff },
-            },
-        });
-
-        if (result.count > 0) {
-            logger.debug(
-                `[NOTIFICATION] Cleaned up ${result.count} old notifications`
-            );
-        }
-        return result;
-    }
-
     // === Convenience methods for common notification types ===
 
     /**
@@ -196,22 +239,15 @@ class NotificationService {
             metadata: { subject, error },
         });
     }
-
-    /**
-     * Notify user that a playlist is ready
-     */
-    async notifyPlaylistReady(
-        userId: string,
-        playlistName: string,
-        playlistId: string,
-        trackCount: number
-    ) {
+    /** A download Lidarr is holding for the user to import or remove; a repeat for the same album replaces the row. */
+    async notifyDownloadWaiting(userId: string, subject: string, reason: string) {
         return this.create({
             userId,
-            type: "playlist_ready",
-            title: "Playlist Ready",
-            message: `"${playlistName}" is ready with ${trackCount} tracks`,
-            metadata: { playlistId, playlistName, trackCount },
+            type: "download_waiting",
+            title: "Waiting in Lidarr",
+            message: `${subject}: ${reason}. It is waiting in Lidarr's queue for you to import or remove.`,
+            metadata: { subject, reason },
+            groupKey: `download-waiting:${subject}`,
         });
     }
 
@@ -237,14 +273,15 @@ class NotificationService {
     }
 
     /**
-     * System notification (cache cleared, sync complete, etc.)
+     * Notify user that a Spotify import failed
      */
-    async notifySystem(userId: string, title: string, message?: string) {
+    async notifyImportFailed(userId: string, playlistName: string, error: string) {
         return this.create({
             userId,
-            type: "system",
-            title,
-            message,
+            type: "error",
+            title: "Import failed",
+            message: `"${playlistName}": ${error}`,
+            metadata: { href: "/import/playlist" },
         });
     }
 }

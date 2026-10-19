@@ -5,9 +5,12 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import axios from "axios";
 import crypto from "crypto";
-import { encryptField, invalidateSystemSettingsCache } from "../utils/systemSettings";
+import { invalidateSystemSettingsCache } from "../utils/systemSettings";
+import { encryptField } from "../utils/encryption";
 import { writeEnvFile } from "../utils/envWriter";
 import { generateToken, requireAuth, requireAdmin } from "../middleware/auth";
+import { defaultUserSettingsFor } from "../utils/userSettingsDefaults";
+import { createLidarrClient } from "../services/lidarrClient";
 
 const router = Router();
 
@@ -17,16 +20,7 @@ const registerSchema = z.object({
     password: z.string().min(6),
 });
 
-const lidarrConfigSchema = z.object({
-    url: z.string().optional().or(z.literal("")),
-    apiKey: z.string().optional().or(z.literal("")),
-    enabled: z.boolean(),
-}).refine(
-    (data) => !data.enabled || !data.url || data.url === "" || z.string().url().safeParse(data.url).success,
-    { message: "Invalid url", path: ["url"] },
-);
-
-const audiobookshelfConfigSchema = z.object({
+const serviceConfigSchema = z.object({
     url: z.string().optional().or(z.literal("")),
     apiKey: z.string().optional().or(z.literal("")),
     enabled: z.boolean(),
@@ -134,15 +128,9 @@ router.post("/register", async (req, res) => {
             },
         });
 
-        // Create default user settings with optimal defaults
+        // Create default user settings
         await prisma.userSettings.create({
-            data: {
-                userId: user.id,
-                playbackQuality: "original",
-                wifiOnly: false,
-                offlineEnabled: false,
-                maxCacheSizeMb: 10240, // 10GB
-            },
+            data: defaultUserSettingsFor(user.id),
         });
 
         // Generate JWT token (same as login)
@@ -181,7 +169,7 @@ router.post("/register", async (req, res) => {
  */
 router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
     try {
-        const config = lidarrConfigSchema.parse(req.body);
+        const config = serviceConfigSchema.parse(req.body);
 
         // If not enabled, just save as disabled
         if (!config.enabled) {
@@ -200,12 +188,8 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
         let connectionTested = false;
         if (config.url && config.apiKey) {
             try {
-                const response = await axios.get(
-                    `${config.url}/api/v1/system/status`,
-                    {
-                        headers: { "X-Api-Key": config.apiKey },
-                        timeout: 5000,
-                    }
+                const response = await createLidarrClient(config.url, config.apiKey, 5000).get(
+                    "/api/v1/system/status"
                 );
 
                 if (response.status === 200) {
@@ -262,7 +246,7 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
  */
 router.post("/audiobookshelf", requireAuth, requireAdmin, async (req, res) => {
     try {
-        const config = audiobookshelfConfigSchema.parse(req.body);
+        const config = serviceConfigSchema.parse(req.body);
 
         // If not enabled, just save as disabled
         if (!config.enabled) {

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { usePodcastQuery } from "@/hooks/useQueries";
+import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { queryKeys, usePodcastQuery } from "@/hooks/useQueries";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { Podcast, PodcastPreview, SimilarPodcast, Episode } from "../types";
@@ -14,24 +15,6 @@ export function usePodcastData() {
   const { isAuthenticated } = useAuth();
   const podcastId = params.id as string;
 
-  // Use React Query hook for podcast
-  const { data: podcast, isLoading: isPodcastLoading, refetch } =
-    usePodcastQuery(podcastId);
-
-  // Listen for podcast-progress-updated event (fired when playback starts/updates or episode marked complete)
-  useEffect(() => {
-    const unsubscribe = subscribeQueryEvent("podcast-progress-updated", () => {
-      refetch();
-    });
-
-    return unsubscribe;
-  }, [refetch]);
-
-  // State for preview mode, subscription, and similar podcasts
-  const [previewData, setPreviewData] = useState<PodcastPreview | null>(null);
-  const [previewLoadState, setPreviewLoadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [similarPodcasts, setSimilarPodcasts] = useState<SimilarPodcast[]>([]);
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem(
@@ -41,6 +24,53 @@ export function usePodcastData() {
     }
     return "newest";
   });
+
+  const {
+    data: podcast,
+    isLoading: isPodcastLoading,
+    isPlaceholderData: episodesUpdating,
+    refetch,
+    hasMore,
+    loadMore,
+    loadingMore,
+  } = usePodcastQuery(podcastId, sortOrder);
+
+  // Playback saves progress every 15 s: the saved episode is updated in place
+  // on every loaded page, with no request. A change that names no episode
+  // reads the podcast again.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const unsubscribe = subscribeQueryEvent("podcast-progress-updated", (event) => {
+      const { podcastId: savedFor, episodeId, progress } = event.detail as {
+        podcastId?: string;
+        episodeId?: string;
+        progress?: Episode["progress"];
+      };
+      if (!episodeId || !progress) {
+        refetch({ cancelRefetch: false });
+        return;
+      }
+      if (savedFor !== podcastId) return;
+      // Only the order on screen: patching the other would mark it fresh and
+      // drop a refetch it still owes.
+      queryClient.setQueryData<InfiniteData<Podcast | null>>([...queryKeys.podcast(podcastId), sortOrder], (data) =>
+        data && {
+          ...data,
+          pages: data.pages.map((page) =>
+            page && { ...page, episodes: page.episodes.map((ep) => (ep.id === episodeId ? { ...ep, progress } : ep)) },
+          ),
+        },
+      );
+    });
+
+    return unsubscribe;
+  }, [refetch, queryClient, podcastId, sortOrder]);
+
+  // State for preview mode, subscription, and similar podcasts
+  const [previewData, setPreviewData] = useState<PodcastPreview | null>(null);
+  const [previewLoadState, setPreviewLoadState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [similarPodcasts, setSimilarPodcasts] = useState<SimilarPodcast[]>([]);
 
   // Reset preview/error state when navigating between podcasts so a previous
   // page's error UI does not sticky-state into the next podcast's view.
@@ -53,15 +83,13 @@ export function usePodcastData() {
     setSimilarPodcasts([]);
   }
 
-  // Get raw cover URL
   const rawCoverUrl = podcast?.coverUrl || previewData?.coverUrl;
   const heroImage = rawCoverUrl ? api.getCoverArtUrl(rawCoverUrl, 1200) : null;
   // Separate URL with token for color extraction (CORS access for canvas)
   const colorExtractionImage = rawCoverUrl ? api.getCoverArtUrl(rawCoverUrl, 300, true) : null;
 
-  // Load similar podcasts when podcast data is available
   useEffect(() => {
-    if (!podcast || !isAuthenticated) return;
+    if (!podcast?.id || !isAuthenticated) return;
 
     let cancelled = false;
 
@@ -76,12 +104,11 @@ export function usePodcastData() {
 
     loadSimilarPodcasts();
     return () => { cancelled = true; };
-  }, [podcast, isAuthenticated, podcastId]);
+  }, [podcast?.id, isAuthenticated, podcastId]);
 
-  // Handle preview mode if podcast is not subscribed
+  // An unsubscribed podcast is shown from its directory preview instead.
   useEffect(() => {
-    if (isPodcastLoading) return;
-    if (podcast || !isAuthenticated || previewLoadState !== 'idle') return;
+    if (isPodcastLoading || podcast || !isAuthenticated) return;
 
     let cancelled = false;
 
@@ -107,9 +134,8 @@ export function usePodcastData() {
 
     loadPreviewData();
     return () => { cancelled = true; };
-  }, [isPodcastLoading, podcast, isAuthenticated, podcastId, router, previewLoadState]);
+  }, [isPodcastLoading, podcast, isAuthenticated, podcastId, router]);
 
-  // Save sort order to localStorage when it changes
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(
@@ -119,7 +145,6 @@ export function usePodcastData() {
     }
   }, [sortOrder, podcastId]);
 
-  // Computed values
   const displayData = podcast || (previewData ? {
     title: previewData.title,
     author: previewData.author,
@@ -138,14 +163,8 @@ export function usePodcastData() {
       )
     : [];
 
-  // Sort episodes based on selected order
-  const sortedEpisodes = podcast
-    ? [...podcast.episodes].sort((a: Episode, b: Episode) => {
-        const dateA = new Date(a.publishedAt).getTime();
-        const dateB = new Date(b.publishedAt).getTime();
-        return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
-      })
-    : [];
+  // The server pages from the end that was asked for; render in the order it arrived.
+  const sortedEpisodes = podcast ? [...podcast.episodes] : [];
 
   // Determine loading state:
   // - Loading if podcast query is loading
@@ -169,5 +188,9 @@ export function usePodcastData() {
     setSortOrder,
     inProgressEpisodes,
     sortedEpisodes,
+    episodesUpdating,
+    hasMore,
+    loadMore,
+    loadingMore,
   };
 }

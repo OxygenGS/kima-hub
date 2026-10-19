@@ -1,19 +1,8 @@
 /**
- * Regression guard for the podcast auto-refresh wedge (production, 2026-06-14).
- *
- * Root cause: BullMQ keeps the jobId dedup marker for FAILED jobs as well as
- * completed ones. executePodcastRefreshPhase cleaned only "completed", so a
- * single failed `podcast-<id>` job (here: a Redis-corrupted data-less hash)
- * kept its marker forever -- every later add() with that jobId silently no-op'd
- * and the podcast never refreshed again. All 4 production podcasts were frozen.
- *
- * The fix: (a) clean BOTH "completed" and "failed" so a failed refresh can be
- * retried, and (b) optimistically advance lastRefreshed for the selected
- * podcasts BEFORE queuing, so a feed whose refresh fails (refreshPodcastFeed
- * only advances lastRefreshed on success/304) backs off a full window instead
- * of being re-queued every cycle.
- *
- * Failure paths first; happy path last. Each assertion targets a discriminator.
+ * The podcast refresh phase cleans both completed and failed jobs, since BullMQ
+ * keeps a failed job's id and silently ignores a re-add. It advances
+ * lastRefreshed before queuing, so a failing feed waits a full window.
+ * Failure paths first, happy path last.
  */
 
 const mockQueueAdd = jest.fn().mockResolvedValue({ id: "job" });
@@ -25,6 +14,12 @@ const mockPodcastFindMany = jest.fn();
 const mockPodcastUpdateMany = jest.fn().mockResolvedValue({ count: 0 });
 
 jest.mock("../enrichmentQueues", () => ({
+    QUEUE_NAMES: {
+        ARTISTS: "enrichment-artists",
+        TRACKS: "enrichment-tracks",
+        VIBE: "enrichment-vibe",
+        PODCASTS: "enrichment-podcasts",
+    },
     artistQueue: { add: mockQueueAdd, clean: mockQueueClean, resume: mockQueueResume },
     trackQueue: { add: mockQueueAdd, clean: mockQueueClean, resume: mockQueueResume },
     vibeQueue: { add: mockQueueAdd, clean: mockQueueClean, resume: mockQueueResume },
@@ -47,7 +42,6 @@ jest.mock("../../services/enrichmentState", () => ({
 jest.mock("../../services/enrichmentFailureService", () => ({
     enrichmentFailureService: { recordFailure: jest.fn(), getFailures: jest.fn() },
 }));
-jest.mock("../../services/lastfm", () => ({ lastFmService: {} }));
 jest.mock("ioredis", () => jest.fn().mockImplementation(() => ({
     on: jest.fn(), publish: jest.fn(), subscribe: jest.fn(), quit: jest.fn(),
 })));
@@ -96,16 +90,16 @@ describe("executePodcastRefreshPhase -- dedup wedge regression", () => {
         expect(mockPodcastUpdateMany).not.toHaveBeenCalled();
     });
 
-    it("THE FIX: cleans the failed set, not only completed", async () => {
+    it("cleans the failed set, not only completed", async () => {
         mockPodcastCount.mockResolvedValue(1);
         mockPodcastFindMany.mockResolvedValue([{ id: "p1", title: "Pod One" }]);
         await executePodcastRefreshPhase();
         const cleanedStates = mockQueueClean.mock.calls.map((c) => c[2]);
         expect(cleanedStates).toContain("completed");
-        expect(cleanedStates).toContain("failed"); // the regression discriminator
+        expect(cleanedStates).toContain("failed");
     });
 
-    it("claims podcasts by bumping lastRefreshed BEFORE queuing (backoff)", async () => {
+    it("claims podcasts by bumping lastRefreshed before queuing (backoff)", async () => {
         mockPodcastCount.mockResolvedValue(2);
         mockPodcastFindMany.mockResolvedValue([
             { id: "p1", title: "Pod One" },

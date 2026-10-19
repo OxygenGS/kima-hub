@@ -2,18 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
-import { SettingsSection, SettingsInput, SettingsSelect, SettingsToggle } from "../ui";
+import { SettingsSection, SettingsInput, SettingsSelect } from "../ui";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { Button } from "@/components/ui/Button";
 
 interface User {
     id: string;
     username: string;
     role: "user" | "admin";
-    canRequestAlbums: boolean;
-    canDownloadTracks: boolean;
     createdAt: string;
 }
 
@@ -24,8 +23,6 @@ export function UserManagementSection() {
     const [newPassword, setNewPassword] = useState("");
     const [newRole, setNewRole] = useState<"user" | "admin">("user");
     const [creating, setCreating] = useState(false);
-    const [savingPermission, setSavingPermission] = useState<string | null>(null);
-    const [permissionError, setPermissionError] = useState<{ id: string; message: string } | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [createStatus, setCreateStatus] = useState<StatusType>("idle");
@@ -60,7 +57,7 @@ export function UserManagementSection() {
         setCreateStatus("loading");
         try {
             await api.post("/auth/create-user", {
-                username: newUsername,
+                username: newUsername.trim(),
                 password: newPassword,
                 role: newRole,
             });
@@ -78,35 +75,24 @@ export function UserManagementSection() {
         }
     };
 
-    const handlePermissionChange = async (
-        user: User,
-        permission: "canRequestAlbums" | "canDownloadTracks",
-        checked: boolean
-    ) => {
-        setSavingPermission(user.id);
-        setPermissionError(null);
-        try {
-            const updated = await api.patch<User>(`/auth/users/${user.id}/permissions`, {
-                [permission]: checked,
-            });
-            setUsers((previous) => previous.map((item) => item.id === user.id ? updated : item));
-        } catch (error: unknown) {
-            setPermissionError({
-                id: user.id,
-                message: error instanceof Error ? error.message : "Failed to update permissions",
-            });
-        } finally {
-            setSavingPermission(null);
-        }
+    // Each opening of the dialog starts clean: a status from an earlier delete
+    // must not show against another user.
+    const openDelete = (userId: string) => {
+        setDeleteStatus("idle");
+        setDeleteMessage("");
+        setConfirmDelete(userId);
+    };
+    const closeDelete = () => {
+        setDeleteStatus("idle");
+        setDeleteMessage("");
+        setConfirmDelete(null);
     };
 
     const handleDelete = async (userId: string) => {
         setDeleteStatus("loading");
         try {
             await api.delete(`/auth/users/${userId}`);
-            setDeleteStatus("success");
-            setDeleteMessage("Deleted");
-            setConfirmDelete(null);
+            closeDelete();
             loadUsers();
         } catch (error: unknown) {
             setDeleteStatus("error");
@@ -126,7 +112,6 @@ export function UserManagementSection() {
                 description="Manage users who can access this instance"
                 showSeparator={false}
             >
-                {/* Create User Form */}
                 <div className="py-4 px-4 bg-white/5 rounded-lg border border-white/10 mb-4">
                     <h3 className="text-xs text-[var(--text-secondary)] mb-3">Create New User</h3>
                     <div className="space-y-3">
@@ -154,14 +139,14 @@ export function UserManagementSection() {
                                     { value: "admin", label: "Admin" },
                                 ]}
                             />
-                            <button
+                            <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={handleCreate}
                                 disabled={creating || !newUsername.trim() || newPassword.length < 6}
-                                className="px-4 py-1.5 text-xs font-semibold bg-brand text-black rounded-lg
-                                    hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 {creating ? "Creating..." : "Create"}
-                            </button>
+                            </Button>
                             <InlineStatus
                                 status={createStatus}
                                 message={createMessage}
@@ -171,7 +156,6 @@ export function UserManagementSection() {
                     </div>
                 </div>
 
-                {/* Users List */}
                 <div className="space-y-1">
                     {loading ? (
                         <div className="py-4 text-xs text-[var(--text-muted)]">Loading users...</div>
@@ -181,7 +165,7 @@ export function UserManagementSection() {
                         users.map((user) => (
                             <div
                                 key={user.id}
-                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 px-3 rounded-lg hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all"
+                                className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-white/[0.03] border border-transparent hover:border-white/5 transition-all"
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-semibold text-brand">
@@ -200,60 +184,29 @@ export function UserManagementSection() {
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-4">
-                                    {user.role === "admin" ? (
-                                        <span className="text-xs text-[var(--text-muted)]">Full access (admin)</span>
-                                    ) : (
-                                        <>
-                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                                                Album requests
-                                                <SettingsToggle
-                                                    label={`Allow album requests for ${user.username}`}
-                                                    checked={user.canRequestAlbums}
-                                                    disabled={savingPermission === user.id}
-                                                    onChange={(value) => handlePermissionChange(user, "canRequestAlbums", value)}
-                                                />
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                                                Track downloads
-                                                <SettingsToggle
-                                                    label={`Allow track downloads for ${user.username}`}
-                                                    checked={user.canDownloadTracks}
-                                                    disabled={savingPermission === user.id}
-                                                    onChange={(value) => handlePermissionChange(user, "canDownloadTracks", value)}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                    {currentUser?.id !== user.id && (
-                                        <button
-                                            type="button"
-                                            aria-label={`Delete ${user.username}`}
-                                            onClick={() => setConfirmDelete(user.id)}
-                                            className="p-2 text-[var(--text-muted)] hover:text-red-400 transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    {permissionError?.id === user.id && (
-                                        <span role="alert" className="text-xs text-red-400">{permissionError.message}</span>
-                                    )}
-                                </div>
+                                {currentUser?.id !== user.id && (
+                                    <button
+                                        onClick={() => openDelete(user.id)}
+                                        className="p-2 text-[var(--text-muted)] hover:text-danger-light transition-colors"
+                                        aria-label={`delete ${user.username}`}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
                             </div>
                         ))
                     )}
                 </div>
             </SettingsSection>
 
-            {/* Delete Confirmation Modal */}
             <Modal
                 isOpen={!!confirmDelete}
-                onClose={() => setConfirmDelete(null)}
+                onClose={closeDelete}
                 title="Delete User"
             >
                 <div className="space-y-4">
                     <p className="text-xs text-[var(--text-secondary)]">
-                        Are you sure you want to delete this user? This action cannot be undone.
+                        Delete {users.find((u) => u.id === confirmDelete)?.username ?? "this user"} and everything they made? This cannot be undone.
                     </p>
                     <div className="flex gap-2 justify-end items-center">
                         <InlineStatus
@@ -261,18 +214,17 @@ export function UserManagementSection() {
                             message={deleteMessage}
                             onClear={() => setDeleteStatus("idle")}
                         />
-                        <button
-                            onClick={() => setConfirmDelete(null)}
-                            className="px-4 py-2 text-xs text-[var(--text-muted)] hover:text-white/70 transition-colors"
-                        >
+                        <Button variant="ghost" size="sm" onClick={closeDelete}>
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => confirmDelete && handleDelete(confirmDelete)}
-                            className="px-4 py-2 text-xs font-semibold bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            disabled={deleteStatus === "loading"}
                         >
                             Delete
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </Modal>

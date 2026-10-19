@@ -1,76 +1,83 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
-import { AudiobookCard } from "@/components/ui/AudiobookCard";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { MediaCard } from "@/components/cards/MediaCard";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioControls } from "@/lib/audio-context";
-import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
-import { useToast } from "@/lib/toast-context";
+import { notify } from "@/lib/notify";
 import { useAudiobooksQuery, queryKeys } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     Book,
+    CheckCircle,
     ListTree,
     Shuffle,
     ArrowUpDown,
     RefreshCw,
 } from "lucide-react";
-import { shuffleArray } from "@/utils/shuffle";
+import { shuffleArray } from "@/lib/shuffle";
 import { Pagination } from "@/components/ui/Pagination";
-
-interface Audiobook {
-    id: string;
-    title: string;
-    author: string;
-    narrator?: string;
-    description?: string;
-    coverUrl: string | null;
-    duration: number;
-    libraryId: string;
-    series?: {
-        name: string;
-        sequence: string;
-    } | null;
-    genres?: string[];
-    progress: {
-        currentTime: number;
-        progress: number;
-        isFinished: boolean;
-        lastPlayedAt: Date;
-    } | null;
-}
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Button } from "@/components/ui/Button";
+import { scrollMainToTop } from "@/lib/scroll";
+import type { Audiobook } from "@/features/audiobook/types";
+import { coverArtUrl } from "@/lib/cover-art";
 
 type FilterType = "all" | "listening" | "finished";
 type SortType = "title" | "author" | "recent" | "series";
 
-function SectionHeader({ title, count, children }: { title: string; count?: number; children?: React.ReactNode }) {
+function BookCard({ book, index }: { book: Audiobook; index: number }) {
     return (
-        <div className="flex items-center gap-3 mb-6">
-            <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-            <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
-            {count !== undefined && (
-                <span className="text-xs tabular-nums text-[#f59e0b]">{count}</span>
-            )}
-            <span className="flex-1 border-t border-white/10" />
-            {children}
+        <MediaCard
+            href={`/audiobooks/${book.id}`}
+            title={book.title}
+            subtitle={book.author}
+            imageUrl={coverArtUrl(book.coverUrl)}
+            fallbackIcon={Book}
+            type="audiobook"
+            aspect="portrait"
+            index={index}
+            progress={book.progress?.isFinished ? undefined : book.progress?.progress}
+            corner={book.progress?.isFinished && <CheckCircle className="w-5 h-5 text-success" aria-label="Finished" />}
+        />
+    );
+}
+
+function BookSection({
+    title,
+    books,
+    count = books.length,
+    section,
+}: {
+    title: string;
+    books: Audiobook[];
+    count?: number;
+    section: string;
+}) {
+    return (
+        <div>
+            <SectionHeader type="audiobook" title={title} count={count} />
+            <div className="grid-media" data-tv-section={section}>
+                {books.map((book, index) => (
+                    <BookCard key={book.id} book={book} index={index} />
+                ))}
+            </div>
         </div>
     );
 }
 
 export default function AudiobooksPage() {
-    const { branding } = useBranding();
     const router = useRouter();
-    useAuth();
-    const { toast } = useToast();
     const { currentAudiobook } = useAudioState();
     const { pause } = useAudioControls();
 
     const queryClient = useQueryClient();
-    const { data: audiobooksData, isLoading, error } = useAudiobooksQuery();
+    const { data: audiobooksData, isLoading, error, refetch } = useAudiobooksQuery();
     const [isSyncing, setIsSyncing] = useState(false);
 
     const [filter, setFilter] = useState<FilterType>("all");
@@ -79,12 +86,16 @@ export default function AudiobooksPage() {
     const [groupBySeries, setGroupBySeries] = useState(false);
     const [itemsPerPage, setItemsPerPage] = useState<number>(50);
     const [currentPage, setCurrentPage] = useState(1);
+    const showPage = (page: number) => {
+        setCurrentPage(page);
+        scrollMainToTop();
+    };
 
-    const isConfigured =
-        !error &&
-        (!audiobooksData ||
-            !("configured" in audiobooksData) ||
-            audiobooksData.configured !== false);
+    const isConfigured = !(
+        audiobooksData &&
+        "configured" in audiobooksData &&
+        audiobooksData.configured === false
+    );
     const audiobooks: Audiobook[] = useMemo(
         () => (Array.isArray(audiobooksData) ? audiobooksData : []),
         [audiobooksData]
@@ -94,8 +105,8 @@ export default function AudiobooksPage() {
         if (!isConfigured && currentAudiobook) {
             pause();
             if (typeof window !== "undefined") {
-                localStorage.removeItem("kima_current_audiobook");
-                localStorage.removeItem("kima_playback_type");
+                localStorage.removeItem(STORAGE_KEYS.CURRENT_AUDIOBOOK);
+                localStorage.removeItem(STORAGE_KEYS.PLAYBACK_TYPE);
             }
         }
     }, [isConfigured, currentAudiobook, pause]);
@@ -181,7 +192,6 @@ export default function AudiobooksPage() {
         return sorted;
     }, [audiobooks, filter, continueListening, selectedGenre, sortBy]);
 
-    const totalPages = Math.ceil(filteredBooks.length / itemsPerPage);
     const paginatedBooks = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
         return filteredBooks.slice(start, start + itemsPerPage);
@@ -198,7 +208,7 @@ export default function AudiobooksPage() {
         const seriesMap = new Map<string, Audiobook[]>();
         const standaloneBooks: Audiobook[] = [];
 
-        paginatedBooks.forEach((book) => {
+        filteredBooks.forEach((book) => {
             if (book.series && book.series.name && book.series.name.trim() !== "") {
                 const seriesName = book.series.name.trim();
                 if (!seriesMap.has(seriesName)) {
@@ -219,21 +229,28 @@ export default function AudiobooksPage() {
         });
 
         return { series: Array.from(seriesMap.entries()), standalone: standaloneBooks };
-    }, [paginatedBooks]);
+    }, [filteredBooks]);
 
-    const getCoverUrl = (coverUrl: string | null, size = 300) => {
-        if (!coverUrl) return null;
-        return api.getCoverArtUrl(coverUrl, size);
-    };
+    // The series view groups the whole library, then pages over its cards (a series or a
+    // standalone book each), so a series is never split across pages.
+    const pageStart = (currentPage - 1) * itemsPerPage;
+    const pageEnd = pageStart + itemsPerPage;
+    const pageSeries = series.slice(pageStart, pageEnd);
+    const pageStandalone = standalone.slice(
+        Math.max(0, pageStart - series.length),
+        Math.max(0, pageEnd - series.length),
+    );
+    const totalPages = Math.ceil(
+        (groupBySeries ? series.length + standalone.length : filteredBooks.length) / itemsPerPage,
+    );
 
     const handleShuffleAudiobooks = () => {
         if (audiobooks.length === 0) {
-            toast.error("No audiobooks to shuffle");
+            notify.error("No audiobooks to shuffle");
             return;
         }
         const shuffled = shuffleArray(audiobooks);
         if (shuffled[0]) {
-            toast.success(`Playing random audiobook: ${shuffled[0].title}`);
             router.push(`/audiobooks/${shuffled[0].id}`);
         }
     };
@@ -248,74 +265,69 @@ export default function AudiobooksPage() {
                 error?: string;
             }>("/audiobooks/sync", {});
             if (!res?.success) {
-                toast.error(res?.error || "Audiobook sync failed");
+                notify.error("Audiobook sync failed", { message: res?.error });
                 return;
             }
             const r = res.result;
             if (r && r.failed > 0) {
-                toast.error(
-                    `Synced ${r.synced}, failed ${r.failed}${r.errors[0] ? `: ${r.errors[0]}` : ""}`
-                );
-            } else if (r) {
-                toast.success(`Synced ${r.synced} audiobooks`);
+                notify.error("Some audiobooks failed to sync", {
+                    message: `Synced ${r.synced}, failed ${r.failed}${r.errors[0] ? `: ${r.errors[0]}` : ""}`,
+                });
             }
             await queryClient.refetchQueries({ queryKey: queryKeys.audiobooks() });
         } catch (error) {
-            toast.error((error as Error)?.message || "Audiobook sync failed");
+            notify.error("Audiobook sync failed", { message: (error as Error)?.message });
         } finally {
             setIsSyncing(false);
         }
     };
 
     if (isLoading) {
+        return <LoadingScreen />;
+    }
+
+    if (error && isConfigured) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
+            <div className="page-shell pt-8">
+                <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6 max-w-xl">
+                    <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+                        Couldn&apos;t load audiobooks
+                    </h1>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">{(error as Error).message}</p>
+                    <Button variant="primary" onClick={() => refetch()} className="mt-4">
+                        Try again
+                    </Button>
+                </div>
             </div>
         );
     }
 
     if (!isConfigured) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black relative overflow-hidden">
-                {/* Atmospheric overlay */}
-                <div className="fixed inset-0 pointer-events-none opacity-30">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#f59e0b]/5 via-transparent to-transparent" />
-                </div>
+            <div className="min-h-screen">
+                <PageHeader
+                    eyebrow="Not set up"
+                    title="Audiobooks"
+                    description="Connect Audiobookshelf to listen to your audiobooks here"
+                />
 
-                <div className="relative px-4 md:px-8 py-16 md:py-24 max-w-[1800px] mx-auto">
-                    {/* Editorial hero */}
-                    <div className="mb-16">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full" />
-                            <span className="t-eyebrow">
-                                Not Configured
-                            </span>
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-4">
-                            Audiobooks
-                        </h1>
-                        <p className="text-sm text-[var(--text-muted)] max-w-xl">
-                            Connect Audiobookshelf to unlock your audiobook library
-                        </p>
-                    </div>
+                <div className="relative page-shell pb-24">
 
-                    {/* Setup Steps */}
                     <div className="grid md:grid-cols-3 gap-4 mb-12">
                         {[
                             { num: "01", title: "Install Audiobookshelf", desc: "Set up your own Audiobookshelf instance via Docker or use an existing installation" },
                             { num: "02", title: "Get API Key", desc: "Settings > Users > Click your user > API Tokens > Generate" },
-                            { num: "03", title: "Configure", desc: `Enter your Audiobookshelf URL and API key in ${branding.name} settings` },
+                            { num: "03", title: "Configure", desc: "Enter your Audiobookshelf URL and API key in Kima settings" },
                         ].map((step) => (
                             <div
                                 key={step.num}
-                                className="rounded-lg border border-white/10 bg-[var(--bg-primary)] p-6 hover:border-[#f59e0b]/30 transition-all"
+                                className="rounded-lg border border-white/10 bg-[var(--bg-primary)] p-6 hover:border-type-audiobook/30 transition-all"
                             >
                                 {/* 20% opacity put this at 1.4:1, and it is the
                                     only thing on the card saying which step
                                     comes first. 60% clears the 3:1 that text
                                     this size needs. */}
-                                <div className="text-3xl font-bold text-[#f59e0b]/60 mb-3 tracking-tight">
+                                <div className="text-3xl font-bold text-brand/60 mb-3 tracking-tight">
                                     {step.num}
                                 </div>
                                 <h3 className="text-sm font-bold text-white tracking-tight mb-2">
@@ -328,20 +340,22 @@ export default function AudiobooksPage() {
                         ))}
                     </div>
 
-                    {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row gap-3 max-w-xl">
-                        <button
+                        <Button
+                            variant="primary"
+                            size="lg"
                             onClick={() => router.push("/settings#audiobookshelf")}
-                            className="flex-1 h-12 px-6 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] transition-all font-bold text-sm text-black hover:scale-[1.02] active:scale-[0.98]"
+                            className="flex-1"
                         >
                             Configure Audiobookshelf
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                            size="lg"
                             onClick={() => window.open("https://hub.docker.com/r/advplyr/audiobookshelf", "_blank")}
-                            className="flex-1 h-12 px-6 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all font-bold text-sm text-white"
+                            className="flex-1"
                         >
                             Install via Docker
-                        </button>
+                        </Button>
                     </div>
 
                     <div className="mt-8">
@@ -360,269 +374,198 @@ export default function AudiobooksPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black relative">
-            {/* Atmospheric overlay */}
-            <div className="fixed inset-0 pointer-events-none opacity-30">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#f59e0b]/5 via-transparent to-transparent" />
-            </div>
+        <div className="min-h-screen">
+            <PageHeader
+                eyebrow="Your library"
+                title="Audiobooks"
+                description={`${audiobooks.length} ${audiobooks.length === 1 ? "book" : "books"}`}
+                className="pb-2"
+            />
 
-            {/* Editorial Hero */}
-            <div className="relative px-4 md:px-8 pt-8 pb-2">
-                <div className="max-w-[1800px] mx-auto">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="w-1.5 h-1.5 bg-[#f59e0b] rounded-full" />
-                        <span className="t-eyebrow">
-                            Library
+            <div className="relative page-shell pb-24 animate-rise">
+                <div className="mb-8 space-y-3">
+                    {/* First Row: Filter Pills and Shuffle */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {(["all", "listening", "finished"] as FilterType[]).map((f) => (
+                            <Button
+                                key={f}
+                                variant={filter === f ? "primary" : "secondary"}
+                                size="sm"
+                                onClick={() => setFilter(f)}
+                            >
+                                {f === "all" ? "All Books" : f === "listening" ? "In Progress" : "Finished"}
+                            </Button>
+                        ))}
+
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleShuffleAudiobooks}
+                        >
+                            <Shuffle className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Random</span>
+                        </Button>
+
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            title="sync audiobooks from audiobookshelf"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                            <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync"}</span>
+                        </Button>
+
+                        <span className="hidden md:inline text-xs tabular-nums text-[var(--text-muted)] ml-auto">
+                            {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
                         </span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-2">
-                        Audiobooks
-                    </h1>
-                    <p className="text-sm tabular-nums text-[var(--text-muted)]">
-                        {audiobooks.length} {audiobooks.length === 1 ? "book" : "books"} in library
-                    </p>
-                </div>
-            </div>
 
-            <div className="relative px-4 md:px-8 pb-24 animate-rise">
-                <div className="max-w-[1800px] mx-auto">
-                    {/* Filter and Sort Controls */}
-                    <div className="mb-8 space-y-3">
-                        {/* First Row: Filter Pills and Shuffle */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            {(["all", "listening", "finished"] as FilterType[]).map((f) => (
-                                <button
-                                    key={f}
-                                    onClick={() => setFilter(f)}
-                                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                        filter === f
-                                            ? "bg-[#f59e0b] text-black"
-                                            : "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
-                                    }`}
-                                >
-                                    {f === "all" ? "All Books" : f === "listening" ? "In Progress" : "Finished"}
-                                </button>
-                            ))}
-
-                            <button
-                                onClick={handleShuffleAudiobooks}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#f59e0b] hover:bg-[#d97706] text-black font-semibold text-xs transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    {/* Second Row: Sort, Series View, Genre */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                            <ArrowUpDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as SortType)}
+                                className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
                             >
-                                <Shuffle className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Random</span>
-                            </button>
-
-                            <button
-                                onClick={handleSync}
-                                disabled={isSyncing}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 font-semibold text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Sync audiobooks from Audiobookshelf"
-                            >
-                                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                                <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync"}</span>
-                            </button>
-
-                            <span className="hidden md:inline text-xs tabular-nums text-[var(--text-muted)] ml-auto">
-                                {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
-                            </span>
+                                <option value="title">title</option>
+                                <option value="author">author</option>
+                                <option value="recent">recently played</option>
+                                <option value="series">series</option>
+                            </select>
                         </div>
 
-                        {/* Second Row: Sort, Series View, Genre */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-                                <ArrowUpDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                <select
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as SortType)}
-                                    className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
-                                >
-                                    <option value="title">Title</option>
-                                    <option value="author">Author</option>
-                                    <option value="recent">Recently Played</option>
-                                    <option value="series">Series</option>
-                                </select>
-                            </div>
+                        <Button
+                            variant={groupBySeries ? "primary" : "secondary"}
+                            size="sm"
+                            onClick={() => setGroupBySeries(!groupBySeries)}
+                            title="show series as single cards"
+                        >
+                            <ListTree className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Series View</span>
+                        </Button>
 
-                            <button
-                                onClick={() => setGroupBySeries(!groupBySeries)}
-                                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-2 ${
-                                    groupBySeries
-                                        ? "bg-[#f59e0b] text-black"
-                                        : "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
-                                }`}
-                                title="Show series as single cards"
-                            >
-                                <ListTree className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Series View</span>
-                            </button>
-
-                            {allGenres.length > 0 && (
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-                                    <select
-                                        value={selectedGenre || ""}
-                                        onChange={(e) => setSelectedGenre(e.target.value || null)}
-                                        className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer min-w-0 max-w-[140px] truncate [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
-                                    >
-                                        <option value="">All Genres</option>
-                                        {allGenres.map((genre) => (
-                                            <option key={genre} value={genre}>
-                                                {genre}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
+                        {allGenres.length > 0 && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
                                 <select
-                                    value={itemsPerPage}
-                                    onChange={(e) => {
-                                        setItemsPerPage(Number(e.target.value));
-                                        setCurrentPage(1);
-                                    }}
-                                    className="bg-transparent text-xs tabular-nums text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
+                                    value={selectedGenre || ""}
+                                    onChange={(e) => setSelectedGenre(e.target.value || null)}
+                                    className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer min-w-0 max-w-[140px] truncate [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
                                 >
-                                    <option value={25}>25 per page</option>
-                                    <option value={50}>50 per page</option>
-                                    <option value={100}>100 per page</option>
-                                    <option value={250}>250 per page</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Mobile count */}
-                        <div className="md:hidden text-xs tabular-nums text-[var(--text-muted)]">
-                            {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
-                        </div>
-                    </div>
-
-                    <div className="section-stack">
-                        {/* Continue Listening Section */}
-                        {continueListening.length > 0 && filter === "all" && !groupBySeries && (
-                            <div>
-                                <SectionHeader title="Continue Listening" count={continueListening.length} />
-                                <div
-                                    className="grid-media"
-                                    data-tv-section="continue-listening"
-                                >
-                                    {continueListening.map((book, index) => (
-                                        <AudiobookCard
-                                            key={book.id}
-                                            id={book.id}
-                                            title={book.title}
-                                            author={book.author}
-                                            coverUrl={book.coverUrl}
-                                            progress={book.progress}
-                                            index={index}
-                                            getCoverUrl={getCoverUrl}
-                                        />
+                                    <option value="">all genres</option>
+                                    {allGenres.map((genre) => (
+                                        <option key={genre} value={genre}>
+                                            {genre.toLowerCase()}
+                                        </option>
                                     ))}
-                                </div>
+                                </select>
                             </div>
                         )}
 
-                        {/* Audiobooks Grid */}
-                        {filteredBooks.length > 0 ? (
-                            groupBySeries ? (
-                                <>
-                                    {series.length > 0 && (
-                                        <div>
-                                            <SectionHeader title="Series" count={series.length} />
-                                            <div
-                                                className="grid-media"
-                                                data-tv-section="series"
-                                            >
-                                                {series.map(([seriesName, books], index) => {
-                                                    const firstBook = books[0];
-                                                    const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
-                                                    return (
-                                                        <AudiobookCard
-                                                            key={seriesName}
-                                                            id={seriesName}
-                                                            title={seriesName}
-                                                            author={firstBook.author}
-                                                            coverUrl={firstBook.coverUrl}
-                                                            seriesBadge={bookCount}
-                                                            index={index}
-                                                            getCoverUrl={getCoverUrl}
-                                                        />
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {standalone.length > 0 && (
-                                        <div>
-                                            <SectionHeader title="Standalone" count={standalone.length} />
-                                            <div
-                                                className="grid-media"
-                                                data-tv-section="standalone"
-                                            >
-                                                {standalone.map((book, index) => (
-                                                    <AudiobookCard
-                                                        key={book.id}
-                                                        id={book.id}
-                                                        title={book.title}
-                                                        author={book.author}
-                                                        coverUrl={book.coverUrl}
-                                                        progress={book.progress}
-                                                        index={index}
-                                                        getCoverUrl={getCoverUrl}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <div>
-                                    <SectionHeader title="All Books" count={filteredBooks.length} />
-                                    <div
-                                        className="grid-media"
-                                        data-tv-section="audiobooks"
-                                    >
-                                        {paginatedBooks.map((book, index) => (
-                                            <AudiobookCard
-                                                key={book.id}
-                                                id={book.id}
-                                                title={book.title}
-                                                author={book.author}
-                                                coverUrl={book.coverUrl}
-                                                progress={book.progress}
-                                                index={index}
-                                                getCoverUrl={getCoverUrl}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )
-                        ) : (
-                            <EmptyState
-                                icon={<Book className="w-12 h-12" />}
-                                title={
-                                    filter === "listening"
-                                        ? "No audiobooks in progress"
-                                        : filter === "finished"
-                                        ? "No finished audiobooks"
-                                        : "No audiobooks found"
-                                }
-                                description={
-                                    filter === "all"
-                                        ? "Add audiobooks to your Audiobookshelf library to get started"
-                                        : "Start listening to some audiobooks"
-                                }
-                            />
-                        )}
-
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={setCurrentPage}
-                            label="Audiobooks"
-                            className="mt-0"
-                        />
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                            <select
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                    setItemsPerPage(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="bg-transparent text-xs tabular-nums text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
+                            >
+                                <option value={25}>25 per page</option>
+                                <option value={50}>50 per page</option>
+                                <option value={100}>100 per page</option>
+                                <option value={250}>250 per page</option>
+                            </select>
+                        </div>
                     </div>
+
+                    <div className="md:hidden text-xs tabular-nums text-[var(--text-muted)]">
+                        {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
+                    </div>
+                </div>
+
+                <div className="section-stack">
+                    {continueListening.length > 0 && filter === "all" && !groupBySeries && (
+                        <BookSection title="Continue Listening" books={continueListening} section="continue-listening" />
+                    )}
+
+                    {filteredBooks.length > 0 ? (
+                        groupBySeries ? (
+                            <>
+                                {pageSeries.length > 0 && (
+                                    <div>
+                                        <SectionHeader type="audiobook" title="Series" count={series.length} />
+                                        <div
+                                            className="grid-media"
+                                            data-tv-section="series"
+                                        >
+                                            {pageSeries.map(([seriesName, books], index) => {
+                                                const firstBook = books[0];
+                                                const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
+                                                return (
+                                                    <MediaCard
+                                                        key={seriesName}
+                                                        href={`/audiobooks/series/${encodeURIComponent(seriesName)}`}
+                                                        title={seriesName}
+                                                        subtitle={firstBook.author}
+                                                        imageUrl={coverArtUrl(firstBook.coverUrl)}
+                                                        fallbackIcon={Book}
+                                                        type="audiobook"
+                                                        aspect="portrait"
+                                                        index={index}
+                                                        corner={<span className="block bg-brand text-black rounded px-2 py-0.5 text-xs font-semibold">{bookCount}</span>}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {pageStandalone.length > 0 && (
+                                    <BookSection
+                                        title="Standalone"
+                                        books={pageStandalone}
+                                        count={standalone.length}
+                                        section="standalone"
+                                    />
+                                )}
+                            </>
+                        ) : (
+                            <BookSection
+                                title="All Books"
+                                books={paginatedBooks}
+                                count={filteredBooks.length}
+                                section="audiobooks"
+                            />
+                        )
+                    ) : (
+                        <EmptyState
+                            icon={<Book className="w-12 h-12" />}
+                            title={
+                                filter === "listening"
+                                    ? "No audiobooks in progress"
+                                    : filter === "finished"
+                                    ? "No finished audiobooks"
+                                    : "No audiobooks found"
+                            }
+                            description={
+                                filter === "all"
+                                    ? "Add audiobooks to your Audiobookshelf library to get started"
+                                    : "Start listening to some audiobooks"
+                            }
+                        />
+                    )}
+
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={showPage}
+                        label="Audiobooks"
+                        className="mt-0"
+                    />
                 </div>
             </div>
         </div>

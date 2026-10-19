@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingsSection, SettingsRow, SettingsSelect } from "../ui";
-import { SystemSettings } from "../../types";
+import { SystemSettings, soulseekConfigured } from "../../types";
 
 interface DownloadPreferencesSectionProps {
     settings: SystemSettings;
@@ -12,20 +12,16 @@ export function DownloadPreferencesSection({
     settings,
     onUpdate,
 }: DownloadPreferencesSectionProps) {
-    // Service configuration detection
     const isLidarrConfigured =
         settings.lidarrEnabled === true &&
         settings.lidarrUrl.trim() !== "" &&
         settings.lidarrApiKey.trim() !== "";
 
-    const isSoulseekConfigured =
-        settings.soulseekUsername.trim() !== "" &&
-        settings.soulseekPassword.trim() !== "";
+    const isSoulseekConfigured = soulseekConfigured(settings);
 
     const areBothServicesConfigured = isLidarrConfigured && isSoulseekConfigured;
     const isDisabled = !areBothServicesConfigured;
 
-    // Dynamic fallback options based on primary source
     const getFallbackOptions = () => {
         if (settings.downloadSource === "soulseek") {
             return [

@@ -1,4 +1,4 @@
-import { Router, Request, Response } from "express";
+import { Router } from "express";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { eventBus, SSEEvent, SSESubscriber } from "../services/eventBus";
 import { logger } from "../utils/logger";
@@ -7,22 +7,12 @@ import { redisClient } from "../utils/redis";
 const router = Router();
 
 /**
- * Drop a client once this much unsent data has piled up in its socket buffer.
- *
- * `res.write()` returning false means the kernel buffer is full and Node is now
- * queueing in memory. A backgrounded mobile tab or a client on dead Wi-Fi never
- * drains, and with 39 emit sites across the codebase a scan or download in
- * progress produces a steady stream -- so the buffer grew without bound and the
- * only thing that eventually noticed was the OOM killer. The previous code
- * ignored the return value entirely.
+ * Drop a client once this much unsent data is buffered: a backgrounded tab or
+ * dead connection never drains, and the buffer would grow without bound.
  */
 const MAX_BUFFERED_BYTES = 512 * 1024;
 
-/**
- * Per-user connection cap. Nothing stopped a client opening streams in a loop;
- * each one held a Response object and a subscription for the life of the
- * process.
- */
+/** Per-user connection cap: each stream holds a Response and a subscription until it closes. */
 const MAX_CONNECTIONS_PER_USER = 5;
 
 /**
@@ -30,14 +20,9 @@ const MAX_CONNECTIONS_PER_USER = 5;
  * SSE endpoint for real-time event streaming.
  * Auth via short-lived, one-time-use ticket obtained from POST /api/events/ticket.
  */
-// The ticket lookup below is an `await` that runs BEFORE res.writeHead, so if
-// Redis is unreachable this handler rejects with no response written at all and
-// the client waits forever for a stream that never opens. asyncHandler bridges
-// that to errorHandler, which answers a 500. Anything that rejects AFTER the
-// headers go out is handled too: errorHandler checks headersSent and delegates
-// to Express's default, which closes the connection rather than throwing
-// ERR_HTTP_HEADERS_SENT from inside the error handler.
-router.get("/", asyncHandler(async (req: Request, res: Response) => {
+// asyncHandler routes a rejection (Redis down during the ticket lookup) to
+// errorHandler: a 500 before the headers, a closed connection after.
+router.get("/", asyncHandler(async (req, res) => {
     const ticket = req.query.ticket as string | undefined;
     if (!ticket) {
         res.status(401).json({ error: "Unauthorized" });

@@ -1,12 +1,6 @@
 /**
- * GET /albums ordering.
- *
- * Same defect family as artists.sort.route.test.ts, on Album this time:
- * `ALBUM_SORT_MAP`'s `name`/`name-desc` entries ordered on the raw `title`,
- * so "The Dark Side of the Moon" filed under T. Unlike
- * routes/library/artists.ts, there is no raw-SQL branch here bypassing the
- * map for the default sortBy -- checked directly against the source, not
- * assumed from the artist file's shape.
+ * GET /albums sorts by name on `sortName`, so "The Dark Side of the Moon" files
+ * under D.
  */
 
 jest.mock('../../../middleware/auth', () => ({
@@ -23,10 +17,20 @@ jest.mock('../../../utils/logger', () => ({
 jest.mock('../../../services/deezer', () => ({ deezerService: {} }));
 jest.mock('../../../services/lidarr', () => ({ lidarrService: {} }));
 
+// Shared prisma mock instance, so $transaction can delegate to the same fn instances.
+const mockAlbumFindMany = jest.fn();
+const mockAlbumCount = jest.fn();
+const mockOwnedFindMany = jest.fn();
+
 jest.mock('../../../utils/db', () => ({
     prisma: {
-        album: { findMany: jest.fn(), count: jest.fn() },
-        ownedAlbum: { findMany: jest.fn() },
+        album: { findMany: mockAlbumFindMany, count: mockAlbumCount },
+        ownedAlbum: { findMany: mockOwnedFindMany },
+        track: { findMany: jest.fn() },
+        $transaction: jest.fn(async (fn: (tx: any) => Promise<any[]>) => fn({
+            album: { findMany: mockAlbumFindMany, count: mockAlbumCount },
+            ownedAlbum: { findMany: mockOwnedFindMany },
+        })),
     },
     Prisma: { SortOrder: { asc: 'asc', desc: 'desc' } },
 }));
@@ -55,7 +59,7 @@ describe('GET /albums alphabetical ordering', () => {
         await request(makeApp()).get('/albums').expect(200);
 
         expect(prisma.album.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: { sortName: 'asc' } }),
+            expect.objectContaining({ orderBy: [{ sortName: 'asc' }, { id: 'asc' }] }),
         );
     });
 
@@ -63,7 +67,7 @@ describe('GET /albums alphabetical ordering', () => {
         await request(makeApp()).get('/albums?sortBy=name-desc').expect(200);
 
         expect(prisma.album.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: { sortName: 'desc' } }),
+            expect.objectContaining({ orderBy: [{ sortName: 'desc' }, { id: 'asc' }] }),
         );
     });
 
@@ -71,7 +75,7 @@ describe('GET /albums alphabetical ordering', () => {
         await request(makeApp()).get('/albums?sortBy=nonsense').expect(200);
 
         expect(prisma.album.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: { sortName: 'asc' } }),
+            expect.objectContaining({ orderBy: [{ sortName: 'asc' }, { id: 'asc' }] }),
         );
     });
 
@@ -79,7 +83,7 @@ describe('GET /albums alphabetical ordering', () => {
         await request(makeApp()).get('/albums?sortBy=recent').expect(200);
 
         expect(prisma.album.findMany).toHaveBeenCalledWith(
-            expect.objectContaining({ orderBy: { year: 'desc' } }),
+            expect.objectContaining({ orderBy: [{ year: 'desc' }, { id: 'asc' }] }),
         );
     });
 });

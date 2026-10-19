@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, memo, useCallback } from "react";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { Track } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { AudioLines, ListPlus, Plus, Trash2, Play } from "lucide-react";
-import { cn } from "@/utils/cn";
-import { formatTime } from "@/utils/formatTime";
+import { cn } from "@/lib/cn";
+import { formatTime } from "@/lib/format";
 import { api } from "@/lib/api";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
+import { cascadeStyle } from "@/lib/motion";
 
 interface TracksListProps {
     tracks: Track[];
@@ -22,7 +25,6 @@ interface TracksListProps {
     isLoading?: boolean;
     gridKey?: number;
 }
-
 
 interface TrackRowProps {
     track: Track;
@@ -66,36 +68,34 @@ const TrackRow = memo(
                 className={cn(
                     "grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all duration-200 group cursor-pointer touch-manipulation",
                     isCurrentlyPlaying
-                        ? "bg-[#a855f7]/10 border-[#a855f7]/30 "
-                        : "bg-[var(--bg-primary)] border-white/5 hover:border-[#a855f7]/30 hover:bg-[#a855f7]/5",
-                    index < 8 ? "animate-rise [animation-delay:calc(var(--i)*45ms)]" : "",
+                        ? "bg-brand/10 border-brand/30 "
+                        : "bg-[var(--bg-primary)] border-white/5 hover:border-brand/30 hover:bg-brand/5",
+                    "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]",
                 )}
             >
-                {/* Track number / Play button */}
                 <div className="w-8 flex items-center justify-center">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             onPlayTrack();
                         }}
-                        className="w-10 h-10 flex items-center justify-center"
+                        className="group/play w-10 h-10 flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                         aria-label={isCurrentlyPlaying ? "Pause" : "Play"}
                     >
                         <span
                             className={cn(
                                 "text-sm tabular-nums font-bold group-hover:hidden",
-                                isCurrentlyPlaying ? "text-[#a855f7]" : "text-[var(--text-muted)]",
+                                isCurrentlyPlaying ? "text-brand" : "text-[var(--text-muted)]",
                             )}
                         >
                             {isCurrentlyPlaying ?
-                                <AudioLines className="w-4 h-4 text-[#a855f7]" />
+                                <AudioLines className="w-4 h-4 text-brand" />
                             :   displayTrackLabel}
                         </span>
-                        <Play className="w-4 h-4 text-[#a855f7] opacity-0 group-hover:opacity-100 transition-opacity duration-150 fill-current" />
+                        <Play className="w-4 h-4 text-brand opacity-0 group-hover:opacity-100 group-focus-visible/play:opacity-100 transition-opacity duration-150 fill-current" />
                     </button>
                 </div>
 
-                {/* Cover + Title/Artist */}
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="relative w-11 h-11 bg-[#181818] rounded border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                         {track.album?.coverArt ?
@@ -115,7 +115,7 @@ const TrackRow = memo(
                         <h3
                             className={cn(
                                 "text-sm font-bold truncate tracking-tight",
-                                isCurrentlyPlaying ? "text-[#a855f7]" : "text-white",
+                                isCurrentlyPlaying ? "text-brand" : "text-white",
                             )}
                         >
                             {track.displayTitle ?? track.title}
@@ -126,22 +126,20 @@ const TrackRow = memo(
                     </div>
                 </div>
 
-                {/* Album - hidden on mobile */}
                 <div className="hidden md:block min-w-0">
                     <p className="text-xs tabular-nums text-[var(--text-muted)] truncate">
                         {track.album?.title}
                     </p>
                 </div>
 
-                {/* Actions + Duration */}
                 <div className="flex items-center gap-1">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             onAddToQueue(track);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="Add to Queue"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
+                        title="add to queue"
                     >
                         <ListPlus className="w-4 h-4" />
                     </button>
@@ -150,8 +148,8 @@ const TrackRow = memo(
                             e.stopPropagation();
                             onShowAddToPlaylist(track.id);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="Add to Playlist"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
+                        title="add to playlist"
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -160,8 +158,8 @@ const TrackRow = memo(
                             e.stopPropagation();
                             onDelete(track.id, track.title);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all duration-150 border border-transparent hover:border-red-500/30"
-                        title="Delete Track"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-danger/30"
+                        title="delete track"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -190,6 +188,7 @@ export function TracksList({
     isLoading = false,
     gridKey,
 }: TracksListProps) {
+    const { locale } = useLanguage();
     const { currentTrack } = useAudioState();
     const currentTrackId = currentTrack?.id;
     const [showPlaylistSelector, setShowPlaylistSelector] = useState(false);
@@ -230,15 +229,14 @@ export function TracksList({
 
     return (
         <>
-            {/* Header row - terminal style */}
             <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
-                <div className="w-8 text-center text-xs font-semibold text-[#a855f7]">#</div>
-                <div className="text-xs font-semibold text-[#a855f7]">Title</div>
-                <div className="hidden md:block text-xs font-semibold text-[#a855f7]">Album</div>
-                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[#a855f7]">Duration</div>
+                <div className="w-8 text-center text-xs font-semibold text-[var(--text-muted)]">#</div>
+                <div className="text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Title")}</div>
+                <div className="hidden md:block text-xs font-semibold text-[var(--text-muted)]">Album</div>
+                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">Duration</div>
             </div>
 
-            <div key={gridKey} data-tv-section="library-tracks" className="space-y-1">
+            <div key={gridKey} data-tv-section="library-tracks" className="space-y-1" style={cascadeStyle(tracks.length)}>
                 {tracks.map((track, index) => {
                     const isCurrentlyPlaying = currentTrackId === track.id;
                     return (

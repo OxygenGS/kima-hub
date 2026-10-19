@@ -1,17 +1,11 @@
-/**
- * Discovery Seeding Module
- *
- * Handles seed artist selection for discovering new music based on:
- * - User's listening history (recent plays)
- * - Library contents (fallback when insufficient history)
- * - Album ownership checking across multiple sources
- */
+/** Seed artists for discovery (recent plays, else the library) and album ownership checks. */
 
 import { prisma } from '../../utils/db';
 import { logger } from '../../utils/logger';
 import { lidarrService } from '../lidarr';
 import { subWeeks } from 'date-fns';
-import { normalizeForMatching, matchAlbum } from '../../utils/fuzzyMatch';
+import { normalizeForMatching, stringSimilarity } from '../../utils/normalization';
+import { LIBRARY_LOCATION } from '../libraryFilters';
 
 export interface SeedArtist {
     name: string;
@@ -20,11 +14,9 @@ export interface SeedArtist {
 }
 
 /**
- * In-memory snapshot of owned albums, built once per TTL window instead of
- * re-querying Postgres for every candidate album checked during a discovery
- * run (DISC-5). `albums` covers every Album row (any location) since
- * isAlbumOwnedByName's Album-table check is intentionally not location-scoped;
- * callers that need LIBRARY-only semantics filter on `location` themselves.
+ * Owned-album snapshot, rebuilt once per TTL instead of queried per candidate.
+ * `albums` holds every Album row regardless of location; callers that need
+ * LIBRARY only filter on it.
  */
 interface OwnedAlbumIndex {
     albums: Array<{ artistName: string; title: string; location: string; rgMbid: string }>;
@@ -40,17 +32,12 @@ export class DiscoverySeeding {
     private ownedIndexCache: (OwnedAlbumIndex & { builtAt: number }) | null = null;
     private ownedIndexLoad: Promise<OwnedAlbumIndex> | null = null;
 
-    /**
-     * Gets seed artists based on user's listening history.
-     * Falls back to library artists when insufficient play history.
-     * Uses recency weighting: plays in last 2 weeks count 2x more.
-     */
+    /** Seed artists from the user's last four weeks of plays, a play in the last two weeks counting double; the library's most engaged artists when there are too few plays. */
     async getSeedArtists(userId: string, seedCount?: number): Promise<SeedArtist[]> {
         const limit = seedCount ?? this.DEFAULT_SEED_COUNT;
         const twoWeeksAgo = subWeeks(new Date(), 2);
         const fourWeeksAgo = subWeeks(new Date(), 4);
 
-        // Get plays from last 4 weeks with recency weighting
         const recentPlays = await prisma.play.groupBy({
             by: ['trackId'],
             where: {
@@ -62,7 +49,6 @@ export class DiscoverySeeding {
             _max: { playedAt: true },
         });
 
-        // Weight: plays in last 2 weeks count 2x
         const weightedPlays = recentPlays
             .map(play => {
                 const isRecent = play._max.playedAt && play._max.playedAt >= twoWeeksAgo;
@@ -84,7 +70,7 @@ export class DiscoverySeeding {
         const tracks = await prisma.track.findMany({
             where: {
                 id: { in: weightedPlays.map((p) => p.trackId) },
-                album: { location: 'LIBRARY' },
+                album: { location: LIBRARY_LOCATION },
             },
             include: { album: { include: { artist: true } } },
         });
@@ -107,23 +93,19 @@ export class DiscoverySeeding {
         return artists;
     }
 
-    /**
-     * Fallback: Get artists with most engagement (albums + tracks) when play history is insufficient.
-     * More tracks = more listened to = better seed.
-     */
+    /** The artists with the most albums and tracks, for users with too little play history. */
     private async getFallbackSeedArtists(limit: number): Promise<SeedArtist[]> {
         logger.debug('[DiscoverySeeding] Insufficient play history, falling back to library');
 
-        // Get artists with their album and track counts
         const artistsWithCounts = await prisma.artist.findMany({
             where: {
                 albums: {
-                    some: { location: 'LIBRARY' },
+                    some: { location: LIBRARY_LOCATION },
                 },
             },
             include: {
                 albums: {
-                    where: { location: 'LIBRARY' },
+                    where: { location: LIBRARY_LOCATION },
                     include: {
                         _count: {
                             select: { tracks: true },
@@ -133,8 +115,7 @@ export class DiscoverySeeding {
             },
         });
 
-        // Calculate composite score: album count + (track count / 10)
-        // More tracks = more listened to
+        // Score: album count + track count / 10
         const scored = artistsWithCounts
             .map(artist => {
                 const albumCount = artist.albums.length;
@@ -160,43 +141,14 @@ export class DiscoverySeeding {
         }));
     }
 
-    /**
-     * Checks if an artist is already in the user's library (has albums).
-     * Discovery should find NEW artists, not more albums from artists they already own.
-     */
-    async isArtistInLibrary(artistMbid: string): Promise<boolean> {
-        if (!this.isValidMbid(artistMbid)) {
-            return false;
-        }
-
-        const artist = await prisma.artist.findFirst({
-            where: { mbid: artistMbid },
-            include: { albums: { take: 1 } },
-        });
-
-        if (artist && artist.albums.length > 0) {
-            logger.debug(`[DiscoverySeeding] Artist ${artistMbid} is in library`);
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Loads (and caches for OWNED_INDEX_TTL_MS) a snapshot of owned-album data
-     * used by the per-candidate fuzzy/name matching in `isAlbumOwned` and
-     * `DiscoverWeeklyService.isAlbumOwnedByName`. Replaces what used to be a
-     * fresh `contains`/ILIKE query per candidate album with one bulk load that
-     * both checks then scan in-memory (DISC-5).
-     */
+    /** The owned-album snapshot, cached for OWNED_INDEX_TTL_MS. */
     async getOwnedAlbumIndex(): Promise<OwnedAlbumIndex> {
         const now = Date.now();
         if (this.ownedIndexCache && now - this.ownedIndexCache.builtAt < this.OWNED_INDEX_TTL_MS) {
             return this.ownedIndexCache;
         }
         // Single-flight: concurrent candidate checks on a cold/expired cache share
-        // one DB load instead of each firing the full-table album/ownedAlbum scan
-        // (35b review follow-up).
+        // one DB load instead of each firing the full-table album/ownedAlbum scan.
         if (!this.ownedIndexLoad) {
             this.ownedIndexLoad = this.buildOwnedAlbumIndex().finally(() => {
                 this.ownedIndexLoad = null;
@@ -235,15 +187,7 @@ export class DiscoverySeeding {
         return this.ownedIndexCache;
     }
 
-    /**
-     * Checks if an album is already owned through any source:
-     * - OwnedAlbum table
-     * - Album table
-     * - Previous discovery
-     * - Pending downloads
-     * - Lidarr
-     * - Fuzzy name matching (if artistName and albumTitle provided)
-     */
+    /** Whether an album is owned: OwnedAlbum, Album, past discovery, pending downloads, Lidarr, then fuzzy names. */
     async isAlbumOwned(
         albumMbid: string,
         userId: string,
@@ -277,15 +221,12 @@ export class DiscoverySeeding {
         const inLidarr = await lidarrService.isAlbumAvailable(albumMbid);
         if (inLidarr) return true;
 
-        // Check exclusion window (recently discovered albums)
-        const excluded = await this.isAlbumExcluded(albumMbid, userId);
-        if (excluded) return true;
+        const recentlyRecommended = await this.wasRecentlyRecommended(albumMbid, userId);
+        if (recentlyRecommended) return true;
 
-        // Check if recently unavailable (failed downloads)
         const unavailable = await this.isAlbumUnavailable(albumMbid, userId);
         if (unavailable) return true;
 
-        // OPTIMIZED fuzzy matching - only if names provided
         if (artistName && albumTitle) {
             const normArtist = normalizeForMatching(artistName);
             const artistFirstWord = normArtist.split(' ')[0];
@@ -293,16 +234,21 @@ export class DiscoverySeeding {
             // Allow 2+ character names (handles U2, AC/DC, M83, etc.)
             if (artistFirstWord && artistFirstWord.length >= 2) {
                 // Scan the cached owned-album snapshot in-memory instead of a
-                // startsWith/contains query per candidate (DISC-5).
+                // startsWith/contains query per candidate.
                 const { albums } = await this.getOwnedAlbumIndex();
+                // Both sides normalised the same way: no leading article, no edition suffix.
+                const normTitle = normalizeForMatching(albumTitle);
                 const candidates = albums.filter(
                     (a) =>
-                        a.location === 'LIBRARY' &&
-                        a.artistName.toLowerCase().startsWith(artistFirstWord)
+                        a.location === LIBRARY_LOCATION &&
+                        normalizeForMatching(a.artistName).startsWith(artistFirstWord)
                 );
 
                 for (const album of candidates) {
-                    if (matchAlbum(artistName, albumTitle, album.artistName, album.title)) {
+                    if (
+                        stringSimilarity(normArtist, normalizeForMatching(album.artistName)) >= 75 &&
+                        stringSimilarity(normTitle, normalizeForMatching(album.title)) >= 75
+                    ) {
                         logger.debug(`[DiscoverySeeding] Fuzzy match: ${artistName} - ${albumTitle} = ${album.artistName} - ${album.title}`);
                         return true;
                     }
@@ -313,11 +259,8 @@ export class DiscoverySeeding {
         return false;
     }
 
-    /**
-     * Check if album was recently recommended (exclusion window).
-     * Prevents re-recommending albums from last 12 weeks.
-     */
-    async isAlbumExcluded(albumMbid: string, userId: string): Promise<boolean> {
+    /** Whether the album was recommended to this user in the last 12 weeks. */
+    private async wasRecentlyRecommended(albumMbid: string, userId: string): Promise<boolean> {
         const EXCLUSION_WEEKS = 12;
         const exclusionCutoff = subWeeks(new Date(), EXCLUSION_WEEKS);
 
@@ -337,11 +280,8 @@ export class DiscoverySeeding {
         return false;
     }
 
-    /**
-     * Check if album failed to download in recent weeks.
-     * Prevents wasting slots on albums not available on Soulseek.
-     */
-    async isAlbumUnavailable(albumMbid: string, userId: string): Promise<boolean> {
+    /** Whether the album failed to download for this user in the last 4 weeks. */
+    private async isAlbumUnavailable(albumMbid: string, userId: string): Promise<boolean> {
         const UNAVAILABLE_RETRY_WEEKS = 4;
         const retryCutoff = subWeeks(new Date(), UNAVAILABLE_RETRY_WEEKS);
 
@@ -361,9 +301,7 @@ export class DiscoverySeeding {
         return false;
     }
 
-    /**
-     * Validates that an MBID is not null/undefined and not a temporary ID.
-     */
+    /** An MBID that is present and not a temporary `temp-` id. */
     private isValidMbid(mbid: string | null | undefined): mbid is string {
         return !!mbid && !mbid.startsWith('temp-');
     }

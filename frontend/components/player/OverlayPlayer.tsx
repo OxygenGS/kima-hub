@@ -1,11 +1,10 @@
 "use client";
 
-import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
 import { useMediaInfo } from "@/hooks/useMediaInfo";
-import Image from "next/image";
+import { usePlayerControls } from "@/hooks/usePlayerControls";
+import { PlayCountLine } from "@/features/stats/PlayCountLine";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { useVibeToggle } from "@/hooks/useVibeToggle";
 import {
     Play,
     Pause,
@@ -16,24 +15,27 @@ import {
     Shuffle,
     Repeat,
     Repeat1,
-    AudioWaveform,
     Loader2,
     RotateCcw,
     RotateCw,
     RefreshCw,
     MicVocal,
 } from "lucide-react";
-import { formatTime, formatTimeRemaining } from "@/utils/formatTime";
-import { cn } from "@/utils/cn";
-import { usePlaybackProgress } from "@/hooks/usePlaybackProgress";
+import { formatTime, formatMediaDuration } from "@/lib/format";
+import { shuffleState } from "@/lib/shuffle";
+import { cn } from "@/lib/cn";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
-import { useFeatures } from "@/lib/features-context";
-import { MobileLyricsView } from "@/components/lyrics/MobileLyricsView";
+import { LyricsView } from "@/components/lyrics/LyricsView";
 import { useLyricsToggle } from "@/hooks/useLyricsToggle";
+import { VibeToggleButton } from "./VibeToggleButton";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function OverlayPlayer() {
+    const { t, locale } = useLanguage();
     const {
         currentTrack,
         currentAudiobook,
@@ -42,17 +44,14 @@ export function OverlayPlayer() {
         isShuffle,
         repeatMode,
         activeOperation,
-    } = useAudioState();
-    const {
         isPlaying,
         isBuffering,
         canSeek,
         downloadProgress,
         audioError,
-    } = useAudioPlayback();
-
-    const { duration, displayTime, progress } = usePlaybackProgress();
-    const {
+        duration,
+        displayTime,
+        progress,
         pause,
         resumeWithGesture,
         next,
@@ -63,7 +62,7 @@ export function OverlayPlayer() {
         skipBackward,
         toggleShuffle,
         toggleRepeat,
-    } = useAudioControls();
+    } = usePlayerControls();
 
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
@@ -71,29 +70,37 @@ export function OverlayPlayer() {
 
     // Swipe state for track skipping
     const touchStartX = useRef<number | null>(null);
+    const touchStartY = useRef<number | null>(null);
     const [swipeOffset, setSwipeOffset] = useState(0);
-    const { handleVibeToggle, isVibeLoading } = useVibeToggle();
-    const { vibeEmbeddings, loading: featuresLoading } = useFeatures();
-    const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ isMobile: isMobileOrTablet });
+    const { handleLyricsToggle, isLyricsActive } = useLyricsToggle({ inline: true });
     const { title, subtitle, coverUrl, artistLink, mediaLink, hasMedia } = useMediaInfo(500);
 
     if (!currentTrack && !currentAudiobook && !currentPodcast) return null;
 
     const canSkip = playbackType === "track";
+    const shuffle = shuffleState(hasMedia, playbackType, activeOperation.type);
 
-
-    // Swipe handlers for track skipping
+    // A sideways swipe on the artwork skips the track; the seek bar and other
+    // controls are outside it. Only a clearly sideways swipe counts.
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
-        if (touchStartX.current === null) return;
+        if (touchStartX.current === null || touchStartY.current === null) return;
         const deltaX = e.touches[0].clientX - touchStartX.current;
+        const deltaY = e.touches[0].clientY - touchStartY.current;
+        if (Math.abs(deltaY) > Math.abs(deltaX)) {
+            touchStartX.current = null;
+            setSwipeOffset(0);
+            return;
+        }
         setSwipeOffset(Math.max(-100, Math.min(100, deltaX)));
     };
 
     const handleTouchEnd = () => {
+        touchStartY.current = null;
         if (touchStartX.current === null) return;
 
         if (canSkip) {
@@ -111,11 +118,7 @@ export function OverlayPlayer() {
     return (
         <div
             className="fixed inset-0 bg-gradient-to-b from-[#141210] via-[#0a0a0a] to-[#000000] z-(--z-overlay) flex flex-col overflow-hidden"
-            onTouchStart={isMobileOrTablet ? handleTouchStart : undefined}
-            onTouchMove={isMobileOrTablet ? handleTouchMove : undefined}
-            onTouchEnd={isMobileOrTablet ? handleTouchEnd : undefined}
         >
-            {/* Header with close button */}
             <div
                 className="flex items-center justify-between px-4 py-3 flex-shrink-0"
                 style={{ paddingTop: "calc(12px + env(safe-area-inset-top))" }}
@@ -127,23 +130,22 @@ export function OverlayPlayer() {
                         returnToPreviousMode();
                     }}
                     className="text-[var(--text-secondary)] hover:text-white transition-colors p-2 -ml-2 rounded-full hover:bg-white/10"
-                    title="Close"
+                    title={t("close")}
+                    aria-label={t("close")}
                 >
                     <ChevronDown className="w-7 h-7" />
                 </button>
-                {/* Now Playing indicator */}
                 <span className="text-xs text-[var(--text-muted)] font-medium">
-                    Now Playing
+                    {t("Now Playing")}
                 </span>
                 <div className="w-11" /> {/* Spacer for centering */}
             </div>
 
             {/* Main Content - Portrait vs Landscape */}
             <div className="flex-1 flex flex-col landscape:flex-row items-center justify-center px-6 pb-6 landscape:px-8 landscape:gap-8 overflow-hidden">
-                {/* Artwork / Lyrics swap */}
-                {isLyricsActive && isMobileOrTablet ? (
+                {isLyricsActive ? (
                     <div className="w-full max-w-[280px] landscape:flex-1 aspect-square flex-shrink-0 relative mb-6 landscape:mb-0 rounded-2xl bg-[var(--bg-primary)]/90 border border-white/[0.06]">
-                        <MobileLyricsView />
+                        <LyricsView variant="compact" />
                     </div>
                 ) : (
                     <div
@@ -152,24 +154,25 @@ export function OverlayPlayer() {
                             transform: `translateX(${swipeOffset * 0.5}px)`,
                             opacity: 1 - Math.abs(swipeOffset) / 200,
                         }}
+                        onTouchStart={isMobileOrTablet ? handleTouchStart : undefined}
+                        onTouchMove={isMobileOrTablet ? handleTouchMove : undefined}
+                        onTouchEnd={isMobileOrTablet ? handleTouchEnd : undefined}
                     >
-                        {/* Glow effect */}
                         <div
                             className={cn(
                                 "absolute inset-0 rounded-2xl blur-2xl opacity-50",
                                 activeOperation.type !== 'idle'
-                                    ? "bg-gradient-to-br from-brand/30 via-transparent to-purple-500/30"
-                                    : "bg-gradient-to-br from-brand/20 via-transparent to-[#f97316]/20"
+                                    ? "bg-gradient-to-br from-brand/30 via-transparent to-type-track/30"
+                                    : "bg-gradient-to-br from-brand/20 via-transparent to-brand-dark/20"
                             )}
                         />
 
-                        {/* Album art */}
                         <div className={cn(
                             "relative w-full h-full bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a] rounded-2xl overflow-hidden transition-transform duration-300",
                             isPlaying && "scale-[1.03]"
                         )}>
                         {coverUrl ? (
-                            <Image
+                            <CachedImage
                                 key={coverUrl}
                                 src={coverUrl}
                                 alt={title}
@@ -177,7 +180,6 @@ export function OverlayPlayer() {
                                 sizes="280px"
                                 className="object-cover"
                                 priority
-                                unoptimized
                             />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center">
@@ -186,7 +188,6 @@ export function OverlayPlayer() {
                         )}
                         </div>
 
-                        {/* Swipe hint indicators */}
                         {canSkip &&
                             isMobileOrTablet &&
                             Math.abs(swipeOffset) > 20 && (
@@ -206,9 +207,7 @@ export function OverlayPlayer() {
                     </div>
                 )}
 
-                {/* Info & Controls Section */}
                 <div className="w-full max-w-[320px] landscape:max-w-[280px] landscape:flex-1 flex flex-col">
-                    {/* Track Info */}
                     <div className="text-center landscape:text-left mb-6">
                         {mediaLink ? (
                             <Link
@@ -240,10 +239,13 @@ export function OverlayPlayer() {
                                 {subtitle}
                             </p>
                         )}
+                        <PlayCountLine
+                            trackId={playbackType === "track" ? currentTrack?.id : null}
+                            className="mt-1"
+                        />
 
                     </div>
 
-                    {/* Progress Bar */}
                     <div className="mb-6">
                         <SeekSlider
                             progress={progress}
@@ -256,24 +258,19 @@ export function OverlayPlayer() {
                             showHandle={false}
                             className="mb-2"
                         />
-                        <div className="flex justify-between text-xs text-[var(--text-muted)] tabular-nums font-medium tabular-nums">
+                        <div className="flex justify-between text-xs text-[var(--text-muted)] tabular-nums font-medium">
                             <span>{formatTime(displayTime)}</span>
-                            <span>
-                                {playbackType === "podcast" || playbackType === "audiobook"
-                                    ? formatTimeRemaining(Math.max(0, duration - displayTime))
-                                    : formatTime(duration)}
-                            </span>
+                            <span>{formatMediaDuration(playbackType, duration, displayTime)}</span>
                         </div>
                     </div>
 
-                    {/* Main Controls */}
                     <div className="flex items-center justify-center gap-6 mb-6">
-                        {/* Skip -30s (for audiobooks/podcasts) */}
                         {!canSkip && (
                             <button
                                 onClick={() => skipBackward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="Rewind 30 seconds"
+                                title={t("rewind 30 seconds")}
+                                aria-label={t("Rewind 30 seconds")}
                             >
                                 <RotateCcw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -290,7 +287,8 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "Previous" : "Skip only for music"}
+                            title={t(canSkip ? "previous" : "skip only for music")}
+                            aria-label={t(canSkip ? "Previous track" : "skip only for music")}
                         >
                             <SkipBack className="w-8 h-8" />
                         </button>
@@ -300,20 +298,21 @@ export function OverlayPlayer() {
                             className={cn(
                                 "w-16 h-16 rounded-full flex items-center justify-center hover:scale-105 transition-all",
                                 audioError
-                                    ? "bg-red-500 text-black hover:bg-red-400"
+                                    ? "bg-danger text-black hover:bg-danger-light"
                                     : isBuffering
                                     ? "bg-brand/80 text-black"
                                     : "bg-brand text-black"
                             )}
-                            title={
+                            title={t(
                                 audioError
-                                    ? "Retry playback"
+                                    ? "retry playback"
                                     : isBuffering
-                                    ? "Buffering..."
+                                    ? "buffering..."
                                     : isPlaying
-                                    ? "Pause"
-                                    : "Play"
-                            }
+                                    ? "pause"
+                                    : "play"
+                            )}
+                            aria-label={t(audioError ? "Retry playback" : isBuffering ? "Buffering..." : isPlaying ? "Pause" : "Play")}
                         >
                             {audioError ? (
                                 <RefreshCw className="w-7 h-7" />
@@ -334,17 +333,18 @@ export function OverlayPlayer() {
                                     "opacity-30 cursor-not-allowed hover:scale-100"
                             )}
                             disabled={!canSkip}
-                            title={canSkip ? "Next" : "Skip only for music"}
+                            title={t(canSkip ? "next" : "skip only for music")}
+                            aria-label={t(canSkip ? "Next track" : "skip only for music")}
                         >
                             <SkipForward className="w-8 h-8" />
                         </button>
 
-                        {/* Skip +30s (for audiobooks/podcasts) */}
                         {!canSkip && (
                             <button
                                 onClick={() => skipForward(30)}
                                 className="text-[var(--text-primary)] hover:text-white transition-all hover:scale-110 relative"
-                                title="Forward 30 seconds"
+                                title={t("forward 30 seconds")}
+                                aria-label={t("Forward 30 seconds")}
                             >
                                 <RotateCw className="w-7 h-7" />
                                 <span className="absolute text-micro font-semibold top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -354,22 +354,22 @@ export function OverlayPlayer() {
                         )}
                     </div>
 
-                    {/* Secondary Controls */}
                     <div className="flex items-center justify-center gap-8">
                         <SleepTimer />
 
                         <button
                             onClick={toggleShuffle}
-                            disabled={!canSkip}
+                            disabled={!shuffle.enabled}
                             className={cn(
                                 "transition-colors",
-                                !canSkip
+                                !shuffle.enabled
                                     ? "text-[var(--text-muted)] cursor-not-allowed"
                                     : isShuffle
-                                    ? "text-[#a855f7]"
+                                    ? "text-brand"
                                     : "text-[var(--text-muted)] hover:text-white"
                             )}
-                            title="Shuffle"
+                            title={translate(locale, shuffle.title)}
+                            aria-label={t("Shuffle")}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -382,16 +382,17 @@ export function OverlayPlayer() {
                                 !canSkip
                                     ? "text-[var(--text-muted)] cursor-not-allowed"
                                     : repeatMode !== "off"
-                                    ? "text-[#a855f7]"
+                                    ? "text-brand"
                                     : "text-[var(--text-muted)] hover:text-white"
                             )}
-                            title={
+                            title={t(
                                 repeatMode === "one"
-                                    ? "Repeat One"
+                                    ? "repeat one"
                                     : repeatMode === "all"
-                                    ? "Repeat All"
-                                    : "Repeat Off"
-                            }
+                                    ? "repeat all"
+                                    : "repeat off"
+                            )}
+                            aria-label={t(repeatMode === "one" ? "Repeat one" : repeatMode === "all" ? "Repeat all" : "Repeat off")}
                         >
                             {repeatMode === "one" ? (
                                 <Repeat1 className="w-5 h-5" />
@@ -400,34 +401,14 @@ export function OverlayPlayer() {
                             )}
                         </button>
 
-                        {/* Vibe button - only when embeddings available */}
-                        {!featuresLoading && vibeEmbeddings && (
-                            <button
-                                onClick={handleVibeToggle}
-                                disabled={!canSkip || isVibeLoading}
-                                className={cn(
-                                    "transition-colors",
-                                    !canSkip
-                                        ? "text-[var(--text-muted)] cursor-not-allowed"
-                                        : activeOperation.type !== 'idle'
-                                        ? "text-brand"
-                                        : "text-[var(--text-muted)] hover:text-brand"
-                                )}
-                                title={
-                                    activeOperation.type !== 'idle'
-                                        ? "Turn off vibe mode"
-                                        : "Match this vibe"
-                                }
-                            >
-                                {isVibeLoading ? (
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <AudioWaveform className="w-5 h-5" />
-                                )}
-                            </button>
-                        )}
+                        <VibeToggleButton
+                            unavailable={!canSkip}
+                            className="transition-colors"
+                            iconClassName="w-5 h-5"
+                            idleClassName="text-[var(--text-muted)] hover:text-brand"
+                            activeClassName="text-brand"
+                        />
 
-                        {/* Lyrics Toggle */}
                         {playbackType === "track" && (
                             <button
                                 onClick={handleLyricsToggle}
@@ -440,8 +421,8 @@ export function OverlayPlayer() {
                                         : "text-[var(--text-muted)] hover:text-brand"
                                 )}
                                 disabled={!hasMedia}
-                                aria-label="Toggle lyrics"
-                                title="Show lyrics"
+                                aria-label={t("Toggle lyrics")}
+                                title={t("show lyrics")}
                             >
                                 <MicVocal className="w-5 h-5" />
                             </button>

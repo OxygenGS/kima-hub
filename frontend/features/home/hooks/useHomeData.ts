@@ -1,14 +1,9 @@
-/**
- * useHomeData Hook
- *
- * Manages data loading for the Home page, fetching all 7 sections using React Query
- * and providing refresh functionality for mixes.
- */
+/** Loads every Home section and refreshes the mixes. */
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast-context";
+import { notify } from "@/lib/notify";
 import type {
     Artist,
     ListenedItem,
@@ -51,22 +46,8 @@ export interface UseHomeDataReturn {
     handleRefreshMixes: () => Promise<void>;
 }
 
-/**
- * Custom hook to load all Home page data sections using React Query
- *
- * Loads the following sections with automatic caching:
- * 1. Recently listened (Continue Listening)
- * 2. Recently added artists
- * 3. Recommended for you
- * 4. Mixes (Made For You)
- * 5. Popular artists
- * 6. Recent podcasts
- * 7. Recent audiobooks
- *
- * @returns {UseHomeDataReturn} All home page data and loading states
- */
+/** Every Home section: continue listening, recently added, recommended, mixes, popular, podcasts, audiobooks. */
 export function useHomeData(): UseHomeDataReturn {
-    const { toast } = useToast();
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
@@ -100,7 +81,6 @@ export function useHomeData(): UseHomeDataReturn {
     const { data: browseData, isLoading: isBrowseLoading } =
         useBrowseAllQuery();
 
-    // Mutation for refreshing mixes
     const { mutateAsync: refreshMixes, isPending: isRefreshingMixes } =
         useRefreshMixesMutation();
 
@@ -110,10 +90,9 @@ export function useHomeData(): UseHomeDataReturn {
     const handleRefreshMixes = async () => {
         try {
             await refreshMixes();
-            toast.success("Mixes refreshed! Check out your new daily picks");
         } catch (error) {
             console.error("Failed to refresh mixes:", error);
-            toast.error("Failed to refresh mixes");
+            notify.error("Failed to refresh mixes");
         }
     };
 

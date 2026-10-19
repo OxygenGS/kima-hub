@@ -1,18 +1,7 @@
 /**
- * safeError must never hand the error OBJECT to the logger.
- *
- * `logger.error` forwards extra arguments to `console.error`, which runs
- * util.inspect over them, and util.inspect prints an AxiosError's enumerable
- * properties -- including `config.headers`. The connection-test routes in
- * routes/systemSettings.ts put an admin's unsaved API key in a header, so
- * `logger.error(ctx, error)` wrote that key to stdout in plaintext on every
- * failed probe. In production it still landed: the log level defaults to
- * 'warn', and error outranks warn.
- *
- * These cases are measured against this repo's own axios rather than argued.
- * The first one deliberately asserts that the leak WAS real -- if a future
- * axios stops exposing config on the error, that test failing is the signal to
- * re-read this file, not to delete it.
+ * safeError never passes the error object to the logger: util.inspect would
+ * print an AxiosError's config.headers, including an API key. The first test
+ * checks that axios really does expose them.
  */
 
 jest.mock("../logger", () => ({
@@ -118,9 +107,8 @@ describe("safeError and credentials in logs", () => {
 
         const args = (logger.error as jest.Mock).mock.calls[0];
         expect(args).toHaveLength(1);
-        // Inspect the WHOLE argument list, not just the first entry: a second
-        // argument is precisely how the secret used to escape, so checking only
-        // args[0] would pass while leaking.
+        // Inspect the whole argument list: a second argument would carry the
+        // secret while args[0] looked clean.
         expect(util.inspect(args)).not.toContain(SECRET);
     });
 });

@@ -2,482 +2,518 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
+import { LocateFixed, Tag, X, type LucideIcon } from "lucide-react";
 import { useVibeMap } from "@/features/vibe/useVibeMap";
-const VibeMap = dynamic(
-    () => import("@/features/vibe/VibeMap").then(m => ({ default: m.VibeMap })),
-    { ssr: false },
-);
 import { VibeToolbar } from "@/features/vibe/VibeToolbar";
 import { VibeSongPath } from "@/features/vibe/VibeSongPath";
-import { VibePanelSheet } from "@/features/vibe/VibePanelSheet";
 import { VibeAlchemy } from "@/features/vibe/VibeAlchemy";
+import { VibePanelSheet } from "@/features/vibe/VibePanelSheet";
+import { TrackPanel } from "@/features/vibe/TrackPanel";
+import { TrackMenu } from "@/features/vibe/TrackMenu";
+import { MoodLegend } from "@/features/vibe/MoodLegend";
+import { buildLibraryIndex, searchLibrary } from "@/features/vibe/librarySearch";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { api } from "@/lib/api";
 import type { Track, VibeOperation } from "@/lib/audio-state-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import { Loader2, X } from "lucide-react";
-type VibeView = "map" | "galaxy";
+import { notify } from "@/lib/notify";
+import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/Button";
+import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 
-const GalacticMap = dynamic(
-    () => import("@/features/vibe/scenes/GravityGridScene").then(m => ({ default: m.GravityGridScene })),
-    { ssr: false },
+const VibeMapScene = dynamic(
+    () => import("@/features/vibe/map/VibeMapScene").then((m) => ({ default: m.VibeMapScene })),
+    { ssr: false, loading: () => <VibeLoadingNote /> },
 );
 
-class VibeMapErrorBoundary extends React.Component<
-    { children: React.ReactNode },
-    { hasError: boolean; error: string | null }
-> {
-    constructor(props: { children: React.ReactNode }) {
-        super(props);
-        this.state = { hasError: false, error: null };
-    }
+// Width the desktop track panel takes from the right edge (20rem + its 1rem inset + a gap).
+const PANEL_CLEARANCE = 352;
 
+function CenteredNote({ title, detail, spinner, action }: { title: string; detail?: string; spinner?: boolean; action?: React.ReactNode }) {
+    return (
+        <div className="vibe-sky flex h-full w-full items-center justify-center">
+            <div className="max-w-xs px-6 text-center">
+                {spinner && <GradientSpinner size="sm" className="mx-auto mb-3 block" />}
+                <p className="text-sm text-[var(--text-secondary)]">{title}</p>
+                {detail && <p className="mt-1 text-xs text-[var(--text-muted)]">{detail}</p>}
+                {action}
+            </div>
+        </div>
+    );
+}
+
+function VibeLoadingNote() {
+    const { locale } = useLanguage();
+    return <CenteredNote title={translate(locale, "Charting your library")} spinner />;
+}
+
+// A WebGL failure must not take the rest of the app down with it.
+class SceneErrorBoundary extends React.Component<{ children: React.ReactNode; locale: Locale }, { error: string | null }> {
+    state = { error: null as string | null };
     static getDerivedStateFromError(error: Error) {
-        return { hasError: true, error: error.message };
+        return { error: error.message };
     }
-
     render() {
-        if (this.state.hasError) {
+        if (this.state.error !== null) {
             return (
-                <div className="w-full h-full vibe-map-bg flex items-center justify-center">
-                    <div className="text-center">
-                        <p className="text-[var(--text-muted)] text-sm">Map rendering failed</p>
-                        <p className="text-[var(--text-muted)] text-xs mt-1">{this.state.error}</p>
-                        <button
-                            onClick={() => this.setState({ hasError: false, error: null })}
-                            className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/15 rounded text-xs text-[var(--text-secondary)] hover:text-white"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                </div>
+                <CenteredNote
+                    title={translate(this.props.locale, "The map could not be drawn")}
+                    detail={this.state.error}
+                    action={
+                        <Button size="sm" className="mt-3" onClick={() => this.setState({ error: null })}>
+                            {translate(this.props.locale, "Try again")}
+                        </Button>
+                    }
+                />
             );
         }
         return this.props.children;
     }
 }
 
+function MapIconButton({ icon: Icon, compact, className, ...props }: { icon: LucideIcon; compact: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+    return (
+        <button
+            type="button"
+            className={cn(
+                "vibe-glass flex items-center justify-center transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+                compact ? "h-11 w-11 rounded-full" : "h-9 w-9 rounded-lg",
+                className,
+            )}
+            {...props}
+        >
+            <Icon className={compact ? "h-[18px] w-[18px]" : "h-4 w-4"} />
+        </button>
+    );
+}
+
+function toQueueTrack(t: { id: string; title: string; duration?: number; artist: { id: string; name: string }; album: { id: string; title: string; coverUrl: string | null } }): Track {
+    return {
+        id: t.id,
+        title: t.title,
+        duration: t.duration ?? 0,
+        artist: { name: t.artist.name, id: t.artist.id },
+        album: { title: t.album.title, coverArt: t.album.coverUrl ?? undefined, id: t.album.id },
+    };
+}
+
 export default function VibePage() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const {
-        mapData,
-        isLoading,
-        error,
-        refetch,
-        trackMap,
-        mode,
-        selectedTrackId,
-        highlightedIds,
-        pathResult,
-        selectTrack,
-        completePathPicking,
-        resetMode,
-        setMode,
-        setHighlightedIds,
+        mapData, isLoading, computing, error, refetch, trackMap, mode, selectedTrackId, highlightedIds,
+        selectTrack, resetMode, setMode, setHighlightedIds,
     } = useVibeMap();
 
-    // The luma.gl teardown error this page provokes is suppressed by
-    // GpuTeardownSuppressor, mounted at the root. It cannot live here: the error fires
-    // after this page unmounts, by which point a handler registered here is gone.
-
-    const [view, setView] = useState<VibeView>(() => {
-        try {
-            const saved = sessionStorage.getItem("kima_vibe_view");
-            if (saved === "map" || saved === "galaxy") return saved;
-        } catch { /* noop */ }
-        return "map";
-    });
-    const [driftSourceId, setDriftSourceId] = useState<string | null>(null);
-    const handleViewChange = useCallback((v: VibeView) => {
-        setView(v);
-        setDriftSourceId(null);
-        try { sessionStorage.setItem("kima_vibe_view", v); } catch { /* noop */ }
-    }, []);
-
-    const [showLabels, setShowLabels] = useState(() => {
-        try { return localStorage.getItem("kima_vibe_labels") !== "false"; } catch { return true; }
-    });
-    const handleToggleLabels = useCallback(() => {
-        setShowLabels((prev) => {
-            const next = !prev;
-            try { localStorage.setItem("kima_vibe_labels", String(next)); } catch { /* noop */ }
-            return next;
-        });
-    }, []);
-    const [showPathPicker, setShowPathPicker] = useState(false);
-    const [showAlchemy, setShowAlchemy] = useState(false);
-    const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
-        if (typeof window === "undefined") return false;
-        try { return localStorage.getItem("kima_vibe_onboarding_seen") === "true"; } catch { return false; }
-    });
-    const dismissOnboarding = useCallback(() => {
-        setOnboardingDismissed(true);
-        try { localStorage.setItem("kima_vibe_onboarding_seen", "true"); } catch { /* noop */ }
-    }, []);
-    const { currentTrack, queue, activeOperation } = useAudioState();
+    const { currentTrack, playbackType, queue, activeOperation } = useAudioState();
     const { playTrack, replaceOperation } = useAudioControls();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
-    const queueTrackIds = useMemo(() => queue.map(t => t.id), [queue]);
+    const compact = isMobile || isTablet;
+
+    const [driftSourceId, setDriftSourceId] = useState<string | null>(null);
+    const [showPathPicker, setShowPathPicker] = useState(false);
+    const [showAlchemy, setShowAlchemy] = useState(false);
+    const [menu, setMenu] = useState<{ trackId: string; at: { x: number; y: number } } | null>(null);
+    const [resetSignal, setResetSignal] = useState(0);
+    const [moodPreview, setMoodPreview] = useState<string | null>(null);
+    const [moodPinned, setMoodPinned] = useState<string | null>(null);
+
+    const [showLabels, setShowLabels] = useState(() => {
+        try { return localStorage.getItem("kima_vibe_labels") === "true"; } catch { return false; }
+    });
+    const toggleLabels = useCallback(() => {
+        setShowLabels((prev) => {
+            try { localStorage.setItem("kima_vibe_labels", String(!prev)); } catch { /* storage unavailable */ }
+            return !prev;
+        });
+    }, []);
+
+    const [hintDismissed, setHintDismissed] = useState(() => {
+        try { return localStorage.getItem("kima_vibe_onboarding_seen") === "true"; } catch { return false; }
+    });
+    const dismissHint = useCallback(() => {
+        setHintDismissed(true);
+        try { localStorage.setItem("kima_vibe_onboarding_seen", "true"); } catch { /* storage unavailable */ }
+    }, []);
+
+    const queueTrackIds = useMemo(() => queue.map((t) => t.id), [queue]);
     const vibeRequestRef = useRef<AbortController | null>(null);
-    const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const driftPickedAt = useRef(0);
     useEffect(() => () => { vibeRequestRef.current?.abort(); }, []);
-    useEffect(() => () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); }, []);
 
-    const handleTrackContextMenu = useCallback(async (trackId: string, op: 'vibe' | 'similar' | 'drift') => {
-        if (op === 'drift') {
-            setDriftSourceId(trackId);
-            return;
-        }
+    // Title/artist search over the loaded map. The index is built once per map;
+    // each query is a single pass over pre-folded strings.
+    const libraryIndex = useMemo(() => buildLibraryIndex(mapData?.tracks ?? []), [mapData]);
+    const [searchQuery, setSearchQuery] = useState("");
+    const searchResults = useMemo(() => searchLibrary(libraryIndex, searchQuery), [libraryIndex, searchQuery]);
+    const [flyTo, setFlyTo] = useState<{ id: string; nonce: number } | null>(null);
+    const [searchClears, setSearchClears] = useState(0);
 
-        // Cancel any in-flight request from a previous right-click
+    // Mood legend highlights apply only while no search/similar/path/blend result is showing.
+    const moodFocus = mode === "idle" ? moodPreview ?? moodPinned : null;
+    const displayedHighlights = useMemo(() => {
+        if (mode === "search") return searchResults.ids;
+        if (!moodFocus || !mapData) return highlightedIds;
+        return new Set(mapData.tracks.filter((t) => t.dominantMood === moodFocus).map((t) => t.id));
+    }, [mode, moodFocus, mapData, highlightedIds, searchResults]);
+
+    // ── track operations ──
+    const runTrackOperation = useCallback(async (trackId: string, op: "vibe" | "similar") => {
         vibeRequestRef.current?.abort();
         const controller = new AbortController();
         vibeRequestRef.current = controller;
-
         try {
             const response = await api.getVibeSimilarTracks(trackId, 50, controller.signal);
             if (controller.signal.aborted) return;
-            if (!response.tracks || response.tracks.length === 0) return;
-
-            if (!mapData?.tracks.some(t => t.id === trackId)) return;
-
-            const tracks: Track[] = response.tracks.map((t) => ({
-                id: t.id,
-                title: t.title,
-                duration: t.duration,
-                artist: { name: t.artist.name, id: t.artist.id },
-                album: { title: t.album.title, coverArt: t.album.coverUrl ?? undefined, id: t.album.id },
-            }));
-
-            if (op === 'vibe') {
-                const sourceTrackFull = await api.getTrack(trackId);
-                if (controller.signal.aborted) return;
-                if (!sourceTrackFull) return;
-                const newOp: VibeOperation = {
-                    type: 'vibe',
+            if (!response.tracks?.length) {
+                notify.error(translate(locale, "No matches for this track yet"));
+                return;
+            }
+            if (!mapData?.tracks.some((t) => t.id === trackId)) return;
+            if (op === "vibe") {
+                const source = await api.getTrack(trackId);
+                if (controller.signal.aborted || !source) return;
+                const tracks = response.tracks.map(toQueueTrack);
+                const operation: VibeOperation = {
+                    type: "vibe",
                     sourceTrackId: trackId,
-                    sourceFeatures: {},
-                    trackIds: [trackId, ...tracks.map(t => t.id)],
+                    matches: Object.fromEntries(response.tracks.map((t) => [t.id, t.similarity])),
+                    trackIds: [trackId, ...tracks.map((t) => t.id)],
                 };
-                await replaceOperation(newOp, [sourceTrackFull, ...tracks], 0);
+                await replaceOperation(operation, [source, ...tracks], 0);
             } else {
-                // similar -- highlight on map, no queue replacement
-                setHighlightedIds(new Set(response.tracks.map(t => t.id)));
+                setMoodPinned(null);
+                setHighlightedIds(new Set([trackId, ...response.tracks.map((t) => t.id)]));
                 setMode("similar");
             }
-        } catch {
-            // silently fail (includes abort errors)
+        } catch (error) {
+            if (controller.signal.aborted) return;
+            notify.error(error instanceof Error && error.message ? error.message : translate(locale, "Couldn't find matches for this track"));
         }
-    }, [mapData, replaceOperation, setHighlightedIds, setMode]);
+    }, [mapData, replaceOperation, setHighlightedIds, setMode, locale]);
 
-    // Galaxy is not suitable for mobile -- fall back to map view
-    const effectiveView: VibeView = isMobile && view === "galaxy" ? "map" : view;
-
-    const handleTrackClick = useCallback(async (trackId: string) => {
-        if (mode === "path-picking") {
-            completePathPicking(trackId);
-            return;
-        }
-        if (driftSourceId) {
-            const sourceId = driftSourceId;
-            setDriftSourceId(null);
-            try {
-                const result = await api.getVibePath(sourceId, trackId, { length: 12, mode: "smooth" });
-                const allPath = [result.startTrack, ...result.path, result.endTrack];
-                const driftTracks: Track[] = allPath.map((t) => ({
-                    id: t.id,
-                    title: t.title,
-                    duration: t.duration,
-                    artist: { name: t.artistName, id: t.artistId },
-                    album: { title: t.albumTitle, coverArt: t.albumCoverUrl ?? undefined, id: t.albumId },
-                }));
-                const newOp: VibeOperation = {
-                    type: 'drift',
-                    startTrackId: sourceId,
-                    endTrackId: trackId,
-                    pathTrackIds: driftTracks.map(t => t.id),
-                };
-                await replaceOperation(newOp, driftTracks, 0);
-            } catch {
-                // silently fail
-            }
-            return;
-        }
-        selectTrack(trackId);
-    }, [mode, selectTrack, completePathPicking, driftSourceId, replaceOperation]);
-
-    const handleTrackDoubleClick = useCallback(async (trackId: string) => {
+    const playById = useCallback(async (trackId: string) => {
         try {
             const track = await api.getTrack(trackId);
             if (track) playTrack(track);
         } catch {
-            // Silently fail -- track may not be streamable
+            notify.error(translate(locale, "Couldn't play this track"));
         }
-    }, [playTrack]);
+    }, [playTrack, locale]);
+
+    // The second click of a double-click that picked a song-path destination
+    // must not also start that track and race the path's queue.
+    const playFromMap = useCallback((trackId: string) => {
+        if (Date.now() - driftPickedAt.current < 600) return;
+        void playById(trackId);
+    }, [playById]);
+
+    const playSelected = useCallback(() => {
+        if (selectedTrackId) void playById(selectedTrackId);
+    }, [selectedTrackId, playById]);
+
+    const finishDrift = useCallback(async (sourceId: string, targetId: string) => {
+        try {
+            const result = await api.getVibePath(sourceId, targetId, { length: 12, mode: "smooth" });
+            const steps = [result.startTrack, ...result.path, result.endTrack];
+            const tracks: Track[] = steps.map((t) => ({
+                id: t.id,
+                title: t.title,
+                duration: t.duration,
+                artist: { name: t.artistName, id: t.artistId },
+                album: { title: t.albumTitle, coverArt: t.albumCoverUrl ?? undefined, id: t.albumId },
+            }));
+            const operation: VibeOperation = {
+                type: "drift",
+                startTrackId: sourceId,
+                endTrackId: targetId,
+                pathTrackIds: tracks.map((t) => t.id),
+            };
+            await replaceOperation(operation, tracks, 0);
+        } catch (error) {
+            notify.error(error instanceof Error && error.message ? error.message : translate(locale, "Couldn't find a path between those two tracks"));
+        }
+    }, [replaceOperation, locale]);
+
+    // ── map interaction ──
+    const handleTrackClick = useCallback((trackId: string) => {
+        if (driftSourceId) {
+            const sourceId = driftSourceId;
+            setDriftSourceId(null);
+            driftPickedAt.current = Date.now();
+            if (sourceId !== trackId) void finishDrift(sourceId, trackId);
+            return;
+        }
+        selectTrack(trackId);
+    }, [driftSourceId, finishDrift, selectTrack]);
+
+    const handleBackgroundClick = useCallback(() => {
+        setMenu(null);
+        setDriftSourceId(null);
+        if (mode === "idle") selectTrack(null);
+    }, [mode, selectTrack]);
+
+    const handleTrackMenu = useCallback((trackId: string, at: { x: number; y: number }) => {
+        setMenu({ trackId, at });
+    }, []);
 
     const handleSearch = useCallback((query: string) => {
-        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-        searchTimerRef.current = setTimeout(() => {
-            if (!query || query.length < 2 || !mapData) {
-                setMode((prev) => {
-                    if (prev === "search") {
-                        setHighlightedIds(new Set());
-                        return "idle";
-                    }
-                    return prev;
-                });
-                return;
-            }
-            const lower = query.toLowerCase();
-            const matchIds = new Set<string>();
-            for (const track of mapData.tracks) {
-                if (track.title.toLowerCase().includes(lower) || track.artist.toLowerCase().includes(lower)) {
-                    matchIds.add(track.id);
-                }
-            }
+        setSearchQuery(query);
+        if (query.trim().length >= 2) {
+            setMoodPinned(null);
             setMode("search");
-            setHighlightedIds(matchIds);
-        }, 200);
-    }, [mapData, setMode, setHighlightedIds]);
+        } else {
+            setMode((prev) => (prev === "search" ? "idle" : prev));
+        }
+    }, [setMode]);
 
-    const handlePathMode = useCallback(() => {
+    // Picking a search result selects that track and flies the camera to it.
+    const pickSearchResult = useCallback((trackId: string) => {
+        selectTrack(trackId);
+        setFlyTo({ id: trackId, nonce: Date.now() });
+    }, [selectTrack]);
+
+    const openPathPicker = useCallback(() => {
         setShowPathPicker(true);
         setShowAlchemy(false);
         setMode("path-picking");
     }, [setMode]);
 
-    const handleAlchemyMode = useCallback(() => {
+    const openAlchemy = useCallback(() => {
         setShowAlchemy(true);
         setShowPathPicker(false);
         setMode("alchemy");
     }, [setMode]);
 
-    const handlePathSubmit = useCallback(async (startId: string, endId: string) => {
+    // The toolbar's Song Path and the one started from a track are the same drift.
+    const submitPath = useCallback(async (startId: string, endId: string) => {
         setShowPathPicker(false);
-        await completePathPicking(endId, startId);
-    }, [completePathPicking]);
+        setMode("idle");
+        await finishDrift(startId, endId);
+    }, [finishDrift, setMode]);
 
-    const handleClose = useCallback(() => {
+    const clearAll = useCallback(() => {
         resetMode();
         setShowPathPicker(false);
         setShowAlchemy(false);
+        setDriftSourceId(null);
+        setMoodPinned(null);
+        setSearchQuery("");
+        setSearchClears((n) => n + 1);
     }, [resetMode]);
 
-    const handleBackgroundClick = useCallback(() => {
-        if (mode === "idle") selectTrack(null);
-    }, [mode, selectTrack]);
+    // One Escape handler for the page, undoing the latest thing first: the menu,
+    // an open Song Path or Blend panel, a pending song-path pick, then the
+    // selection. Inputs that handle Escape themselves mark the event handled.
+    const escapeState = useRef({ menu: false, panel: false, drift: false, selected: false });
+    useEffect(() => {
+        escapeState.current = { menu: !!menu, panel: showAlchemy || showPathPicker, drift: !!driftSourceId, selected: !!selectedTrackId };
+    }, [menu, showAlchemy, showPathPicker, driftSourceId, selectedTrackId]);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape" || e.defaultPrevented) return;
+            const state = escapeState.current;
+            if (state.menu) setMenu(null);
+            else if (state.panel) { setShowAlchemy(false); setShowPathPicker(false); resetMode(); }
+            else if (state.drift) setDriftSourceId(null);
+            else if (state.selected) selectTrack(null);
+            else return;
+            e.preventDefault();
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [selectTrack, resetMode]);
 
-    if (isLoading) {
+    // A refetch can drop the selected track; do not leave the map dimmed for a
+    // selection that no longer exists.
+    useEffect(() => {
+        if (selectedTrackId && mapData && !trackMap.has(selectedTrackId)) selectTrack(null);
+    }, [selectedTrackId, mapData, trackMap, selectTrack]);
+
+    if (isLoading) return <CenteredNote title={t("Charting your library")} spinner />;
+    if (computing) {
         return (
-            <div className="w-full h-full vibe-map-bg flex items-center justify-center">
-                <div className="text-center">
-                    <Loader2 className="w-6 h-6 text-purple-500 animate-spin mx-auto mb-3 opacity-60" />
-                    <p className="text-[var(--text-muted)] text-sm tracking-wide">Computing music map</p>
-                </div>
-            </div>
+            <CenteredNote
+                title={t("Charting your library")}
+                detail={t("Building the map. Large libraries take a few minutes.")}
+                spinner
+            />
         );
     }
 
     if (error) {
         return (
-            <div className="w-full h-full vibe-map-bg flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-[var(--text-muted)] text-sm">Failed to load music map</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-1">{error instanceof Error ? error.message : "Unknown error"}</p>
-                    <button
-                        onClick={() => refetch()}
-                        className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/15 rounded text-xs text-[var(--text-secondary)] hover:text-white"
-                    >
-                        Retry
-                    </button>
-                </div>
-            </div>
+            <CenteredNote
+                title={t("The music map did not load")}
+                detail={error instanceof Error ? error.message : undefined}
+                action={
+                    <Button size="sm" className="mt-3" onClick={() => refetch()}>
+                        {t("Try again")}
+                    </Button>
+                }
+            />
         );
     }
 
     if (!mapData || mapData.tracks.length === 0) {
-        return (
-            <div className="w-full h-full vibe-map-bg flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-[var(--text-muted)] text-sm">No tracks with vibe analysis yet</p>
-                    <p className="text-[var(--text-muted)] text-xs mt-1">Run enrichment to generate embeddings</p>
-                </div>
-            </div>
-        );
+        return <CenteredNote title={t("No tracks with vibe analysis yet")} detail={t("Run enrichment to analyse your library; tracks appear here as they finish.")} />;
     }
 
+    const selectedTrack = selectedTrackId ? trackMap.get(selectedTrackId) : undefined;
+    const showHint = mode === "idle" && !hintDismissed && !selectedTrack;
+    const menuTrack = menu ? trackMap.get(menu.trackId) : undefined;
+
     return (
-        <div className="w-full h-full relative overflow-hidden animate-rise">
-                <VibeMapErrorBoundary>
-                    {effectiveView === "map" ? (
-                        <VibeMap
-                            tracks={mapData.tracks}
-                            highlightedIds={highlightedIds}
-                            selectedTrackId={selectedTrackId}
-                            pathResult={pathResult}
-                            mode={mode}
-                            trackMap={trackMap}
-                            queueTrackIds={queueTrackIds}
-                            showLabels={showLabels}
-                            playingTrackId={currentTrack?.id ?? null}
-                            activeOperation={activeOperation}
-                            onTrackClick={handleTrackClick}
-                            onTrackDoubleClick={handleTrackDoubleClick}
-                            onBackgroundClick={handleBackgroundClick}
-                        />
-                    ) : (
-                        <>
-                            <GalacticMap
-                                tracks={mapData.tracks}
-                                highlightedIds={highlightedIds}
-                                playingTrackId={currentTrack?.id ?? null}
-                                selectedTrackId={selectedTrackId}
-                                queueTrackIds={queueTrackIds}
-                                activeOperation={activeOperation}
-                                showLabels={showLabels}
-                                onTrackClick={handleTrackClick}
-                                onTrackDoubleClick={handleTrackDoubleClick}
-                                onTrackContextMenu={handleTrackContextMenu}
-                                onBackgroundClick={handleBackgroundClick}
-                            />
-                            {/* Desktop/Galaxy song-path banner -- desktop only; mobile gets the sheet hint */}
-                            {driftSourceId && !isMobile && !isTablet && (
-                                <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-raised) bg-black/80 text-[var(--text-secondary)] px-4 py-2 rounded-lg text-sm backdrop-blur-sm border border-[var(--color-brand)]/20 flex items-center gap-3">
-                                    <span className="w-2 h-2 rounded-full bg-[var(--color-brand)]/60 animate-pulse" />
-                                    Click destination to begin song path
-                                    <button
-                                        onClick={() => setDriftSourceId(null)}
-                                        className="text-[var(--text-muted)] hover:text-white ml-1 text-xs"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </VibeMapErrorBoundary>
-
-                {/* Desktop map-view song-path banner (galaxy view has its own inline) */}
-                {driftSourceId && effectiveView === "map" && !isMobile && !isTablet && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-raised) bg-black/80 text-[var(--text-secondary)] px-4 py-2 rounded-lg text-sm backdrop-blur-sm border border-[var(--color-brand)]/20 flex items-center gap-3">
-                        <span className="w-2 h-2 rounded-full bg-[var(--color-brand)]/60 animate-pulse" />
-                        Click destination to begin song path
-                        <button
-                            onClick={() => setDriftSourceId(null)}
-                            className="text-[var(--text-muted)] hover:text-white ml-1 text-xs"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                )}
-
-                <VibeToolbar
-                    mode={mode}
-                    onSearch={handleSearch}
-                    onPathMode={handlePathMode}
-                    onAlchemyMode={handleAlchemyMode}
-                    onReset={handleClose}
+        <div className="vibe-sky relative h-full w-full overflow-hidden animate-rise">
+            <SceneErrorBoundary locale={locale}>
+                <VibeMapScene
+                    tracks={mapData.tracks}
+                    trackMap={trackMap}
+                    highlightedIds={displayedHighlights}
+                    selectedTrackId={selectedTrackId}
+                    playingTrackId={currentTrack?.id ?? null}
+                    queueTrackIds={queueTrackIds}
+                    activeOperation={activeOperation}
+                    showLabels={showLabels}
+                    focusMood={moodFocus}
+                    picking={!!driftSourceId}
+                    resetSignal={resetSignal}
+                    flyTo={flyTo}
+                    coveredRight={!compact && selectedTrack ? PANEL_CLEARANCE : 0}
+                    onTrackClick={handleTrackClick}
+                    onTrackDoubleClick={playFromMap}
+                    onTrackMenu={handleTrackMenu}
+                    onBackgroundClick={handleBackgroundClick}
                 />
+            </SceneErrorBoundary>
 
-                <div className="absolute top-[max(3.5rem,calc(env(safe-area-inset-top)+3.5rem))] left-[max(0.75rem,env(safe-area-inset-left))] z-(--z-raised) flex flex-col gap-1">
-                    <div className="flex gap-1 rounded-lg backdrop-blur-md border border-white/8 bg-black/20 p-0.5">
-                        <button
-                            onClick={() => handleViewChange("map")}
-                            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                effectiveView === "map"
-                                    ? "bg-white/10 text-[var(--text-secondary)]"
-                                    : "text-[var(--text-muted)] hover:text-white/50"
-                            }`}
-                        >
-                            Map
-                        </button>
-                        {!isMobile && (
-                            <button
-                                onClick={() => handleViewChange("galaxy")}
-                                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                    effectiveView === "galaxy"
-                                        ? "bg-white/10 text-[var(--text-secondary)]"
-                                        : "text-[var(--text-muted)] hover:text-white/50"
-                                }`}
-                            >
-                                Galaxy
-                            </button>
-                        )}
-                        <div className="w-px h-4 self-center bg-white/10" />
-                        <button
-                            onClick={handleToggleLabels}
-                            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                showLabels
-                                    ? "bg-white/10 text-[var(--text-secondary)]"
-                                    : "text-[var(--text-muted)] hover:text-white/50"
-                            }`}
-                            title={showLabels ? "Hide labels" : "Show labels"}
-                        >
-                            Labels
-                        </button>
-                    </div>
+            <VibeToolbar
+                clearSignal={searchClears}
+                mode={mode}
+                compact={compact}
+                onSearch={handleSearch}
+                results={mode === "search" ? searchResults : null}
+                onPickResult={pickSearchResult}
+                onPathMode={openPathPicker}
+                onAlchemyMode={openAlchemy}
+                onReset={clearAll}
+            />
+
+            <div className={`absolute z-(--z-scene) flex ${compact
+                ? "right-3 top-[max(0.75rem,env(safe-area-inset-top))] gap-2"
+                : "left-[max(0.75rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] gap-1"}`}>
+                <MapIconButton
+                    icon={Tag}
+                    compact={compact}
+                    onClick={toggleLabels}
+                    aria-pressed={showLabels}
+                    title={t(showLabels ? "Hide labels" : "Show labels")}
+                    aria-label={t(showLabels ? "Hide labels" : "Show labels")}
+                    className={showLabels ? "text-white" : "text-white/45"}
+                />
+                <MapIconButton
+                    icon={LocateFixed}
+                    compact={compact}
+                    onClick={() => setResetSignal((n) => n + 1)}
+                    title={t("Show the whole library")}
+                    aria-label={t("Show the whole library")}
+                    className="text-white/70"
+                />
+            </div>
+
+            {driftSourceId && (
+                <div role="status" className={`vibe-glass absolute left-1/2 z-(--z-scene) flex -translate-x-1/2 items-center gap-3 rounded-full px-4 py-2 text-sm text-[var(--text-secondary)] ${compact ? "top-[max(7rem,calc(env(safe-area-inset-top)+7rem))] w-max max-w-[calc(100%-1.5rem)]" : "top-[max(4.25rem,calc(env(safe-area-inset-top)+4.25rem))]"}`}>
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-brand)]" />
+                    {t(compact ? "Tap the track the path should end on" : "Click the track the song path should end on")}
+                    <button type="button" onClick={() => setDriftSourceId(null)} className="text-xs text-[var(--text-muted)] hover:text-white">
+                        {t("Cancel")}
+                    </button>
                 </div>
+            )}
 
-                {showPathPicker && (
-                    <VibeSongPath
-                        onStartPath={handlePathSubmit}
-                        onClose={() => setShowPathPicker(false)}
-                    />
-                )}
+            {showPathPicker && <VibeSongPath library={libraryIndex} onStartPath={submitPath} onClose={() => { setShowPathPicker(false); setMode((m) => (m === "path-picking" ? "idle" : m)); }} />}
+            {showAlchemy && <VibeAlchemy library={libraryIndex} onHighlight={setHighlightedIds} onClose={() => { setShowAlchemy(false); resetMode(); }} />}
 
-                {showAlchemy && (
-                    <VibeAlchemy
-                        onHighlight={setHighlightedIds}
-                        onClose={() => { setShowAlchemy(false); resetMode(); }}
-                    />
-                )}
+            <div className={`absolute z-(--z-scene) ${compact
+                ? "left-0 right-0 top-[max(4rem,calc(env(safe-area-inset-top)+4rem))] px-3"
+                : "left-[max(0.75rem,env(safe-area-inset-left))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] max-w-[min(30rem,calc(100%-25rem))]"}`}>
+                <MoodLegend
+                    tracks={mapData.tracks}
+                    trackCount={mapData.trackCount}
+                    activeMood={moodFocus}
+                    scroll={compact}
+                    onPreview={setMoodPreview}
+                    onToggle={(m) => { if (mode !== "idle") clearAll(); setMoodPinned((cur) => (cur === m ? null : m)); }}
+                />
+            </div>
 
-                <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-[max(0.75rem,env(safe-area-inset-left))] z-(--z-raised) text-[var(--text-muted)] text-xs font-medium">
-                    {mapData.trackCount} tracks
-                </div>
-
-                {mode === "idle" && !onboardingDismissed && (
-                    <div className="absolute bottom-[max(2.5rem,calc(env(safe-area-inset-bottom)+2.5rem))] left-1/2 -translate-x-1/2 z-(--z-raised) w-[calc(100vw-2rem)] max-w-sm animate-hint-in">
-                        <div className="rounded-xl border border-white/10 bg-black/75 backdrop-blur-md px-4 py-3 flex items-start gap-3">
-                            <div className="flex-1 min-w-0">
-                                {!(isMobile || isTablet) && (
-                                    <p className="text-[var(--text-primary)] text-xs font-semibold mb-0.5 tracking-wide">
-                                        This is your music, mapped by sound.
-                                    </p>
-                                )}
-                                <p className="text-[var(--text-secondary)] text-xs leading-relaxed">
-                                    {isMobile || isTablet
-                                        ? "Each dot is a track -- nearby dots sound alike. Tap a dot to play it."
-                                        : "Each dot is a track -- nearby dots sound alike. Click a dot to play it, or use Song Path and Blend above to discover new mixes."}
-                                </p>
-                            </div>
-                            <button
-                                onClick={dismissOnboarding}
-                                aria-label="Dismiss"
-                                className="shrink-0 text-[var(--text-muted)] hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 rounded"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
+            {!compact && showHint && (
+                <div className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-[max(0.75rem,env(safe-area-inset-right))] z-(--z-scene) w-[22rem] max-w-sm">
+                    <div className="vibe-glass flex items-start gap-3 rounded-xl px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                            <p className="mb-0.5 text-xs font-semibold text-[var(--text-primary)]">{t("This is your music, mapped by vibe.")}</p>
+                            <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+                                {t("Click: details · Double-click: play · Right-click: more · Drag: rotate · Right-drag: pan · Scroll: zoom")}
+                            </p>
                         </div>
+                        <button onClick={dismissHint} aria-label={t("Dismiss")} className="shrink-0 rounded text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+                            <X className="h-4 w-4" />
+                        </button>
                     </div>
-                )}
+                </div>
+            )}
 
-            {/* Mobile/tablet: bottom sheet for vibe details */}
-            {(isMobile || isTablet) && (
+            {!compact && selectedTrack && (
+                <TrackPanel
+                    track={selectedTrack}
+                    songPathActive={driftSourceId === selectedTrack.id}
+                    onClose={() => selectTrack(null)}
+                    onPlay={playSelected}
+                    onVibe={() => runTrackOperation(selectedTrack.id, "vibe")}
+                    onSimilar={() => runTrackOperation(selectedTrack.id, "similar")}
+                    onSongPath={() => setDriftSourceId((cur) => (cur === selectedTrack.id ? null : selectedTrack.id))}
+                />
+            )}
+
+            {menuTrack && menu && (
+                <TrackMenu
+                    track={menuTrack}
+                    at={menu.at}
+                    avoidRight={!compact && selectedTrack ? PANEL_CLEARANCE : 0}
+                    onClose={() => setMenu(null)}
+                    onPlay={() => playById(menuTrack.id)}
+                    onVibe={() => runTrackOperation(menuTrack.id, "vibe")}
+                    onSimilar={() => runTrackOperation(menuTrack.id, "similar")}
+                    onSongPath={() => setDriftSourceId(menuTrack.id)}
+                />
+            )}
+
+            {compact && (
                 <VibePanelSheet
                     selectedTrackId={selectedTrackId}
-                    selectedTrackTitle={selectedTrackId ? (trackMap.get(selectedTrackId)?.title ?? null) : null}
-                    selectedTrackArtist={selectedTrackId ? (trackMap.get(selectedTrackId)?.artist ?? null) : null}
-                    onTrackOperation={selectedTrackId
-                        ? (op: 'vibe' | 'similar') => handleTrackContextMenu(selectedTrackId, op)
-                        : undefined
-                    }
-                    onStartSongPath={selectedTrackId
-                        ? () => setDriftSourceId(selectedTrackId)
-                        : undefined
-                    }
+                    selectedTrackTitle={selectedTrack?.title ?? null}
+                    selectedTrackArtist={selectedTrack?.artist ?? null}
+                    onTrackOperation={selectedTrack ? (op) => runTrackOperation(selectedTrack.id, op) : undefined}
+                    onStartSongPath={selectedTrack ? () => setDriftSourceId(selectedTrack.id) : undefined}
+                    onPlay={selectedTrack ? playSelected : undefined}
+                    selectedArtistId={selectedTrack?.artistId ?? null}
                     songPathActive={!!driftSourceId}
+                    aboveMiniPlayer={!!playbackType}
+                    intro={showHint ? (
+                        <div className="flex items-start gap-3">
+                            <p className="min-w-0 flex-1 text-xs leading-relaxed text-[var(--text-secondary)] landscape-short:text-[11px]">
+                                <span className="font-semibold text-[var(--text-primary)]">{t("This is your music, mapped by vibe.")}{" "}</span>
+                                {t("Tap: details · Double-tap: play · Drag: rotate · Pinch: zoom · Two fingers: pan")}
+                            </p>
+                            <button onClick={dismissHint} aria-label={t("Dismiss")} className="-mr-2 -mt-2 flex shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] transition-colors hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ) : undefined}
                 />
             )}
         </div>

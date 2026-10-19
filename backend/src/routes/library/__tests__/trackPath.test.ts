@@ -1,19 +1,18 @@
 /**
- * `resolveWithinMusicRoot` -- the guard between a database string and rm -rf.
- *
- * The read paths (streaming, waveform, subsonic playback) went through this
- * from the start. The DELETE paths did not: they joined the music root to a
- * stored value and handed the result to unlinkSync or
- * rmSync(recursive, force). The cases below are the ones that made that a real
- * hole rather than a theoretical one -- `Artist.name` and `Album.title` are ID3
- * tag values, so a file added to the watched folder chooses them.
+ * `resolveWithinMusicRoot` guards every path built from a stored value before a
+ * read or delete. Artist names and album titles are ID3 tags, so a file in the
+ * watched folder chooses them.
  */
 
 jest.mock("../../../config", () => ({
   config: { music: { musicPath: "/music" } },
 }));
 
-import { resolveTrackFilePath, resolveWithinMusicRoot } from "../trackPath";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { config } from "../../../config";
+import { resolveWithinMusicRoot, resolveExistingMusicFile } from "../trackPath";
 
 describe("paths inside the root resolve", () => {
   it("resolves a plain relative path", () => {
@@ -80,14 +79,64 @@ describe("paths that escape the root are refused", () => {
   });
 });
 
-describe("resolveTrackFilePath keeps its old contract", () => {
-  it("resolves a track path", () => {
-    expect(resolveTrackFilePath("Artist/Album/t.mp3")).toBe(
-      "/music/Artist/Album/t.mp3",
+
+describe("physical music file root containment", () => {
+  let fixture = "";
+  let musicRoot = "";
+  let originalRoot = "";
+
+  beforeAll(() => {
+    originalRoot = config.music.musicPath;
+    fixture = fs.mkdtempSync(path.join(os.tmpdir(), "music-canonical-test-"));
+    musicRoot = path.join(fixture, "music");
+    fs.mkdirSync(path.join(musicRoot, "Artist"), { recursive: true });
+    fs.writeFileSync(path.join(musicRoot, "Artist", "valid.flac"), "audio fixture");
+    fs.writeFileSync(path.join(fixture, "private.flac"), "private fixture");
+    fs.symlinkSync(path.join(fixture, "private.flac"), path.join(musicRoot, "escaped.flac"));
+    fs.symlinkSync(path.join(musicRoot, "Artist", "valid.flac"), path.join(musicRoot, "internal.flac"));
+    fs.symlinkSync(musicRoot, path.join(fixture, "linked-root"));
+    config.music.musicPath = musicRoot;
+  });
+
+  afterAll(() => {
+    config.music.musicPath = originalRoot;
+    fs.rmSync(fixture, { recursive: true, force: true });
+  });
+
+  it("allows actual regular files inside the music root", async () => {
+    expect(await resolveExistingMusicFile("Artist/valid.flac")).toBe(
+      await fs.promises.realpath(path.join(musicRoot, "Artist", "valid.flac")),
     );
   });
 
-  it("refuses a traversing track path", () => {
-    expect(resolveTrackFilePath("../../etc/passwd")).toBeNull();
+  it("allows a track symlink pointing back inside the music root", async () => {
+    expect(await resolveExistingMusicFile("internal.flac")).toBe(
+      await fs.promises.realpath(path.join(musicRoot, "Artist", "valid.flac")),
+    );
+  });
+
+  it("rejects track symlinks pointing outside the music root", async () => {
+    expect(await resolveExistingMusicFile("escaped.flac")).toBeNull();
+  });
+
+  it("rejects lexical traversal, absolute paths and backslash traversal", async () => {
+    for (const escaped of ["../private.flac", path.join(fixture, "private.flac"), "..\\private.flac"]) {
+      expect(await resolveExistingMusicFile(escaped)).toBeNull();
+    }
+  });
+
+  it("rejects missing paths, directories and a broken symlink", async () => {
+    fs.symlinkSync(path.join(fixture, "vanished.flac"), path.join(musicRoot, "broken.flac"));
+    for (const value of ["missing.flac", "Artist", "broken.flac"]) {
+      expect(await resolveExistingMusicFile(value)).toBeNull();
+    }
+  });
+
+  it("supports a configured music root that itself is a symlink", async () => {
+    config.music.musicPath = path.join(fixture, "linked-root");
+    expect(await resolveExistingMusicFile("Artist/valid.flac")).toBe(
+      await fs.promises.realpath(path.join(musicRoot, "Artist", "valid.flac")),
+    );
+    expect(await resolveExistingMusicFile("escaped.flac")).toBeNull();
   });
 });

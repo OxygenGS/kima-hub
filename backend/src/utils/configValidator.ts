@@ -1,13 +1,12 @@
 import * as fs from "fs";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import { logger } from "./logger";
 import * as path from "path";
 import { AppError, ErrorCode, ErrorCategory } from "./errors";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import { getSystemSettings } from "./systemSettings";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 export interface MusicConfig {
     musicPath: string;
@@ -39,10 +38,10 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         logger.debug(`Database has musicPath=${settings.musicPath}, using ${musicPath} from env/default`);
     }
 
-    // VALIDATE MUSIC PATH EXISTS
     if (!fs.existsSync(musicPath)) {
-        const isDocker = fs.existsSync('/.dockerenv') || process.env.NODE_ENV === 'production';
-        const guidance = isDocker
+        const showDockerGuidance =
+            fs.existsSync('/.dockerenv') || process.env.NODE_ENV === 'production';
+        const guidance = showDockerGuidance
             ? `Docker users: Ensure your volume mount is correct in docker-compose.yml:
    volumes:
      - /path/to/your/music:/music
@@ -56,7 +55,6 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         );
     }
 
-    // VALIDATE MUSIC PATH IS READABLE
     try {
         fs.accessSync(musicPath, fs.constants.R_OK);
     } catch {
@@ -72,8 +70,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         process.env.TRANSCODE_CACHE_PATH ||
         path.join(process.cwd(), "cache", "transcodes");
 
-    // VALIDATE TRANSCODE CACHE PATH
-    // Create if doesn't exist
+    // The transcode cache directory is created if missing...
     if (!fs.existsSync(transcodeCachePath)) {
         try {
             fs.mkdirSync(transcodeCachePath, { recursive: true });
@@ -90,7 +87,7 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         }
     }
 
-    // Validate writable
+    // ...and must then be writable.
     try {
         fs.accessSync(transcodeCachePath, fs.constants.W_OK);
     } catch {
@@ -114,24 +111,19 @@ export async function validateMusicConfig(): Promise<MusicConfig> {
         );
     }
 
-    // VALIDATE BUNDLED FFMPEG (from @ffmpeg-installer/ffmpeg)
     try {
-        // Check if bundled FFmpeg binary exists
-        if (!fs.existsSync(ffmpegPath.path)) {
-            throw new Error(`Bundled FFmpeg not found at: ${ffmpegPath.path}`);
-        }
-
-        // Verify it's executable by running version check
-        const { stdout } = await execAsync(`"${ffmpegPath.path}" -version`);
+        // The AIO provides distro-managed FFmpeg; respect an operator-supplied
+        // executable path in non-AIO installs, without shell interpolation.
+        const ffmpegExecutable = process.env.FFMPEG_PATH || "ffmpeg";
+        const { stdout } = await execFileAsync(ffmpegExecutable, ["-version"]);
         if (!stdout.includes("ffmpeg version")) {
-            throw new Error("Invalid ffmpeg output");
+            throw new Error("Invalid FFmpeg output");
         }
-
-        logger.debug(`FFmpeg detected (bundled): ${stdout.split("\n")[0]}`);
-        logger.debug(`   FFmpeg path: ${ffmpegPath.path}`);
+        logger.debug(`FFmpeg detected (system): ${stdout.split("\\n")[0]}`);
+        logger.debug(`   FFmpeg command: ${ffmpegExecutable}`);
     } catch (err: any) {
         logger.warn(
-            "  Bundled FFmpeg not available. Transcoding will not be available."
+            "  System FFmpeg not available. Transcoding will not be available."
         );
         logger.warn(`   Error: ${err.message}`);
         logger.warn("   Original quality streaming will still work.");

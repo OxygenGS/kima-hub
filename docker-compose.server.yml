@@ -1,5 +1,5 @@
 # Kima Full Stack - Production Deployment
-# Uses pre-built Kima image from DockerHub + all external services
+# Uses the fork-owned, versioned GHCR AIO image + optional external services
 #
 # Usage:
 #   docker compose -f docker-compose.server.yml up -d
@@ -10,7 +10,8 @@ services:
     # ==============================================================================
 
     kima:
-        image: chevron7locked/kima:latest
+        # Match the normal fork Compose example; override VERSION for a reviewed update.
+        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.10.0}
         container_name: kima
         ports:
             - "${FRONTEND_PORT:-3030}:3030"
@@ -22,7 +23,7 @@ services:
         environment:
             - TZ=${TZ:-America/Chicago}
             # Generate with: openssl rand -base64 32
-            - SESSION_SECRET=${SESSION_SECRET:-changeme-generate-secure-key}
+            - SESSION_SECRET=${SESSION_SECRET:-}
             # Lidarr webhook callback URL - how Lidarr reaches Kima when downloads complete
             # Default uses host.docker.internal which works on most setups with extra_hosts below
             # Override if using custom Docker networks: e.g., http://192.168.0.20:3030
@@ -36,9 +37,8 @@ services:
         # 6g is enough for frontend + backend + embeddings + Redis + Postgres.
         mem_limit: 6g
         memswap_limit: 8g
-        # Fix Redis memory overcommit warning
-        sysctls:
-            - vm.overcommit_memory=1
+        # Non-namespaced vm.overcommit_memory must be configured on the host,
+        # not via container sysctls (which can prevent startup).
         restart: unless-stopped
         healthcheck:
             test: ["CMD", "node", "/app/healthcheck.js"]

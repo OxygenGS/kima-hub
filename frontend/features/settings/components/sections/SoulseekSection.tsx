@@ -1,44 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useBranding } from "@/lib/branding-context";
-import { SettingsSection, SettingsRow, SettingsInput, SettingsSelect } from "../ui";
-import { SystemSettings } from "../../types";
+import { SettingsSection, SettingsRow, SettingsInput, SettingsSelect, ConnectionTestButton } from "../ui";
+import { ConnectionTestResult, SystemSettings, soulseekConfigured } from "../../types";
+import { useConnectionTest } from "../../hooks/useConnectionTest";
 import { ExternalLink } from "lucide-react";
-import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 
 interface SoulseekSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
+    onTest: (service: string) => Promise<ConnectionTestResult>;
     isTesting: boolean;
 }
 
 export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: SoulseekSectionProps) {
-    const { branding } = useBranding();
-    const [testStatus, setTestStatus] = useState<StatusType>("idle");
-    const [testMessage, setTestMessage] = useState("");
-
-    const handleTest = async () => {
-        setTestStatus("loading");
-        setTestMessage("Connecting...");
-        const result = await onTest("soulseek");
-        if (result.success) {
-            setTestStatus("success");
-            setTestMessage("Connected to Soulseek");
-        } else {
-            setTestStatus("error");
-            setTestMessage(result.error || "Connection failed");
-        }
-    };
+    const connection = useConnectionTest(() => onTest("soulseek"), {
+        busy: "Connecting...",
+        connected: () => "Connected to Soulseek",
+        failed: "Connection failed",
+    });
 
     const mode = settings.soulseekMode || "p2p";
     const isSlskd = mode === "slskd";
-    // Direct P2P needs server-side credentials; slskd only needs a reachable URL
-    // (slskd holds its own Soulseek account).
-    const canTest = isSlskd
-        ? !!settings.slskdUrl
-        : !!(settings.soulseekUsername && settings.soulseekPassword);
+    const canTest = soulseekConfigured(settings);
 
     return (
         <SettingsSection
@@ -50,8 +33,8 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                 label="Connection Mode"
                 description={
                     isSlskd
-                        ? "Route through a slskd REST API instance. slskd holds its own Soulseek account, so no credentials are needed here."
-                        : `Connect directly using ${branding.name}'s built-in Soulseek client and your account credentials.`
+                        ? "Use a slskd instance. Credentials stay in slskd."
+                        : "Built-in client with your Soulseek account."
                 }
             >
                 <SettingsSelect
@@ -75,7 +58,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                                     href="https://www.slsknet.org/news/node/1"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-brand hover:text-[#f97316] transition-colors"
+                                    className="inline-flex items-center gap-1 text-brand hover:text-brand-hover transition-colors"
                                 >
                                     <ExternalLink className="w-3 h-3" />
                                     Create Account
@@ -136,21 +119,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
             )}
 
             <div className="pt-2 space-y-2">
-                <div className="inline-flex items-center gap-3">
-                    <button
-                        onClick={handleTest}
-                        disabled={isTesting || !canTest}
-                        className="px-4 py-1.5 text-xs tabular-nums bg-white/5 border border-white/10 text-[var(--text-secondary)] rounded-lg
-                            hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                        {testStatus === "loading" ? "Connecting..." : "Test Connection"}
-                    </button>
-                    <InlineStatus
-                        status={testStatus}
-                        message={testMessage}
-                        onClear={() => setTestStatus("idle")}
-                    />
-                </div>
+                <ConnectionTestButton connection={connection} disabled={isTesting || !canTest} />
                 <p className="text-xs text-[var(--text-muted)]">
                     Downloads will be saved to your Singles folder automatically
                 </p>

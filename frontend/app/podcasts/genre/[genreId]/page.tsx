@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import { Mic2, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
-import { cn } from "@/utils/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { PageMessage } from "@/components/ui/PageMessage";
+import { PODCAST_GENRES } from "@/features/podcast/genres";
 
 interface Podcast {
     id: string;
@@ -17,55 +18,48 @@ interface Podcast {
     itunesId?: number;
 }
 
-const GENRE_MAP: { [key: string]: { name: string; searchTerm: string } } = {
-    "1303": { name: "Comedy", searchTerm: "comedy podcast" },
-    "1324": { name: "Society & Culture", searchTerm: "society culture podcast" },
-    "1489": { name: "News", searchTerm: "news podcast" },
-    "1488": { name: "True Crime", searchTerm: "true crime podcast" },
-    "1321": { name: "Business", searchTerm: "business podcast" },
-    "1545": { name: "Sports", searchTerm: "sports podcast" },
-    "1502": { name: "Leisure", searchTerm: "gaming hobbies podcast" },
-};
-
 export default function GenrePage() {
     const params = useParams();
     const router = useRouter();
     const genreId = params.genreId as string;
-    const genre = GENRE_MAP[genreId];
+    const genre = PODCAST_GENRES.find((g) => g.id === genreId);
 
     const [podcasts, setPodcasts] = useState<Podcast[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-    const [offset, setOffset] = useState(0);
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
+    const inFlightRef = useRef(false);
+    const offsetRef = useRef(0);
 
     const LIMIT = 20;
 
     const loadMorePodcasts = useCallback(async () => {
-        if (loading || !hasMore) return;
+        if (inFlightRef.current || !hasMore) return;
+        inFlightRef.current = true;
 
         setLoading(true);
         try {
             const data = await api.getPodcastsByGenrePaginated(
                 parseInt(genreId),
                 LIMIT,
-                offset
+                offsetRef.current
             );
 
             if (data.length < LIMIT) {
                 setHasMore(false);
             }
 
+            offsetRef.current += data.length;
             setPodcasts((prev) => [...prev, ...data]);
-            setOffset((prev) => prev + data.length);
         } catch (error) {
             console.error("Failed to load podcasts:", error);
             setHasMore(false);
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
         }
-    }, [genreId, offset, loading, hasMore]);
+    }, [genreId, hasMore]);
 
     useEffect(() => {
         if (observerRef.current) observerRef.current.disconnect();
@@ -95,29 +89,21 @@ export default function GenrePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: initial load should not re-trigger when loadMorePodcasts identity changes
     }, []);
 
-    const handlePodcastClick = (podcast: Podcast) => {
-        router.push(`/podcasts/${podcast.id || podcast.itunesId}`);
-    };
-
     if (!genre) {
         return (
-            <div className="flex items-center justify-center h-screen bg-[var(--bg-primary)]">
-                <p className="text-xs text-[var(--text-muted)]">Genre not found</p>
-            </div>
+            <PageMessage title="Genre not found" action={{ label: "Podcasts", href: "/podcasts" }} />
         );
     }
 
     return (
         <div className="min-h-screen relative bg-gradient-to-b from-[#0a0a0a] to-black">
-            {/* Atmospheric overlay */}
             <div className="fixed inset-0 pointer-events-none opacity-50">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent" />
             </div>
 
             <div className="relative">
-                {/* Hero */}
-                <div className="relative bg-gradient-to-b from-[#0a0a0a] via-[#0f0f0f] to-transparent pt-6 pb-8 px-4 sm:px-6 md:px-8 border-b border-white/5">
-                    <div className="max-w-[1800px] mx-auto">
+                <div className="relative bg-gradient-to-b from-[#0a0a0a] via-[#0f0f0f] to-transparent pt-6 pb-8 page-shell border-b border-white/5">
+                    <div>
                         <button
                             onClick={() => router.push("/podcasts")}
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
@@ -127,7 +113,7 @@ export default function GenrePage() {
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="w-1.5 h-1.5 bg-[#3b82f6] rounded-full" />
+                            <div className="w-1.5 h-1.5 bg-type-podcast rounded-full" />
                             <span className="t-eyebrow">
                                 Genre
                             </span>
@@ -142,48 +128,22 @@ export default function GenrePage() {
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="relative max-w-[1800px] mx-auto px-4 sm:px-6 md:px-8 pb-32 pt-8 animate-rise">
+                <div className="relative page-shell pb-32 pt-8 animate-rise">
                     <div className="grid-media">
-                        {podcasts.map((podcast) => (
-                            <button
+                        {podcasts.map((podcast, index) => (
+                            <MediaCard
                                 key={podcast.id}
-                                onClick={() => handlePodcastClick(podcast)}
-                                className="group text-left bg-[var(--bg-primary)] border border-white/10 rounded-lg overflow-hidden hover:border-[#3b82f6]/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                <div className="relative w-full aspect-square bg-[var(--bg-secondary)] overflow-hidden">
-                                    {podcast.coverUrl ? (
-                                        <Image
-                                            src={podcast.coverUrl}
-                                            alt={podcast.title}
-                                            fill
-                                            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                                            className="object-cover group-hover:scale-105 transition-transform duration-150"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <Mic2 className="w-12 h-12 text-[var(--text-muted)]" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-3">
-                                    <h3 className="text-sm font-bold text-white truncate tracking-tight">
-                                        {podcast.title}
-                                    </h3>
-                                    <p className="text-xs tabular-nums text-[var(--text-muted)] truncate mt-0.5">
-                                        {podcast.author}
-                                    </p>
-                                </div>
-                                <div className={cn(
-                                    "h-0.5 bg-gradient-to-r from-[#3b82f6] to-[#2563eb]",
-                                    "transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150 origin-center"
-                                )} />
-                            </button>
+                                href={`/podcasts/${podcast.id || podcast.itunesId}`}
+                                title={podcast.title}
+                                subtitle={podcast.author}
+                                imageUrl={podcast.coverUrl}
+                                fallbackIcon={Mic2}
+                                type="podcast"
+                                index={index}
+                            />
                         ))}
                     </div>
 
-                    {/* Loading */}
                     {loading && (
                         <div className="flex justify-center items-center py-8">
                             <GradientSpinner size="md" />
@@ -193,7 +153,6 @@ export default function GenrePage() {
                     {/* Intersection observer target */}
                     <div ref={loadMoreRef} className="h-20" />
 
-                    {/* End of results */}
                     {!hasMore && podcasts.length > 0 && (
                         <div className="text-center py-8">
                             <span className="text-xs text-[var(--text-muted)]">
@@ -202,7 +161,6 @@ export default function GenrePage() {
                         </div>
                     )}
 
-                    {/* No results */}
                     {!loading && podcasts.length === 0 && (
                         <div className="text-center py-20">
                             <Mic2 className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />

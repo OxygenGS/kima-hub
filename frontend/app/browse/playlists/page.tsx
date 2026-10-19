@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
 import {
     Search,
-    Loader2,
     Music2,
     Link2,
     X,
@@ -14,21 +11,19 @@ import {
     ArrowLeft,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { useMusicPermissions } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast-context";
+import { notify } from "@/lib/notify";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
-
-interface PlaylistPreview {
-    id: string;
-    source: "deezer" | "spotify";
-    type: "playlist" | "radio";
-    title: string;
-    description: string | null;
-    creator: string;
-    imageUrl: string | null;
-    trackCount: number;
-    url: string;
-}
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { DeezerIcon } from "@/features/home/components/DeezerIcon";
+import type { PlaylistPreview } from "@/features/home/types";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { TileCard } from "@/components/cards/TileCard";
+import { plural } from "@/lib/format";
 
 interface Genre {
     id: number;
@@ -36,45 +31,9 @@ interface Genre {
     imageUrl: string | null;
 }
 
-const DeezerIcon = ({ className }: { className?: string }) => (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
-        <path d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38h-5.19zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.595v3.027h5.189v-3.027h-5.19zm6.27 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.189v-3.03h-5.19zm6.27 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z" />
-    </svg>
-);
-
 type BrowseTab = "playlists" | "genres";
 
-function SectionHeader({
-    title,
-    count,
-    children,
-}: {
-    title: string;
-    count?: number;
-    children?: React.ReactNode;
-}) {
-    return (
-        <div className="flex items-center gap-3 mb-6">
-            <span className="w-1 h-8 bg-gradient-to-b from-[#a855f7] to-[#c026d3] rounded-full shrink-0" />
-            <h2 className="text-2xl font-bold tracking-tight">
-                {title}
-            </h2>
-            {count !== undefined && (
-                <span className="text-xs tabular-nums text-[#a855f7]">
-                    {count}
-                </span>
-            )}
-            <span className="flex-1 border-t border-white/10" />
-            {children}
-        </div>
-    );
-}
-
 export default function BrowsePlaylistsPage() {
-    const router = useRouter();
-    const { toast } = useToast();
-    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const canImportPlaylist = canRequestAlbums && canDownloadTracks;
 
     const [activeTab, setActiveTab] = useState<BrowseTab>("playlists");
     const [searchQuery, setSearchQuery] = useState("");
@@ -124,6 +83,7 @@ export default function BrowsePlaylistsPage() {
 
         setIsSearching(true);
         setHasSearched(true);
+        setSelectedGenre(null);
         setActiveTab("playlists");
 
         try {
@@ -133,7 +93,7 @@ export default function BrowsePlaylistsPage() {
             setPlaylists(response.playlists);
         } catch (error) {
             console.error("Search failed:", error);
-            toast.error("Failed to search playlists");
+            notify.error("Failed to search playlists");
         } finally {
             setIsSearching(false);
         }
@@ -146,38 +106,25 @@ export default function BrowsePlaylistsPage() {
     };
 
     const handleUrlSubmit = async () => {
-        if (!canImportPlaylist || !urlInput.trim()) return;
+        if (!urlInput.trim()) return;
         setIsParsing(true);
 
         try {
             // Parse URL first to validate it
-            const response = await api.post<{
-                source: string;
-                id: string;
-                url: string;
-            }>("/browse/playlists/parse", { url: urlInput.trim() });
+            const response = await api.post<{ url: string }>(
+                "/browse/playlists/parse",
+                { url: urlInput.trim() },
+            );
 
-            // Fire background import
-            await api.post<{ jobId: string }>("/spotify/import/quick", {
-                url: response.url,
-            });
+            await api.post("/spotify/import/quick", { url: response.url });
 
             setShowUrlModal(false);
             setUrlInput("");
-            window.dispatchEvent(new CustomEvent("import-status-change", {
-                detail: { status: "started", playlistName: null }
-            }));
         } catch (error: unknown) {
-            const message =
-                error instanceof Error ? error.message : "Invalid playlist URL";
-            toast.error(message);
+            notify.error("Couldn't import playlist", { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsParsing(false);
         }
-    };
-
-    const handleItemClick = (item: PlaylistPreview) => {
-        router.push(`/browse/playlists/${item.id}`);
     };
 
     const handleGenreClick = async (genre: Genre) => {
@@ -191,7 +138,7 @@ export default function BrowsePlaylistsPage() {
             setGenrePlaylists(response.playlists);
         } catch (error) {
             console.error("Failed to fetch genre playlists:", error);
-            toast.error("Failed to load genre playlists");
+            notify.error("Failed to load genre playlists");
         } finally {
             setIsLoading(false);
         }
@@ -207,117 +154,57 @@ export default function BrowsePlaylistsPage() {
         index: number,
         context?: string,
     ) => (
-        <button
+        <MediaCard
             key={`${item.source}-${item.type}-${item.id}-${context || "main"}-${index}`}
-            onClick={() => handleItemClick(item)}
-            className="group cursor-pointer text-left w-full"
-        >
-            <div className="relative aspect-square mb-2.5 rounded-lg overflow-hidden bg-[var(--bg-primary)] border border-white/10 group-hover:border-[#a855f7]/40 transition-all duration-300">
-                {item.imageUrl ?
-                    <Image
-                        src={item.imageUrl}
-                        alt={item.title}
-                        fill
-                        sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, (max-width: 1536px) 16vw, 14vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-150"
-                        unoptimized
-                    />
-                :   <div className="w-full h-full flex items-center justify-center">
-                        <Music2 className="w-12 h-12 text-white/10" />
-                    </div>
-                }
-
-                {/* Hover accent line */}
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#a855f7] to-[#c026d3] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150 origin-center" />
-            </div>
-            <h3 className="text-sm font-bold text-white truncate tracking-tight">
-                {item.title}
-            </h3>
-            <p className="text-xs tabular-nums text-[var(--text-muted)] truncate mt-0.5">
-                {item.trackCount} songs -- {item.creator}
-            </p>
-        </button>
+            href={`/browse/playlists/${item.id}`}
+            title={item.title}
+            subtitle={`${plural(item.trackCount, "song")} · ${item.creator}`}
+            imageUrl={item.imageUrl}
+            fallbackIcon={Music2}
+            type="track"
+            index={index}
+        />
     );
 
-    const renderGenreCard = (genre: Genre) => (
-        <button
+    const renderGenreCard = (genre: Genre, index: number) => (
+        <TileCard
             key={genre.id}
+            title={genre.name}
+            imageUrl={genre.imageUrl}
+            tint="from-type-track/30 to-type-track/10"
+            hoverBorder="hover:border-type-track/40"
+            accent="from-type-track to-type-track"
             onClick={() => handleGenreClick(genre)}
-            className="group cursor-pointer relative aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-[#a855f7]/40 transition-all duration-300"
-        >
-            {genre.imageUrl ?
-                <Image
-                    src={genre.imageUrl}
-                    alt={genre.name}
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
-                    className="object-cover group-hover:scale-105 transition-transform duration-150"
-                    unoptimized
-                />
-            :   <div className="w-full h-full bg-gradient-to-br from-[#a855f7]/30 to-[#c026d3]/10" />
-            }
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-            <div className="absolute bottom-3 left-3 right-3">
-                <h3 className="text-sm font-bold text-white tracking-tight">
-                    {genre.name}
-                </h3>
-            </div>
-
-            {/* Hover accent line */}
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#a855f7] to-[#c026d3] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-150 origin-center" />
-        </button>
+            index={index}
+            className="aspect-square"
+        />
     );
 
     if (isLoading && !selectedGenre && !hasSearched) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <LoadingScreen />;
     }
 
     let sectionIndex = 0;
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black relative">
-            {/* Atmospheric overlay */}
-            <div className="fixed inset-0 pointer-events-none opacity-30">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#a855f7]/5 via-transparent to-transparent" />
-            </div>
-
+        <div className="min-h-screen">
             <div className="section-stack">
-            {/* Editorial Hero */}
-            <div className="relative px-4 md:px-8 pt-8 pb-2">
-                <div className="max-w-[1800px] mx-auto">
-                    <div className="flex items-center gap-2 mb-4">
-                        <DeezerIcon className="w-4 h-4 text-[#a855f7]" />
-                        <span className="text-xs text-[var(--text-secondary)]">
-                            Deezer Discovery
-                        </span>
-                    </div>
-                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-none mb-2">
-                        Browse Playlists
-                    </h1>
-                    <p className="text-sm text-[var(--text-muted)]">
-                        Discover and import playlists from Deezer
-                    </p>
-                </div>
-            </div>
+                <PageHeader
+                    eyebrow="From Deezer"
+                    title="Browse playlists"
+                    description="Find playlists on Deezer and import them into your library"
+                    className="pb-2"
+                />
 
-            <div className="relative px-4 md:px-8 pb-24 animate-rise">
-                <div className="max-w-[1800px] mx-auto">
-                    {/* Beta Notice */}
-                    <div
-                        className="mb-6"
-
-                    >
-                        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-[#a855f7]/5 border border-[#a855f7]/20">
-                            <Info className="w-4 h-4 text-[#a855f7] shrink-0 mt-0.5" />
+                <div className="relative page-shell pb-24 animate-rise">
+                    <div className="mb-6">
+                        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-type-track/5 border border-type-track/20">
+                            <Info className="w-4 h-4 text-brand shrink-0 mt-0.5" />
                             <p className="text-xs tabular-nums text-[var(--text-secondary)] leading-relaxed">
-                                <span className="font-bold text-[#a855f7]">
+                                <span className="font-bold text-brand">
                                     Beta
                                 </span>{" "}
-                                -- Importing from Spotify and Deezer relies on
+                                · Importing from Spotify and Deezer relies on
                                 matching tracks through Soulseek and your
                                 configured indexers. Results may vary depending
                                 on track availability and metadata quality.
@@ -325,11 +212,7 @@ export default function BrowsePlaylistsPage() {
                         </div>
                     </div>
 
-                    {/* Search Bar & Import URL */}
-                    <div
-                        className="flex items-center gap-3 mb-6"
-
-                    >
+                    <div className="flex items-center gap-3 mb-6">
                         <form
                             onSubmit={handleSearch}
                             className="relative flex-1 max-w-md"
@@ -341,7 +224,7 @@ export default function BrowsePlaylistsPage() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search playlists..."
                                 aria-label="Search playlists"
-                                className="w-full bg-white/5 border border-white/10 rounded-lg pl-11 pr-10 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#a855f7]/40 transition-all tabular-nums"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg pl-11 pr-10 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/40 transition-all tabular-nums"
                             />
                             {searchQuery && (
                                 <button
@@ -355,45 +238,35 @@ export default function BrowsePlaylistsPage() {
                             )}
                         </form>
 
-                        {canImportPlaylist && <button
+                        <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => setShowUrlModal(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-xs font-semibold text-[var(--text-secondary)] hover:text-white transition-all"
                         >
                             <Link2 className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">Import URL</span>
-                        </button>}
+                        </Button>
                     </div>
 
-                    {/* Tabs */}
                     {!selectedGenre && !hasSearched && (
-                        <div
-                            className="flex items-center gap-2 mb-8"
-
-                        >
-                            <button
+                        <div className="flex items-center gap-2 mb-8">
+                            <Button
+                                variant={activeTab === "playlists" ? "primary" : "secondary"}
+                                size="sm"
                                 onClick={() => setActiveTab("playlists")}
-                                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                    activeTab === "playlists" ?
-                                        "bg-[#9333ea] text-white"
-                                    :   "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
-                                }`}
                             >
                                 Playlists
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant={activeTab === "genres" ? "primary" : "secondary"}
+                                size="sm"
                                 onClick={() => setActiveTab("genres")}
-                                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                                    activeTab === "genres" ?
-                                        "bg-[#9333ea] text-white"
-                                    :   "bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20"
-                                }`}
                             >
                                 Genres
-                            </button>
+                            </Button>
                         </div>
                     )}
 
-                    {/* Genre Breadcrumb */}
                     {selectedGenre && (
                         <div className="flex items-center gap-2 mb-6">
                             <button
@@ -410,58 +283,34 @@ export default function BrowsePlaylistsPage() {
                         </div>
                     )}
 
-                    {/* Loading State */}
                     {(isLoading || isSearching) && !loadError && (
                         <div className="flex items-center justify-center py-24">
                             <GradientSpinner size="md" />
                         </div>
                     )}
 
-                    {/* Error State */}
                     {loadError && !isLoading && (
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                            <Music2 className="w-12 h-12 text-white/10 mb-4" />
-                            <h3 className="text-lg font-bold text-white mb-2 tracking-tight">
-                                Couldn&apos;t load content
-                            </h3>
-                            <p className="text-xs tabular-nums text-[var(--text-muted)] mb-6 max-w-sm">
-                                {loadError}
-                            </p>
-                            <button
-                                onClick={fetchAllContent}
-                                className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                Try again
-                            </button>
-                        </div>
+                        <EmptyState
+                            icon={<Music2 className="w-12 h-12" />}
+                            title="Couldn't load content"
+                            description={loadError}
+                            action={{ label: "Try again", onClick: fetchAllContent }}
+                        />
                     )}
 
-                    {/* Search Results */}
                     {!isLoading && !isSearching && hasSearched && (
-                        <div
-
-
-                        >
-                            <SectionHeader
+                        <div>
+                            <SectionHeader type="track"
                                 title={`Results for "${searchQuery}"`}
                                 count={playlists.length}
                             />
                             {playlists.length === 0 ?
-                                <div className="flex flex-col items-center justify-center py-20 text-center">
-                                    <h3 className="text-lg font-bold text-white mb-2 tracking-tight">
-                                        No playlists found
-                                    </h3>
-                                    <p className="text-xs text-[var(--text-muted)] mb-4">
-                                        Try a different search or import a URL
-                                        directly
-                                    </p>
-                                    {canImportPlaylist && <button
-                                        onClick={() => setShowUrlModal(true)}
-                                        className="px-6 py-2.5 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold transition-all"
-                                    >
-                                        Import by URL
-                                    </button>}
-                                </div>
+                                <EmptyState
+                                    icon={<Search className="w-12 h-12" />}
+                                    title="No playlists found"
+                                    description="Try a different search or import a URL directly"
+                                    action={{ label: "Import by URL", onClick: () => setShowUrlModal(true) }}
+                                />
                             :   <div className="grid-media">
                                     {playlists.map((item, idx) =>
                                         renderCard(item, idx, "search"),
@@ -471,13 +320,9 @@ export default function BrowsePlaylistsPage() {
                         </div>
                     )}
 
-                    {/* Genre Playlists View */}
                     {!isLoading && selectedGenre && (
-                        <div
-
-
-                        >
-                            <SectionHeader
+                        <div>
+                            <SectionHeader type="track"
                                 title={`${selectedGenre.name} Playlists`}
                                 count={genrePlaylists.length}
                             />
@@ -494,7 +339,6 @@ export default function BrowsePlaylistsPage() {
                         </div>
                     )}
 
-                    {/* Main Content */}
                     {!isLoading &&
                         !isSearching &&
                         !hasSearched &&
@@ -507,7 +351,7 @@ export default function BrowsePlaylistsPage() {
                                             animationDelay: `${sectionIndex++ * 0.1}s`,
                                         }}
                                     >
-                                        <SectionHeader
+                                        <SectionHeader type="track"
                                             title="Featured Playlists"
                                             count={playlists.length}
                                         />
@@ -537,7 +381,7 @@ export default function BrowsePlaylistsPage() {
                                             animationDelay: `${sectionIndex++ * 0.1}s`,
                                         }}
                                     >
-                                        <SectionHeader
+                                        <SectionHeader type="track"
                                             title="Browse by Genre"
                                             count={genres.length}
                                         />
@@ -550,139 +394,100 @@ export default function BrowsePlaylistsPage() {
                         )}
                 </div>
             </div>
-            </div>
 
-            {/* URL Import Modal */}
-            {canImportPlaylist && showUrlModal && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-(--z-modal) p-4 animate-in fade-in duration-200"
-                    onClick={() => setShowUrlModal(false)}
-                >
-                    <div
-                        className="bg-[var(--bg-secondary)] rounded-lg max-w-lg w-full border border-white/10 animate-in zoom-in-95 duration-200"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Header */}
-                        <div className="relative px-6 pt-6 pb-4 border-b border-white/10">
-                            <button
-                                onClick={() => setShowUrlModal(false)}
-                                aria-label="Close import modal"
-                                className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-lg transition-colors"
+            <Modal
+                isOpen={showUrlModal}
+                onClose={() => setShowUrlModal(false)}
+                title="Import Playlist"
+                footer={
+                    <>
+                        <Button variant="secondary" size="sm" onClick={() => setShowUrlModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleUrlSubmit}
+                            disabled={!urlInput.trim()}
+                            isLoading={isParsing}
+                        >
+                            {isParsing ? "Importing..." : (
+                                <>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                    Continue
+                                </>
+                            )}
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-lg border border-white/5">
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-spotify/10 rounded border border-spotify/20">
+                            <svg
+                                viewBox="0 0 24 24"
+                                className="w-3.5 h-3.5 text-spotify"
+                                fill="currentColor"
                             >
-                                <X className="w-4 h-4 text-[var(--text-muted)] hover:text-white transition-colors" />
-                            </button>
-
-                            <div className="flex items-center gap-3 mb-1">
-                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#a855f7] to-[#c026d3] flex items-center justify-center">
-                                    <Link2 className="w-4 h-4 text-white" />
-                                </div>
-                                <h3 className="text-lg font-bold text-white tracking-tight">
-                                    Import Playlist
-                                </h3>
-                            </div>
-                            <p className="text-xs text-[var(--text-muted)] ml-11">
-                                Paste a link to get started
-                            </p>
+                                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                            </svg>
+                            <span className="text-xs font-semibold text-spotify">
+                                Spotify
+                            </span>
                         </div>
-
-                        {/* Supported platforms */}
-                        <div className="px-6 py-4">
-                            <div className="flex items-center gap-3 p-3 bg-white/[0.02] rounded-lg border border-white/5">
-                                <div className="flex items-center gap-2 px-2.5 py-1 bg-[#1DB954]/10 rounded border border-[#1DB954]/20">
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        className="w-3.5 h-3.5 text-[#1DB954]"
-                                        fill="currentColor"
-                                    >
-                                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
-                                    </svg>
-                                    <span className="text-xs font-semibold text-[#1DB954]">
-                                        Spotify
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 px-2.5 py-1 bg-[#a855f7]/10 rounded border border-[#a855f7]/20">
-                                    <DeezerIcon className="w-3.5 h-3.5 text-[#a855f7]" />
-                                    <span className="text-xs font-semibold text-[#a855f7]">
-                                        Deezer
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 px-2.5 py-1 bg-[#FF0000]/10 rounded border border-[#FF0000]/20">
-                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#FF0000]" fill="currentColor">
-                                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                                    </svg>
-                                    <span className="text-xs font-semibold text-[#FF0000]">
-                                        YouTube
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 px-2.5 py-1 bg-[#FF5500]/10 rounded border border-[#FF5500]/20">
-                                    <span className="text-xs font-semibold text-[#FF5500]">
-                                        SC
-                                    </span>
-                                </div>
-                                <span className="text-xs text-[var(--text-muted)] ml-auto">
-                                    +more
-                                </span>
-                            </div>
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-type-track/10 rounded border border-type-track/20">
+                            <DeezerIcon className="w-3.5 h-3.5 text-brand" />
+                            <span className="text-xs font-semibold text-brand">
+                                Deezer
+                            </span>
                         </div>
-
-                        {/* Input */}
-                        <div className="px-6 pb-4">
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    value={urlInput}
-                                    onChange={(e) =>
-                                        setUrlInput(e.target.value)
-                                    }
-                                    placeholder="Paste a playlist URL (Spotify, YouTube, SoundCloud...)"
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#a855f7]/40 transition-all tabular-nums"
-                                    onKeyDown={(e) =>
-                                        e.key === "Enter" && handleUrlSubmit()
-                                    }
-                                    autoFocus
-                                />
-                                {urlInput && (
-                                    <button
-                                        onClick={() => setUrlInput("")}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/5 rounded transition-colors"
-                                    >
-                                        <X className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                                    </button>
-                                )}
-                            </div>
-                            <p className="text-xs text-[var(--text-muted)] mt-2 ml-1">
-                                Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud
-                            </p>
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-[#FF0000]/10 rounded border border-[#FF0000]/20">
+                            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-[#FF0000]" fill="currentColor">
+                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                            </svg>
+                            <span className="text-xs font-semibold text-[#FF0000]">
+                                YouTube
+                            </span>
                         </div>
-
-                        {/* Actions */}
-                        <div className="px-6 pb-6 flex gap-3">
-                            <button
-                                onClick={() => setShowUrlModal(false)}
-                                className="flex-1 py-3 rounded-lg bg-white/5 border border-white/10 text-xs font-semibold text-[var(--text-secondary)] hover:bg-white/10 hover:text-white transition-all"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleUrlSubmit}
-                                disabled={isParsing || !urlInput.trim()}
-                                className="flex-1 py-3 rounded-lg bg-[#9333ea] hover:bg-[#7e22ce] text-white text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                            >
-                                {isParsing ?
-                                    <>
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        <span>Importing...</span>
-                                    </>
-                                :   <>
-                                        <ChevronRight className="w-3.5 h-3.5" />
-                                        <span>Continue</span>
-                                    </>
+                        <div className="flex items-center gap-2 px-2.5 py-1 bg-[#FF5500]/10 rounded border border-[#FF5500]/20">
+                            <span className="text-xs font-semibold text-[#FF5500]">
+                                SC
+                            </span>
+                        </div>
+                        <span className="text-xs text-[var(--text-muted)] ml-auto">
+                            +more
+                        </span>
+                    </div>
+                    <div>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={urlInput}
+                                onChange={(e) =>
+                                    setUrlInput(e.target.value)
                                 }
-                            </button>
+                                placeholder="Paste a playlist URL (Spotify, YouTube, SoundCloud...)"
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/40 transition-all tabular-nums"
+                                onKeyDown={(e) =>
+                                    e.key === "Enter" && handleUrlSubmit()
+                                }
+                                autoFocus
+                            />
+                            {urlInput && (
+                                <button
+                                    onClick={() => setUrlInput("")}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/5 rounded transition-colors"
+                                >
+                                    <X className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                </button>
+                            )}
                         </div>
+                        <p className="text-xs text-[var(--text-muted)] mt-2 ml-1">
+                            Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud
+                        </p>
                     </div>
                 </div>
-            )}
+            </Modal>
         </div>
     );
 }

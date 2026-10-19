@@ -1,12 +1,7 @@
 /**
- * Real-Postgres, real-HTTP tests for API key auth after the plaintext -> SHA-256
- * hash-at-rest fix (`prisma/migrations/20260812120000_apikey_hash_at_rest`,
- * `apiKeyStore.ts`'s `hashApiKey`). Every consumer of `ApiKey.keyHash` is
- * exercised here through the real Express app, not the service functions
- * directly -- the thing this fix has to prove is what actually reaches the
- * wire: a real key issued through `X-API-Key`, through OpenSubsonic's
- * `apiKey=` param, and the legacy `t=`/`s=` MD5 path's new, deliberate
- * rejection.
+ * API keys are stored as SHA-256 hashes. Through the real app and database: a
+ * key works as `X-API-Key` and OpenSubsonic `apiKey=`, and the MD5 `t=`/`s=`
+ * path is refused.
  */
 import express from "express";
 import request from "supertest";
@@ -15,6 +10,10 @@ import { prisma } from "../../utils/db";
 import authRoutes from "../auth";
 import { subsonicRouter } from "../subsonic/index";
 import { createApiKey, hashApiKey } from "../../services/users/apiKeyStore";
+import { queues } from "../../workers/queues";
+import { redisClient } from "../../utils/redis";
+import { closeClient } from "../../utils/closeRedisClient";
+import { closeQueue } from "../../__tests__/helpers/closeQueue";
 
 jest.setTimeout(30_000);
 
@@ -34,7 +33,15 @@ async function wipe() {
 }
 
 beforeEach(wipe);
-afterAll(wipe);
+afterAll(async () => {
+    await wipe();
+    await prisma.$disconnect();
+    // The subsonic router mounts routes from workers/queues, whose module
+    // scope builds three BullMQ queues; middleware/auth reaches the shared
+    // Redis client. Left open, Jest finishes and outlives those sockets.
+    await Promise.all(queues.map((q) => closeQueue(q)));
+    await closeClient(redisClient);
+});
 
 describe("API key auth, hashed at rest", () => {
     it("a freshly minted key authenticates via X-API-Key on a real protected route", async () => {
@@ -59,9 +66,8 @@ describe("API key auth, hashed at rest", () => {
     });
 
     it("a key that existed BEFORE this migration still authenticates with its original plaintext, after being re-keyed the same way the migration re-keys every row", async () => {
-        // Bypasses createApiKey deliberately: this simulates a row exactly as
-        // the migration leaves it -- keyHash holding SHA-256(the value that
-        // used to be the plaintext column), not a key minted fresh today.
+        // A row as the migration leaves it: keyHash is SHA-256 of the old
+        // plaintext column, written directly rather than through createApiKey.
         const user = await mkUser("premigration");
         const originalPlaintextKey = crypto.randomBytes(32).toString("hex");
         await prisma.apiKey.create({
@@ -99,14 +105,8 @@ describe("API key auth, hashed at rest", () => {
     });
 
     it("legacy t=/s= MD5-token auth is explicitly rejected with TOKEN_AUTH_NOT_SUPPORTED (41) -- not silently mistaken for a wrong password", async () => {
-        // This is the one auth path that CANNOT survive hashing the key --
-        // it needs the plaintext to reproduce md5(key+salt) server-side, and
-        // a one-way hash makes that impossible by construction, not by an
-        // oversight. Computing a genuinely CORRECT token here (matching what
-        // a real client would send for this real key) and confirming it's
-        // still rejected proves the rejection is deliberate, not a
-        // coincidental side effect of a bad hash comparison -- a wrong-token
-        // test could pass for the wrong reason.
+        // MD5 token auth needs the plaintext key, which is not stored. A
+        // correctly computed token is still refused, so the refusal is deliberate.
         const user = await mkUser("md5legacy");
         const created = await createApiKey(user.id, "legacy client");
         const salt = "abc123";

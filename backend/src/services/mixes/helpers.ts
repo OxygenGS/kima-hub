@@ -1,4 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/db";
+import { NOT_MISSING } from "../../utils/libraryEligibility";
+import { shuffleArray } from "../../utils/shuffle";
 
 export interface ProgrammaticMix {
     id: string;
@@ -107,12 +110,26 @@ export function getMixColor(type: string): string {
 }
 
 export function randomSample<T>(array: T[], count: number): T[] {
-    const result = [...array];
-    for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
-    }
-    return result.slice(0, count);
+    return shuffleArray(array).slice(0, count);
+}
+
+/** Tracks in a finished generated mix. */
+export const TRACK_LIMIT = 20;
+
+/** `current` plus those of `more` whose ids it lacks. */
+export function mergeNewById<T extends { id: string }>(current: T[], more: T[]): T[] {
+    const ids = new Set(current.map((t) => t.id));
+    return [...current, ...more.filter((t) => !ids.has(t.id))];
+}
+
+/** Up to four album covers, in track order, for a mix's cover mosaic. */
+export function albumCoverUrls(
+    tracks: { album: { coverUrl: string | null } }[]
+): string[] {
+    return tracks
+        .filter((t) => t.album.coverUrl)
+        .slice(0, 4)
+        .map((t) => t.album.coverUrl!);
 }
 
 export function getSeededRandom(seed: string): number {
@@ -127,11 +144,8 @@ export function getSeededRandom(seed: string): number {
 
 
 /**
- * Deterministic Fisher-Yates shuffle driven by the same LCG progression used
- * to derive `seed` from getSeededRandom(). Unlike `array.sort(() => random - 0.5)`,
- * this always makes exactly array.length - 1 swaps regardless of how many times
- * a sort implementation calls the comparator, so the result is uniformly
- * shuffled instead of biased.
+ * Deterministic Fisher-Yates shuffle using getSeededRandom's LCG; unbiased,
+ * unlike sorting with a random comparator.
  */
 export function seededShuffle<T>(array: T[], seed: number): T[] {
     const result = [...array];
@@ -154,45 +168,103 @@ export type TrackWithAlbumCover = {
             userGenres?: string[] | null;
         };
     };
-    lastfmTags?: string[];
     essentiaGenres?: string[];
     [key: string]: unknown;
 };
 
+interface MixSpec {
+    id: string;
+    type: string;
+    name: string;
+    description: string;
+    /** Key into the mix colour table. */
+    colorType: string;
+}
+
+/** A mix of `limit` randomly sampled tracks. */
+export function sampleMix(
+    spec: MixSpec,
+    tracks: { id: string; album: { coverUrl: string | null } }[],
+    limit: number
+): ProgrammaticMix {
+    const sample = randomSample(tracks, limit);
+
+    return {
+        id: spec.id,
+        type: spec.type,
+        name: spec.name,
+        description: spec.description,
+        trackIds: sample.map((t) => t.id),
+        coverUrls: albumCoverUrls(sample),
+        trackCount: sample.length,
+        color: getMixColor(spec.colorType),
+    };
+}
+
+/** A sampled mix of the tracks that match a filter, or null when too few do. */
+export async function sampledMix(
+    spec: MixSpec & {
+        where: Prisma.TrackWhereInput;
+        /** How many matching tracks to fetch before sampling. */
+        take: number;
+        /** Fewest fetched tracks that still make a mix. */
+        minTracks: number;
+        /** Tracks in the finished mix. */
+        limit: number;
+    }
+): Promise<ProgrammaticMix | null> {
+    const tracks = await prisma.track.findMany({
+        where: spec.where,
+        include: { album: { select: { coverUrl: true } } },
+        take: spec.take,
+    });
+
+    if (tracks.length < spec.minTracks) return null;
+
+    return sampleMix(spec, tracks, spec.limit);
+}
+
+const WITH_ALBUM_GENRES = {
+    album: {
+        select: {
+            coverUrl: true,
+            genres: true,
+            userGenres: true,
+            artist: { select: { userGenres: true } },
+        },
+    },
+} satisfies Prisma.TrackInclude;
+
 /**
- * Helper to find tracks matching genre patterns.
- * Uses lastfmTags and essentiaGenres on tracks (String[]) first,
- * then falls back to filtering album.genres (JSON array) in memory.
+ * Tracks matching genre patterns: the Genre/TrackGenre tables first, then
+ * album.genres and user genres in memory for tracks the tables lack.
  */
 export async function findTracksByGenrePatterns(
     genrePatterns: string[],
     limit: number = 100
 ): Promise<TrackWithAlbumCover[]> {
-    const tagPatterns = genrePatterns.map((g) => g.toLowerCase());
-
-    const tracks = await prisma.track.findMany({
+    const genreRows = await prisma.genre.findMany({
         where: {
-            OR: [
-                { lastfmTags: { hasSome: tagPatterns } },
-                { essentiaGenres: { hasSome: tagPatterns } },
-            ],
+            name: { in: genrePatterns, mode: "insensitive" },
         },
-        include: {
-            album: {
-                select: {
-                    coverUrl: true,
-                    genres: true,
-                    userGenres: true,
-                    artist: {
-                        select: {
-                            userGenres: true,
-                        },
-                    },
-                },
-            },
-        },
-        take: limit,
+        select: { id: true },
     });
+
+    const tracks =
+        genreRows.length === 0
+            ? []
+            : await prisma.track.findMany({
+                  where: {
+                      ...NOT_MISSING,
+                      trackGenres: {
+                          some: {
+                              genreId: { in: genreRows.map((g) => g.id) },
+                          },
+                      },
+                  },
+                  include: WITH_ALBUM_GENRES,
+                  take: limit,
+              });
 
     if (tracks.length >= 15) {
         return tracks as TrackWithAlbumCover[];
@@ -200,6 +272,7 @@ export async function findTracksByGenrePatterns(
 
     const albumTracks = await prisma.track.findMany({
         where: {
+            ...NOT_MISSING,
             album: {
                 OR: [
                     { genres: { not: { equals: null } } },
@@ -207,20 +280,7 @@ export async function findTracksByGenrePatterns(
                 ],
             },
         },
-        include: {
-            album: {
-                select: {
-                    coverUrl: true,
-                    genres: true,
-                    userGenres: true,
-                    artist: {
-                        select: {
-                            userGenres: true,
-                        },
-                    },
-                },
-            },
-        },
+        include: WITH_ALBUM_GENRES,
         take: limit * 3,
     });
 
@@ -245,11 +305,7 @@ export async function findTracksByGenrePatterns(
         );
     });
 
-    const existingIds = new Set(tracks.map((t) => t.id));
-    const merged = [
-        ...tracks,
-        ...genreMatched.filter((t) => !existingIds.has(t.id)),
-    ];
+    const merged = mergeNewById(tracks, genreMatched);
 
     return merged.slice(0, limit) as TrackWithAlbumCover[];
 }

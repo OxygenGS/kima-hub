@@ -3,9 +3,7 @@ import { spawn } from "child_process";
 import { prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { logger } from "../../utils/logger";
-import { config } from "../../config";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
-import { resolveTrackFilePath } from "./trackPath";
+import { resolveWithinMusicRoot } from "./trackPath";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -28,6 +26,11 @@ const SAMPLE_RATE = 4000;
  */
 const MINI_BLOCK = 100;
 
+/** Resource caps prevent malformed audio from exhausting server memory or CPU. */
+export const WAVEFORM_FFMPEG_TIMEOUT_MS = 120_000;
+const MAX_WAVEFORM_STDERR_CHARS = 4_096;
+const MAX_WAVEFORM_MINI_BLOCKS = Math.ceil(24 * 60 * 60 * SAMPLE_RATE / MINI_BLOCK);
+
 /** Redis TTL for cached waveform data (30 days).  Waveform is stable as long
  *  as the file hasn't changed; the cache key embeds the file-modified timestamp
  *  so a re-encoded file automatically busts the entry. */
@@ -42,11 +45,7 @@ interface WaveformPayload {
     count: number;
 }
 
-// ---------------------------------------------------------------------------
-// In-flight dedup map
-// ---------------------------------------------------------------------------
-// Concurrent requests for the same (trackId, mtime) pair share a single
-// ffmpeg spawn so we never compute the same waveform twice in parallel.
+// Concurrent requests for the same (trackId, mtime) share one ffmpeg run.
 
 const inFlight = new Map<string, Promise<WaveformPayload>>();
 
@@ -71,94 +70,109 @@ function inFlightKey(trackId: string, mtime: Date): string {
  */
 export function computeWaveformPeaks(filePath: string): Promise<number[]> {
     return new Promise((resolve, reject) => {
-        const ff = spawn(ffmpegPath.path, [
+        // Only local audio is supported. Do not let playlist/container demuxers
+        // follow network protocols from untrusted files in the music library.
+        const ff = spawn(process.env.FFMPEG_PATH || "ffmpeg", [
             "-hide_banner",
+            "-nostdin",
             "-loglevel", "error",
+            "-protocol_whitelist", "file,pipe",
             "-i", filePath,
+            "-vn", "-sn", "-dn",
             "-ac", "1",
             "-ar", String(SAMPLE_RATE),
             "-f", "s16le",
             "pipe:1",
-        ]);
+        ], { stdio: ["ignore", "pipe", "pipe"] });
 
         const miniBlocks: number[] = [];
-        let carry: number | null = null; // leftover byte (low byte of a straddling sample)
+        let carry: number | null = null;
         let blockMax = 0;
         let blockSamples = 0;
+        let stderrText = "";
+        let settled = false;
+        let watchdog: NodeJS.Timeout | undefined;
+
+        const fail = (error: Error, terminate = false) => {
+            if (settled) return;
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            if (terminate) {
+                try { ff.kill("SIGKILL"); } catch { /* process may have exited */ }
+            }
+            reject(error);
+        };
+
+        const appendBlock = () => {
+            if (miniBlocks.length >= MAX_WAVEFORM_MINI_BLOCKS) {
+                fail(new Error("ffmpeg waveform exceeds 24 hours of decoded audio"), true);
+                return;
+            }
+            miniBlocks.push(blockMax);
+            blockMax = 0;
+            blockSamples = 0;
+        };
+
+        const processSample = (sample: number) => {
+            blockMax = Math.max(blockMax, Math.abs(sample));
+            blockSamples++;
+            if (blockSamples >= MINI_BLOCK) appendBlock();
+        };
 
         ff.stdout.on("data", (chunk: Buffer) => {
+            if (settled) return;
             let start = 0;
 
-            // Stitch the carry byte from the previous chunk into a full sample.
+            // Preserve odd-byte chunk boundaries so PCM samples stay aligned.
             if (carry !== null) {
                 if (chunk.length === 0) return;
                 const sample = Buffer.from([carry, chunk[0]]).readInt16LE(0);
-                const abs = Math.abs(sample);
-                if (abs > blockMax) blockMax = abs;
-                blockSamples++;
-                if (blockSamples >= MINI_BLOCK) {
-                    miniBlocks.push(blockMax);
-                    blockMax = 0;
-                    blockSamples = 0;
-                }
                 carry = null;
+                processSample(sample);
+                if (settled) return;
                 start = 1;
             }
 
-            // Process complete 2-byte samples.
             const fullSamples = Math.floor((chunk.length - start) / 2);
             for (let i = 0; i < fullSamples; i++) {
-                const abs = Math.abs(chunk.readInt16LE(start + i * 2));
-                if (abs > blockMax) blockMax = abs;
-                blockSamples++;
-                if (blockSamples >= MINI_BLOCK) {
-                    miniBlocks.push(blockMax);
-                    blockMax = 0;
-                    blockSamples = 0;
-                }
+                processSample(chunk.readInt16LE(start + i * 2));
+                if (settled) return;
             }
 
-            // If there's a leftover byte at the end of the chunk, carry it forward.
             const consumed = start + fullSamples * 2;
-            if (consumed < chunk.length) {
-                carry = chunk[consumed];
-            }
+            if (consumed < chunk.length) carry = chunk[consumed];
         });
 
-        const stderrBuf: string[] = [];
-        ff.stderr.on("data", (d: Buffer) => stderrBuf.push(d.toString()));
+        // Avoid unbounded memory growth on malformed files that produce huge stderr.
+        ff.stderr.on("data", (data: Buffer) => {
+            const remaining = MAX_WAVEFORM_STDERR_CHARS - stderrText.length;
+            if (remaining > 0) stderrText += data.toString("utf8").slice(0, remaining);
+        });
 
         ff.on("close", (code) => {
-            // Flush any partial mini-block at EOF.
-            if (blockSamples > 0) {
-                miniBlocks.push(blockMax);
-            }
-
-            if (code !== 0 && miniBlocks.length === 0) {
-                return reject(
-                    new Error(
-                        `ffmpeg exited ${code}: ${stderrBuf.join("").slice(0, 300)}`,
-                    ),
-                );
+            if (settled) return;
+            if (blockSamples > 0) appendBlock();
+            if (settled) return;
+            // Never cache a partial waveform when FFmpeg failed after outputting PCM.
+            if (code !== 0) {
+                fail(new Error(`ffmpeg exited ${code}: ${stderrText.slice(0, 300)}`));
+                return;
             }
 
             const K = miniBlocks.length;
             if (K === 0) {
-                return resolve(new Array(PEAK_COUNT).fill(0));
+                settled = true;
+                if (watchdog) clearTimeout(watchdog);
+                resolve(new Array(PEAK_COUNT).fill(0));
+                return;
             }
 
-            // Dynamic normalisation: the loudest mini-block = 1.0.
-            // This ensures quiet tracks still show a full-height waveform,
-            // which is what the player scrubber needs.
             let globalMax = 0;
             for (const v of miniBlocks) {
                 if (v > globalMax) globalMax = v;
             }
             if (globalMax === 0) globalMax = 1;
 
-            // Redistribute K mini-blocks into exactly PEAK_COUNT buckets.
-            // Each output peak takes the max-abs of the mini-blocks that fall
-            // within its proportional slice.
             const peaks: number[] = new Array(PEAK_COUNT).fill(0);
             for (let p = 0; p < PEAK_COUNT; p++) {
                 const lo = Math.floor((p * K) / PEAK_COUNT);
@@ -167,14 +181,19 @@ export function computeWaveformPeaks(filePath: string): Promise<number[]> {
                 for (let b = lo; b < hi && b < K; b++) {
                     if (miniBlocks[b] > bucketMax) bucketMax = miniBlocks[b];
                 }
-                // Round to 4 decimal places to keep JSON payload compact.
                 peaks[p] = Math.round((bucketMax / globalMax) * 10000) / 10000;
             }
 
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
             resolve(peaks);
         });
 
-        ff.on("error", reject);
+        ff.on("error", (error) => fail(error));
+        watchdog = setTimeout(() => {
+            fail(new Error("ffmpeg waveform timed out after 120000ms"), true);
+        }, WAVEFORM_FFMPEG_TIMEOUT_MS);
+        watchdog.unref();
     });
 }
 
@@ -244,14 +263,8 @@ async function getOrComputeWaveform(
 const router = Router();
 
 /**
- * GET /api/library/tracks/:id/waveform
- *
- * Returns precomputed amplitude peaks for the track's audio file.
- * Auth is applied upstream by requireAuthOrToken in the library index.
- *
- * Response: { peaks: number[], count: number }
- *   peaks  — PEAK_COUNT (400) normalised amplitude values, 0.0–1.0, start→end
- *   count  — peaks.length (always 400 for a valid track)
+ * GET /api/library/tracks/:id/waveform -> { peaks, count }: PEAK_COUNT (400)
+ * amplitudes from 0 to 1, start to end. Auth is applied by the library index.
  */
 router.get("/tracks/:id/waveform", async (req, res) => {
     try {
@@ -273,7 +286,7 @@ router.get("/tracks/:id/waveform", async (req, res) => {
             return res.status(404).json({ error: "Track audio file unavailable" });
         }
 
-        const absolutePath = resolveTrackFilePath(track.filePath);
+        const absolutePath = resolveWithinMusicRoot(track.filePath);
         if (!absolutePath) {
             logger.warn(`[WAVEFORM] Rejected out-of-root path for track ${track.id}`);
             return res.status(404).json({ error: "Track audio file unavailable" });
@@ -285,9 +298,12 @@ router.get("/tracks/:id/waveform", async (req, res) => {
             track.fileModified,
         );
 
-        // Allow clients and CDNs to cache the response for a day; the
-        // server-side Redis entry stays warm for 30 days.
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        // This is an authenticated endpoint: shared CDN/proxy caches must not
+        // reuse a waveform response for a different user or an anonymous request.
+        // Browser-private caching is still allowed; Redis handles server-side reuse.
+        res.setHeader("Cache-Control", "private, max-age=86400");
+        res.vary("Authorization");
+        res.vary("Cookie");
         return res.json(payload);
     } catch (error) {
         logger.error("[WAVEFORM] Unhandled error:", error);

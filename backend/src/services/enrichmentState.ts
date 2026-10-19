@@ -8,6 +8,7 @@
 import { logger } from "../utils/logger";
 import Redis from "ioredis";
 import { config } from "../config";
+import { closeClient } from "../utils/closeRedisClient";
 
 const ENRICHMENT_STATE_KEY = "enrichment:state";
 const ENRICHMENT_CONTROL_CHANNEL = "enrichment:control";
@@ -16,37 +17,40 @@ const AUDIO_ANALYSIS_CONTROL_CHANNEL = "audio:analysis:control";
 // Eliminates pub/sub timing races between Node.js stop and Python work pickup.
 const AUDIO_ANALYSIS_GATE_KEY = "audio:analysis:gate";
 
-type EnrichmentStatus = "idle" | "running" | "paused" | "stopping";
-type EnrichmentPhase = "artists" | "tracks" | "scan" | "audio" | "vibe" | "podcasts" | null;
+type EnrichmentStatus = "idle" | "running" | "paused" | "stopping" | "failed";
+export type EnrichmentPhase =
+    | "artists"
+    | "tracks"
+    | "fingerprint"
+    | "audio"
+    | "podcasts"
+    | "vibe"
+    | "similarity"
+    | null;
 
 interface EnrichmentState {
     status: EnrichmentStatus;
     startedAt?: string;
     pausedAt?: string;
     stoppedAt?: string;
+    /** Set when a run transitioned to failed. */
+    lastError?: string;
     currentPhase: EnrichmentPhase;
     lastActivity: string;
-    completionNotificationSent?: boolean; // Prevent repeated completion notifications
+    completionNotificationSent?: boolean; // Set once a finished run has refreshed the failure alert and vibe map
     coreCacheCleared?: boolean; // Prevent repeated cache clearing on core complete
     fullCacheCleared?: boolean; // Prevent repeated cache clearing on full complete
-    stoppingInfo?: {
-        phase: string;
-        currentItem: string;
-        itemsRemaining: number;
-    };
 
     // Progress tracking
     artists: {
         total: number;
         completed: number;
         failed: number;
-        current?: string; // Currently processing artist name
     };
     tracks: {
         total: number;
         completed: number;
         failed: number;
-        current?: string; // Currently processing track
     };
     audio: {
         total: number;
@@ -54,6 +58,30 @@ interface EnrichmentState {
         failed: number;
         processing: number; // Currently in worker pool
     };
+}
+
+/**
+ * Signature of the state that is actual work: progress counters and status.
+ * Excludes lastActivity, currentPhase (rotated every cycle) and bookkeeping flags.
+ */
+export function progressSignature(state: EnrichmentState): string {
+    return JSON.stringify({
+        status: state.status,
+        artists: state.artists,
+        tracks: state.tracks,
+        audio: state.audio,
+    });
+}
+
+/**
+ * Whether a write counts as activity for the hang detector: only counter or
+ * status changes, never phase churn, or a stuck loop would look alive.
+ */
+export function shouldRefreshLastActivity(
+    previous: EnrichmentState,
+    next: EnrichmentState
+): boolean {
+    return progressSignature(previous) !== progressSignature(next);
 }
 
 class EnrichmentStateService {
@@ -104,10 +132,13 @@ class EnrichmentStateService {
     }
 
     /**
-     * Update enrichment state
+     * Persist state, refreshing `lastActivity` only on real work (see
+     * shouldRefreshLastActivity). initializeState() always stamps it.
      */
-    async setState(state: EnrichmentState): Promise<void> {
-        state.lastActivity = new Date().toISOString();
+    async setState(state: EnrichmentState, opts?: { stampActivity?: boolean }): Promise<void> {
+        if (opts?.stampActivity !== false) {
+            state.lastActivity = new Date().toISOString();
+        }
         await this.redis.set(ENRICHMENT_STATE_KEY, JSON.stringify(state));
     }
 
@@ -131,7 +162,13 @@ class EnrichmentStateService {
         }
 
         const updated = { ...current, ...updates };
-        await this.setState(updated);
+        // Heartbeat honesty: stamp lastActivity only if the write actually
+        // moved counters or changed status/phase. A phase-only rewrite of
+        // status="running" over an unchanged counter set is the exact
+        // false-heartbeat signature this class exists to kill.
+        await this.setState(updated, {
+            stampActivity: shouldRefreshLastActivity(current, updated),
+        });
         return updated;
     }
 
@@ -243,21 +280,9 @@ class EnrichmentStateService {
 
         return updated;
     }
-
-    /**
-     * Clear enrichment state (set to idle)
-     */
     async clear(): Promise<void> {
         await this.redis.del(ENRICHMENT_STATE_KEY);
         logger.debug("[Enrichment State] Cleared");
-    }
-
-    /**
-     * Check if enrichment is currently running
-     */
-    async isRunning(): Promise<boolean> {
-        const state = await this.getState();
-        return state?.status === "running";
     }
 
     /**
@@ -287,10 +312,17 @@ class EnrichmentStateService {
 
     /**
      * Clear the synchronous gate so Python can process work again.
-     * Called by clearPauseState() when enrichment is explicitly resumed.
      */
     async clearGate(): Promise<void> {
         await this.redis.del(AUDIO_ANALYSIS_GATE_KEY);
+    }
+
+    /**
+     * Close the analysis gate without touching state. Used at startup to honour a
+     * persisted pause when the gate key is gone (Redis flushed or expired).
+     */
+    async holdGateClosed(): Promise<void> {
+        await this.redis.set(AUDIO_ANALYSIS_GATE_KEY, "paused");
     }
 
     /**
@@ -305,8 +337,8 @@ class EnrichmentStateService {
      * Cleanup connections
      */
     async disconnect(): Promise<void> {
-        await this.redis.quit().catch(() => {});
-        await this.publisher.quit().catch(() => {});
+        await closeClient(this.redis).catch(() => {});
+        await closeClient(this.publisher).catch(() => {});
     }
 }
 

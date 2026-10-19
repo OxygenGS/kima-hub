@@ -4,6 +4,33 @@
 
 This changelog documents changes made to Kima Hub — Oxygen's Fork, independently maintained by OxygenGS and originally developed by Chevron7Locked.
 
+## OxygenGS fork v1.11.0 — release preparation (unpublished)
+
+**Release status: Draft combined PR #7 remains unmerged; stable OxygenGS `v1.11.0` is NOT released.** The isolated `ghcr.io/oxygengs/kima-hub:prerelease-v111-rc2` was published from app/runtime source `ec44b98d9f69175b08bd2c6c88b0fb6552d6581c`, then independently verified on both platforms by immutable OCI index digest `sha256:c566c59b2aabb150d63cb623c61c5335a41122b224bb08b1df4c55b3a8a2fe56` ([publisher](https://github.com/OxygenGS/kima-hub/actions/runs/39069358767), [real published-image verification](https://github.com/OxygenGS/kima-hub/actions/runs/39070979565)). The published rc2 is an older image: subsequent Draft #7 commits change backend FFmpeg and AIO process-secret boundaries; their runtime is separately validated in disposable CI and has not yet been published. Neither this candidate nor the pending stable tag authorizes production deployment.
+
+### Added
+- Integrated official upstream Kima v1.11.0 features including Stats, Discover Weekly, Vibe Map, updated audio and library processing.
+- English/Dutch language selector across user-facing screens, login, onboarding, Settings, playback controls and the newer v1.11 views; music titles, stored metadata and API identifiers remain unchanged.
+- Kept fork-owned user music-request/download permissions and configurable instance branding.
+
+### Security and reliability
+- Native AMD64/ARM64 full AIO smoke now enables the normally active CLAP analyzer, asserting supervised RUNNING state and credential-isolated process environment both on fresh boot and persistent-volume restart. Experimental exact-source [9/9 checks #39157328832](https://github.com/OxygenGS/kima-hub/actions/runs/39157328832) passed, including real auth, audio, EN/NL UI, and independent v1.10/v1.11 upgrades and rollback (AMD64). **The check verifies service liveness and isolation, not the quality or completeness of CLAP model inference**; all updated combined-PR CI must pass again. No image was published.
+- Limited inherited AIO credentials by removing backend database URLs and session/encryption variables from frontend, PostgreSQL and Redis subprocess environments; the analyzers retain their required database URL but not unnecessary session/encryption secrets. Native AMD64/ARM64 full AIO runs verified actual supervised /proc process environments, real audio/auth, persistence and original upstream v1.10/v1.11 image-upgrade/rollback without publishing ([9/9 isolated tests](https://github.com/OxygenGS/kima-hub/actions/runs/39154014014)). Backend and analyzers still run as root; this improvement is **not** full privilege isolation or an approval of remaining Debian CVEs.
+- Hardened FFmpeg waveform decoding: no stdin or remote demuxer protocols, audio-only decoding, bounded stderr and 120-second subprocess watchdog, a 24-hour PCM resource cap and strict nonzero-exit rejection. Authenticated waveform HTTP responses are now private and vary by credentials; added unit and real-image HTTP security regressions. Initial isolated [3/3 compatibility and backend verification](https://github.com/OxygenGS/kima-hub/actions/runs/39149334113) passed. Combined native release-image checks are required before claiming final validation.
+- Removed the separate legacy `@ffmpeg-installer/ffmpeg` static binaries (including older 4.1.x Linux builds). Streaming, transcoding and waveform generation now resolve distribution-managed system FFmpeg, with optional `FFMPEG_PATH` for custom installs. Native AMD64/ARM64 full AIO builds and actual authenticated audio/seek/waveform tests passed [isolated experiment CI 9/9](https://github.com/OxygenGS/kima-hub/actions/runs/39128491602), including v1.10 and v1.11 independent rollback on AMD64. The full release-PR commit and any eventual published image require their own verification.
+- AIO backend, Redis and PostgreSQL bound to container loopback; PostgreSQL role uses a persistent per-installation random credential with SCRAM and an upgrade-safe legacy-password migration.
+- Dedicated unprivileged Next.js frontend process; backend and analyzers require separate non-root compatibility review.
+- Removed vulnerable Transformers runtime dependency from ONNX CLAP while retaining tested model/audio parity, with pinned tokenizer and Apache-licensed NumPy helper attribution.
+- Added structural and real HTTP permission tests, native AMD64/ARM64 AIO build/smoke, synthetic EN/NL browser and user-role tests, and disposable genuine upstream v1.10/v1.11 copy-upgrade plus independent rollback.
+- Added Trivy source/dependency and native assembled-image scans. **Image-security acceptance remains OPEN:** exact published-rc2 audit [#39101135942](https://github.com/OxygenGS/kima-hub/actions/runs/39101135942) found 295/294 HIGH and 8 CRITICAL per AMD64/ARM64; no Trivy-listed fix versions. Backend and two analyzers still inherit root, unlike the non-root frontend/Redis/PostgreSQL.
+- The proposed stable publisher now uses native AMD64/ARM64 runners and scans each actual image before staging; final multiarch manifest is built only after both pass. The versioned tag and `:latest` are **separate** publication decisions: stable tag creation does not automatically move `:latest`.
+
+### Release gates outstanding
+- Exact final-head CI including image security, manual cross-device EN/NL accessibility and playback, independent representative cold backup/restore, and security/license review.
+- Explicit separate approval for a candidate image, stable tag/merge/publication and any existing-installation upgrade. Existing `ghcr.io/oxygengs/kima-hub:v1.10.0` remains the published default.
+
+---
+
 ## Unreleased — October 2026
 
 ### Added
@@ -29,10 +56,7 @@ This changelog documents changes made to Kima Hub — Oxygen's Fork, independent
 - 879 backend automated tests passed.
 - 1,193 automated tests passed in total.
 - Confirmed successful application startup and health checks.
-- Tested database migration using a restored copy of production data.
-- Successfully deployed the fork using an existing Kima Hub installation.
-- Confirmed preservation of the existing user and 1,152 music tracks during migration.
-- Verified authentication, branding, music playback, and availability of permission controls.
+- Verified migration, authentication, branding, media playback and permission checks in isolated test environments; no private installation details are included in this public changelog.
 
 ### Known Limitations
 
@@ -58,6 +82,138 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased] - nightly
+
+## [1.11.0] - 2026-10-12
+
+### Added
+
+- **The Stats page.** Everything on it is computed from your own listening: most-replayed tracks, the artists that carry half of everything you play, how much of your library has never been heard, and how habits shift between weeks, months, and all time. Play counts in the player come from the same listen definition; tracks never played say so instead of showing zero. Includes `verify-stats.ts` (67 independent cross-checks) and ten live end-to-end journeys covering the four destructive audit buttons with database-level verification.
+- **An update window.** It opens on a note from Kevin and a short list of what's new; each line opens its own page with the buttons and links for it. The copy says plainly what each thing does.
+- **Scrobbling to ListenBrainz, opt-in.** Plays are recorded locally as always; setting a ListenBrainz user token mirrors each play to ListenBrainz's open API. Fire-and-forget: never awaited, rejections logged, no token means skipped, a ListenBrainz outage cannot fail a play or touch stats. The token is stored encrypted.
+- **Similar artists rebuilt for discovery.** Candidates come from ListenBrainz's similar-artists data first (the same as its artist pages; free, no key, no account), with Deezer related artists as fallback; your library re-ranks the merged list by up to ±0.1 on the same matching as the vibe features, so taste leans yours without hiding anyone. Artists not in your library are flagged `inLibrary: false` so they can be offered for download.
+- **Track identification without ISRC.** A file's own MusicBrainz recording tag answers first; then its album's tracklist (one request answers every song on the album, the earliest official release, and on a compilation the song credited to the track's artist), a title-checked MusicBrainz name search, and AcoustID fingerprint lookup (fpcalc) for the rest. Resolution outcomes are counted per path so the mix is observable.
+- **A queue-length setting** in Settings > Playback (default 10000, min 100, max 100000).
+- **A public vibe feed, off by default.** With `KIMA_PUBLIC_VIBE=true`, a token and a username set (see `.env.example`), `/api/public/vibe` serves the owned library as one gzipped export (positions, moods, nearest tracks; suggested albums and missing files are left out) and that user's listening as it happens: play, pause, seek, skip, stop and up-next, from the web player and from Subsonic clients' now-playing. That user gets a "Share what I'm playing" switch under Settings → Scrobbling; off, the feed reads `hidden` and drops their plays until it is turned back on. Subsonic clients do not report pausing, so a paused phone app reads as playing until the track's length plus 30 seconds has passed, then stopped. Without the variable the routes do not exist.
+- **The vibe analyzer is now ONNX** — torch-free, reproducible from public sources. The audio and text ONNX exports are built from the public `laion/clap-htsat-unfused` checkpoint and verified against fixed hashes at build time; the mel-spectrogram path is vendored as pure numpy so the stack runs without torch. Sound vectors from 1.10 came from a different model under the same name, so they are made again on upgrade.
+- **A choice about your saved mood mix.** Moods were being read backwards, so a mood mix saved before 1.11 was picked from the wrong values. The release window asks what to do with it: rebuild it, keep it, or save it as an ordinary playlist (saving and rebuilding can be combined). A mix saved under a mood 1.11 removed (High Energy, Focus Mode, Deep Feels, Acoustic Vibes) can no longer be shown, so it offers save-as-playlist or remove instead, and is asked about again on the next visit until answered. Nothing is deleted until the user chooses.
+- **NVIDIA GPU, opt-in.** Two switches in Settings, one for vibe embeddings and one for audio analysis, so you choose which steps use the GPU. The first switch turned on downloads about 2 GB of pinned packages into the data folder (about 3.4 GB on disk); they are removed when both are off, so nobody who leaves them off pays in image size or behaviour. Flip a switch and, within about a minute, the analyzer it belongs to finishes the songs it is on and restarts itself on or off the GPU. Audio analysis on the GPU is checked against the CPU's answers at every start; if it disagrees, or fails mid-run, analysis runs on the CPU. Settings says when a switch is still applying, when the GPU session fell back to the CPU, and when the analyzer that does the download is not running.
+- **Wipe and re-run enrichment.** Admins can clear what enrichment worked out (audio analysis, vibe data, the vibe map, artist bios, genres and similar artists) and run the whole library through the engine again, from the 1.11 window or Settings under Library Enrichment. The library, which recording and artist each file is, artist images, playlists, plays, likes and edits stay.
+- **A fifth enrichment step, Similarity.** It runs after vibe embeddings, computes each track's feel once, keeps the library's matching statistics current and lays out the vibe map; Settings shows its progress. A newly embedded track joins matching and the map when the step has run (seconds while enrichment is busy).
+
+### Changed
+
+- **Vibe matching uses sound, feel and artist genre.** Similar tracks, recommendations from a track, Alchemy, Song Path, the public export's nearest tracks and the similar-artists re-rank now share one formula: how a track sounds (CLAP), how it feels (valence and arousal read from the sound and set against your own library's range, weight 0.25), and its artist's MusicBrainz genres (weight 0.25, counted only between different artists). Every list holds at most 2 tracks per album and 4 per artist. Text search still matches on sound alone; radio stations and artist radio are unchanged. The feel weights are derived from the DEAM dataset and licensed separately (see the README).
+- **Song Path answers 400 for a track that has not been analysed yet.** It answered 500.
+- **The vibe map is a picture of the matching.** Each track sits where the same formula places it among its closest matches (sound, feel and artist genre), laid out by UMAP's published method in Kima's own code; on a 9,027-track library 68% of each track's 10 closest matches sit among its 50 nearest stars. The similarity step lays a library's map out once and then places each new track among the others: a track that has a place never moves, and every server computes the same map. The page only draws it. The home view frames the map on any screen, phone included.
+- **The vibe map opens without mood names.** The tag button shows them; the choice is remembered.
+- **The vibe map looks like a universe.** Each song is a crisp star, a bright few over a faint many; a very faint glow sits behind everything and sparse stars in the far distance give it depth, as in Kima v2's galaxy. Songs stay exactly where the matching places them; the fog around clusters and the coloured glow on them are gone.
+- **A phone on its side gets more room.** On short landscape screens the top bar, the bottom bar (icon beside its label) and the mini player are slimmer on every page, so the content shows about 180 px instead of 110.
+- **The vibe map on phones is rebuilt.** Search across the top with the two map buttons beside it, the moods in one row under it, Song Path and Blend on the right edge in thumb reach, and a sheet that shows only its handle until you pick a song. Song Path from the toolbar and from a song are now the same feature.
+- **Lyrics scroll inside their own box.** Opening them no longer slides the whole app sideways.
+- **Everything is lowercase.** Every page, menu, dialog, tooltip and dropdown shows lowercase text, as in Kima v2. Typed, copied and submitted text keeps its case, and keys, codes and addresses show exactly as they are.
+- **Lyrics open inside the full-screen player on desktop.** The button opened them in the side panel, behind the player.
+- **Audio analysis keeps every worker busy.** Workers take the next track as soon as they finish one; before, they took tracks ten at a time and waited for the slowest, so at most ten were ever busy. Moving the workers slider while enrichment runs no longer caps it at 8.
+- **Audio analysis runs MusiCNN on ONNX Runtime, without TensorFlow.** The models are Essentia's own, converted when the image is built; the build fails unless they give Essentia's answers (on 16 library tracks the stored values agree within 0.000004). The image no longer carries two copies of TensorFlow.
+- **Sound vectors take one model call per track** instead of five.
+- **The new Kima mark.** The logo in the app is the waveform in the new gradient, amber at the top through rose and violet to azure, its colour gently shifting like the mobile app's; still when the system asks for reduced motion.
+- **Last.fm is gone, replaced everywhere.** No API keys, no account, nothing to configure:
+  - Similar artists: ListenBrainz → Deezer → local audio re-rank (above).
+  - Artist name resolution (aliases, misspellings): MusicBrainz.
+  - Track genres ("mood tags"): MusicBrainz recording genres.
+  - Artist biographies: Wikidata.
+  - Artwork: Deezer → Cover Art Archive → Fanart for albums; Fanart → Deezer for artists.
+  - Discover charts: ListenBrainz sitewide top artists.
+  - Identification: the file's MusicBrainz tag → the album's tracklist → MusicBrainz name search (title-checked) → AcoustID fingerprint.
+  - Scrobbling: optional ListenBrainz mirror; local play tracking needs nothing.
+- **Database:** `Track.lastfmTags` is dropped: since the Last.fm service was deleted it held MusicBrainz genre tags, which now live in the genre tables. Four dead Last.fm columns are dropped from `SystemSettings`, and so are the nightly-only `publicVibeEnabled` and `publicVibeUserId` (the public feed is configured by environment variables now). If you keep dashboards or scripts against `lastfmTags`, point them at the genre tables.
+- **The galaxy map is the only vibe view.** The old Map view (deck.gl grid) and its toggle are gone; the Vibe page renders the 3D galaxy on every screen. Clicking a star shows that song over the right side of the map, with its moods, energy and valence and Play, Match Vibe, Similar and Song Path, and the map stays clickable around it; on phones the song opens in a sheet at the bottom. The former "you" star and its neighbour highlight are gone.
+
+### Removed
+
+- **The old map positions.** Migration `matching_map` drops the three position columns on `track_embeddings` and the map's Redis copy is no longer kept; the similarity step lays every library out again from its own data.
+- **API routes nothing in Kima calls.** Scripts that used them need updating: the old manual enrichment controls under `/api/enrichment` (`/start`, `/full`, `/skip`, the four `/reset-*` routes, `/repair-covers`, `/settings` and `DELETE /failures`); `/api/analysis/start`, `/status`, `/features`, `/analyze/:trackId` and `/vibe/retry`; `/api/listening-state`; `/api/mixes/mood` with its presets and saved preferences (the mood mixer's `/api/mixes/mood/buckets` routes stay); `/api/browse/radios` and `/api/browse/genres`; `/api/homepage/genres` and `/top-podcasts`; `/api/search/genres`; `/api/podcasts/sync-covers`; `/api/downloads/keep-track`; `/api/audiobooks/debug-series`; the queue-cleaner start, stop and status routes (stuck Discover batches and Spotify imports are now recovered on a schedule); and `/api/system-settings/test-lastfm`. The Subsonic API, share links and the public vibe feed are unchanged.
+- **The iOS audio debug log**, its page and its upload route.
+- **Two settings nothing could use:** `User.moodMixParams`, written only by the removed `/api/mixes/mood` routes, and the Lidarr bundle size limit, which no screen could set; a bundle is grabbed whatever its size.
+- **Mood radio's tag fallback.** A mood other than the five moods, high-energy, acoustic and instrumental now answers 400 instead of an empty station.
+- **`CLAP_SLEEP_INTERVAL` and `AUDIO_ANALYSIS_INTERVAL`.** Neither changed anything; the analyzers wait on their queues (`AUDIO_BRPOP_TIMEOUT` still sets how long).
+- **Artwork consolidation.** `backend/src/services/artwork.ts` is the single artwork door; the four previous call paths (including `imageProvider.ts`) are absorbed into it. Each of albums and artists walks one ordered source list and takes the first real answer; a source that throws is not evidence of absence.
+
+### Fixed
+
+- **Audio analysis reads stereo correctly.** Tempo, key, energy and the mood scores were computed from a garbled signal; a re-run of enrichment recomputes them.
+- **Enrichment restarts after Stop, and after a server restart.** Run Enrichment and wipe and re-run lift a stop or pause; a restart no longer blocks enrichment for up to four hours.
+- **ListenBrainz receives your listens.** Plays were sent in a format ListenBrainz rejects.
+- **Spotify playlist imports find songs that arrive later** for artists with many tracks or multi-word names, and no longer add another artist's song with the same short title.
+- **Radio, shuffle and the Similar Artists mix skip missing or broken files.**
+- **A cover or picture that failed to load is retried** instead of being remembered as "none" for a day; the Popular Artists row on Home shows pictures.
+- **Soulseek: the Test button works for slskd setups**, and download preferences are no longer greyed out for them.
+- **A wrong password or 2FA code says so** instead of "Not authenticated".
+- **Copy buttons work on plain-http installs** (recovery codes, Subsonic tokens, share links).
+- **Queue buttons show on phones and to keyboard users.**
+- **The same song played twice in a row counts twice.**
+- **Vibe map:** Blend's buttons stay reachable on short screens; song path and similar say why they failed; Escape closes Song Path and Blend; vibe queues always play in order; the camera no longer jumps home when the window is resized.
+- **Songs are matched to the right recording.** Every way Kima identifies a song (its ISRC, its album's tracklist, a name search, its audio fingerprint) now checks the title, the version (remix, live, acoustic...), the artist and the length before accepting an answer; before, an ISRC or a name search took the first hit. A file's own MusicBrainz recording tag is used first. Wipe and re-run checks every song again.
+- **An artist's MusicBrainz id comes from the right tag.** When the artist name came from the album-artist tag, the id was taken from the track-artist tag. An artist whose stored id belongs to someone else loses it, with the bio, genres and similar artists that came with it; local artist images stay.
+- **A failed Wikidata lookup keeps the artist's bio** instead of replacing it and remembering the failure for 30 days.
+- **Artists with more than 100 releases** have their whole catalogue checked.
+- **A late or repeated report from an analyzer can no longer overwrite a finished step**, and retrying failed analysis or rebuilding embeddings no longer reopens tracks whose files are missing.
+- **Audio analysis measures what it says.** Mono files are analysed at their real level (they were read 3 dB quiet); loudness is EBU R128 loudness and loudness range; danceability comes from the danceability model; silence and tracks under 3 seconds get no tempo, key or mood instead of made-up ones. Older analyses are redone on upgrade.
+- **A song whose audio can't be read in full gets no sound vector** and is retried, instead of a vector averaged from the parts that loaded.
+- **Analysis and sound-vector times are stored correctly** on servers whose clock is not set to UTC (they were 5 hours off).
+- **Audio analysis listens to the end of each song.** It reads the last 90 seconds, where songs build to, instead of the first 90.
+- **Audio analysis never stores guesses.** If the analysis models are missing or fail, the song is retried instead of being given moods, valence and danceability estimated from its key and tempo.
+- **Enrichment finishes instead of starting over.** A song's identification is no longer handed out again after 30 seconds while it waits its turn, a job handed out again does no work, and waiting for an outside service no longer counts as a failed try. Only real failures use up a song's four tries.
+- **An artist whose lookup keeps failing stops being retried every cycle** after four failures, and an artist left half-done by a restart is picked up again. A failed similar-artists source no longer wipes the similar artists already stored.
+- **A malformed MusicBrainz id in a file's tags is ignored** rather than sent to MusicBrainz and Wikidata.
+- **A song whose fingerprint can't be made is still identified** by its tags and a name search; it was closed unidentified.
+- **An artist is asked again after a MusicBrainz outage** instead of being marked done without its genres.
+- **Upgrading works on a database Kima's user doesn't own** (an external Postgres); the clock setting falls back to the user's own.
+- **Sound-vector building keeps up with the worker slider.** Raising workers past the count set at startup exhausted the analyzer's database connections and wedged songs mid-embed; the pool now follows the live slider, always kept under the server's own connection limit.
+- **The sound-vector stage starts and stays running.** A refactor stopped its worker 125 milliseconds after launch and the progress ledger froze without an error; it was proven running again at concurrency 16 and 24.
+- **GPU switches appear only where a GPU can exist** — Linux with an NVIDIA card the server can see. They were offered on every platform and did nothing elsewhere.
+- **The app opens in browsers that block storage.** Private-mode and blocked-storage browsers crashed the API client on load; sign-in now keeps working in memory and the app opens.
+- **A song's genres are its recording's own MusicBrainz genres** whichever way it was identified; songs identified from their album's tracklist were given crowd tags or, without them, the album's genres. Spotify playlist import and shared links pick MusicBrainz's recording by title, version, artist and length too, instead of taking its first answer. On upgrade each album's tracklist is fetched once more (two MusicBrainz requests per album).
+- **Enrichment says it is finished only when it is.** It waited for neither identification answers due a retry nor artists still being looked up, and a question someone set aside counted as still to do, which also kept the vibe map from being laid out.
+- **Audio analysis reads the real end of a song** when the file's header gives a shorter length than the audio has.
+- **Mood tags read what was measured.** A song whose tempo could not be read was tagged slow, and a valence or energy of exactly 0 was read as middling, so those songs missed "sad" and "calm".
+- **A vibe started from the map shows its match score** in the full player, as one started from the player does.
+- **One song preview plays at a time on every page,** and the main player resumes when a preview stops, ends or fails; a preview that could not play left it paused.
+- **Removing a podcast that fails says so** instead of doing nothing.
+- **Carousel arrows and track play buttons show for the keyboard,** not only for the mouse; the previous and next episode rows are buttons.
+- **A second "Sync library" press within five seconds is no longer silently ignored.** The server already refuses a scan while one is running.
+- **The activity panel's tabs have names.** Screen readers heard only the unread count ("15"); each tab is now named and says whether it is open, and the panel toggle points at the panel it opens on desktop.
+- **A file that cannot be read is no longer counted as added.** The scan counted every new file before reading it, so an unreadable file showed up as "added" on every scan while never reaching the library. It now counts only as an error.
+- **Podcast subscribe returns 422 on an unreadable feed, not 500.**
+
+### Security
+
+- **Next.js 16.3.8 and proxy-addr 2.0.8.** Patch updates for published advisories: Next.js 16.0 to 16.3.7, and proxy-addr's client-address check, which IPv4-mapped IPv6 addresses could get past. The production dependencies of both apps now audit clean.
+
+### Infrastructure
+
+- **The public export's nearest-track lists are computed in a worker thread**, and one export builds at a time: a library change during a build is built once that build ends.
+- **Enrichment hardening.** Failed status is genuine (crash-safe boot, honest route responses), the false-heartbeat hang class is gone, and a corrupted file can no longer disable all embeddings.
+- **Backend route tests keep one server per test app.** Handed a bare app, supertest opened a new server on a fresh port for every request; under parallel workers a request sometimes reached the wrong socket and the suite failed on a different test each time (a 303 or 404 from another app, or an HTTP parse error). A test app now keeps one server until its file finishes.
+- **A gate journey file for the features the walkthrough never touched:** the notification tray, ListenBrainz scrobbling, the public library export and live feed, the GPU switch, and the release window.
+- **Migrations for upgraders from 1.10:** 44 of them, applied automatically by `npm run db:migrate` on deploy. Among them: the track-embeddings constraint repair restores the primary key, foreign key, HNSW index and model-version index; `matching_engine` adds the similarity step's tables; `matching_map` drops the old map position columns; `analysis_v4` and `sound_vector_label` have every song analysed and given a sound vector again; `database_clock_utc` sets the database clock to UTC. The boot-time fake migration rows the old Dockerfile wrote are gone.
+
+## [1.10.1] - 2026-08-25
+
+### Added
+
+- **A window that tells you what changed, and asks before it assumes.** After an update, Kima shows the release once: what changed, anything you can run, and anything it needs permission for. Closing it is a real answer — every permission you did not touch is recorded as declined, at its default, which is always off. Nothing is left blank for later code to read as a yes. A permission you did switch on survives closing the window; it is not a retraction.
+- **A one-off repair for play history recorded under the old rule.** Offered in that window and permanently in Settings. It looks first and shows what it found: how many plays it can prove were skips, how many it cannot tell about, and a sample of the actual rows. Only then does a button appear that removes anything.
+
+  The evidence is the gap to the next play. A play followed eight seconds later by another ran for at most eight seconds, whatever else was happening — so it cannot have met the threshold. A *long* gap proves nothing either way, so those are kept, along with the last play of every session, which has nothing following it to bound it. On a test history of 1,700 plays built from 836 deliberate skips, it found 836 and misclassified none of the real listening.
+
+### Changed
+
+- **A play now means somebody listened.** A `Play` row was written the moment the stream endpoint was hit, so skipping through an album recorded a play for every track and nobody had heard any of them — and that history feeds the vibe profile, recently-played and the decay model. The rule is now Last.fm's, restated verbatim by ListenBrainz: longer than 30 seconds, and played for half its length or four minutes, whichever comes first.
+
+  The stream endpoint records nothing at all — requesting bytes is not listening. The web player measures real listening and reports it, the server decides, and a track whose length is unknown gets the four-minute bound rather than a free pass, so never scanning a file is not the cheapest way to log a play. Repeats inside five minutes collapse to one. Subsonic clients keep choosing their own moment to scrobble, which is what the contract says, but the 30-second floor is enforced server-side whatever a client claims.
+
+  Existing rows are still stream-starts. The decay model fades them out on its own, and `Play.source` still distinguishes the Subsonic ones if you ever want to audit the cutover.
+
 
 ## [1.10.0] - 2026-08-23
 ### Added
@@ -214,7 +370,7 @@ iOS audio reliability overhaul plus audiobook, Soulseek, and podcast fixes.
 
 ### Added
 
-- **Persist UMAP map positions to the database**: The vibe galaxy map previously cached its UMAP projection in Redis with a 24h TTL; on every expiry (or container restart) the worker recomputed the full projection, taking ~30s on an 8k-track library. Positions are deterministic once the embedding set is fixed, so they now live in `track_embeddings.map_x` / `map_y`. The map loader tries Redis first, then hydrates from the DB when at least 98% of embeddings have persisted positions (uncovered tracks get patched by `appendTrackToProjection` as they analyze), and only falls back to full UMAP recompute when coverage drops below that threshold. Cold-Redis hydrate is a single indexed join (~100ms) instead of a 30s worker run. The migration is a metadata-only `ADD COLUMN` on PG 11+, zero downtime, safe for `docker compose pull` on existing deployments.
+- **Persist UMAP map positions to the database**: The vibe galaxy map previously cached its UMAP projection in Redis with a 24h TTL; on every expiry (or container restart) the worker recomputed the full projection, taking ~30s on an 8k-track library. Persisting them avoids that recompute on every expiry, so they now live in `track_embeddings.map_x` / `map_y`. The map loader tries Redis first, then hydrates from the DB when at least 98% of embeddings have persisted positions (uncovered tracks get patched by `appendTrackToProjection` as they analyze), and only falls back to full UMAP recompute when coverage drops below that threshold. Cold-Redis hydrate is a single indexed join (~100ms) instead of a 30s worker run. The migration is a metadata-only `ADD COLUMN` on PG 11+, zero downtime, safe for `docker compose pull` on existing deployments.
 - **Deezer as fallback source for podcast search**: iTunes Search API had an outage that broke all podcast discovery. The `/podcasts/discover/*` and `/search?type=podcasts` endpoints now fan out to both iTunes and Deezer in parallel via `Promise.allSettled` with title-based dedupe. Deezer results fill gaps when iTunes is down; iTunes results are preferred when available (they carry the `feedUrl` needed for subscription). The preview endpoint can resolve Deezer-only podcasts by looking up the feed URL via iTunes name match.
 
 ### Fixed
@@ -565,7 +721,7 @@ Closes #121, #125, #136, #138. Partially addresses #139, #25, #108, #30.
 - **Previous track restart**: Restart current track if position > 3s on previous button press.
 - **Podcast detection**: Split podcast composite ID before URL comparison.
 
-## [1.6.0] - 2026-02-28
+## [1.6.0-pre.1] - 2026-02-28
 
 ### Added
 
@@ -1137,18 +1293,17 @@ Thanks to everyone who contributed to this release:
 
 ---
 
-## [1.3.2] - 2025-01-07
+## [1.3.2] - 2026-01-07
 
 ### Fixed
 - Mobile scrolling blocked by pull-to-refresh component
-- Pull-to-refresh component temporarily disabled (will be properly fixed in v1.4)
+- Pull-to-refresh component disabled
 
 ### Technical Details
 - Root cause: CSS flex chain break (`h-full`) and touch event interference
 - Implemented early return to bypass problematic wrapper while preserving child rendering
-- TODO: Re-enable in v1.4 with proper CSS fix (`flex-1 flex flex-col min-h-0`)
 
-## [1.3.1] - 2025-01-07
+## [1.3.1] - 2026-01-07
 
 ### Fixed
 - Production database schema mismatch causing SystemSettings endpoints to fail
@@ -1354,7 +1509,3 @@ Big thanks to everyone who contributed, tested, and helped make this release hap
 - @brokenglasszero - Mood tags feature verification ([#35](https://github.com/Chevron7Locked/kima-hub/issues/35))
 
 And all users who reported bugs, tested fixes, and provided feedback!
-
----
-
-For detailed technical implementation notes, see [docs/PENDING_DEPLOY-2.md](docs/PENDING_DEPLOY-2.md).

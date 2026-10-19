@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Tab, DeleteDialogState } from "@/features/library/types";
@@ -15,42 +17,81 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useLibraryActions } from "@/features/library/hooks/useLibraryActions";
-import { LibraryHeader } from "@/features/library/components/LibraryHeader";
+import { CollectionMasthead } from "@/features/library/components/CollectionMasthead";
+import { useLibraryVibe } from "@/features/library/useLibraryVibe";
+import { useShelfSummary } from "@/features/library/useShelfSummary";
 import { LibraryTabs } from "@/features/library/components/LibraryTabs";
 import { LibraryToolbar } from "@/features/library/components/LibraryToolbar";
 import { ArtistsGrid } from "@/features/library/components/ArtistsGrid";
 import { AlbumsGrid } from "@/features/library/components/AlbumsGrid";
 import { TracksList } from "@/features/library/components/TracksList";
+import { DEFAULT_REFINE, PER_PAGE_OPTIONS, sortOptionsFor } from "@/features/library/components/RefinePanel";
 import { Pagination } from "@/components/ui/Pagination";
+import { latchTotal, parsePageParam } from "@/lib/pagination";
+import { scrollMainToTop } from "@/lib/scroll";
+
+const FILTERS: LibraryFilter[] = ["owned", "discovery", "all"];
+
+interface LibraryView {
+    filter: LibraryFilter;
+    sortBy: SortOption;
+    itemsPerPage: number;
+}
+const DEFAULT_VIEW: LibraryView = DEFAULT_REFINE;
+
+/** The address carries tab, page, filter, sort and page size, so refresh and Back keep them; defaults are left out. */
+function libraryUrl(tab: Tab, page: number, view: LibraryView): string {
+    const params = new URLSearchParams();
+    params.set("tab", tab);
+    if (page > 1) params.set("page", String(page));
+    if (view.filter !== DEFAULT_VIEW.filter) params.set("filter", view.filter);
+    if (view.sortBy !== DEFAULT_VIEW.sortBy) params.set("sort", view.sortBy);
+    if (view.itemsPerPage !== DEFAULT_VIEW.itemsPerPage) params.set("per", String(view.itemsPerPage));
+    return `/collection?${params.toString()}`;
+}
+
+/** The address's value when it is one of the choices, else the default. */
+function oneOf<T extends string | number>(raw: string | null, choices: readonly T[], fallback: T): T {
+    return choices.find((choice) => String(choice) === raw) ?? fallback;
+}
 
 export default function LibraryPage() {
+    const { locale } = useLanguage();
     const router = useRouter();
     const searchParams = useSearchParams();
     const { playTracks } = useAudioControls();
 
-    // Get active tab from URL params, default to "artists"
+    // The masthead's mood band and heard line; both cache independently of the
+    // tab pages and keep their last copy on failure.
+    const vibe = useLibraryVibe();
+    const shelf = useShelfSummary();
+
     const validTabs: Tab[] = ["artists", "albums", "tracks"];
     const tabParam = searchParams.get("tab");
     const activeTab: Tab = validTabs.includes(tabParam as Tab) ? (tabParam as Tab) : "artists";
 
-    // Read page from URL params
-    const urlPage = parseInt(searchParams.get("page") || "1", 10);
+    // Page lives in the URL and nowhere else. Reading it through
+    // parsePageParam means a garbage ?page= never reaches the API, and the
+    // pager math never sees NaN.
+    const currentPage = parsePageParam(searchParams.get("page"));
 
-    // Filter state (owned = your library, discovery = discovery weekly artists)
-    const [filter, setFilter] = useState<LibraryFilter>("owned");
+    // Filter (owned = your library, discovery = discovery weekly artists), sort
+    // and page size live in the URL too; the tracks tab shows owned tracks only.
+    const filter: LibraryFilter =
+        activeTab === "tracks" ? "owned" : oneOf(searchParams.get("filter"), FILTERS, DEFAULT_VIEW.filter);
+    const sortBy = oneOf(
+        searchParams.get("sort"),
+        sortOptionsFor(activeTab).map((opt) => opt.value),
+        DEFAULT_VIEW.sortBy,
+    );
+    const itemsPerPage = oneOf(searchParams.get("per"), PER_PAGE_OPTIONS, DEFAULT_VIEW.itemsPerPage);
 
-    // Sort and pagination state
-    const [sortBy, setSortBy] = useState<SortOption>("name");
-    const [itemsPerPage, setItemsPerPage] = useState<number>(40);
-    const [currentPage, setCurrentPage] = useState(urlPage);
+    const shownPageRef = useRef(currentPage);
 
-    // Track previous page to detect pagination changes
-    const prevPageRef = useRef(currentPage);
-
-    // Sync currentPage with URL changes (browser back/forward)
-    useEffect(() => {
-        setCurrentPage(urlPage);
-    }, [urlPage]);
+    // Last total seen per tab. A query that fails on its first load has no
+    // data; the latch keeps the pager standing on the last real count instead
+    // of recomputing the list down to zero pages.
+    const [latchedTotals, setLatchedTotals] = useState<Partial<Record<Tab, number>>>({});
 
     const queryClient = useQueryClient();
 
@@ -79,15 +120,8 @@ export default function LibraryPage() {
         enabled: activeTab === "tracks",
     });
 
-    // Get data based on active tab.
-    //
-    // The server returns this list already ordered, by the article-stripped
-    // `Artist.sortName` it also indexes and buckets on. There used to be a
-    // client-side re-sort here with its own `^the\s+` stripper -- a fifth copy
-    // of that rule, and the weakest: it knew one English article where the
-    // server knows eleven across four languages, and it could only reorder the
-    // page in hand, since the list is paginated server-side. Re-sorting a
-    // correctly-ordered page by a worse rule can only make it wrong.
+    // The server returns this list already ordered by the article-stripped
+    // `Artist.sortName`, across all pages. Do not re-sort here.
     const artists = useMemo(() => {
         if (activeTab !== "artists") {
             return [];
@@ -95,9 +129,6 @@ export default function LibraryPage() {
 
         return artistsQuery.data?.artists ?? [];
     }, [activeTab, artistsQuery.data?.artists]);
-
-
-
 
     const albums = useMemo(
         () => (activeTab === "albums" ? (albumsQuery.data?.albums ?? []) : []),
@@ -108,54 +139,51 @@ export default function LibraryPage() {
         [activeTab, tracksQuery.data?.tracks],
     );
 
-    // Loading state based on active tab
     const isLoading =
         (activeTab === "artists" && artistsQuery.isLoading) ||
         (activeTab === "albums" && albumsQuery.isLoading) ||
         (activeTab === "tracks" && tracksQuery.isLoading);
 
+    // `fresh` is undefined while the query has no data (loading, or a failed
+    // first load). The latch keeps the last real total, and totalPages is
+    // floored at 1 so the pager never disappears.
+    const fresh =
+        activeTab === "artists" ? artistsQuery.data?.total
+        : activeTab === "albums" ? albumsQuery.data?.total
+        : tracksQuery.data?.total;
+    const total = latchTotal(latchedTotals[activeTab] ?? 0, fresh);
+    if (total !== (latchedTotals[activeTab] ?? 0)) {
+        setLatchedTotals((prev) => ({ ...prev, [activeTab]: total }));
+    }
 
-    // Scroll to top when page changes (after data loads)
-    useEffect(() => {
-        if (prevPageRef.current !== currentPage) {
-            prevPageRef.current = currentPage;
-            // Scroll the main content container, not the window
-            const mainContent = document.getElementById("main-content");
-            if (mainContent) {
-                mainContent.scrollTo({ top: 0, behavior: "instant" });
-            }
-        }
-    }, [currentPage]);
+    const activeQuery =
+        activeTab === "artists" ? artistsQuery
+        : activeTab === "albums" ? albumsQuery
+        : tracksQuery;
 
-    // Pagination from active query
+    // The previous page stays on screen until the next one arrives, so the
+    // jump to the top waits for the swap; scrolling on the click shows the
+    // old page's top for the length of the request.
+    const pageDataReady =
+        activeQuery.data !== undefined && !activeQuery.isPlaceholderData;
+    useLayoutEffect(() => {
+        if (!pageDataReady || shownPageRef.current === currentPage) return;
+        shownPageRef.current = currentPage;
+        scrollMainToTop();
+    }, [pageDataReady, currentPage]);
+
     const pagination = useMemo(
-        () => {
-            // Get the total from the query data
-            const total =
-                activeTab === "artists" ? (artistsQuery.data?.total ?? 0)
-                : activeTab === "albums" ? (albumsQuery.data?.total ?? 0)
-                : (tracksQuery.data?.total ?? 0);
-
-            return {
-                total,
-                offset: 0,
-                limit: itemsPerPage,
-                totalPages: Math.ceil(total / itemsPerPage),
-                currentPage,
-                itemsPerPage,
-            };
-        },
-        [
-            activeTab,
-            artistsQuery.data,
-            albumsQuery.data,
-            tracksQuery.data,
-            itemsPerPage,
+        () => ({
+            total,
+            offset: 0,
+            limit: itemsPerPage,
+            totalPages: Math.max(1, Math.ceil(total / itemsPerPage)),
             currentPage,
-        ],
+            itemsPerPage,
+        }),
+        [total, itemsPerPage, currentPage],
     );
 
-    // Reload data function using React Query invalidation
     const reloadData = useCallback(async () => {
         if (activeTab === "artists") {
             await queryClient.invalidateQueries({
@@ -177,42 +205,49 @@ export default function LibraryPage() {
         playAlbum,
         addTrackToQueue,
         addTrackToPlaylist,
-        deleteArtist,
-        deleteAlbum,
-        deleteTrack,
     } = useLibraryActions();
 
-    // Monotonic key that increments on tab/filter/sort change to remount grids
-    // and replay staggered entrance animations.
-    //
-    // Declared above the effects that call setGridKey, not below them. Both
-    // orders run correctly -- an effect body executes long after the whole
-    // component function has, so the binding is initialised by then -- but
-    // reading a `const` from a line above its declaration puts the reference in
-    // the temporal dead zone as written, which the React Compiler flags and a
-    // future refactor could turn into a real ReferenceError.
+    // Increments on tab/filter/sort change to remount grids and replay the
+    // entrance animation. Declared above the effects that set it.
     const [gridKey, setGridKey] = useState(0);
 
-    // Reset page and filter when tab changes
+    // A tab switch pushes a page-less URL, so the page resets on its own; the
+    // grid remounts to replay its entrance.
+    const [shownTab, setShownTab] = useState(activeTab);
+    if (shownTab !== activeTab) {
+        setShownTab(activeTab);
+        setGridKey((k) => k + 1);
+    }
+
+    // Changing filter/sort/page-size starts again at page 1 and remounts the
+    // grid. Done in the handlers, so the URL changes only on user action.
+    const changeView = useCallback(
+        (next: Partial<LibraryView>) => {
+            setGridKey((k) => k + 1);
+            router.replace(libraryUrl(activeTab, 1, { filter, sortBy, itemsPerPage, ...next }), { scroll: false });
+        },
+        [activeTab, filter, sortBy, itemsPerPage, router],
+    );
+    const changeFilter = useCallback((next: LibraryFilter) => changeView({ filter: next }), [changeView]);
+    const changeSort = useCallback((next: SortOption) => changeView({ sortBy: next }), [changeView]);
+    const changeItemsPerPage = useCallback((next: number) => changeView({ itemsPerPage: next }), [changeView]);
+
+    // A ?page= past the end is moved back to the last real page once a response
+    // lands. The URL stays the single source of truth, so one empty frame shows.
+    const outOfRange =
+        !isLoading &&
+        !activeQuery.isError &&
+        activeQuery.data !== undefined &&
+        currentPage > pagination.totalPages;
     useEffect(() => {
-        setCurrentPage(1);
-        // Reset filter to 'owned' when switching to tracks tab (which doesn't support filter)
-        if (activeTab === "tracks") {
-            setFilter("owned");
+        if (outOfRange) {
+            router.replace(libraryUrl(activeTab, pagination.totalPages, { filter, sortBy, itemsPerPage }), { scroll: false });
         }
-        setGridKey((k) => k + 1);
-    }, [activeTab]);
+    }, [outOfRange, activeTab, pagination.totalPages, filter, sortBy, itemsPerPage, router]);
 
-    useEffect(() => {
-        setCurrentPage(1);
-        setGridKey((k) => k + 1);
-    }, [filter, sortBy, itemsPerPage]);
-
-    // Get total items and pages from pagination
     const totalItems = pagination.total;
     const totalPages = pagination.totalPages;
 
-    // Delete confirmation dialog state
     const [deleteConfirm, setDeleteConfirm] = useState<DeleteDialogState>({
         isOpen: false,
         type: "track",
@@ -220,23 +255,23 @@ export default function LibraryPage() {
         title: "",
     });
 
-    // Change tab function
     const changeTab = useCallback(
         (tab: Tab) => {
-            router.push(`/collection?tab=${tab}`, { scroll: false });
+            // The tracks tab shows owned tracks only and starts the filter over;
+            // a sort the next tab does not offer starts over too.
+            const nextFilter = tab === "tracks" ? DEFAULT_VIEW.filter : filter;
+            const nextSort = sortOptionsFor(tab).some((opt) => opt.value === sortBy) ? sortBy : DEFAULT_VIEW.sortBy;
+            router.push(libraryUrl(tab, 1, { filter: nextFilter, sortBy: nextSort, itemsPerPage }), { scroll: false });
         },
-        [router],
+        [filter, sortBy, itemsPerPage, router],
     );
 
-    // Update page with URL state - scroll handled by useEffect on currentPage change
+    // Update page with URL state — the URL is the page's only storage.
     const updatePage = useCallback(
         (page: number) => {
-            const params = new URLSearchParams();
-            params.set("tab", activeTab);
-            params.set("page", String(page));
-            router.push(`/collection?${params.toString()}`, { scroll: false });
+            router.push(libraryUrl(activeTab, page, { filter, sortBy, itemsPerPage }), { scroll: false });
         },
-        [activeTab, router],
+        [activeTab, filter, sortBy, itemsPerPage, router],
     );
 
     // Helper to convert library Track to audio context Track format
@@ -257,7 +292,6 @@ export default function LibraryPage() {
         }));
     }, []);
 
-    // Wrapper for playTracks that converts track format
     const handlePlayTracks = useCallback(
         (libraryTracks: typeof tracks, startIndex?: number) => {
             const formattedTracks = formatTracksForAudio(libraryTracks);
@@ -283,18 +317,17 @@ export default function LibraryPage() {
         }
     }, [formatTracksForAudio, playTracks]);
 
-    // Handle delete confirmation
     const handleDelete = useCallback(async () => {
         try {
             switch (deleteConfirm.type) {
                 case "artist":
-                    await deleteArtist(deleteConfirm.id);
+                    await api.deleteArtist(deleteConfirm.id);
                     break;
                 case "album":
-                    await deleteAlbum(deleteConfirm.id);
+                    await api.deleteAlbum(deleteConfirm.id);
                     break;
                 case "track":
-                    await deleteTrack(deleteConfirm.id);
+                    await api.deleteTrack(deleteConfirm.id);
                     break;
             }
 
@@ -310,7 +343,7 @@ export default function LibraryPage() {
             console.error(`Failed to delete ${deleteConfirm.type}:`, error);
             // Keep dialog open on error so user can retry
         }
-    }, [deleteConfirm, deleteArtist, deleteAlbum, deleteTrack, reloadData]);
+    }, [deleteConfirm, reloadData]);
 
     // Memoize delete handlers to prevent grid re-renders
     const handleDeleteArtist = useCallback((id: string, name: string) => {
@@ -341,64 +374,94 @@ export default function LibraryPage() {
     }, []);
 
     return (
-        <div className="min-h-screen relative bg-gradient-to-b from-[#0a0a0a] to-black">
-            <LibraryHeader totalItems={totalItems} activeTab={activeTab} />
+        <div className="min-h-screen">
+            <CollectionMasthead
+                title={translate(locale, "Collection")}
+                heardLine={shelf.heard}
+                fallbackLine={`${totalItems.toLocaleString()} ${activeTab === "artists" ? "artists" : activeTab === "albums" ? "albums" : "tracks"}`}
+                shares={vibe.shares}
+            />
 
-            <div className="relative px-4 md:px-8 pb-24 max-w-[1800px] mx-auto">
-                <div className="mb-6 -mt-4">
+            <div className="relative page-shell pb-24">
+                <div className="mb-6">
                     <LibraryTabs
                         activeTab={activeTab}
                         onTabChange={changeTab}
                     />
                 </div>
 
-                {/* Toolbar */}
                 <div className="mb-8">
                     <LibraryToolbar
                         activeTab={activeTab}
                         filter={filter}
                         sortBy={sortBy}
                         itemsPerPage={itemsPerPage}
-                        onFilterChange={setFilter}
-                        onSortChange={setSortBy}
-                        onItemsPerPageChange={setItemsPerPage}
+                        onFilterChange={changeFilter}
+                        onSortChange={changeSort}
+                        onItemsPerPageChange={changeItemsPerPage}
                         onShuffleLibrary={handleShuffleLibrary}
                     />
                 </div>
 
-                {activeTab === "artists" && (
-                    <ArtistsGrid
-                        key={gridKey}
-                        artists={artists}
-                        isLoading={isLoading}
-                        onPlay={playArtist}
-                        onDelete={handleDeleteArtist}
-                        gridKey={gridKey}
-                    />
-                )}
+                <div
+                    aria-busy={activeQuery.isPlaceholderData}
+                    className={`transition-opacity duration-150 ${activeQuery.isPlaceholderData ? "opacity-50" : ""}`}
+                >
+                    {activeTab === "artists" && (
+                        <ArtistsGrid
+                            key={gridKey}
+                            artists={artists}
+                            isLoading={isLoading}
+                            onPlay={playArtist}
+                            onDelete={handleDeleteArtist}
+                            moodByKey={vibe.artistMood}
+                            gridKey={gridKey}
+                        />
+                    )}
 
-                {activeTab === "albums" && (
-                    <AlbumsGrid
-                        key={gridKey}
-                        albums={albums}
-                        isLoading={isLoading}
-                        onPlay={playAlbum}
-                        onDelete={handleDeleteAlbum}
-                        gridKey={gridKey}
-                    />
-                )}
+                    {activeTab === "albums" && (
+                        <AlbumsGrid
+                            key={gridKey}
+                            albums={albums}
+                            isLoading={isLoading}
+                            onPlay={playAlbum}
+                            onDelete={handleDeleteAlbum}
+                            moodByKey={vibe.albumMood}
+                            gridKey={gridKey}
+                        />
+                    )}
 
-                {activeTab === "tracks" && (
-                    <TracksList
-                        key={gridKey}
-                        tracks={tracks}
-                        isLoading={isLoading}
-                        onPlay={handlePlayTracks}
-                        onAddToQueue={addTrackToQueue}
-                        onAddToPlaylist={addTrackToPlaylist}
-                        onDelete={handleDeleteTrack}
-                        gridKey={gridKey}
-                    />
+                    {activeTab === "tracks" && (
+                        <TracksList
+                            key={gridKey}
+                            tracks={tracks}
+                            isLoading={isLoading}
+                            onPlay={handlePlayTracks}
+                            onAddToQueue={addTrackToQueue}
+                            onAddToPlaylist={addTrackToPlaylist}
+                            onDelete={handleDeleteTrack}
+                            gridKey={gridKey}
+                        />
+                    )}
+                </div>
+
+                {activeQuery.isError && !isLoading && (
+                    <div
+                        role="status"
+                        className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 mb-6 -mt-6"
+                    >
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            Couldn&apos;t load this page.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => void activeQuery.refetch()}
+                            disabled={activeQuery.isFetching}
+                            className="text-sm font-medium text-white underline underline-offset-4 hover:text-[var(--text-secondary)] disabled:opacity-50 whitespace-nowrap"
+                        >
+                            {activeQuery.isFetching ? "Retrying…" : "Retry"}
+                        </button>
+                    </div>
                 )}
 
                 <Pagination

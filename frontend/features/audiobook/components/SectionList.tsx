@@ -1,6 +1,7 @@
 "use client";
 
 import type { AudiobookSection } from "../types";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 interface SectionListProps {
     sections: AudiobookSection[];
@@ -19,14 +20,7 @@ export function SectionList({
 
     return (
         <section>
-            <div className="flex items-center gap-3 mb-6">
-                <span className="w-1 h-8 bg-gradient-to-b from-[#f59e0b] to-[#d97706] rounded-full shrink-0" />
-                <h2 className="text-2xl font-bold tracking-tight">Chapters</h2>
-                <span className="text-xs tabular-nums text-[#f59e0b]">
-                    {sections.length}
-                </span>
-                <span className="flex-1 border-t border-white/10" />
-            </div>
+            <SectionHeader type="audiobook" title="Chapters" count={sections.length} />
 
             <div className="rounded-lg border border-white/10 bg-[var(--bg-primary)] overflow-hidden">
                 <div className="divide-y divide-white/5">
@@ -39,7 +33,7 @@ export function SectionList({
                             <span className="text-xs tabular-nums text-[var(--text-muted)] w-6 text-right shrink-0">
                                 {index + 1}
                             </span>
-                            <span className="text-sm font-bold text-white group-hover:text-[#f59e0b] transition-colors truncate tracking-tight">
+                            <span className="text-sm font-bold text-white group-hover:text-brand transition-colors truncate tracking-tight">
                                 {section.title}
                             </span>
                             <span className="ml-auto text-xs tabular-nums text-[var(--text-muted)] shrink-0">

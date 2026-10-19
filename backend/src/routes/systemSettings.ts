@@ -1,28 +1,27 @@
 import { Router } from "express";
+import axios from "axios";
 import { logger } from "../utils/logger";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { prisma } from "../utils/db";
+import { redisClient } from "../utils/redis";
 import { z } from "zod";
 import { writeEnvFile } from "../utils/envWriter";
 import { invalidateSystemSettingsCache } from "../utils/systemSettings";
-import { queueCleaner } from "../jobs/queueCleaner";
-import { encrypt, decrypt } from "../utils/encryption";
+import {
+    decryptOrNull,
+    encryptSettings,
+    resolveEncryptedSettings,
+} from "../utils/encryptedFields";
+import {
+    getGpuStatus,
+    setGpuToggles,
+    gpuSupported,
+} from "../services/gpuRuntime";
+import { configureLidarrWebhook } from "../services/lidarrWebhookSetup";
+import { createLidarrClient } from "../services/lidarrClient";
 import { safeError } from "../utils/errors";
 
 const router = Router();
-
-/**
- * Safely decrypt a field, returning null if decryption fails
- */
-function safeDecrypt(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    return decrypt(value);
-  } catch (error) {
-    logger.warn("[Settings Route] Failed to decrypt field, returning null");
-    return null;
-  }
-}
 
 // Public (any authenticated user) — returns only the configured server URL
 router.get("/public-config", requireAuth, async (_req, res) => {
@@ -49,21 +48,11 @@ const systemSettingsSchema = z.object({
   lidarrWebhookSecret: z.string().nullable().optional(),
   lidarrQualityProfileId: z.number().int().positive().nullable().optional(),
   lidarrMetadataProfileId: z.number().int().positive().nullable().optional(),
-
-  // AI Services
-  openaiEnabled: z.boolean().optional(),
-  openaiApiKey: z.string().nullable().optional(),
-  openaiModel: z.string().optional(),
-  openaiBaseUrl: z.string().nullable().optional(),
+  lidarrRemoveJunk: z.boolean().optional(),
 
   fanartEnabled: z.boolean().optional(),
   fanartApiKey: z.string().nullable().optional(),
-
-  // Last.fm
-  lastfmApiKey: z.string().nullable().optional(),
-  lastfmApiSecret: z.string().nullable().optional(),
-  lastfmUserKey: z.string().nullable().optional(),
-  lastfmEnabled: z.boolean().nullable().optional(),
+  acoustidApiKey: z.string().nullable().optional(),
 
   // Media Services
   audiobookshelfEnabled: z.boolean().optional(),
@@ -99,6 +88,7 @@ const systemSettingsSchema = z.object({
   spotifyClientId: z.string().nullable().optional(),
   spotifyClientSecret: z.string().nullable().optional(),
 
+
   // Storage Paths
   musicPath: z.string().optional(),
   downloadPath: z.string().optional(),
@@ -109,6 +99,7 @@ const systemSettingsSchema = z.object({
 
   // Advanced Settings
   transcodeCacheMaxGb: z.number().optional(),
+  maxQueueLength: z.number().int().min(100).max(100000).optional(),
   soulseekConcurrentDownloads: z.number().min(1).max(10).optional(),
 
   // Download Preferences
@@ -121,7 +112,7 @@ const systemSettingsSchema = z.object({
 });
 
 // GET /system-settings
-router.get("/", async (req, res) => {
+router.get("/", async (_req, res) => {
   try {
     let settings = await prisma.systemSettings.findUnique({
       where: { id: "default" },
@@ -134,8 +125,6 @@ router.get("/", async (req, res) => {
           id: "default",
           lidarrEnabled: true,
           lidarrUrl: "http://localhost:8686",
-          openaiEnabled: false,
-          openaiModel: "gpt-4",
           fanartEnabled: false,
           audiobookshelfEnabled: false,
           audiobookshelfUrl: "http://localhost:13378",
@@ -144,29 +133,16 @@ router.get("/", async (req, res) => {
           autoSync: true,
           autoEnrichMetadata: true,
           transcodeCacheMaxGb: 10,
+          maxQueueLength: 10000,
           soulseekConcurrentDownloads: 4,
         },
       });
     }
 
-    // Decrypt sensitive fields before sending to client
-    // Use safeDecrypt to handle corrupted encrypted values gracefully
-    const decryptedSettings = {
-      ...settings,
-      lidarrApiKey: safeDecrypt(settings.lidarrApiKey),
-      lidarrWebhookSecret: safeDecrypt(settings.lidarrWebhookSecret),
-      openaiApiKey: safeDecrypt(settings.openaiApiKey),
-      fanartApiKey: safeDecrypt(settings.fanartApiKey),
-      lastfmApiKey: safeDecrypt(settings.lastfmApiKey),
-      lastfmApiSecret: safeDecrypt(settings.lastfmApiSecret),
-      lastfmUserKey: safeDecrypt(settings.lastfmUserKey),
-      audiobookshelfApiKey: safeDecrypt(settings.audiobookshelfApiKey),
-      soulseekPassword: safeDecrypt(settings.soulseekPassword),
-      slskdApiKey: safeDecrypt(settings.slskdApiKey),
-      spotifyClientSecret: safeDecrypt(settings.spotifyClientSecret),
-    };
+    // Decrypt every field in ENCRYPTED_FIELDS before sending to the client.
+    const resolved = await resolveEncryptedSettings({ ...settings });
 
-    res.json(decryptedSettings);
+    res.json(resolved);
   } catch (error) {
     logger.error("Get system settings error:", error);
     res.status(500).json({ error: "Failed to get system settings" });
@@ -184,36 +160,14 @@ router.post("/", async (req, res) => {
       data.transcodeCacheMaxGb,
     );
 
-    // Encrypt sensitive fields
-    const encryptedData: any = { ...data };
-
-    if (data.lidarrApiKey)
-      encryptedData.lidarrApiKey = encrypt(data.lidarrApiKey);
-    if (data.lidarrWebhookSecret)
-      encryptedData.lidarrWebhookSecret = encrypt(data.lidarrWebhookSecret);
-    if (data.openaiApiKey)
-      encryptedData.openaiApiKey = encrypt(data.openaiApiKey);
-    if (data.fanartApiKey)
-      encryptedData.fanartApiKey = encrypt(data.fanartApiKey);
-    if (data.lastfmApiKey)
-      encryptedData.lastfmApiKey = encrypt(data.lastfmApiKey);
-    if (data.lastfmApiSecret)
-      encryptedData.lastfmApiSecret = encrypt(data.lastfmApiSecret);
-    if (data.lastfmUserKey)
-      encryptedData.lastfmUserKey = encrypt(data.lastfmUserKey);
-    if (data.audiobookshelfApiKey)
-      encryptedData.audiobookshelfApiKey = encrypt(data.audiobookshelfApiKey);
-    if (data.soulseekPassword)
-      encryptedData.soulseekPassword = encrypt(data.soulseekPassword);
-    if (data.slskdApiKey)
-      encryptedData.slskdApiKey = encrypt(data.slskdApiKey);
-    if (data.spotifyClientSecret)
-      encryptedData.spotifyClientSecret = encrypt(data.spotifyClientSecret);
+    // Encrypt every supplied field from ENCRYPTED_FIELDS; fields the
+    // payload omits stay untouched by the upsert.
+    const encryptedData = encryptSettings(data as Record<string, unknown>) as any;
 
     // Fetch existing settings before save to detect credential changes
     const existingSettings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
 
-    const settings = await prisma.systemSettings.upsert({
+    await prisma.systemSettings.upsert({
       where: { id: "default" },
       create: {
         id: "default",
@@ -224,20 +178,8 @@ router.post("/", async (req, res) => {
 
     invalidateSystemSettingsCache();
 
-    // Refresh Last.fm API key if it was updated
-    try {
-      const { lastFmService } = await import("../services/lastfm");
-      await lastFmService.refreshApiKey();
-    } catch (err) {
-      logger.warn("Failed to refresh Last.fm API key:", err);
-    }
-
-    // Reconnect Soulseek only if connection-relevant settings actually changed
-    // (not just present in payload). This covers P2P credentials AND the slskd
-    // backend selection — switching soulseekMode or editing slskdUrl/slskdApiKey
-    // now reconnects the chosen backend immediately (connect() re-reads settings
-    // and re-runs configureSlskd/resolveSlskClient), instead of the toggle
-    // appearing to do nothing until an unrelated reconnect.
+    // Reconnect Soulseek only when a connection setting actually changed: the P2P
+    // credentials or the slskd backend (mode, URL, API key).
     if (
       data.soulseekUsername !== undefined ||
       data.soulseekPassword !== undefined ||
@@ -247,7 +189,7 @@ router.post("/", async (req, res) => {
     ) {
       try {
         const oldUsername = existingSettings?.soulseekUsername || "";
-        const oldPassword = existingSettings?.soulseekPassword ? safeDecrypt(existingSettings.soulseekPassword) : "";
+        const oldPassword = decryptOrNull("soulseekPassword", existingSettings?.soulseekPassword) ?? "";
         const newUsername = data.soulseekUsername !== undefined ? data.soulseekUsername : oldUsername;
         const newPassword = data.soulseekPassword !== undefined ? data.soulseekPassword : oldPassword;
 
@@ -255,7 +197,7 @@ router.post("/", async (req, res) => {
         const newMode = (data.soulseekMode !== undefined ? data.soulseekMode : oldMode) || "";
         const oldSlskdUrl = existingSettings?.slskdUrl || "";
         const newSlskdUrl = (data.slskdUrl !== undefined ? data.slskdUrl : oldSlskdUrl) || "";
-        const oldSlskdApiKey = existingSettings?.slskdApiKey ? safeDecrypt(existingSettings.slskdApiKey) : "";
+        const oldSlskdApiKey = decryptOrNull("slskdApiKey", existingSettings?.slskdApiKey) ?? "";
         const newSlskdApiKey = (data.slskdApiKey !== undefined ? data.slskdApiKey : oldSlskdApiKey) || "";
 
         const changed =
@@ -344,148 +286,14 @@ router.post("/", async (req, res) => {
       // Don't fail the request if .env write fails
     }
 
-    // Auto-configure Lidarr webhook if Lidarr is enabled
     if (data.lidarrEnabled && data.lidarrUrl && data.lidarrApiKey) {
       try {
-        logger.debug("[LIDARR] Auto-configuring webhook...");
-
-        const axios = (await import("axios")).default;
-        const lidarrUrl = data.lidarrUrl;
-        const apiKey = data.lidarrApiKey;
-
-        // Determine webhook URL
-        // Use KIMA_CALLBACK_URL env var if set, otherwise default to backend:3006
-        // In Docker, services communicate via Docker network names (backend, lidarr, etc.)
-        const callbackHost =
-          process.env.KIMA_CALLBACK_URL || "http://backend:3006";
-        const webhookUrl = `${callbackHost}/api/webhooks/lidarr`;
-
-        logger.debug(`   Webhook URL: ${webhookUrl}`);
-
-        // Check if webhook already exists - find by name "Kima" OR by URL containing "lidify" or "webhooks/lidarr"
-        const notificationsResponse = await axios.get(
-          `${lidarrUrl}/api/v1/notification`,
-          {
-            headers: { "X-Api-Key": apiKey },
-            timeout: 10000,
-          },
-        );
-
-        // The Lidarr /api/v1/notification endpoint always returns a flat array,
-        // but some versions or proxies may return a paged envelope ({ records: [...] })
-        // or an error object. Normalise before use.
-        const notificationsRaw = notificationsResponse.data;
-        if (!Array.isArray(notificationsRaw) && !Array.isArray(notificationsRaw?.records)) {
-          throw new Error(
-            `Unexpected response shape from /api/v1/notification: ${typeof notificationsRaw} — aborting webhook setup to prevent duplicate creation`,
-          );
-        }
-        const notifications: any[] = Array.isArray(notificationsRaw)
-          ? notificationsRaw
-          : notificationsRaw.records;
-
-        // Find existing Kima webhook by name (primary) or URL pattern (fallback)
-        const existingWebhook = notifications.find(
-          (n: any) =>
-            n.implementation === "Webhook" &&
-            // Match by name
-            (n.name === "Kima" ||
-              // Or match by URL pattern (catches old webhooks with different URLs)
-              n.fields?.find(
-                (f: any) =>
-                  f.name === "url" &&
-                  (f.value?.includes("webhooks/lidarr") ||
-                    f.value?.includes("lidify")),
-              )),
-        );
-
-        if (existingWebhook) {
-          const currentUrl = existingWebhook.fields?.find(
-            (f: any) => f.name === "url",
-          )?.value;
-          logger.debug(
-            `   Found existing webhook: "${existingWebhook.name}" with URL: ${currentUrl}`,
-          );
-          if (currentUrl !== webhookUrl) {
-            logger.debug(`   URL needs updating from: ${currentUrl}`);
-            logger.debug(`   URL will be updated to: ${webhookUrl}`);
-          }
-        }
-
-        const webhookConfig = {
-          onGrab: true,
-          onReleaseImport: true,
-          onAlbumDownload: true,
-          onDownloadFailure: true,
-          onImportFailure: true,
-          onAlbumDelete: true,
-          onRename: true,
-          onHealthIssue: false,
-          onApplicationUpdate: false,
-          supportsOnGrab: true,
-          supportsOnReleaseImport: true,
-          supportsOnAlbumDownload: true,
-          supportsOnDownloadFailure: true,
-          supportsOnImportFailure: true,
-          supportsOnAlbumDelete: true,
-          supportsOnRename: true,
-          supportsOnHealthIssue: true,
-          supportsOnApplicationUpdate: true,
-          includeHealthWarnings: false,
-          name: "Kima",
-          implementation: "Webhook",
-          implementationName: "Webhook",
-          configContract: "WebhookSettings",
-          infoLink: "https://wiki.servarr.com/lidarr/supported#webhook",
-          tags: [],
-          fields: [
-            { name: "url", value: webhookUrl },
-            { name: "method", value: 1 }, // 1 = POST
-            { name: "username", value: "" },
-            { name: "password", value: "" },
-          ],
-        };
-
-        if (existingWebhook) {
-          if (!existingWebhook.id) {
-            throw new Error(
-              `Found existing webhook "${existingWebhook.name}" but it has no id — aborting webhook setup`,
-            );
-          }
-          // Update existing webhook
-          await axios.put(
-            `${lidarrUrl}/api/v1/notification/${existingWebhook.id}?forceSave=true`,
-            { ...existingWebhook, ...webhookConfig },
-            {
-              headers: { "X-Api-Key": apiKey },
-              timeout: 10000,
-            },
-          );
-          logger.debug("   Webhook updated");
-        } else {
-          // Create new webhook (use forceSave to skip test)
-          await axios.post(
-            `${lidarrUrl}/api/v1/notification?forceSave=true`,
-            webhookConfig,
-            {
-              headers: { "X-Api-Key": apiKey },
-              timeout: 10000,
-            },
-          );
-          logger.debug("   Webhook created");
-        }
-
-        logger.debug("Lidarr webhook configured automatically\n");
+        await configureLidarrWebhook(data.lidarrUrl, data.lidarrApiKey);
       } catch (webhookError: any) {
-        logger.error("Failed to auto-configure webhook:", webhookError.message);
+        logger.error("Failed to configure the Lidarr webhook:", webhookError.message);
         if (webhookError.response?.data) {
-          logger.error(
-            "   Lidarr error details:",
-            JSON.stringify(webhookError.response.data, null, 2),
-          );
+          logger.error("   Lidarr said:", JSON.stringify(webhookError.response.data));
         }
-        logger.debug(" User can configure webhook manually in Lidarr UI\n");
-        // Don't fail the request if webhook config fails
       }
     }
 
@@ -517,14 +325,7 @@ router.post("/test-lidarr", async (req, res) => {
       return res.status(400).json({ error: "URL and API key are required" });
     }
 
-    // Normalize URL - remove trailing slash
-    const normalizedUrl = url.replace(/\/+$/, "");
-
-    const axios = require("axios");
-    const response = await axios.get(`${normalizedUrl}/api/v1/system/status`, {
-      headers: { "X-Api-Key": apiKey },
-      timeout: 10000,
-    });
+    const response = await createLidarrClient(url, apiKey, 10_000).get("/api/v1/system/status");
 
     logger.debug(
       "[Lidarr Test] Connection successful, version:",
@@ -549,15 +350,10 @@ router.post("/lidarr-profiles", async (req, res) => {
       return res.status(400).json({ error: "URL and API key are required" });
     }
 
-    const normalizedUrl = url.replace(/\/+$/, "");
-
-    const axios = require("axios");
-    const headers = { "X-Api-Key": apiKey };
-    const timeout = 10000;
-
+    const lidarr = createLidarrClient(url, apiKey, 10_000);
     const [qualityRes, metadataRes] = await Promise.all([
-      axios.get(`${normalizedUrl}/api/v1/qualityprofile`, { headers, timeout }),
-      axios.get(`${normalizedUrl}/api/v1/metadataprofile`, { headers, timeout }),
+      lidarr.get("/api/v1/qualityprofile"),
+      lidarr.get("/api/v1/metadataprofile"),
     ]);
 
     res.json({
@@ -566,39 +362,6 @@ router.post("/lidarr-profiles", async (req, res) => {
     });
   } catch (error) {
     safeError(res, "Lidarr profile fetch", error);
-  }
-});
-
-// POST /system-settings/test-openai
-router.post("/test-openai", async (req, res) => {
-  try {
-    const { apiKey, model } = req.body;
-
-    if (!apiKey) {
-      return res.status(400).json({ error: "API key is required" });
-    }
-
-    const axios = require("axios");
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: model || "gpt-3.5-turbo",
-        messages: [{ role: "user", content: "Test" }],
-        max_tokens: 5,
-      },
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        timeout: 10000,
-      },
-    );
-
-    res.json({
-      success: true,
-      message: "OpenAI connection successful",
-      model: response.data.model,
-    });
-  } catch (error) {
-    safeError(res, "OpenAI connection test", error);
   }
 });
 
@@ -611,12 +374,11 @@ router.post("/test-fanart", async (req, res) => {
       return res.status(400).json({ error: "API key is required" });
     }
 
-    const axios = require("axios");
 
     // Test with a known artist (The Beatles MBID)
     const testMbid = "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d";
 
-    const response = await axios.get(
+    await axios.get(
       `https://webservice.fanart.tv/v3/music/${testMbid}`,
       {
         params: { api_key: fanartApiKey },
@@ -634,46 +396,6 @@ router.post("/test-fanart", async (req, res) => {
   }
 });
 
-// Test Last.fm connection
-router.post("/test-lastfm", async (req, res) => {
-  try {
-    const { lastfmApiKey } = req.body;
-
-    if (!lastfmApiKey) {
-      return res.status(400).json({ error: "API key is required" });
-    }
-
-    const axios = require("axios");
-
-    // Test with a known artist (The Beatles)
-    const testArtist = "The Beatles";
-
-    const response = await axios.get("http://ws.audioscrobbler.com/2.0/", {
-      params: {
-        method: "artist.getinfo",
-        artist: testArtist,
-        api_key: lastfmApiKey,
-        format: "json",
-      },
-      timeout: 5000,
-    });
-
-    // If we get here and have artist data, the API key is valid
-    if (response.data.artist) {
-      res.json({
-        success: true,
-        message: "Last.fm connection successful",
-      });
-    } else {
-      res.status(500).json({
-        error: "Unexpected response from Last.fm",
-      });
-    }
-  } catch (error) {
-    safeError(res, "Last.fm connection test", error);
-  }
-});
-
 // Test Audiobookshelf connection
 router.post("/test-audiobookshelf", async (req, res) => {
   try {
@@ -683,7 +405,6 @@ router.post("/test-audiobookshelf", async (req, res) => {
       return res.status(400).json({ error: "URL and API key are required" });
     }
 
-    const axios = require("axios");
 
     const response = await axios.get(`${url}/api/libraries`, {
       headers: {
@@ -735,7 +456,7 @@ router.post("/test-soulseek", async (req, res) => {
           isConnected: true,
         });
       } catch (connectError) {
-        safeError(res, "slskd connection test", connectError, 401);
+        safeError(res, "slskd connection test", connectError, 502);
       } finally {
         // Restore the live config so a candidate URL never leaks into the
         // running client.
@@ -768,7 +489,7 @@ router.post("/test-soulseek", async (req, res) => {
         isConnected: true,
       });
     } catch (connectError) {
-      safeError(res, "Soulseek connection test", connectError, 401);
+      safeError(res, "Soulseek connection test", connectError, 502);
     }
   } catch (error) {
     safeError(res, "Soulseek connection test", error);
@@ -787,7 +508,6 @@ router.post("/test-spotify", async (req, res) => {
     }
 
     // Test credentials by trying to get an access token
-    const axios = require("axios");
     try {
       const response = await axios.post(
         "https://accounts.spotify.com/api/token",
@@ -809,57 +529,21 @@ router.post("/test-spotify", async (req, res) => {
           message: "Spotify credentials are valid",
         });
       } else {
-        res.status(401).json({
+        res.status(400).json({
           error: "Invalid Spotify credentials",
         });
       }
     } catch (tokenError) {
-      safeError(res, "Spotify credentials test", tokenError, 401);
+      safeError(res, "Spotify credentials test", tokenError, 502);
     }
   } catch (error) {
     safeError(res, "Spotify credentials test", error);
   }
 });
 
-// Get queue cleaner status
-router.get("/queue-cleaner-status", (req, res) => {
-  res.json(queueCleaner.getStatus());
-});
-
-// Start queue cleaner manually
-router.post("/queue-cleaner/start", async (req, res) => {
-  try {
-    await queueCleaner.start();
-    res.json({
-      success: true,
-      message: "Queue cleaner started",
-      status: queueCleaner.getStatus(),
-    });
-  } catch (error) {
-    safeError(res, "Start queue cleaner", error);
-  }
-});
-
-// Stop queue cleaner manually
-router.post("/queue-cleaner/stop", (req, res) => {
-  queueCleaner.stop();
-  res.json({
-    success: true,
-    message: "Queue cleaner stopped",
-    status: queueCleaner.getStatus(),
-  });
-});
-
-// Operational Redis namespaces that "Clear Caches" must NEVER delete: BullMQ
-// queues, sessions, the enrichment/analysis control plane, distributed locks,
-// and short-lived SSE auth tickets. Everything else is a rebuildable cache
-// (external-API responses, cover art, derived data). This is a DENYLIST, not an
-// allowlist, on purpose -- the codebase has 20+ cache prefixes and adds more
-// over time, so an allowlist would silently leave new caches uncleared. Sparing
-// only this small, well-defined operational set keeps the clear complete while
-// never touching live state. (The prior version both used the wrong scan API
-// for our ioredis client -- so it threw every call -- and, had it run, would
-// have wiped queue state.)
+// Redis prefixes "Clear Caches" must never delete: queues, sessions, the
+// enrichment control plane, locks and SSE tickets. A denylist, so caches added
+// later are cleared without being listed.
 const PROTECTED_KEY_PREFIXES = [
   "bull:",
   "sess:",
@@ -871,12 +555,8 @@ const PROTECTED_KEY_PREFIXES = [
 ];
 
 // Clear all rebuildable caches (never queue, session, or control-plane state)
-router.post("/clear-caches", async (req, res) => {
+router.post("/clear-caches", async (_req, res) => {
   try {
-    const { redisClient } = require("../utils/redis");
-    const { notificationService } =
-      await import("../services/notificationService");
-
     // SCAN with the ioredis signature: positional MATCH/COUNT args, and an
     // [nextCursor, keys] array result; the cursor is a string, "0" terminates.
     const keysToDelete: string[] = [];
@@ -906,25 +586,12 @@ router.post("/clear-caches", async (req, res) => {
         `[CACHE] Cleared ${keysToDelete.length} cache entries`,
       );
 
-      // Send notification to user
-      await notificationService.notifySystem(
-        req.user!.id,
-        "Caches Cleared",
-        `Successfully cleared ${keysToDelete.length} cache entries`,
-      );
-
       res.json({
         success: true,
         message: `Cleared ${keysToDelete.length} cache entries`,
         clearedKeys: keysToDelete.length,
       });
     } else {
-      await notificationService.notifySystem(
-        req.user!.id,
-        "Caches Cleared",
-        "No cache entries to clear",
-      );
-
       res.json({
         success: true,
         message: "No cache entries to clear",
@@ -933,6 +600,36 @@ router.post("/clear-caches", async (req, res) => {
     }
   } catch (error) {
     safeError(res, "Clear caches", error);
+  }
+});
+
+const gpuToggleSchema = z
+  .object({ enabled: z.boolean().optional(), analysis: z.boolean().optional() })
+  .refine((body) => body.enabled !== undefined || body.analysis !== undefined);
+
+// GET /system-settings/gpu — the GPU runtime's measured install state
+router.get("/gpu", async (_req, res) => {
+  try {
+    res.json(await getGpuStatus());
+  } catch (error) {
+    safeError(res, "Get GPU status", error);
+  }
+});
+
+// POST /system-settings/gpu: the two switches, `enabled` (sound vectors) and `analysis` (audio analysis),
+// set through setGpuToggles like the release window's GPU choice.
+router.post("/gpu", async (req, res) => {
+  try {
+    const { enabled, analysis } = gpuToggleSchema.parse(req.body);
+    if ((enabled || analysis) && !gpuSupported()) {
+      return res.status(400).json({ error: "GPU acceleration is only available on linux/x86_64 hosts" });
+    }
+    res.json(await setGpuToggles({ soundVectors: enabled, analysis }));
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "enabled or analysis (boolean) is required" });
+    }
+    safeError(res, "Set GPU toggle", error);
   }
 });
 

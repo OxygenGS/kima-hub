@@ -13,6 +13,8 @@ import {
 import { useAudioState } from "./audio-state-context";
 import { useAudioController } from "./audio-controller-context";
 import type { EngineSnapshot } from "./audio-engine-policy";
+import { usePlayReporting } from "@/hooks/usePlayReporting";
+import { upNext, useLiveReporting } from "@/hooks/useLiveReporting";
 
 interface AudioPlaybackContextType {
     isPlaying: boolean;
@@ -27,9 +29,6 @@ interface AudioPlaybackContextType {
     setDuration: (duration: number) => void;
     setCanSeek: (canSeek: boolean) => void;
     setDownloadProgress: (progress: number | null) => void;
-    // No-op stubs retained for backward compat with audio-hooks.tsx shim.
-    // Engine state is authoritative; callers that used to write these can be
-    // deleted as they are encountered -- the engine clears error on play().
 }
 
 const AudioPlaybackContext = createContext<AudioPlaybackContextType | undefined>(undefined);
@@ -84,12 +83,31 @@ export function AudioPlaybackProvider({ children }: { children: ReactNode }) {
 
     const controller = useAudioController();
 
+    // The only source of plays: the stream endpoint does not log them, so if
+    // this stops firing, play history silently stops growing.
+    usePlayReporting(
+        controller as Parameters<typeof usePlayReporting>[0],
+        state.currentTrack?.id ?? null,
+        state.currentTrack?.duration ?? duration ?? null,
+    );
+
+    const liveTrack = state.playbackType === "track" ? state.currentTrack : null;
+    const liveQueue = useMemo(
+        () => liveTrack
+            ? upNext(state.queue, state.currentIndex, state.isShuffle, state.shuffleIndices, state.repeatMode)
+            : [],
+        [liveTrack, state.queue, state.currentIndex, state.isShuffle, state.shuffleIndices, state.repeatMode],
+    );
+    useLiveReporting(
+        controller as Parameters<typeof useLiveReporting>[0],
+        liveTrack ? { id: liveTrack.id, duration: liveTrack.duration } : null,
+        liveQueue,
+    );
+
     // Snapshot subscriber: derive isPlaying/isBuffering/audioError from engine state machine.
     useEffect(() => {
         if (!controller) return;
 
-        // subscribe is the Phase C engine contract; cast until audio-controller.ts lands it.
-         
         const unsubscribe = controller.subscribe((snap: EngineSnapshot) => {
             const { status } = snap;
 

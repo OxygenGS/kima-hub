@@ -30,13 +30,13 @@ services:
             # Don't use ${MUSIC_PATH} here as it contains the host path, not container path
             MUSIC_PATH: /music
             TRANSCODE_CACHE_PATH: /app/cache/transcodes
+            # gpuRuntime.ts writes enabled.json under DATA_DIR/gpu-onnx; the
+            # app dir is writable by the unprivileged backend user, /data is not.
+            DATA_DIR: /app
             TRANSCODE_CACHE_MAX_GB: ${TRANSCODE_CACHE_MAX_GB:-10}
 
             # CORS
             ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3030}
-
-            # Internal API secret for service-to-service auth
-            INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-kima-internal-secret-change-me}
 
             # Lidarr webhook callback URL - how Lidarr can reach Kima
             # Use backend:3006 for same-network communication, or external IP:3030 for external Lidarr
@@ -47,6 +47,7 @@ services:
             - ${MUSIC_PATH:-./music}:/music
             - backend_cache:/app/cache
             - backend_logs:/app/logs
+            - gpu_runtime_data:/app/gpu-onnx
         ports:
             - "${BACKEND_PORT:-3006}:3006"
         depends_on:
@@ -106,7 +107,9 @@ services:
     # ==============================================================================
 
     postgres:
-        image: pgvector/pgvector:pg16
+        # Pinned to the pgvector release verified in production (0.8.6): the
+        # pg16 float tag moves across releases on pull.
+        image: pgvector/pgvector:0.8.6-pg16
         container_name: kima_db
         environment:
             POSTGRES_USER: ${POSTGRES_USER:-kimadb}
@@ -190,9 +193,6 @@ services:
             - "8191:8191"
         restart: unless-stopped
 
-    # NOTE: Soulseek is now handled directly by the backend using slsk-client
-    # No Docker container needed - downloads go straight to Singles/Artist/Album/
-
     # qBittorrent - Torrent client
     qbittorrent:
         image: lscr.io/linuxserver/qbittorrent:latest
@@ -234,35 +234,34 @@ services:
     # Audio Analyzer - Extracts BPM, key, mood, and other audio features
     audio-analyzer:
         build:
-            context: ./services/audio-analyzer
+            context: .
+            dockerfile: services/audio-analyzer/Dockerfile
         container_name: kima_audio_analyzer
         environment:
             REDIS_URL: redis://redis:6379
             DATABASE_URL: postgresql://${POSTGRES_USER:-kimadb}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-kima}
             MUSIC_PATH: /music
-            BATCH_SIZE: ${AUDIO_ANALYSIS_BATCH_SIZE:-10}
-            SLEEP_INTERVAL: ${AUDIO_ANALYSIS_INTERVAL:-5}
-            # BRPOP timeout for blocking wait (seconds). Also controls DB reconciliation interval.
+            # Seconds the analyzer waits for work before checking again.
             BRPOP_TIMEOUT: ${AUDIO_BRPOP_TIMEOUT:-30}
-            # Idle timeout before unloading ML models to free memory (seconds)
+            # Seconds idle before the analysis models unload (0 = never).
             MODEL_IDLE_TIMEOUT: ${AUDIO_MODEL_IDLE_TIMEOUT:-300}
-            # Default workers reduced from 8 to 2 for stability (Issue #26 fix)
-            # Each worker requires 1-1.5GB RAM normally, up to 2-3GB peak
+            # Workers until set in Settings; each needs about 1-1.5 GB RAM, up to 2-3 GB at peak.
             NUM_WORKERS: ${AUDIO_ANALYSIS_WORKERS:-2}
-            # CPU thread limiting per worker (default 1 for conservative CPU usage)
             THREADS_PER_WORKER: ${AUDIO_ANALYSIS_THREADS_PER_WORKER:-1}
+            # The shared GPU runtime lives in the gpu_runtime_data volume, mounted at /gpu-onnx.
+            DATA_DIR: /
         volumes:
             # Music library (read-only)
             - ${MUSIC_PATH:-./music}:/music:ro
-            # NOTE: Models are baked into the Docker image at /app/models
-            # No volume mount needed - previously this caused models to be hidden by empty volume
+            # Models are baked into the image at /app/models; this volume holds only the GPU runtime.
+            - gpu_runtime_data:/gpu-onnx
         depends_on:
             postgres:
                 condition: service_healthy
             redis:
                 condition: service_healthy
         restart: unless-stopped
-        # Memory limits prevent OOM kills (Issue #26 fix)
+        # Memory limits prevent OOM kills
         # 6G limit = safe for 2 workers at 2-3GB peak each
         # 2G reservation = minimum guaranteed memory
         deploy:
@@ -289,13 +288,18 @@ services:
             DATABASE_URL: postgresql://${POSTGRES_USER:-kimadb}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-kima}
             BACKEND_URL: http://backend:3006
             MUSIC_PATH: /music
-            SLEEP_INTERVAL: ${CLAP_SLEEP_INTERVAL:-5}
             NUM_WORKERS: ${CLAP_WORKERS:-2}
             THREADS_PER_WORKER: ${CLAP_THREADS_PER_WORKER:-1}
             MODEL_IDLE_TIMEOUT: ${CLAP_MODEL_IDLE_TIMEOUT:-300}
-            INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-kima-internal-secret-change-me}
+            # ONNX everywhere: the same backend the
+            # all-in-one image runs, so every embedding shares one vector
+            # space. This image is torch-free; CLAP_BACKEND=torch here makes
+            # the analyzer refuse to embed rather than fall back.
+            CLAP_BACKEND: ${CLAP_BACKEND:-onnx}
+            DATA_DIR: /
         volumes:
             - ${MUSIC_PATH:-./music}:/music:ro
+            - gpu_runtime_data:/gpu-onnx
         depends_on:
             postgres:
                 condition: service_healthy
@@ -321,6 +325,7 @@ volumes:
     postgres_data:
     backend_cache:
     backend_logs:
+    gpu_runtime_data:
     # External services
     lidarr_config:
     prowlarr_config:

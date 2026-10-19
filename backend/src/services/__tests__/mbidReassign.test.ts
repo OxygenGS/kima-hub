@@ -1,15 +1,6 @@
 /**
- * mbidReassign Tests
- *
- * Verifies the shared MBID reassignment helper used by BOTH the editor routes
- * AND the enrichment service:
- * - reassignAlbumRgMbid: Album.rgMbid update + OwnedAlbum migration
- * - reassignArtistMbid: Artist.mbid update
- * - DuplicateMbidError translation (P2002 -> 409)
- * - No-op on unchanged value or missing entity
- * - No orphaned OwnedAlbum rows after migration
- *
- * Run with: npx jest mbidReassign.test.ts
+ * The shared MBID reassignment helper: album rgMbid with its OwnedAlbum and
+ * DiscoveryAlbum rows, artist mbid, P2002 → DuplicateMbidError, and no-ops.
  */
 
 import { prisma } from "../../utils/db";
@@ -19,7 +10,6 @@ import {
     reassignArtistMbid,
 } from "../mbidReassign";
 
-// Mock Prisma
 jest.mock("../../utils/db", () => ({
     prisma: {
         album: {
@@ -32,6 +22,10 @@ jest.mock("../../utils/db", () => ({
         ownedAlbum: {
             delete: jest.fn(),
             upsert: jest.fn(),
+        },
+        discoveryAlbum: {
+            findMany: jest.fn().mockResolvedValue([]),
+            updateMany: jest.fn(),
         },
         $transaction: jest.fn(async (cb: any) => cb(prisma)),
     },
@@ -113,7 +107,6 @@ describe("reassignArtistMbid", () => {
 describe("reassignAlbumRgMbid", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        // Default: album exists with old rgMbid
         mockAlbumFindUnique.mockResolvedValue({
             id: ALBUM_ID,
             rgMbid: OLD_RGMUBID,
@@ -152,13 +145,11 @@ describe("reassignAlbumRgMbid", () => {
     it("should update Album.rgMbid and migrate OwnedAlbum", async () => {
         await reassignAlbumRgMbid(ALBUM_ID, NEW_RGMUBID);
 
-        // Album.rgMbid updated
         expect(mockAlbumUpdate).toHaveBeenCalledWith({
             where: { id: ALBUM_ID },
             data: { rgMbid: NEW_RGMUBID },
         });
 
-        // Old OwnedAlbum row deleted
         expect(mockOwnedAlbumDelete).toHaveBeenCalledWith({
             where: {
                 artistId_rgMbid: {
@@ -168,7 +159,6 @@ describe("reassignAlbumRgMbid", () => {
             },
         });
 
-        // New OwnedAlbum row created
         expect(mockOwnedAlbumUpsert).toHaveBeenCalledWith({
             where: {
                 artistId_rgMbid: {
@@ -215,7 +205,7 @@ describe("reassignAlbumRgMbid", () => {
     });
 
     it("should throw DuplicateMbidError if Album.update hits P2002 (the @unique collision — the FIRST collision point)", async () => {
-        // Album.rgMbid is @unique, so a duplicate rgMbid collides at Step 2's
+        // Album.rgMbid is @unique, so a duplicate rgMbid collides at the
         // album.update BEFORE the OwnedAlbum upsert. This must also map to 409.
         const p2002Error = new Error("Unique constraint failed") as any;
         p2002Error.code = "P2002";
@@ -237,7 +227,9 @@ describe("reassignAlbumRgMbid", () => {
     });
 });
 
-describe("Integration: no orphaned OwnedAlbum rows", () => {
+describe("reassignAlbumRgMbid: DiscoveryAlbum migration", () => {
+    const WEEK1 = new Date("2026-09-21T05:00:00.000Z");
+    const WEEK2 = new Date("2026-09-28T05:00:00.000Z");
     beforeEach(() => {
         jest.clearAllMocks();
         mockAlbumFindUnique.mockResolvedValue({
@@ -249,33 +241,47 @@ describe("Integration: no orphaned OwnedAlbum rows", () => {
         mockOwnedAlbumDelete.mockResolvedValue({});
         mockOwnedAlbumUpsert.mockResolvedValue({});
         mockTransaction.mockImplementation(async (cb: any) => cb(prisma));
+        (prisma.discoveryAlbum.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
     });
 
-    it("should delete old OwnedAlbum BEFORE creating new one (no orphan)", async () => {
-        let deleteCalled = false;
-        let upsertCalled = false;
-
-        mockOwnedAlbumDelete.mockImplementation(async () => {
-            deleteCalled = true;
-            return {};
-        });
-        mockOwnedAlbumUpsert.mockImplementation(async () => {
-            upsertCalled = true;
-            return {};
-        });
+    it("moves every stale discovery row to the new rgMbid", async () => {
+        (prisma.discoveryAlbum.findMany as jest.Mock)
+            .mockResolvedValueOnce([
+                { id: "disc-1", userId: "u1", weekStartDate: WEEK1 },
+                { id: "disc-2", userId: "u2", weekStartDate: WEEK2 },
+            ]) // stale rows on the old string
+            .mockResolvedValueOnce([]); // no collision slots
 
         await reassignAlbumRgMbid(ALBUM_ID, NEW_RGMUBID);
 
-        // Old row deleted first, new row created after
-        expect(deleteCalled).toBe(true);
-        expect(upsertCalled).toBe(true);
+        const update = (prisma.discoveryAlbum.updateMany as jest.Mock).mock
+            .calls[0][0];
+        expect(update.where.id.in.sort()).toEqual(["disc-1", "disc-2"]);
+        expect(update.data.rgMbid).toBe(NEW_RGMUBID);
+    });
 
-        // Verify the old row was deleted with the OLD rgMbid
-        const deleteCall = mockOwnedAlbumDelete.mock.calls[0][0];
-        expect(deleteCall.where.artistId_rgMbid.rgMbid).toBe(OLD_RGMUBID);
+    it("leaves collision rows on the old string and moves only the rest", async () => {
+        (prisma.discoveryAlbum.findMany as jest.Mock)
+            .mockResolvedValueOnce([
+                { id: "disc-collide", userId: "u1", weekStartDate: WEEK1 },
+                { id: "disc-free", userId: "u2", weekStartDate: WEEK2 },
+            ])
+            .mockResolvedValueOnce([
+                { userId: "u1", weekStartDate: WEEK1 }, // slot already taken
+            ]);
 
-        // Verify the new row was created with the NEW rgMbid
-        const upsertCall = mockOwnedAlbumUpsert.mock.calls[0][0];
-        expect(upsertCall.create.rgMbid).toBe(NEW_RGMUBID);
+        await reassignAlbumRgMbid(ALBUM_ID, NEW_RGMUBID);
+
+        const update = (prisma.discoveryAlbum.updateMany as jest.Mock).mock
+            .calls[0][0];
+        expect(update.where.id.in).toEqual(["disc-free"]);
+    });
+
+    it("writes nothing when no discovery row used the old string", async () => {
+        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValueOnce([]);
+
+        await reassignAlbumRgMbid(ALBUM_ID, NEW_RGMUBID);
+
+        expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
     });
 });

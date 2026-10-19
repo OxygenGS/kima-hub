@@ -1,5 +1,6 @@
-import { Music } from "lucide-react";
+import { Mic2 } from "lucide-react";
 import { MediaCard } from "@/components/cards/MediaCard";
+import { cascadeStyle } from "@/lib/motion";
 import { Podcast } from "../types";
 import { api } from "@/lib/api";
 
@@ -9,7 +10,7 @@ interface LibraryPodcastsGridProps {
 
 export function LibraryPodcastsGrid({ podcasts }: LibraryPodcastsGridProps) {
     return (
-        <div className="grid-media" data-tv-section="search-results-podcasts">
+        <div className="grid-media" data-tv-section="search-results-podcasts" style={cascadeStyle(Math.min(podcasts.length, 6))}>
             {podcasts.slice(0, 6).map((podcast, index) => {
                 const subtitle =
                     podcast.episodeCount && podcast.episodeCount > 0
@@ -27,13 +28,8 @@ export function LibraryPodcastsGrid({ podcasts }: LibraryPodcastsGridProps) {
                                 ? api.getCoverArtUrl(podcast.imageUrl, 200)
                                 : null
                         }
-                        fallbackIcon={Music}
-                        accentColor={{
-                            border: "hover:border-[#3b82f6]/50",
-                            gradient: "bg-gradient-to-r from-[#3b82f6] to-[#2563eb]",
-                            button: "bg-[#3b82f6] text-white",
-                            shadow: "",
-                        }}
+                        fallbackIcon={Mic2}
+                        type="podcast"
                         index={index}
                     />
                 );

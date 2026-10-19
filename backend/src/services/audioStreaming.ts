@@ -6,14 +6,14 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { prisma } from "../utils/db";
 import ffmpeg from "fluent-ffmpeg";
-import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import PQueue from "p-queue";
 import { AppError, ErrorCode, ErrorCategory } from "../utils/errors";
 import { parseRangeHeader } from "../utils/rangeParser";
 import { parseFile } from "music-metadata";
 
-// Set FFmpeg path to bundled binary
-ffmpeg.setFfmpegPath(ffmpegPath.path);
+// Use the system FFmpeg (the AIO already installs a maintained Debian ffmpeg).
+// fluent-ffmpeg resolves FFMPEG_PATH when explicitly set, otherwise the PATH.
+// Avoid shipping a second legacy static FFmpeg binary from npm.
 
 // Quality settings
 const QUALITY_SETTINGS = {
@@ -25,7 +25,11 @@ const QUALITY_SETTINGS = {
 
 export type Quality = keyof typeof QUALITY_SETTINGS;
 
-// 120s hard kill -- must be shorter than the 240s queue-wait cap (1.3)
+export function isQuality(value: unknown): value is Quality {
+    return typeof value === "string" && Object.prototype.hasOwnProperty.call(QUALITY_SETTINGS, value);
+}
+
+// 120s hard kill -- must be shorter than the 240s queue-wait cap
 const TRANSCODE_TIMEOUT_MS = 120_000;
 
 interface StreamFileInfo {
@@ -367,6 +371,7 @@ export class AudioStreamingService {
                         );
                 }, TRANSCODE_TIMEOUT_MS);
             } catch (err: any) {
+                logger.warn(`[STREAM] Transcode could not start: ${err.message}`);
                 reject(
                     new AppError(
                         ErrorCode.FFMPEG_NOT_FOUND,
@@ -383,11 +388,10 @@ export class AudioStreamingService {
      * Get total cache size in GB
      */
     async getCacheSize(): Promise<number> {
-        const cached = await prisma.transcodedFile.findMany({
-            select: { cacheSize: true },
+        const sum = await prisma.transcodedFile.aggregate({
+            _sum: { cacheSize: true },
         });
-        const totalBytes = cached.reduce((sum, f) => sum + Number(f.cacheSize), 0);
-        return totalBytes / (1024 * 1024 * 1024);
+        return Number(sum._sum.cacheSize ?? 0n) / (1024 * 1024 * 1024);
     }
 
     /**
@@ -456,15 +460,15 @@ export class AudioStreamingService {
     }
 
     /**
-     * Stream file with proper HTTP Range support (fixes Firefox FLAC issue #42/#17)
-     * Manually handles Range requests to ensure compatibility with Firefox's strict
-     * Content-Range header validation for large FLAC files.
+     * Stream file with manual HTTP Range handling, for Firefox's strict
+     * Content-Range header validation on large FLAC files.
      */
     async streamFileWithRangeSupport(
         req: Request,
         res: Response,
         filePath: string,
-        mimeType: string
+        mimeType: string,
+        cacheControl = "private, max-age=3600, must-revalidate",
     ): Promise<void> {
         try {
             // Get file stats for size
@@ -485,7 +489,7 @@ export class AudioStreamingService {
                 if (candidates.includes(etag) || candidates.includes("*")) {
                     res.status(304).set({
                         "ETag": etag,
-                        "Cache-Control": "private, max-age=3600, must-revalidate",
+                        "Cache-Control": cacheControl,
                     }).end();
                     return;
                 }
@@ -494,7 +498,7 @@ export class AudioStreamingService {
                 if (!Number.isNaN(ifModifiedSinceMs) && stats.mtime.getTime() <= ifModifiedSinceMs) {
                     res.status(304).set({
                         "ETag": etag,
-                        "Cache-Control": "private, max-age=3600, must-revalidate",
+                        "Cache-Control": cacheControl,
                     }).end();
                     return;
                 }
@@ -533,7 +537,7 @@ export class AudioStreamingService {
             const headers: Record<string, string> = {
                 "Content-Type": mimeType,
                 "Accept-Ranges": "bytes",
-                "Cache-Control": "private, max-age=3600, must-revalidate",
+                "Cache-Control": cacheControl,
                 "Content-Length": contentLength.toString(),
                 "ETag": etag,
                 "Last-Modified": lastModified,

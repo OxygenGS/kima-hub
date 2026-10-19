@@ -1,83 +1,37 @@
 #!/usr/bin/env python3
-"""Audio analyzer service - Essentia-based analysis with TensorFlow ML models"""
+"""
+Essentia audio analyzer: BPM, key, loudness and energy from Essentia; moods,
+valence/arousal and danceability from the MusiCNN models (ONNX Runtime, CPU or
+GPU). Without the models no track is analysed. Jobs arrive over Redis; results go
+to PostgreSQL.
+"""
 
-# CRITICAL: TensorFlow threading MUST be configured before any imports.
-# Environment variables are read by TensorFlow C++ runtime before initialization.
+# Thread limits are read by the numeric libraries when they load, so they are set
+# before anything imports them.
 import os
 import sys
 
-# Get thread configuration from environment (default to 1 for safety)
 THREADS_PER_WORKER = int(os.getenv('THREADS_PER_WORKER', '1'))
-
-# Configure TensorFlow threading via environment variables
-# These are read by TensorFlow C++ runtime before thread pool initialization
-# Must be set BEFORE any TensorFlow/Essentia imports load TensorFlow
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TF logging noise
-os.environ['TF_NUM_INTRAOP_THREADS'] = str(THREADS_PER_WORKER)  # Threads within ops
-os.environ['TF_NUM_INTEROP_THREADS'] = '1'  # Serialize op scheduling
-
-# Also set NumPy/BLAS/OpenMP limits for non-TensorFlow operations
 os.environ['OMP_NUM_THREADS'] = str(THREADS_PER_WORKER)
 os.environ['OPENBLAS_NUM_THREADS'] = str(THREADS_PER_WORKER)
 os.environ['MKL_NUM_THREADS'] = str(THREADS_PER_WORKER)
 os.environ['NUMEXPR_MAX_THREADS'] = str(THREADS_PER_WORKER)
 
-# Log thread configuration on startup
-print("=" * 80, file=sys.stderr)
-print("AUDIO ANALYZER THREAD CONFIGURATION", file=sys.stderr)
-print("=" * 80, file=sys.stderr)
-print(f"TF_NUM_INTRAOP_THREADS: {THREADS_PER_WORKER}", file=sys.stderr)
-print(f"TF_NUM_INTEROP_THREADS: 1", file=sys.stderr)
-print(f"OpenMP/BLAS threads: {THREADS_PER_WORKER}", file=sys.stderr)
-print(f"Expected CPU usage: ~{THREADS_PER_WORKER * 100 + 100}% per worker", file=sys.stderr)
-print("=" * 80, file=sys.stderr)
-
-"""
-Essentia Audio Analyzer Service - Enhanced Vibe Matching
-
-This service processes audio files and extracts audio features including:
-- BPM/Tempo
-- Key/Scale
-- Energy/Loudness
-- Danceability
-- ML-based Mood classification (happy, sad, relaxed, aggressive)
-- ML-based Valence and Arousal (real predictions, not estimates)
-- Voice/Instrumental detection
-
-Two analysis modes:
-- ENHANCED (default): Uses TensorFlow models for accurate mood detection
-- STANDARD (fallback): Uses heuristics when models aren't available
-
-It connects to Redis for job queue and PostgreSQL for storing results.
-"""
-
-# NOW safe to import other dependencies
 import json
+import re
 import time
 import logging
 import gc
-from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Tuple
-import traceback
 import subprocess
+import threading
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 import multiprocessing
 
-# BrokenProcessPool was added in Python 3.9, provide compatibility for Python 3.8
-try:
-    from concurrent.futures import BrokenProcessPool
-except ImportError:
-    # Python 3.8 fallback: use the internal class or create a compatible exception
-    try:
-        from concurrent.futures.process import BrokenProcessPool
-    except ImportError:
-        # If still not available, create a compatible exception class
-        class BrokenProcessPool(Exception):
-            """Compatibility shim for Python < 3.9"""
-            pass
+from concurrent.futures.process import BrokenProcessPool
 
-# Force spawn mode for TensorFlow compatibility (must be called before any multiprocessing)
+# Workers start fresh (spawn): a CUDA context does not survive fork.
 try:
     multiprocessing.set_start_method('spawn', force=True)
 except RuntimeError:
@@ -87,19 +41,21 @@ import redis
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-# ProcessPoolExecutor gained max_tasks_per_child in Python 3.11. This image is
-# built on Ubuntu 20.04 for essentia-tensorflow compatibility, which ships
-# Python 3.8, so passing it unconditionally raised
-#   TypeError: __init__() got an unexpected keyword argument 'max_tasks_per_child'
-# the first time a scan batch arrived -- killing the worker loop while the
-# container still reported healthy. Worker recycling is a memory-hygiene nicety;
-# not starting at all is not.
-def _pool_recycle_kwargs(limit: int) -> dict:
-    return {"max_tasks_per_child": limit} if sys.version_info >= (3, 11) else {}
+# Failure classes live in classifier.py (pure stdlib), which the backend
+# mirrors. Decode errors are tagged with their class here so the message the
+# analyzer reports carries the signature the backend's classifier reads.
+from classifier import (
+    classify_failure,
+    tag_error,
+    Disposition,
+)
+from musicnn_onnx import PATCH_SECONDS
+import gpu_switch
 
+# True when the wrapper started this process with the GPU runtime ("GPU for audio analysis" on and the
+# runtime installed).
+GPU_ANALYSIS = gpu_switch.started_with_runtime()
 
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -118,24 +74,22 @@ try:
 except ImportError as e:
     logger.warning(f"Essentia not available: {e}")
 
-# TensorFlow models via Essentia
-# NOTE: TF is NOT imported in the main process to save ~300MB RAM.
-# Worker processes import TF independently via spawn mode.
-# TF_MODELS_AVAILABLE is set after MODELS dict is defined below.
-TF_MODELS_AVAILABLE = False
-TensorflowPredictMusiCNN = None  # Loaded in worker processes
 
 # Configuration from environment
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379')
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 MUSIC_PATH = os.getenv('MUSIC_PATH', '/music')
-BATCH_SIZE = int(os.getenv('BATCH_SIZE', '10'))
-SLEEP_INTERVAL = int(os.getenv('SLEEP_INTERVAL', '5'))
+# A track still running after this long has a stuck worker; the pool restarts.
+JOB_TIMEOUT_S = 900
+# Below this much audio, or below this peak (-80 dBFS), nothing here measures anything real: silence
+# still reads as a tempo, a key and a mood. 3 s, and never less than the one patch MusiCNN needs.
+MIN_ANALYZE_SECONDS = max(3.0, PATCH_SECONDS)
+# A stage job id ends in its claim: <key>-<attempt>-r<redelivered> (backend `claimOf`).
+CLAIM_IN_JOB_ID = re.compile(r'-(\d+)-r(\d+)$')
+SILENCE_PEAK = 10 ** (-80 / 20)
 
-# BRPOP timeout: how long to block waiting for work (seconds)
-# Also serves as the DB reconciliation interval
-# Uses SLEEP_INTERVAL for backward compatibility, minimum 5s
-BRPOP_TIMEOUT = max(5, int(os.getenv('BRPOP_TIMEOUT', str(SLEEP_INTERVAL))))
+# How long to block waiting for work, in seconds (at least 5).
+BRPOP_TIMEOUT = max(5, int(os.getenv('BRPOP_TIMEOUT', '5')))
 
 # Idle timeout before unloading ML models from memory (seconds)
 # Models are reloaded automatically when new work arrives
@@ -159,7 +113,8 @@ class DatabaseConnection:
 
         self.conn = psycopg2.connect(
             self.url,
-            options="-c client_encoding=UTF8"
+            options="-c client_encoding=UTF8 -c timezone=UTC",
+            application_name="audio-analyzer",
         )
         self.conn.set_client_encoding('UTF8')
         self.conn.autocommit = False
@@ -188,6 +143,14 @@ class DatabaseConnection:
             self.conn = None
 
 
+def _clamp_workers(count: int) -> int:
+    """A worker count between one and the machine's cores."""
+    return max(1, min(os.cpu_count() or 8, count))
+
+
+DEFAULT_WORKERS = 2
+
+
 def _get_workers_from_db() -> int:
     """
     Fetch worker count from SystemSettings table.
@@ -197,46 +160,40 @@ def _get_workers_from_db() -> int:
         db = DatabaseConnection(DATABASE_URL)
         db.connect()
         cursor = db.get_cursor()
-        
+
         cursor.execute("""
             SELECT "audioAnalyzerWorkers"
             FROM "SystemSettings"
             WHERE id = 'default'
             LIMIT 1
         """)
-        
+
         result = cursor.fetchone()
         cursor.close()
         db.close()
-        
+
         if result and result['audioAnalyzerWorkers'] is not None:
-            workers = int(result['audioAnalyzerWorkers'])
-            # Validate range (1-8)
-            workers = max(1, min(8, workers))
+            workers = _clamp_workers(int(result['audioAnalyzerWorkers']))
             logger.info(f"Loaded worker count from database: {workers}")
             return workers
-        else:
-            logger.info("No worker count found in database, using env var or default")
-            return int(os.getenv('NUM_WORKERS', str(DEFAULT_WORKERS)))
-            
+        logger.info("No worker count found in database, using env var or default")
+        return int(os.getenv('NUM_WORKERS', str(DEFAULT_WORKERS)))
+
     except Exception as e:
         logger.warning(f"Failed to fetch worker count from database: {e}")
         logger.info("Falling back to env var or default")
         return int(os.getenv('NUM_WORKERS', str(DEFAULT_WORKERS)))
-# Conservative default: 2 workers (stable on any system)
-# Previous default used auto-scaling which could cause OOM on memory-constrained systems
-DEFAULT_WORKERS = 2
-# Try to load from database first, fall back to env var or default
+
+
+# The settings page's count first, then the NUM_WORKERS environment variable, then the default.
 NUM_WORKERS = _get_workers_from_db()
-ESSENTIA_VERSION = '2.1b6-enhanced-v2'
+# Bump when stored features change meaning, with a migration that asks every older answer again.
+ESSENTIA_VERSION = '2.1b6-enhanced-v4'
 
-# Retry configuration
-MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))  # Max retry attempts per track
-# Seconds to allow the ffmpeg pre-decode integrity probe before giving up.
-PRE_DECODE_PROBE_TIMEOUT = int(os.getenv('PRE_DECODE_PROBE_TIMEOUT', '120'))
-STALE_PROCESSING_MINUTES = int(os.getenv('STALE_PROCESSING_MINUTES', '15'))  # Reset tracks stuck in 'processing' (synchronized with backend)
+# Seconds to allow the single ffmpeg decode before giving up on the track; the decode is also
+# the integrity check.
+DECODE_TIMEOUT = int(os.getenv('DECODE_TIMEOUT', '120'))
 
-# Queue names
 ANALYSIS_QUEUE = 'audio:analysis:queue'
 
 # Control channel for enrichment coordination
@@ -245,294 +202,268 @@ CONTROL_CHANNEL = 'audio:analysis:control'
 # Model paths (pre-packaged in Docker image)
 MODEL_DIR = '/app/models'
 
-# MusiCNN model file paths (official Essentia models from essentia.upf.edu/models/)
-# Valence/arousal use DEAM regression model when available, heuristic fallback otherwise
-MODELS = {
-    # Base MusiCNN embedding model (for auto-tagging)
-    'musicnn': os.path.join(MODEL_DIR, 'msd-musicnn-1.pb'),
-    'musicnn_metadata': os.path.join(MODEL_DIR, 'msd-musicnn-1.json'),
-    # Mood classification heads (MusiCNN architecture)
-    # Correct filenames: {task}-msd-musicnn-1.pb
-    'mood_happy': os.path.join(MODEL_DIR, 'mood_happy-msd-musicnn-1.pb'),
-    'mood_sad': os.path.join(MODEL_DIR, 'mood_sad-msd-musicnn-1.pb'),
-    'mood_relaxed': os.path.join(MODEL_DIR, 'mood_relaxed-msd-musicnn-1.pb'),
-    'mood_aggressive': os.path.join(MODEL_DIR, 'mood_aggressive-msd-musicnn-1.pb'),
-    'mood_party': os.path.join(MODEL_DIR, 'mood_party-msd-musicnn-1.pb'),
-    'mood_acoustic': os.path.join(MODEL_DIR, 'mood_acoustic-msd-musicnn-1.pb'),
-    'mood_electronic': os.path.join(MODEL_DIR, 'mood_electronic-msd-musicnn-1.pb'),
-    'danceability': os.path.join(MODEL_DIR, 'danceability-msd-musicnn-1.pb'),
-    # voice_instrumental excluded: broken head, CLAP zero-shot replaces it
-    # Valence/Arousal regression (outputs [valence, arousal], range 1-9)
-    'deam': os.path.join(MODEL_DIR, 'deam-msd-musicnn-2.pb'),
-    'emomusic': os.path.join(MODEL_DIR, 'emomusic-msd-musicnn-2.pb'),
+# MusiCNN and its heads, converted to ONNX at image build (convert_musicnn.py) from
+# Essentia's published models (essentia.upf.edu/models/). voice_instrumental is not
+# used: a broken head; CLAP zero-shot answers instrumentalness.
+MUSICNN_GRAPH = os.path.join(MODEL_DIR, 'msd-musicnn-1.onnx')
+
+# Output column order of each head, from the "classes" field of Essentia's model
+# metadata (essentia.upf.edu/models/classification-heads/<head>/). The positive
+# class is first for some heads and second for others.
+HEAD_CLASSES = {
+    'mood_happy': ['happy', 'non_happy'],
+    'mood_sad': ['non_sad', 'sad'],
+    'mood_relaxed': ['non_relaxed', 'relaxed'],
+    'mood_aggressive': ['aggressive', 'not_aggressive'],
+    'mood_party': ['non_party', 'party'],
+    'mood_acoustic': ['acoustic', 'non_acoustic'],
+    'mood_electronic': ['electronic', 'non_electronic'],
+    'danceability': ['danceable', 'not_danceable'],
+}
+HEAD_POSITIVE_CLASS = {
+    'mood_happy': 'happy',
+    'mood_sad': 'sad',
+    'mood_relaxed': 'relaxed',
+    'mood_aggressive': 'aggressive',
+    'mood_party': 'party',
+    'mood_acoustic': 'acoustic',
+    'mood_electronic': 'electronic',
+    'danceability': 'danceable',
 }
 
-# Now that MODELS is defined, check if model files exist on disk
-TF_MODELS_AVAILABLE = os.path.exists(MODELS['musicnn'])
-if TF_MODELS_AVAILABLE:
-    logger.info(f"MusiCNN model files found at {MODEL_DIR}")
-else:
-    logger.info(f"MusiCNN model files not found at {MODEL_DIR} - Standard mode only")
+
+def positive_class_index(head: str) -> int:
+    """Column of the head's softmax output that holds P(positive class)."""
+    return HEAD_CLASSES[head].index(HEAD_POSITIVE_CLASS[head])
+
+
+ML_MODELS_AVAILABLE = os.path.exists(MUSICNN_GRAPH)
+if not ML_MODELS_AVAILABLE:
+    logger.error(f"MusiCNN graph not found at {MUSICNN_GRAPH}: tracks cannot be analysed")
+
+
+def _record_gpu_provider(active: bool) -> None:
+    """Tell the settings page whether analysis sessions actually got the GPU, on every start.
+    An earlier start's answer is removed first, so a failed write leaves no answer rather than
+    a stale one. Without the GPU runtime's folder there is nothing to report."""
+    folder = os.path.join(os.getenv('DATA_DIR', '/data'), 'gpu-onnx')
+    if not os.path.isdir(folder):
+        return
+    path = os.path.join(folder, 'analysis-provider.json')
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, 'w') as f:
+            json.dump({'active': bool(active), 'measured': GPU_ANALYSIS}, f)
+        os.replace(tmp, path)
+    except OSError as e:
+        logger.warning(f"Could not record the analysis GPU provider: {e}")
+
+
+def _source_stream(file_path: str) -> Tuple[int, Optional[float]]:
+    """Channels of the first audio stream (2 when the probe cannot tell) and the
+    file's length in seconds (None when it cannot tell)."""
+    try:
+        out = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+             '-show_entries', 'stream=channels:format=duration', '-of', 'json', file_path],
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=DECODE_TIMEOUT,
+        )
+        if out.returncode != 0:
+            raise RuntimeError(out.stderr.decode('utf-8', 'replace').strip() or f"exit {out.returncode}")
+        probe = json.loads(out.stdout or b'{}')
+    except Exception as e:
+        logger.warning(f"Could not probe {file_path} ({e}); decoding it as stereo, whole")
+        return 2, None
+    streams = probe.get('streams') or [{}]
+    channels = 1 if streams[0].get('channels') == 1 else 2
+    try:
+        length = float(probe.get('format', {}).get('duration'))
+    except (TypeError, ValueError):
+        length = None
+    return channels, length
+
+
+def _ffmpeg_command(file_path: str, channels: int, start: Optional[float]) -> List[str]:
+    """ffmpeg reading the first audio stream from `start` (the beginning when None) to its end, as
+    interleaved 16-bit PCM at 44.1 kHz."""
+    seek = [] if start is None else ['-ss', f'{start:.3f}']
+    return [
+        'ffmpeg', '-nostdin', '-v', 'error',
+        '-err_detect', 'ignore_err',
+        *seek,
+        '-i', file_path,
+        '-map', '0:a:0', '-vn', '-sn', '-dn',
+        '-ac', str(channels), '-ar', '44100',
+        '-c:a', 'pcm_s16le',
+        '-f', 's16le', '-',
+    ]
+
+
+def _run_decode(command: List[str], keep_last_bytes: int) -> Tuple[bytes, int, str, Optional[str]]:
+    """Run one ffmpeg decode within DECODE_TIMEOUT: ``(pcm, rc, stderr, failure)``. The output
+    is read as it comes and only its last `keep_last_bytes` kept, so a whole file is never held
+    in memory."""
+    try:
+        proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception as e:  # missing ffmpeg, spawn failure
+        return b'', -1, '', f"decode command failed: {e}"
+    timer = threading.Timer(DECODE_TIMEOUT, proc.kill)
+    stderr_chunks: List[bytes] = []
+    drain = threading.Thread(target=lambda: stderr_chunks.append(proc.stderr.read()), daemon=True)
+    timer.start()
+    drain.start()
+    try:
+        tail = bytearray()
+        for chunk in iter(lambda: proc.stdout.read(1 << 20), b''):
+            tail += chunk
+            if len(tail) > 2 * keep_last_bytes:
+                del tail[:len(tail) - keep_last_bytes]
+        raw = bytes(tail[-keep_last_bytes:])
+        rc = proc.wait()
+        drain.join()
+    finally:
+        timed_out = not timer.is_alive() and proc.returncode is not None and proc.returncode < 0
+        timer.cancel()
+    stderr_text = b''.join(stderr_chunks).decode('utf-8', 'replace').strip()
+    if timed_out:
+        return b'', rc, stderr_text, f"decode command failed: timed out after {DECODE_TIMEOUT} s"
+    return raw, rc, stderr_text, None
+
+
+def _decode_to_stereo(file_path: str, duration: int = 90):
+    """Decode the last ``duration`` seconds of the first audio stream (the whole song when it is
+    shorter), skipping bad frames rather than failing. Songs build toward their end, so that is
+    the part analysed. The decode seeks ``duration`` seconds before the header's length and runs
+    to the real end, so a header that understates the length still yields the true end; one that
+    overstates it (a cut-short download) gives a short read and the whole file is read instead.
+    A mono source stays one channel (ffmpeg's upmix would lower it 3 dB); wider becomes stereo.
+
+    Returns ``(samples, sample_rate, channels, duration, command, rc, stderr, class)``: samples
+    is ``(channels, n)`` float32 or None, class the ``classify_failure`` disposition of what
+    ffmpeg reported.
+    """
+    channels, length = _source_stream(file_path)
+    frame_bytes = 2 * channels
+    keep = int(duration * 44100) * frame_bytes
+    start = None if length is None or length <= duration else length - duration
+    command = _ffmpeg_command(file_path, channels, start)
+    raw, rc, stderr_text, failure = _run_decode(command, keep_last_bytes=keep)
+    if failure is None and start is not None and len(raw) < (duration - 1.0) * 44100 * frame_bytes:
+        # The file holds less audio than its header says: the seek overshot.
+        command = _ffmpeg_command(file_path, channels, None)
+        raw, rc, stderr_text, failure = _run_decode(command, keep_last_bytes=keep)
+    if failure is not None:
+        return (None, 44100, 0, 0.0, command, -1, failure, classify_failure(failure))
+
+    if raw:
+        samples = np.frombuffer(raw, dtype='<i2')
+        samples = samples[:samples.size - samples.size % channels]  # truncated final frame
+        # s16le is interleaved (left, right, left, right ...).
+        decoded = np.ascontiguousarray(samples.reshape(-1, channels).T, dtype=np.float32) / np.float32(32768.0)
+        window = decoded.shape[1] / 44100.0
+        # Samples arrived: analyse them. A logged decode error with usable
+        # output is a bad frame we tolerate, not a failure.
+        cls = classify_failure(stderr_text) if stderr_text else Disposition.INCONCLUSIVE
+        return (decoded, 44100, channels, window, command, rc, stderr_text, cls)
+
+    # Nothing decoded. The last stderr line is the honest failure reason;
+    # classify it so a truly damaged file gets a terminal disposition
+    # instead of three identical retries.
+    lines = stderr_text.splitlines() if stderr_text else []
+    detail = lines[-1] if lines else f"ffmpeg produced no samples (exit {rc})"
+    return (None, 44100, 0, 0.0, command, rc, detail,
+            classify_failure(detail))
+
 
 class AudioAnalyzer:
     """
-    Enhanced audio analysis using Essentia with TensorFlow models.
-    
-    Supports two modes:
-    - Enhanced: Uses ML models for accurate mood/valence/arousal (default)
-    - Standard: Uses heuristics when models aren't available (fallback)
+    Audio analysis: Essentia's signal measures and the MusiCNN models' moods,
+    valence/arousal and danceability. Without the models a track is not analysed:
+    no hand-made estimate stands in for them.
+
+    ``musicnn_server`` is the main process's MusicnnServer address when the GPU runs
+    MusiCNN for every worker; without it MusiCNN runs here on the CPU.
     """
-    
-    def __init__(self):
-        self.enhanced_mode = False
+
+    def __init__(self, musicnn_server=None):
+        self.enhanced_mode = False  # the models are loaded and every head is there
+        self.models_error: Optional[str] = None  # why not, when they are not
         self.musicnn_model = None  # Base MusiCNN model
         self.prediction_models = {}  # Classification head models
-        
+        self._last_load_error: Optional[str] = None
+
         if ESSENTIA_AVAILABLE:
             self._init_essentia()
-            self._load_ml_models()
-    
+            self._load_ml_models(musicnn_server)
+
     def _init_essentia(self):
         """Initialize Essentia algorithms for basic feature extraction"""
         # Basic feature extractors (always available)
         self.rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
         self.key_extractor = es.KeyExtractor()
-        self.loudness = es.Loudness()
-        self.dynamic_complexity = es.DynamicComplexity()
-        self.danceability_extractor = es.Danceability()
-        
-        # Additional extractors for better Standard mode
-        self.spectral_centroid = es.Centroid(range=22050)  # For brightness
-        self.spectral_flatness = es.FlatnessDB()  # For instrumentalness
-        self.zcr = es.ZeroCrossingRate()
-        self.rms = es.RMS()  # For proper energy calculation
-        self.spectrum = es.Spectrum()
-        self.windowing = es.Windowing(type='hann')
+        # EBU R128: integrated loudness (LUFS) and loudness range (LU).
+        self.loudness_ebu = es.LoudnessEBUR128(sampleRate=44100)
+        self.rms = es.RMS()
         self.resampler = es.Resample(inputSampleRate=44100, outputSampleRate=16000)
 
         logger.info("Essentia basic algorithms initialized")
-    
-    def _load_ml_models(self):
-        """
-        Load MusiCNN TensorFlow models for Enhanced mode.
 
-        Architecture:
-        1. Base MusiCNN model generates embeddings from audio
-        2. Classification head models take embeddings and output predictions
-
-        If models are missing, gracefully fall back to Standard mode.
-        """
-        if not TF_MODELS_AVAILABLE:
-            logger.info("Model files not available - using Standard mode")
+    def _load_ml_models(self, musicnn_server=None):
+        """Load MusiCNN and its heads: HEAD_CLASSES' and the two valence/arousal
+        regressions. Without all of them, `models_error` says why and no track is
+        analysed."""
+        if not ML_MODELS_AVAILABLE:
+            self.models_error = f'MusiCNN graph not found at {MUSICNN_GRAPH}'
             return
-
         try:
-            logger.info("TensorFlow running on CPU")
-
-            from essentia.standard import TensorflowPredict2D, TensorflowPredictMusiCNN
-            logger.info("Loading MusiCNN models...")
-
-            # First, load the base MusiCNN embedding model
-            if os.path.exists(MODELS['musicnn']):
-                try:
-                    self.musicnn_model = TensorflowPredictMusiCNN(
-                        graphFilename=MODELS['musicnn'],
-                        output="model/dense/BiasAdd"  # Embedding layer output
-                    )
-                    logger.info("Loaded base MusiCNN model for embeddings")
-                except Exception as e:
-                    logger.warning(f"Failed to load MusiCNN model: {e}")
-                    logger.info("Falling back to Standard mode (heuristic-based analysis)")
-                    self.enhanced_mode = False
-                    return
-            else:
-                logger.warning(f"Base MusiCNN model not found at: {MODELS['musicnn']}")
-                logger.info("This is normal if models haven't been downloaded yet.")
-                logger.info("Falling back to Standard mode (heuristic-based analysis)")
-                logger.info("Standard mode still provides BPM, key, energy, and mood detection,")
-                logger.info("but uses audio features instead of ML predictions.")
-                self.enhanced_mode = False
-                return
-            
-            # Load classification head models
-            heads_to_load = {
-                'mood_happy': MODELS['mood_happy'],
-                'mood_sad': MODELS['mood_sad'],
-                'mood_relaxed': MODELS['mood_relaxed'],
-                'mood_aggressive': MODELS['mood_aggressive'],
-                'mood_party': MODELS['mood_party'],
-                'mood_acoustic': MODELS['mood_acoustic'],
-                'mood_electronic': MODELS['mood_electronic'],
-                'danceability': MODELS['danceability'],
-                # voice_instrumental excluded: broken head (81% of vocal tracks score 0.9+)
-                # CLAP zero-shot in vibe phase is the sole writer for instrumentalness
-            }
-            
-            for model_name, model_path in heads_to_load.items():
-                if os.path.exists(model_path):
-                    try:
-                        self.prediction_models[model_name] = TensorflowPredict2D(
-                            graphFilename=model_path,
-                            output="model/Softmax"
-                        )
-                        logger.info(f"Loaded classification head: {model_name}")
-                    except Exception as e:
-                        logger.warning(f"Failed to load {model_name}: {e}")
-                else:
-                    logger.warning(f"Model not found: {model_path}")
-
-            # Load valence/arousal regression models (different output layer)
-            for va_model in ['deam', 'emomusic']:
-                va_path = MODELS.get(va_model)
-                if va_path and os.path.exists(va_path):
-                    try:
-                        self.prediction_models[va_model] = TensorflowPredict2D(
-                            graphFilename=va_path,
-                            output="model/Identity"
-                        )
-                        logger.info(f"Loaded {va_model} valence/arousal regression model")
-                    except Exception as e:
-                        logger.warning(f"Failed to load {va_model} model: {e}")
-
-            # Enable enhanced mode if we have the key mood models
-            # (valence and arousal are derived from mood predictions)
-            required = ['mood_happy', 'mood_sad', 'mood_relaxed', 'mood_aggressive']
-            if all(m in self.prediction_models for m in required):
-                self.enhanced_mode = True
-                logger.info(f"ENHANCED MODE ENABLED - {len(self.prediction_models)} MusiCNN classification heads loaded")
-            else:
-                missing = [m for m in required if m not in self.prediction_models]
-                logger.warning(f"Missing required models: {missing} - using Standard mode")
-                
-        except ImportError as e:
-            logger.warning(f"TensorflowPredict2D not available: {e}")
-            self.enhanced_mode = False
+            from musicnn_onnx import MusicnnOnnx
+            models = MusicnnOnnx(MODEL_DIR, use_gpu=False, threads=THREADS_PER_WORKER, server=musicnn_server)
         except Exception as e:
-            logger.error(f"Failed to load ML models: {e}")
-            traceback.print_exc()
-            self.enhanced_mode = False
-    
-    def _is_decodable(self, file_path: str) -> Tuple[bool, Optional[str]]:
-        """Pre-decode integrity probe using the system ffmpeg, which tolerates
-        (and cleanly reports) the corrupt bitstreams that SIGSEGV Essentia's
-        bundled libavcodec. A bad file makes es.MonoLoader crash the entire
-        worker process via an uncatchable native fault, so we gate on ffmpeg
-        first and skip undecodable files rather than feeding them to Essentia.
+            self.models_error = f'MusiCNN models failed to load: {e}'
+            logger.error(self.models_error)
+            return
+        self.musicnn_model = models.embeddings
+        for head in models.heads():
+            if head in HEAD_CLASSES or head in ('deam', 'emomusic'):
+                self.prediction_models[head] = (lambda name: lambda embeddings: models.predict(name, embeddings))(head)
+        logger.info(f"MusiCNN on {'the GPU (main process)' if models.on_gpu else 'CPU'}, {len(self.prediction_models)} heads")
+        missing = [m for m in [*HEAD_CLASSES, 'deam', 'emomusic'] if m not in self.prediction_models]
+        self.enhanced_mode = not missing
+        if missing:
+            self.models_error = f'MusiCNN heads missing: {missing}'
+            logger.error(self.models_error)
 
-        Probes the AUDIO STREAMS ONLY (-map 0:a plus -vn/-sn/-dn). Without that,
-        ffmpeg also decodes the embedded cover art, and -xerror then condemns the
-        whole file over a malformed thumbnail. That is not hypothetical: on the
-        production library all twelve tracks of one album were marked corrupt with
-        "[mjpeg] No JPEG data found in image" while their audio decoded perfectly.
-        Analysis never touches the artwork, so the artwork must not get a vote.
-
-        Fails OPEN (returns decodable) if ffmpeg is missing or the probe itself
-        errors, so analysis is never blocked by a tooling gap. ffmpeg reads no
-        stdin (-nostdin) and exits non-zero on the first decode error (-xerror).
-        A file with no audio stream at all fails the map and is rejected, which
-        is the right answer for something the analyzer cannot read.
+    def load_audio(self, file_path: str, max_duration: int = 90) -> Optional[np.ndarray]:
+        """The last max_duration seconds at 44.1 kHz, ``(channels, n)``: the decode from
+        _decode_to_stereo. The decode is the only integrity check; a file with a logged
+        bad frame is analysed.
         """
-        try:
-            proc = subprocess.run(
-                ['ffmpeg', '-nostdin', '-v', 'error', '-xerror',
-                 '-i', file_path, '-map', '0:a', '-vn', '-sn', '-dn',
-                 '-f', 'null', '-'],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                timeout=PRE_DECODE_PROBE_TIMEOUT,
-            )
-        except FileNotFoundError:
-            return (True, None)  # ffmpeg unavailable -> never block analysis
-        except subprocess.TimeoutExpired:
-            return (False, "pre-decode probe timed out (corrupt/unreadable)")
-        except Exception as e:
-            logger.warning(f"Pre-decode probe error for {file_path}: {e}")
-            return (True, None)  # never let the gate itself reject an OK file
-        if proc.returncode != 0:
-            lines = proc.stderr.decode('utf-8', 'replace').strip().splitlines()
-            detail = lines[-1] if lines else f"ffmpeg exit {proc.returncode}"
-            return (False, f"corrupt bitstream (pre-decode gate): {detail[:160]}")
-        return (True, None)
-
-    def load_audio(self, file_path: str, max_duration: int = 90) -> Optional[Any]:
-        """Load up to max_duration seconds of audio at 44.1kHz as mono signal"""
         self._last_load_error = None
         if not ESSENTIA_AVAILABLE:
             return None
 
-        # Pre-decode gate: Essentia's MonoLoader takes an uncatchable native
-        # SIGSEGV on certain corrupt files (e.g. AAC "channel element N is not
-        # allocated", MP3 "Header missing"), killing the worker process and
-        # dumping a ~0.5G core. Probe with the tolerant system ffmpeg first and
-        # skip the file instead of crashing the pool. See _is_decodable.
-        decodable, probe_err = self._is_decodable(file_path)
-        if not decodable:
-            logger.error(f"Pre-decode gate rejected {file_path}: {probe_err}")
-            self._last_load_error = probe_err
+        (samples, _, channels, window,
+         command, rc, stderr, cls) = _decode_to_stereo(
+            file_path, duration=max_duration)
+        if samples is None:
+            logger.error(f"Decode failed for {file_path}: {stderr}")
+            self._last_load_error = tag_error(stderr, cls, "unknown")
             return None
+        if rc != 0:
+            # Tolerant decode: samples arrived despite ffmpeg reporting a
+            # bad frame -- analyse them, keep the evidence in the log.
+            logger.warning(
+                f"Decoded {file_path} with errors (rc={rc}): {stderr[-160:]}"
+            )
+        return samples
 
-        try:
-            loader = es.MonoLoader(filename=file_path, sampleRate=44100)
-            audio = loader()
-            max_samples = int(44100 * max_duration)
-            if len(audio) > max_samples:
-                audio = audio[:max_samples]
-            return audio
-        except Exception as e:
-            logger.error(f"Failed to load audio {file_path}: {e}")
-            self._last_load_error = f"audio load failed: {e}"
-            return None
-
-    def validate_audio(self, audio, file_path: str) -> Tuple[bool, Optional[str]]:
-        """
-        Validate audio before analysis to detect edge cases that cause crashes.
-
-        Returns:
-            (is_valid, error_message) - error_message is None if valid
-        """
-        try:
-            duration = len(audio) / 44100
-
-            if duration < 5.0:
-                return (False, f"Audio too short: {duration:.1f}s (minimum 5s)")
-
-            if len(audio) == 0:
-                return (False, "Audio is empty")
-
-            if np.any(np.isnan(audio)) or np.any(np.isinf(audio)):
-                return (False, "Audio contains NaN or Inf values (corrupted)")
-
-            # Silence detection using vectorized RMS over chunks
-            try:
-                frame_size = 2048
-                hop_size = 1024
-                n_frames = max(1, (len(audio) - frame_size) // hop_size)
-                # Vectorized: compute RMS per frame using stride tricks
-                silent_count = 0
-                for i in range(0, min(n_frames * hop_size, len(audio) - frame_size), hop_size):
-                    rms_val = self.rms(audio[i:i + frame_size])
-                    if rms_val < 0.001:
-                        silent_count += 1
-
-                if n_frames > 0 and silent_count / n_frames > 0.8:
-                    ratio = silent_count / n_frames * 100
-                    return (False, f"Audio is {ratio:.0f}% silence (likely corrupted or blank)")
-            except Exception as silence_error:
-                logger.warning(f"Silence detection failed for {file_path}: {silence_error}")
-
-            return (True, None)
-
-        except Exception as e:
-            logger.warning(f"Audio validation error for {file_path}: {e}")
-            return (True, None)
-    
     def analyze(self, file_path: str) -> Dict[str, Any]:
         """
         Analyze audio file and extract all features.
 
-        Loads audio once at 44.1kHz, resamples in-memory to 16kHz for ML inference.
-        Uses Enhanced mode (ML models) if available, otherwise Standard mode (heuristics).
+        Loads audio once at 44.1kHz, resamples in-memory to 16kHz for the models.
         """
         result = {
             'bpm': None,
@@ -546,7 +477,7 @@ class AudioAnalyzer:
             'danceability': None,
             'valence': None,
             'arousal': None,
-            'instrumentalness': None,
+            'instrumentalness': None,  # instrumentalness and acousticness come from CLAP zero-shot
             'acousticness': None,
             'moodTags': [],
             'moodHappy': None,
@@ -558,57 +489,48 @@ class AudioAnalyzer:
             'moodElectronic': None,
             'danceabilityMl': None,
             'essentiaGenres': [],
-            'analysisMode': 'standard',
+            'analysisMode': None,
         }
 
         if not ESSENTIA_AVAILABLE:
             logger.error("Essentia not available - cannot analyze audio files")
             result['_error'] = 'Essentia library not installed'
             return result
+        if not self.enhanced_mode:
+            # The track fails and is retried; it is never stored without the models' answers.
+            result['_error'] = self.models_error or 'MusiCNN models not loaded'
+            return result
 
         MAX_ANALYZE_SECONDS = int(os.getenv('MAX_ANALYZE_SECONDS', '90'))
-        audio_44k = None
         try:
-            audio_44k = self.load_audio(file_path, max_duration=MAX_ANALYZE_SECONDS)
+            decoded = self.load_audio(file_path, max_duration=MAX_ANALYZE_SECONDS)
         except MemoryError:
             logger.error(f"MemoryError: Could not load audio for {file_path}")
             result['_error'] = 'MemoryError: audio file too large'
             return result
-        if audio_44k is None:
-            result['_error'] = getattr(self, '_last_load_error', None) or 'Audio failed to load (corrupt or unreadable)'
+        if decoded is None:
+            result['_error'] = self._last_load_error or 'Audio failed to load (corrupt or unreadable)'
             return result
-
-        # Validate audio before analysis
-        is_valid, validation_error = self.validate_audio(audio_44k, file_path)
-        if not is_valid:
-            logger.warning(f"Audio validation failed for {file_path}: {validation_error}")
-            result['_error'] = validation_error
+        audio_44k = decoded.mean(axis=0) if decoded.shape[0] > 1 else decoded[0]
+        if len(audio_44k) < MIN_ANALYZE_SECONDS * 44100 or float(np.max(np.abs(audio_44k))) < SILENCE_PEAK:
+            # Silence, or too little audio to measure: every algorithm here would
+            # still print a number (silence reads 738 BPM, A minor, calm). No
+            # features is the answer.
+            result['analysisMode'] = 'silent'
             return result
 
         try:
             # === BASIC FEATURES (always extracted) ===
 
-            # Rhythm Analysis with fallback chain
+            # Tempo: none is stored when the extractor fails; an onset count is not a tempo.
             try:
-                bpm, beats, beats_confidence, _, beats_intervals = self.rhythm_extractor(audio_44k)
+                bpm, beats, _, _, _ = self.rhythm_extractor(audio_44k)
                 result['bpm'] = round(float(bpm), 1)
                 result['beatsCount'] = len(beats)
             except Exception as rhythm_error:
-                logger.warning(f"RhythmExtractor2013 failed, using fallback: {rhythm_error}")
-                try:
-                    onset_detector = es.OnsetRate()
-                    onset_rate, _ = onset_detector(audio_44k)
-                    bpm = max(60, min(180, onset_rate * 60))
-                    result['bpm'] = round(float(bpm), 1)
-                    result['beatsCount'] = 0
-                    logger.info(f"Fallback BPM estimate: {result['bpm']}")
-                except Exception as fallback_error:
-                    logger.warning(f"Onset-based fallback also failed: {fallback_error}")
-                    bpm = 120.0
-                    result['bpm'] = 120.0
-                    result['beatsCount'] = 0
+                logger.warning(f"Tempo extraction failed: {rhythm_error}")
+                result['beatsCount'] = 0
 
-            # Key Detection
             try:
                 key, scale, strength = self.key_extractor(audio_44k)
                 result['key'] = key
@@ -616,80 +538,41 @@ class AudioAnalyzer:
                 result['keyStrength'] = round(float(strength), 3)
             except Exception as key_error:
                 logger.warning(f"Key extraction failed: {key_error}")
-                key = 'C'
-                scale = 'major'
-                result['key'] = key
-                result['keyScale'] = scale
-                result['keyStrength'] = 0.0
+                # No measured key: report none, never a fabricated C major.
+                result['key'] = None
+                result['keyScale'] = None
+                result['keyStrength'] = None
 
-            # Energy & Spectral features - frame-based extraction
+            # Energy: the mean RMS of 2048-sample frames every 1024.
             frame_size = 2048
             hop_size = 1024
             n_frames = max(0, (len(audio_44k) - frame_size) // hop_size)
+            rms_values = np.array(
+                [self.rms(audio_44k[i * hop_size:i * hop_size + frame_size]) for i in range(n_frames)],
+                dtype=np.float32,
+            )
+            result['energy'] = round(min(1.0, float(np.mean(rms_values)) * 3), 3) if n_frames > 0 else None
 
-            rms_values = np.empty(n_frames, dtype=np.float32)
-            zcr_values = np.empty(n_frames, dtype=np.float32)
-            sc_values = np.empty(n_frames, dtype=np.float32)
-            sf_values = np.empty(n_frames, dtype=np.float32)
+            # A mono source is measured as one channel (BS.1770), not doubled.
+            pair = np.stack(
+                [decoded[0], decoded[1] if decoded.shape[0] > 1 else np.zeros_like(decoded[0])], axis=1
+            ).astype(np.float32)
+            _, _, integrated, loudness_range = self.loudness_ebu(pair)
+            result['loudness'] = round(float(integrated), 2)
+            result['dynamicRange'] = round(float(loudness_range), 2)
 
-            for idx in range(n_frames):
-                offset = idx * hop_size
-                frame = audio_44k[offset:offset + frame_size]
-                windowed = self.windowing(frame)
-                spectrum = self.spectrum(windowed)
+            # The models' answers: moods, valence/arousal, danceability. A failure fails the
+            # track and it is retried, never stored with anything in their place.
+            try:
+                audio_16k = self.resampler(audio_44k)
+                result.update(self._extract_ml_features(audio_16k))
+                result['analysisMode'] = 'enhanced'
+                logger.info(f"Analysis: valence={result['valence']}, arousal={result['arousal']}")
+            except Exception as e:
+                logger.exception(f"ML analysis failed: {e}")
+                result['_error'] = f'ML analysis failed: {e}'
+                return result
 
-                rms_values[idx] = self.rms(frame)
-                zcr_values[idx] = self.zcr(frame)
-                sc_values[idx] = self.spectral_centroid(spectrum)
-                sf_values[idx] = self.spectral_flatness(spectrum)
-
-            if n_frames > 0:
-                avg_rms = float(np.mean(rms_values))
-                result['energy'] = round(min(1.0, avg_rms * 3), 3)
-                avg_sc = float(np.mean(sc_values))
-                avg_sf = float(np.mean(sf_values))
-                avg_zcr = float(np.mean(zcr_values))
-            else:
-                result['energy'] = 0.5
-                avg_sc = 0.5
-                avg_sf = -20.0
-                avg_zcr = 0.1
-
-            loudness = self.loudness(audio_44k)
-            result['loudness'] = round(float(loudness), 2)
-
-            dynamic_range, _ = self.dynamic_complexity(audio_44k)
-            result['dynamicRange'] = round(float(dynamic_range), 2)
-
-            # Store spectral features for Standard mode estimates
-            result['_spectral_centroid'] = avg_sc
-            result['_spectral_flatness'] = avg_sf
-            result['_zcr'] = avg_zcr
-
-            # Basic Danceability (non-ML)
-            # Essentia Danceability() returns [0, 3], normalize to [0, 1]
-            danceability, _ = self.danceability_extractor(audio_44k)
-            result['danceability'] = round(max(0.0, min(1.0, float(danceability) / 3.0)), 3)
-
-            # === ENHANCED MODE: Use ML models ===
-            if self.enhanced_mode:
-                try:
-                    # Resample in-memory instead of re-reading from disk
-                    audio_16k = self.resampler(audio_44k)
-                    ml_features = self._extract_ml_features(audio_16k)
-                    result.update(ml_features)
-                    result['analysisMode'] = 'enhanced'
-                    logger.info(f"Enhanced analysis: valence={result['valence']}, arousal={result['arousal']}")
-                except Exception as e:
-                    logger.warning(f"ML analysis failed, falling back to Standard: {e}")
-                    traceback.print_exc()
-                    self._apply_standard_estimates(result, scale, bpm)
-            else:
-                self._apply_standard_estimates(result, scale, bpm)
-
-            # Acousticness set by CLAP zero-shot in the vibe phase (not derived from dynamicRange).
-
-            # Generate mood tags based on all features
             result['moodTags'] = self._generate_mood_tags(result)
 
             logger.info(f"Analysis complete [{result['analysisMode']}]: BPM={result['bpm']}, Key={result['key']} {result['keyScale']}, Valence={result['valence']}, Arousal={result['arousal']}")
@@ -697,430 +580,136 @@ class AudioAnalyzer:
             logger.error(f"MemoryError during analysis of {file_path}")
             result['_error'] = 'MemoryError: analysis exceeded memory limits'
         except Exception as e:
-            logger.error(f"Analysis error: {e}")
-            traceback.print_exc()
-        finally:
-            for k in ['_spectral_centroid', '_spectral_flatness', '_zcr']:
-                result.pop(k, None)
+            logger.exception(f"Analysis error: {e}")
+            result['_error'] = f'Analysis error: {e}'
         return result
-    
+
     def _extract_ml_features(self, audio_16k) -> Dict[str, Any]:
-        """
-        Extract features using Essentia MusiCNN + classification heads.
-        
-        Architecture:
-        1. TensorflowPredictMusiCNN extracts embeddings from audio
-        2. TensorflowPredict2D classification heads take embeddings and output predictions
-        
-        This is the heart of Enhanced mode - real ML predictions for mood.
-        
-        Note: MusiCNN was trained on pop/rock music (Million Song Dataset).
-        For genres outside this distribution (classical, piano, ambient),
-        predictions may be unreliable (all moods show high values).
-        We detect and normalize these cases.
-        """
-        result = {}
-        
-        if not self.musicnn_model:
-            raise ValueError("MusiCNN model not loaded")
-        
-        def safe_predict(model, embeddings, model_name: str) -> Tuple[float, float]:
-            """
-            Safely extract prediction and return (value, confidence).
-            
-            Returns:
-                (value, variance) - value is the mean prediction, variance indicates confidence
-                High variance = model is uncertain across frames
-            """
-            try:
-                preds = model(embeddings)
-                # preds shape: [frames, 2] for binary classification
-                # [:, 1] = probability of positive class
-                positive_probs = preds[:, 1]
-                raw_value = float(np.mean(positive_probs))
-                variance = float(np.var(positive_probs))
-                # Clamp to valid probability range
-                clamped = max(0.0, min(1.0, raw_value))
-                return (round(clamped, 3), round(variance, 4))
-            except Exception as e:
-                logger.warning(f"Prediction failed for {model_name}: {e}")
-                return (0.5, 0.0)
-        
-        # Step 1: Get embeddings from base MusiCNN model
-        # Output shape: [frames, 200] - 200-dimensional embedding per frame
+        """MusiCNN embeddings fed through the classification heads. MusiCNN was trained
+        on pop and rock, so other genres skew; values are stored raw and the backend
+        ranks them within each library. Any head that fails raises: the track fails
+        and is retried, with no value made up in its place."""
         embeddings = self.musicnn_model(audio_16k)
-        logger.debug(f"MusiCNN embeddings shape: {embeddings.shape}")
-        
-        # Step 2: Pass embeddings through classification heads
-        # Each head outputs [frames, 2] where [:, 1] is probability of positive class
-        
-        # === MOOD PREDICTIONS ===
-        # Collect raw predictions with their variances
-        raw_moods = {}
-        
-        if 'mood_happy' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_happy'], embeddings, 'mood_happy')
-            raw_moods['moodHappy'] = (val, var)
-        
-        if 'mood_sad' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_sad'], embeddings, 'mood_sad')
-            raw_moods['moodSad'] = (val, var)
-        
-        if 'mood_relaxed' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_relaxed'], embeddings, 'mood_relaxed')
-            raw_moods['moodRelaxed'] = (val, var)
-        
-        if 'mood_aggressive' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_aggressive'], embeddings, 'mood_aggressive')
-            raw_moods['moodAggressive'] = (val, var)
-        
-        if 'mood_party' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_party'], embeddings, 'mood_party')
-            raw_moods['moodParty'] = (val, var)
-        
-        if 'mood_acoustic' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_acoustic'], embeddings, 'mood_acoustic')
-            raw_moods['moodAcoustic'] = (val, var)
-        
-        if 'mood_electronic' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['mood_electronic'], embeddings, 'mood_electronic')
-            raw_moods['moodElectronic'] = (val, var)
-        
-        # Log raw mood predictions for debugging
-        raw_values = {k: v[0] for k, v in raw_moods.items()}
-        logger.info(f"ML Raw Moods: H={raw_values.get('moodHappy')}, S={raw_values.get('moodSad')}, R={raw_values.get('moodRelaxed')}, A={raw_values.get('moodAggressive')}")
-        
-        # === DETECT UNRELIABLE PREDICTIONS (Entropy-based) ===
-        # Shannon entropy detects confused predictions better than min/max range.
-        # When the model is OOD, all moods fire high and uniformly.
-        all_mood_keys = list(raw_moods.keys())
-        all_mood_values = np.array([raw_moods[m][0] for m in all_mood_keys])
 
-        if len(all_mood_values) >= 4:
-            # Shannon entropy normalized to [0, 1]
-            total = all_mood_values.sum()
-            if total > 1e-6:
-                probs = all_mood_values / total
-                entropy = -np.sum(probs * np.log(probs + 1e-10)) / np.log(len(probs))
-            else:
-                entropy = 0.0
+        def positive_prob(model_name: str) -> float:
+            """Mean per-patch probability of the head's positive class, read from the
+            column its metadata names (see HEAD_CLASSES)."""
+            preds = self.prediction_models[model_name](embeddings)
+            return round(max(0.0, min(1.0, float(np.mean(preds[:, positive_class_index(model_name)])))), 3)
 
-            mean_val = float(np.mean(all_mood_values))
+        # Each mood head is an independent binary classifier, stored raw; the backend
+        # (moodBucketService) compares moods within the library.
+        mood_heads = {
+            'moodHappy': 'mood_happy',
+            'moodSad': 'mood_sad',
+            'moodRelaxed': 'mood_relaxed',
+            'moodAggressive': 'mood_aggressive',
+            'moodParty': 'mood_party',
+            'moodAcoustic': 'mood_acoustic',
+            'moodElectronic': 'mood_electronic',
+        }
+        result: Dict[str, Any] = {field: positive_prob(head) for field, head in mood_heads.items()}
 
-            # High entropy + high mean = classic OOD (everything fires high)
-            if entropy > 0.85 and mean_val > 0.5:
-                logger.warning(f"Detected OOD audio (entropy={entropy:.3f}, mean={mean_val:.3f}). Normalizing moods...")
-                min_mood = float(np.min(all_mood_values))
-                max_mood = float(np.max(all_mood_values))
-                for mood_key in all_mood_keys:
-                    old_val = raw_moods[mood_key][0]
-                    if max_mood > min_mood:
-                        normalized = 0.2 + (old_val - min_mood) / (max_mood - min_mood) * 0.6
-                    else:
-                        normalized = 0.5
-                    raw_moods[mood_key] = (round(normalized, 3), raw_moods[mood_key][1])
-                logger.info(f"Normalized moods: H={raw_moods.get('moodHappy', (0,0))[0]}, S={raw_moods.get('moodSad', (0,0))[0]}")
+        # Valence and arousal: the mean of the DEAM and emoMusic regressions, each [frames, 2]
+        # on a 1-9 scale. Temperature scaling spreads the compressed predictions around the
+        # centre (5.0) before mapping to 0-1.
+        va = [self.prediction_models[m](embeddings) for m in ('deam', 'emomusic')]
+        valence_raw = sum(float(np.mean(p[:, 0])) for p in va) / len(va)
+        arousal_raw = sum(float(np.mean(p[:, 1])) for p in va) / len(va)
+        center = 5.0
+        temperature = 2.5
+        valence_scaled = max(1.0, min(9.0, center + (valence_raw - center) * temperature))
+        arousal_scaled = max(1.0, min(9.0, center + (arousal_raw - center) * temperature))
+        result['valence'] = round(max(0.0, min(1.0, (valence_scaled - 1.0) / 8.0)), 3)
+        result['arousal'] = round(max(0.0, min(1.0, (arousal_scaled - 1.0) / 8.0)), 3)
 
-        # === GROUPED SOFTMAX ON CONTRADICTORY PAIRS ===
-        # Force competition between semantically opposed moods.
-        # happy/sad and relaxed/aggressive cannot both be high simultaneously.
-        # Other moods (party, acoustic, electronic) remain independent.
-        contradictory_groups = [
-            ['moodHappy', 'moodSad'],
-            ['moodRelaxed', 'moodAggressive'],
-        ]
-        for group in contradictory_groups:
-            present = [k for k in group if k in raw_moods]
-            if len(present) < 2:
-                continue
-            values = np.array([raw_moods[k][0] for k in present])
-            values_clamped = np.clip(values, 0.01, 0.99)
-            logits = np.log(values_clamped / (1 - values_clamped))
-            # Temperature 1.5: moderate competition
-            scaled = logits / 1.5
-            exp_scaled = np.exp(scaled - np.max(scaled))
-            softmax_probs = exp_scaled / exp_scaled.sum()
-            for i, k in enumerate(present):
-                raw_moods[k] = (round(float(softmax_probs[i]), 3), raw_moods[k][1])
+        # Danceability: the head's probability, across the whole 0-1 range.
+        result['danceabilityMl'] = positive_prob('danceability')
+        result['danceability'] = result['danceabilityMl']
 
-        # === VARIANCE-BASED UNCERTAINTY SHRINKAGE ===
-        # High per-frame variance = model oscillating = uncertain prediction.
-        # Shrink uncertain predictions toward 0.5 (neutral).
-        for mood_key in all_mood_keys:
-            val, var = raw_moods[mood_key]
-            if var > 0.02:
-                shrinkage = min(1.0, var / 0.1)
-                shrunk = val * (1 - shrinkage) + 0.5 * shrinkage
-                raw_moods[mood_key] = (round(shrunk, 3), var)
-
-        # Store final mood values in result
-        for mood_key, (val, var) in raw_moods.items():
-            result[mood_key] = val
-        
-        # === VALENCE & AROUSAL (ensemble of available regression models) ===
-        va_models = [m for m in ['deam', 'emomusic'] if m in self.prediction_models]
-        if va_models:
-            # Each model outputs [frames, 2] = [valence, arousal] in range [1, 9]
-            valence_preds = []
-            arousal_preds = []
-            for model_name in va_models:
-                try:
-                    preds = self.prediction_models[model_name](embeddings)
-                    valence_preds.append(float(np.mean(preds[:, 0])))
-                    arousal_preds.append(float(np.mean(preds[:, 1])))
-                except Exception as e:
-                    logger.warning(f"{model_name} prediction failed: {e}")
-            if valence_preds:
-                valence_raw = sum(valence_preds) / len(valence_preds)
-                arousal_raw = sum(arousal_preds) / len(arousal_preds)
-                # Temperature scaling: amplify deviation from center (5.0 in [1,9] space)
-                # to spread compressed predictions before normalizing to [0,1]
-                center = 5.0
-                temperature = 2.5
-                valence_scaled = max(1.0, min(9.0, center + (valence_raw - center) * temperature))
-                arousal_scaled = max(1.0, min(9.0, center + (arousal_raw - center) * temperature))
-                result['valence'] = round(max(0.0, min(1.0, (valence_scaled - 1.0) / 8.0)), 3)
-                result['arousal'] = round(max(0.0, min(1.0, (arousal_scaled - 1.0) / 8.0)), 3)
-            else:
-                self._heuristic_valence_arousal(result)
-        else:
-            self._heuristic_valence_arousal(result)
-        
-        # instrumentalness, acousticness: CLAP zero-shot is sole writer (vibe phase).
-
-        # === ML DANCEABILITY ===
-        if 'danceability' in self.prediction_models:
-            val, var = safe_predict(self.prediction_models['danceability'], embeddings, 'danceability')
-            result['danceabilityMl'] = val
-
+        logger.info(f"ML Moods: H={result['moodHappy']}, S={result['moodSad']}, R={result['moodRelaxed']}, A={result['moodAggressive']}, P={result['moodParty']}")
         return result
-    
-    def _heuristic_valence_arousal(self, result: Dict[str, Any]):
-        """Derive valence/arousal from mood model predictions when V/A regression models are unavailable."""
-        result['valence'] = round(max(0.0, min(1.0,
-            result.get('moodHappy', 0.5) * 0.5 + result.get('moodParty', 0.5) * 0.3 + (1 - result.get('moodSad', 0.5)) * 0.2)), 3)
-        result['arousal'] = round(max(0.0, min(1.0,
-            result.get('moodAggressive', 0.5) * 0.35 + result.get('moodParty', 0.5) * 0.25 +
-            result.get('moodElectronic', 0.5) * 0.2 + (1 - result.get('moodRelaxed', 0.5)) * 0.1 +
-            (1 - result.get('moodAcoustic', 0.5)) * 0.1)), 3)
 
-    def _apply_standard_estimates(self, result: Dict[str, Any], scale: str, bpm: float):
-        """
-        Apply heuristic estimates for Standard mode.
-        
-        Uses multiple audio features for more accurate mood estimation:
-        - Key (major/minor) correlates with valence
-        - BPM correlates with arousal  
-        - Energy (RMS) correlates with both
-        - Dynamic range indicates acoustic vs electronic
-        - Spectral centroid indicates brightness (higher = more energetic)
-        - Spectral flatness indicates noise vs tonal (instrumental estimation)
-        - Zero-crossing rate indicates speech presence
-        """
-        result['analysisMode'] = 'standard'
-        
-        # Get all available features
-        energy = result.get('energy', 0.5) or 0.5
-        dynamic_range = result.get('dynamicRange', 8) or 8
-        danceability = result.get('danceability', 0.5) or 0.5
-        spectral_centroid = result.get('_spectral_centroid', 0.5) or 0.5
-        spectral_flatness = result.get('_spectral_flatness', -20) or -20
-        zcr = result.get('_zcr', 0.1) or 0.1
-        
-        # === VALENCE (happiness/positivity) ===
-        # Major key = happier, minor = sadder
-        key_valence = 0.65 if scale == 'major' else 0.35
-        
-        # Higher tempo tends to be happier
-        bpm_valence = 0.5
-        if bpm:
-            if bpm >= 120:
-                bpm_valence = min(0.8, 0.5 + (bpm - 120) / 200)  # Fast = happy
-            elif bpm <= 80:
-                bpm_valence = max(0.2, 0.5 - (80 - bpm) / 100)   # Slow = melancholic
-        
-        # Brighter sounds (high spectral centroid) tend to be happier
-        # Spectral centroid is 0-1 (fraction of nyquist)
-        brightness_valence = min(1.0, spectral_centroid * 1.5)
-        
-        # Combine factors (key is most important for valence)
-        result['valence'] = round(
-            key_valence * 0.4 +      # Key is strong indicator
-            bpm_valence * 0.25 +     # Tempo matters
-            brightness_valence * 0.2 + # Brightness adds positivity
-            energy * 0.15,           # Energy adds slight positivity
-            3
-        )
-        
-        # === AROUSAL (energy/intensity) ===
-        # BPM is the strongest arousal indicator
-        bpm_arousal = 0.5
-        if bpm:
-            # Map 60-180 BPM to 0.1-0.9 arousal
-            bpm_arousal = min(0.9, max(0.1, (bpm - 60) / 140))
-        
-        # Energy directly indicates intensity
-        energy_arousal = energy
-        
-        # Low dynamic range = compressed = more intense
-        compression_arousal = max(0, min(1.0, 1 - (dynamic_range / 20)))
-        
-        # Brightness adds to perceived energy
-        brightness_arousal = min(1.0, spectral_centroid * 1.2)
-        
-        # Combine factors (BPM and energy are most important)
-        result['arousal'] = round(
-            bpm_arousal * 0.35 +       # Tempo is key
-            energy_arousal * 0.35 +    # Energy/loudness
-            brightness_arousal * 0.15 + # Brightness adds energy
-            compression_arousal * 0.15, # Compression = intensity
-            3
-        )
-        
-        # === INSTRUMENTALNESS ===
-        # High spectral flatness (closer to 0 dB) = more noise-like = more instrumental
-        # Low spectral flatness (closer to -60 dB) = more tonal = likely vocals
-        # ZCR also helps - vocals have moderate ZCR
-        flatness_normalized = min(1.0, max(0, (spectral_flatness + 40) / 40))  # -40 to 0 dB -> 0 to 1
-        
-        # High ZCR often indicates percussion/hi-hats OR speech
-        # Very low ZCR indicates sustained tones (likely instrumental)
-        if zcr < 0.05:
-            zcr_instrumental = 0.7  # Very low = likely sustained instrumental
-        elif zcr > 0.15:
-            zcr_instrumental = 0.4  # High = could be speech or percussion
-        else:
-            zcr_instrumental = 0.5  # Moderate = uncertain
-        
-        # instrumentalness, acousticness: CLAP zero-shot is the sole writer.
-        # Do NOT set them here -- they will be populated during the vibe phase.
-    
     def _generate_mood_tags(self, features: Dict[str, Any]) -> List[str]:
-        """
-        Generate mood tags based on extracted features.
-        
-        In Enhanced mode, uses ML predictions for more accurate tagging.
-        In Standard mode, uses heuristic rules.
-        """
+        """Mood tags from the models' moods, valence/arousal and danceability, and the
+        measured tempo and key. A value that was not measured gives no tag; 0 is a value."""
         tags = []
-        
-        bpm = features.get('bpm', 0) or 0
-        energy = features.get('energy', 0.5) or 0.5
-        valence = features.get('valence', 0.5) or 0.5
-        arousal = features.get('arousal', 0.5) or 0.5
-        danceability = features.get('danceability', 0.5) or 0.5
-        key_scale = features.get('keyScale', '')
-        
-        # Enhanced mode: use ML mood predictions
+        bpm = features.get('bpm')
+        valence = features.get('valence')
+        arousal = features.get('arousal')
+        danceability = features.get('danceability')
         mood_happy = features.get('moodHappy')
         mood_sad = features.get('moodSad')
         mood_relaxed = features.get('moodRelaxed')
         mood_aggressive = features.get('moodAggressive')
-        
-        # ML-based tags (higher confidence)
+
         if mood_happy is not None and mood_happy >= 0.6:
-            tags.append('happy')
-            tags.append('uplifting')
+            tags += ['happy', 'uplifting']
         if mood_sad is not None and mood_sad >= 0.6:
-            tags.append('sad')
-            tags.append('melancholic')
+            tags += ['sad', 'melancholic']
         if mood_relaxed is not None and mood_relaxed >= 0.6:
-            tags.append('relaxed')
-            tags.append('chill')
+            tags += ['relaxed', 'chill']
         if mood_aggressive is not None and mood_aggressive >= 0.6:
-            tags.append('aggressive')
-            tags.append('intense')
-        
-        # Arousal-based tags (prefer ML arousal)
-        if arousal >= 0.7:
-            tags.append('energetic')
-            tags.append('upbeat')
-        elif arousal <= 0.3:
-            tags.append('calm')
-            tags.append('peaceful')
-        
-        # Valence-based tags (if not already added by ML)
-        if 'happy' not in tags and 'sad' not in tags:
+            tags += ['aggressive', 'intense']
+
+        if arousal is not None and arousal >= 0.7:
+            tags += ['energetic', 'upbeat']
+        elif arousal is not None and arousal <= 0.3:
+            tags += ['calm', 'peaceful']
+
+        if valence is not None and 'happy' not in tags and 'sad' not in tags:
             if valence >= 0.7:
-                tags.append('happy')
-                tags.append('uplifting')
+                tags += ['happy', 'uplifting']
             elif valence <= 0.3:
-                tags.append('sad')
-                tags.append('melancholic')
-        
-        # Danceability-based tags
-        if danceability >= 0.7:
-            tags.append('dance')
-            tags.append('groovy')
-        
-        # BPM-based tags
-        if bpm >= 140:
+                tags += ['sad', 'melancholic']
+
+        if danceability is not None and danceability >= 0.7:
+            tags += ['dance', 'groovy']
+
+        if bpm is not None and bpm >= 140:
             tags.append('fast')
-        elif bpm <= 80:
+        elif bpm is not None and bpm <= 80:
             tags.append('slow')
-        
-        # Key-based tags
-        if key_scale == 'minor':
-            if 'happy' not in tags:
-                tags.append('moody')
-        
-        # Combination tags
-        if arousal >= 0.7 and bpm >= 120:
+
+        if features.get('keyScale') == 'minor' and 'happy' not in tags:
+            tags.append('moody')
+
+        if arousal is not None and bpm is not None and arousal >= 0.7 and bpm >= 120:
             tags.append('workout')
-        if arousal <= 0.4 and valence <= 0.4:
+        if arousal is not None and valence is not None and arousal <= 0.4 and valence <= 0.4:
             tags.append('atmospheric')
-        if arousal <= 0.3 and bpm <= 90:
+        if arousal is not None and bpm is not None and arousal <= 0.3 and bpm <= 90:
             tags.append('chill')
-        if mood_aggressive is not None and mood_aggressive >= 0.5 and bpm >= 120:
+        if mood_aggressive is not None and bpm is not None and mood_aggressive >= 0.5 and bpm >= 120:
             tags.append('intense')
-        
-        return list(set(tags))[:12]  # Dedupe and limit
+
+        return list(dict.fromkeys(tags))[:12]
 
 
-# Global analyzer instance for worker processes (initialized per-process)
+# The analyzer of this worker process, built by _init_worker_process.
 _process_analyzer = None
+
 
 def _pool_health_check():
     """No-op function for pool health checks (lambdas can't be pickled with spawn mode)."""
     return True
 
 
-def _validate_track_in_process(args: Tuple[str, str]) -> Tuple[str, dict]:
-    """Lightweight validation -- file existence and size only.
-
-    Full Essentia decode happens during analysis. If a file passes this check
-    but fails decode, the analysis retry mechanism handles it (MAX_RETRIES=3
-    then permanently_failed). Node.js already runs a 16-byte header check
-    before queuing to Python.
+def _init_worker_process(musicnn_server=None):
     """
-    track_id, file_path = args
-    full_path = os.path.join(MUSIC_PATH, file_path.replace('\\', '/'))
+    Initialize the analyzer for a worker process. ``musicnn_server`` is the main
+    process's MusiCNN GPU session, when it has one.
 
-    if not os.path.exists(full_path):
-        return (track_id, {'valid': False, 'error': 'File not found'})
-
-    if os.path.getsize(full_path) == 0:
-        return (track_id, {'valid': False, 'error': 'Empty file (0 bytes)'})
-
-    return (track_id, {'valid': True})
-
-def _init_worker_process():
-    """
-    Initialize the analyzer for a worker process.
-    
-    If model loading fails, the analyzer will fall back to Standard mode.
-    This prevents worker crashes from breaking the entire process pool.
+    If model loading fails, the worker stays up and every track it is given fails with
+    the reason (retried), rather than crashing the pool.
     """
     global _process_analyzer
     try:
-        _process_analyzer = AudioAnalyzer()
-        mode = "Enhanced" if _process_analyzer.enhanced_mode else "Standard"
-        logger.info(f"Worker process {os.getpid()} initialized with analyzer ({mode} mode)")
+        _process_analyzer = AudioAnalyzer(musicnn_server)
+        state = "models ready" if _process_analyzer.enhanced_mode else f"cannot analyse: {_process_analyzer.models_error}"
+        logger.info(f"Worker process {os.getpid()} initialized ({state})")
     except Exception as e:
-        logger.error(f"Worker initialization error: {e}")
-        logger.error("This worker will not be able to process tracks.")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        # Re-raise to kill this worker - better than silent failures
+        logger.exception(f"Worker initialization error, this worker cannot process tracks: {e}")
         raise
 
 def _analyze_track_in_process(args: Tuple[str, str]) -> Tuple[str, str, Dict[str, Any]]:
@@ -1128,34 +717,31 @@ def _analyze_track_in_process(args: Tuple[str, str]) -> Tuple[str, str, Dict[str
     Analyze a single track in a worker process.
     Returns (track_id, file_path, features_dict or error_dict)
     """
-    global _process_analyzer
     track_id, file_path = args
-    
+
     try:
-        # Ensure path is properly decoded (Issue #6 fix)
         if isinstance(file_path, bytes):
             file_path = file_path.decode('utf-8', errors='replace')
-        
+
         # Normalize path separators (Windows paths -> Unix)
         normalized_path = file_path.replace('\\', '/')
         full_path = os.path.join(MUSIC_PATH, normalized_path)
-        
+
         # Use os.fsencode/fsdecode for filesystem-safe encoding
         try:
             full_path = os.fsdecode(os.fsencode(full_path))
         except (UnicodeError, AttributeError):
             return (track_id, file_path, {'_error': 'Invalid characters in file path'})
-        
+
         if not os.path.exists(full_path):
             return (track_id, file_path, {'_error': 'File not found'})
 
         if os.path.getsize(full_path) == 0:
             return (track_id, file_path, {'_error': 'Empty file (0 bytes) - likely incomplete download'})
 
-        # Run analysis
         features = _process_analyzer.analyze(full_path)
         return (track_id, file_path, features)
-        
+
     except UnicodeDecodeError as e:
         logger.error(f"UTF-8 decoding error for track {track_id}: {e}")
         return (track_id, file_path, {'_error': f'UTF-8 encoding error: {e}'})
@@ -1165,9 +751,7 @@ def _analyze_track_in_process(args: Tuple[str, str]) -> Tuple[str, str, Dict[str
 
 
 class AnalysisWorker:
-    """Worker that processes audio analysis jobs from Redis queue using parallel processing"""
-    
-    IDLE_SHUTDOWN_CYCLES = 10  # Shut down pool after this many empty cycles (~50s at 5s interval)
+    """Takes audio analysis jobs from a Redis queue and runs them on a pool of worker processes."""
 
     def __init__(self):
         self.redis = redis.from_url(REDIS_URL)
@@ -1175,16 +759,56 @@ class AnalysisWorker:
         self.running = False
         self.executor = None
         self.pool_active = False
-        self.scan_executor = None  # Separate lightweight pool for scan validation
         self.consecutive_empty = 0
+        self._restarting = False
         self.is_paused = False  # Enrichment control: pause state
         self.pubsub = None  # Redis pub/sub for control signals
         self._last_work_time = time.time()
         self._pending_resize: int | None = None
         self._pending_resize_time: float = 0.0
-        self._last_perm_failed_count: int | None = None
+        self._in_flight: Dict[Any, Tuple[Dict[str, Any], float]] = {}
+        self._gpu_server = None
+        self.musicnn_server = self._start_musicnn_server()
         self._setup_control_channel()
-    
+
+    def _start_musicnn_server(self):
+        """With "GPU for audio analysis" on, one GPU session here runs MusiCNN for every
+        worker; the settings page is told whether it got the GPU."""
+        if not (GPU_ANALYSIS and ML_MODELS_AVAILABLE):
+            _record_gpu_provider(False)
+            return None
+        try:
+            from musicnn_onnx import ANSWERS_FILE, MIN_COSINE, MusicnnBody, MusicnnServer, embedding_cosine
+            body = MusicnnBody(MODEL_DIR, use_gpu=True)
+            if not body.on_gpu:
+                logger.warning("GPU for audio analysis is on but ONNX Runtime has no CUDA provider here; running on CPU")
+                _record_gpu_provider(False)
+                return None
+            # The GPU must answer as Essentia does, checked on this card and driver at every start.
+            cosine = embedding_cosine(body.run, os.path.join(MODEL_DIR, ANSWERS_FILE))
+            if cosine < MIN_COSINE:
+                logger.error(f"MusiCNN on the GPU answers off Essentia's (cosine {cosine:.7f} < {MIN_COSINE}); running on CPU")
+                _record_gpu_provider(False)
+                return None
+            logger.info(f"MusiCNN GPU session checked against Essentia's answers: cosine {cosine:.7f}")
+            server = MusicnnServer(body)
+            self._gpu_server = server
+        except Exception as e:
+            logger.error(f"MusiCNN GPU session failed, running on CPU: {e}")
+            _record_gpu_provider(False)
+            return None
+        _record_gpu_provider(True)
+        logger.info("MusiCNN runs on the GPU in the main process for every worker")
+        return server.address
+
+    def _new_pool(self) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(
+            max_workers=NUM_WORKERS,
+            initializer=_init_worker_process,
+            initargs=(self.musicnn_server,),
+            max_tasks_per_child=50,
+        )
+
     def _setup_control_channel(self):
         """Subscribe to control channel for pause/resume/stop signals"""
         try:
@@ -1194,7 +818,7 @@ class AnalysisWorker:
         except Exception as e:
             logger.warning(f"Failed to subscribe to control channel: {e}")
             self.pubsub = None
-    
+
     def _is_gate_closed(self) -> bool:
         """Check the synchronous Redis gate key set by Node.js.
         Returns True if Python should NOT process work.
@@ -1207,12 +831,10 @@ class AnalysisWorker:
                     self.is_paused = True
                     logger.info("Gate closed by Node.js -- pausing")
                 return True
-            else:
-                if self.is_paused:
-                    # Gate is open but we're still paused -- Node.js has resumed
-                    self.is_paused = False
-                    logger.info("Gate opened by Node.js -- resuming")
-                return False
+            if self.is_paused:
+                self.is_paused = False
+                logger.info("Gate opened by Node.js -- resuming")
+            return False
         except Exception:
             return False
 
@@ -1220,18 +842,17 @@ class AnalysisWorker:
         """Check for pause/resume/stop/set_workers control signals (non-blocking)"""
         if not self.pubsub:
             return
-        
+
         try:
             message = self.pubsub.get_message(ignore_subscribe_messages=True, timeout=0.001)
             if message and message['type'] == 'message':
                 data = message['data'].decode('utf-8') if isinstance(message['data'], bytes) else message['data']
-                
+
                 # Try to parse as JSON for structured commands
                 try:
                     cmd = json.loads(data)
                     if isinstance(cmd, dict) and cmd.get('command') == 'set_workers':
-                        new_count = int(cmd.get('count', NUM_WORKERS))
-                        new_count = max(1, min(8, new_count))
+                        new_count = _clamp_workers(int(cmd.get('count', NUM_WORKERS)))
                         if new_count != NUM_WORKERS:
                             self._pending_resize = new_count
                             self._pending_resize_time = time.time()
@@ -1239,10 +860,10 @@ class AnalysisWorker:
                         return
                 except (json.JSONDecodeError, ValueError):
                     pass  # Not JSON, try as plain string
-                
+
                 # Handle plain string signals (pause/resume/stop)
                 logger.info(f"Received control signal: {data}")
-                
+
                 if data == 'pause':
                     self.is_paused = True
                     logger.info("Audio analysis PAUSED")
@@ -1254,7 +875,7 @@ class AnalysisWorker:
                     logger.info("Audio analysis STOPPING (graceful shutdown)")
         except Exception as e:
             logger.warning(f"Error checking control signals: {e}")
-    
+
     def _apply_pending_resize(self):
         """Apply buffered resize if debounce period has elapsed."""
         if self._pending_resize is None:
@@ -1272,32 +893,25 @@ class AnalysisWorker:
         Gracefully completes in-flight work before resizing.
         """
         global NUM_WORKERS
-        
+
         if new_count == NUM_WORKERS:
             logger.info(f"Worker count unchanged at {new_count}")
             return
-        
+
         logger.info(f"Resizing worker pool: {NUM_WORKERS} -> {new_count} workers")
-        
-        old_executor = self.executor
         NUM_WORKERS = new_count
-        
-        # Create new pool first
-        self.executor = ProcessPoolExecutor(
-            max_workers=NUM_WORKERS,
-            initializer=_init_worker_process,
-            **_pool_recycle_kwargs(50),
-        )
-        
-        # Gracefully shutdown old pool (wait for in-flight work)
-        if old_executor:
-            try:
-                old_executor.shutdown(wait=True)
-            except Exception as e:
-                logger.warning(f"Error shutting down old pool: {e}")
-        
+        if not self.pool_active:
+            return
+
+        # Jobs already running finish on the old pool and are collected as usual.
+        old_executor = self.executor
+        self.executor = self._new_pool()
+        try:
+            old_executor.shutdown(wait=False)
+        except Exception as e:
+            logger.warning(f"Error shutting down old pool: {e}")
         logger.info(f"Worker pool resized to {NUM_WORKERS} workers")
-    
+
     def _check_pool_health(self) -> bool:
         """
         Check if the process pool is still healthy.
@@ -1305,19 +919,15 @@ class AnalysisWorker:
         """
         if self.executor is None:
             return False
-        
-        # Check if pool is explicitly marked as broken
         if hasattr(self.executor, '_broken') and self.executor._broken:
             return False
-        
-        # Try a no-op submission to verify pool works
         try:
             future = self.executor.submit(_pool_health_check)
             result = future.result(timeout=5)
             return result is True
         except Exception:
             return False
-    
+
     def _ensure_pool(self):
         """Lazily start or verify the process pool is running."""
         if self.pool_active and self.executor is not None:
@@ -1328,12 +938,10 @@ class AnalysisWorker:
                 self.executor.shutdown(wait=False)
             except Exception:
                 pass
+        if self.musicnn_server is None:
+            self.musicnn_server = self._start_musicnn_server()
         logger.info(f"Starting worker pool with {NUM_WORKERS} processes...")
-        self.executor = ProcessPoolExecutor(
-            max_workers=NUM_WORKERS,
-            initializer=_init_worker_process,
-            **_pool_recycle_kwargs(50),
-        )
+        self.executor = self._new_pool()
         self.pool_active = True
         logger.info(f"Worker pool started ({NUM_WORKERS} workers)")
 
@@ -1348,13 +956,11 @@ class AnalysisWorker:
             logger.warning(f"Error during pool shutdown: {e}")
         self.executor = None
         self.pool_active = False
-        # Also shut down scan pool when idle
-        if self.scan_executor:
-            try:
-                self.scan_executor.shutdown(wait=False)
-            except Exception:
-                pass
-            self.scan_executor = None
+        # The GPU session goes with the workers it serves, so an idle analyzer holds no GPU memory.
+        if self._gpu_server is not None:
+            self._gpu_server.close()
+            self._gpu_server = None
+        self.musicnn_server = None
         gc.collect()
         # Force glibc to return freed pages to OS (Python/PyTorch hold RSS otherwise)
         try:
@@ -1364,227 +970,22 @@ class AnalysisWorker:
             pass
         logger.info("Worker pool shut down (will restart when work arrives)")
 
-    def _recreate_pool(self):
-        """
-        Safely terminate the broken pool and create a new one.
-        This is the critical recovery mechanism for Issue #21.
-        """
-        logger.warning("Recreating process pool due to broken workers...")
+    def _drop_pool(self):
+        """Kill a broken or stuck pool. The next job starts a fresh one, so an analyzer that is finishing up
+        to restart starts none."""
+        logger.warning("Killing the process pool: a worker died or is stuck")
 
-        # Attempt graceful shutdown first
         if self.executor:
+            # A stuck worker would run on after shutdown(wait=False); stop it outright. The pool's
+            # workers are this process's only multiprocessing children.
+            for process in multiprocessing.active_children():
+                process.kill()
             try:
                 self.executor.shutdown(wait=False)
             except Exception as e:
                 logger.warning(f"Error during executor shutdown: {e}")
             self.executor = None
             self.pool_active = False
-
-        # Small delay to allow cleanup
-        time.sleep(2)
-
-        # Create fresh pool
-        self._ensure_pool()
-        logger.info(f"Process pool recreated with {NUM_WORKERS} workers")
-    
-    def _cleanup_stale_processing(self):
-        """Reset tracks stuck in 'processing' status (from crashed workers).
-        Checks for existing embeddings first to avoid resetting completed work.
-        """
-        cursor = self.db.get_cursor()
-        try:
-            # First: recover tracks that have embeddings but are stuck in processing
-            cursor.execute("""
-                UPDATE "Track" t
-                SET
-                    "analysisStatus" = 'completed',
-                    "analysisError" = NULL,
-                    "analysisStartedAt" = NULL
-                FROM track_embeddings te
-                WHERE t.id = te.track_id
-                AND t."analysisStatus" = 'processing'
-                AND (
-                    (t."analysisStartedAt" IS NOT NULL AND t."analysisStartedAt" < NOW() - INTERVAL '%s minutes')
-                    OR
-                    (t."analysisStartedAt" IS NULL AND t."updatedAt" < NOW() - INTERVAL '%s minutes')
-                )
-                RETURNING t.id
-            """, (STALE_PROCESSING_MINUTES, STALE_PROCESSING_MINUTES))
-
-            recovered_ids = cursor.fetchall()
-            recovered_count = len(recovered_ids)
-
-            if recovered_count > 0:
-                logger.info(f"Recovered {recovered_count} stale tracks that already had embeddings")
-
-            # Quarantine tracks that crashed/stalled MAX_RETRIES times: a worker
-            # that dies on a native fault (e.g. a SIGSEGV the pre-decode gate did
-            # not catch) leaves the track in 'processing' and never reaches the
-            # normal mark-failed path, so without this it would reset forever.
-            cursor.execute("""
-                UPDATE "Track" t
-                SET
-                    "analysisStatus" = 'failed',
-                    "analysisError" = 'Quarantined after repeated worker crash/stall',
-                    "analysisStartedAt" = NULL
-                WHERE t."analysisStatus" = 'processing'
-                AND (
-                    (t."analysisStartedAt" IS NOT NULL AND t."analysisStartedAt" < NOW() - INTERVAL '%s minutes')
-                    OR
-                    (t."analysisStartedAt" IS NULL AND t."updatedAt" < NOW() - INTERVAL '%s minutes')
-                )
-                AND COALESCE(t."analysisRetryCount", 0) >= %s
-                AND NOT EXISTS (SELECT 1 FROM track_embeddings te WHERE te.track_id = t.id)
-                RETURNING t.id
-            """, (STALE_PROCESSING_MINUTES, STALE_PROCESSING_MINUTES, MAX_RETRIES))
-
-            quarantined_ids = cursor.fetchall()
-            quarantined_count = len(quarantined_ids)
-            if quarantined_count > 0:
-                logger.warning(f"Quarantined {quarantined_count} stale 'processing' tracks past {MAX_RETRIES} retries (likely repeated worker crash)")
-
-            # Then: reset truly stale tracks (no embedding) back to pending, and
-            # count the crash as a retry so a poison file can't loop forever.
-            cursor.execute("""
-                UPDATE "Track" t
-                SET
-                    "analysisStatus" = 'pending',
-                    "analysisStartedAt" = NULL,
-                    "analysisRetryCount" = COALESCE(t."analysisRetryCount", 0) + 1
-                WHERE t."analysisStatus" = 'processing'
-                AND (
-                    (t."analysisStartedAt" IS NOT NULL AND t."analysisStartedAt" < NOW() - INTERVAL '%s minutes')
-                    OR
-                    (t."analysisStartedAt" IS NULL AND t."updatedAt" < NOW() - INTERVAL '%s minutes')
-                )
-                AND COALESCE(t."analysisRetryCount", 0) < %s
-                AND NOT EXISTS (SELECT 1 FROM track_embeddings te WHERE te.track_id = t.id)
-                RETURNING t.id
-            """, (STALE_PROCESSING_MINUTES, STALE_PROCESSING_MINUTES, MAX_RETRIES))
-
-            reset_ids = cursor.fetchall()
-            reset_count = len(reset_ids)
-
-            if reset_count > 0:
-                logger.info(f"Reset {reset_count} stale 'processing' tracks back to 'pending'")
-
-            self.db.commit()
-        except Exception as e:
-            logger.error(f"Failed to cleanup stale tracks: {e}")
-            self.db.rollback()
-        finally:
-            cursor.close()
-    
-    def _retry_failed_tracks(self):
-        """Retry failed tracks that haven't exceeded max retries.
-        Recovers tracks that have embeddings but are incorrectly marked failed.
-        """
-        cursor = self.db.get_cursor()
-        try:
-            # First: recover tracks marked failed that actually have embeddings
-            cursor.execute("""
-                UPDATE "Track" t
-                SET
-                    "analysisStatus" = 'completed',
-                    "analysisError" = NULL,
-                    "analysisStartedAt" = NULL
-                FROM track_embeddings te
-                WHERE t.id = te.track_id
-                AND t."analysisStatus" = 'failed'
-                RETURNING t.id
-            """)
-
-            recovered_ids = cursor.fetchall()
-            if len(recovered_ids) > 0:
-                logger.info(f"Recovered {len(recovered_ids)} 'failed' tracks that already had embeddings")
-
-            # Then: retry truly failed tracks (no embedding)
-            cursor.execute("""
-                UPDATE "Track" t
-                SET
-                    "analysisStatus" = 'pending',
-                    "analysisError" = NULL,
-                    "analysisRetryCount" = COALESCE(t."analysisRetryCount", 0)
-                WHERE t."analysisStatus" = 'failed'
-                AND COALESCE(t."analysisRetryCount", 0) < %s
-                AND NOT EXISTS (SELECT 1 FROM track_embeddings te WHERE te.track_id = t.id)
-                RETURNING t.id
-            """, (MAX_RETRIES,))
-            
-            retry_ids = cursor.fetchall()
-            retry_count = len(retry_ids)
-            
-            if retry_count > 0:
-                logger.info(f"Re-queued {retry_count} failed tracks for retry (max retries: {MAX_RETRIES})")
-            
-            # Also log tracks that have permanently failed
-            cursor.execute("""
-                SELECT COUNT(*) as count
-                FROM "Track"
-                WHERE "analysisStatus" = 'failed'
-                AND COALESCE("analysisRetryCount", 0) >= %s
-            """, (MAX_RETRIES,))
-            
-            perm_failed = cursor.fetchone()
-            perm_failed_count = perm_failed['count'] if perm_failed else 0
-            if perm_failed_count > 0 and perm_failed_count != self._last_perm_failed_count:
-                logger.warning(f"{perm_failed_count} tracks have permanently failed (exceeded {MAX_RETRIES} retries)")
-            self._last_perm_failed_count = perm_failed_count
-            
-            self.db.commit()
-        except Exception as e:
-            logger.error(f"Failed to retry failed tracks: {e}")
-            self.db.rollback()
-        finally:
-            cursor.close()
-    
-    def _run_db_reconciliation(self) -> bool:
-        """
-        Re-push tracks the backend already handed us but whose queue entry was lost.
-
-        Only 'queued' rows qualify. A 'queued' row is by definition one the backend
-        selected, checked against the corrupt-file gate, and pushed -- so putting it
-        back on the queue is genuine recovery.
-
-        This used to select 'pending' as well, which quietly made this method a second,
-        independent producer that never consulted "scanStatus". The effect was that the
-        file-validation phase gated nothing at all: every batch this analyzer ran came
-        from here rather than from the queue the validated tracks are pushed to, so a
-        corrupt file reached Essentia anyway and stalled a worker for the full decode
-        timeout. Pending tracks are the backend's to hand out, not ours to take.
-        """
-        if self.is_paused or self._is_gate_closed():
-            return False
-
-        cursor = self.db.get_cursor()
-        try:
-            cursor.execute("""
-                SELECT id, "filePath"
-                FROM "Track"
-                WHERE "analysisStatus" = 'queued'
-                AND COALESCE("analysisRetryCount", 0) < %s
-                ORDER BY "fileModified" DESC
-                LIMIT %s
-            """, (MAX_RETRIES, BATCH_SIZE))
-
-            tracks = cursor.fetchall()
-            if tracks:
-                logger.info(f"DB reconciliation found {len(tracks)} queued tracks, pushing to queue...")
-                pipe = self.redis.pipeline()
-                for t in tracks:
-                    pipe.rpush(ANALYSIS_QUEUE, json.dumps({
-                        'trackId': t['id'],
-                        'filePath': t['filePath']
-                    }))
-                pipe.execute()
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"DB reconciliation failed: {e}")
-            self.db.rollback()
-            return False
-        finally:
-            cursor.close()
 
     def start(self):
         """Start processing jobs with BRPOP-driven event loop"""
@@ -1594,69 +995,38 @@ class AnalysisWorker:
         logger.info("Starting Audio Analysis Worker (BRPOP MODE)")
         logger.info("=" * 60)
         logger.info(f"  Music path: {MUSIC_PATH}")
-        logger.info(f"  Batch size: {BATCH_SIZE}")
         logger.info(f"  CPU cores: {cpu_count}")
         logger.info(f"  Worker processes: {NUM_WORKERS}")
         logger.info(f"  BRPOP timeout: {BRPOP_TIMEOUT}s")
         logger.info(f"  Model idle timeout: {MODEL_IDLE_TIMEOUT}s")
-        logger.info(f"  Max retries per track: {MAX_RETRIES}")
-        logger.info(f"  Stale processing timeout: {STALE_PROCESSING_MINUTES} minutes")
         logger.info(f"  Essentia available: {ESSENTIA_AVAILABLE}")
-        logger.info(f"  ML models on disk: {TF_MODELS_AVAILABLE}")
-        logger.info(f"  Worker pool: LAZY (starts on first job)")
+        logger.info(f"  ML models on disk: {ML_MODELS_AVAILABLE}")
+        logger.info("  Worker pool: LAZY (starts on first job)")
 
         self.db.connect()
         self.running = True
 
-        # Reset "queued" tracks to "pending" -- Redis queue may have been lost during restart
-        cursor = self.db.get_cursor()
-        try:
-            cursor.execute("""
-                UPDATE "Track"
-                SET "analysisStatus" = 'pending'
-                WHERE "analysisStatus" = 'queued'
-            """)
-            queued_reset = cursor.rowcount
-            self.db.commit()
-            if queued_reset > 0:
-                logger.info(f"Reset {queued_reset} queued tracks to pending (Redis queue lost on restart)")
-        except Exception as e:
-            logger.error(f"Failed to reset queued tracks: {e}")
-            self.db.rollback()
-        finally:
-            cursor.close()
-
-        # Debounce stale cleanup -- skip if ran recently (prevents crash-loop inflation)
-        CLEANUP_DEBOUNCE_KEY = 'audio:cleanup:last_run'
-        last_cleanup = self.redis.get(CLEANUP_DEBOUNCE_KEY)
-        cleanup_debounce_seconds = 120
-
-        skip_cleanup = False
-        if last_cleanup:
-            elapsed = time.time() - float(last_cleanup)
-            if elapsed < cleanup_debounce_seconds:
-                logger.info(f"Skipping startup cleanup (ran {elapsed:.0f}s ago, debounce {cleanup_debounce_seconds}s)")
-                skip_cleanup = True
-
-        if not skip_cleanup:
-            logger.info("Cleaning up stale processing tracks...")
-            self._cleanup_stale_processing()
-            self.redis.set(CLEANUP_DEBOUNCE_KEY, str(time.time()), ex=cleanup_debounce_seconds)
-
-        logger.info("Checking for failed tracks to retry...")
-        self._retry_failed_tracks()
-
-        # Check for any already-queued work before entering BRPOP loop
-        self._run_db_reconciliation()
-
+        # A claim from before a crash expires and comes around again; a lost queue entry is
+        # re-offered by the next dispatch.
         try:
             while self.running:
                 try:
-                    # Publish heartbeat
                     try:
                         self.redis.set("audio:worker:heartbeat", str(int(time.time() * 1000)))
-                    except Exception:
+                    except Exception:  # the next pass sets it again
                         pass
+
+                    # The GPU runtime is put on the path before Python starts, so a changed switch is
+                    # applied by restarting: take nothing new, finish what is running, then exit for the
+                    # supervisor (or Docker) to start this process again.
+                    if not self._restarting and gpu_switch.restart_needed('analysis'):
+                        logger.info("GPU switch changed: finishing running tracks, then restarting to apply it")
+                        self._restarting = True
+                    if self._restarting:
+                        self._collect(timeout=1.0)
+                        if not self._in_flight:
+                            self.running = False
+                        continue
 
                     # Check for control signals (pause/resume/stop/set_workers)
                     self._check_control_signals()
@@ -1665,54 +1035,34 @@ class AnalysisWorker:
                     self._is_gate_closed()
 
                     if self.is_paused:
-                        logger.debug("Audio analysis paused, waiting for resume signal...")
-                        time.sleep(1)
+                        # Finish what is running; take nothing new.
+                        self._collect(timeout=1.0)
+                        if not self._in_flight:
+                            time.sleep(1)
                         continue
 
-                    # Check scan validation queue (non-blocking, 1s timeout)
-                    self.process_scan_queue()
+                    took = self._fill()
+                    self._collect(timeout=1.0)
 
-                    # BRPOP-driven: blocks until work arrives or timeout
-                    has_work = self.process_batch_parallel()
-
-                    if has_work:
+                    if took or self._in_flight:
                         self.consecutive_empty = 0
                         self._last_work_time = time.time()
                     else:
-                        # BRPOP timed out -- run periodic maintenance
                         self.consecutive_empty += 1
-                        found_work = self._run_db_reconciliation()
-
-                        # Unload models when idle: immediately if DB has no pending
-                        # work, or after MODEL_IDLE_TIMEOUT as a fallback
-                        if self.pool_active and not found_work:
-                            idle_seconds = time.time() - self._last_work_time
-                            if idle_seconds >= MODEL_IDLE_TIMEOUT:
-                                self._shutdown_pool()
-                                logger.info(f"Models idle for {idle_seconds:.0f}s, pool shut down")
-                            elif idle_seconds >= BRPOP_TIMEOUT:
-                                # No pending work in DB and queue empty -- unload now
-                                self._shutdown_pool()
-                                logger.info("All work complete, pool shut down (will restart when work arrives)")
-
-                        # Periodic cleanup every IDLE_SHUTDOWN_CYCLES timeouts
-                        if self.consecutive_empty >= self.IDLE_SHUTDOWN_CYCLES:
-                            self._cleanup_stale_processing()
-                            self.redis.set('audio:cleanup:last_run', str(time.time()), ex=120)
-                            self._retry_failed_tracks()
-                            self.consecutive_empty = 0
+                        idle_seconds = time.time() - self._last_work_time
+                        if self.pool_active and MODEL_IDLE_TIMEOUT > 0 and idle_seconds >= MODEL_IDLE_TIMEOUT:
+                            self._shutdown_pool()
+                            logger.info(f"Idle for {idle_seconds:.0f}s, pool shut down (restarts when work arrives)")
 
                 except KeyboardInterrupt:
                     logger.info("Shutdown requested")
                     self.running = False
                 except BrokenProcessPool:
-                    logger.error("BrokenProcessPool detected, recreating pool...")
-                    self._recreate_pool()
-                    self._cleanup_stale_processing()
+                    logger.error("BrokenProcessPool detected, dropping the pool")
+                    self._drop_pool()
                     continue
                 except Exception as e:
-                    logger.error(f"Worker error: {e}")
-                    traceback.print_exc()
+                    logger.exception(f"Worker error: {e}")
                     self.consecutive_empty += 1
 
                     if self.consecutive_empty >= 5:
@@ -1721,10 +1071,8 @@ class AnalysisWorker:
                             self.db.close()
                             time.sleep(2)
                             self.db.connect()
-                            self._cleanup_stale_processing()
-                            self._retry_failed_tracks()
                             if self.pool_active and not self._check_pool_health():
-                                self._recreate_pool()
+                                self._drop_pool()
                         except Exception as reconnect_err:
                             logger.error(f"Recovery failed: {reconnect_err}")
                         self.consecutive_empty = 0
@@ -1737,170 +1085,134 @@ class AnalysisWorker:
                 logger.info("Control channel closed")
             self.db.close()
             logger.info("Worker stopped")
-    
-    def process_batch_parallel(self) -> bool:
-        """Process a batch of pending tracks in parallel.
 
-        Uses BRPOP to wait for the first job (blocking, zero CPU),
-        then drains remaining queued jobs up to BATCH_SIZE.
-
-        Returns:
-            True if there was work to process, False if BRPOP timed out
-        """
-        if self._is_gate_closed():
-            return False
-
-        result = self.redis.brpop(ANALYSIS_QUEUE, timeout=BRPOP_TIMEOUT)
-
-        if result is None:
-            return False
-
-        _, first_job_data = result
-        first_job = json.loads(first_job_data)
-        queued_jobs = [(first_job['trackId'], first_job.get('filePath', ''))]
-
-        while len(queued_jobs) < BATCH_SIZE:
-            job_data = self.redis.lpop(ANALYSIS_QUEUE)
-            if not job_data:
+    def _take_jobs(self, room: int, block: bool) -> List[Dict[str, Any]]:
+        """Up to `room` jobs, oldest first; waits up to BRPOP_TIMEOUT for the first only when `block`."""
+        jobs: List[Dict[str, Any]] = []
+        if room <= 0 or self._is_gate_closed():
+            return jobs
+        if block:
+            result = self.redis.blpop(ANALYSIS_QUEUE, timeout=BRPOP_TIMEOUT)
+            if result is None:
+                return jobs
+            jobs.append(json.loads(result[1]))
+        while len(jobs) < room:
+            data = self.redis.lpop(ANALYSIS_QUEUE)
+            if not data:
                 break
-            job = json.loads(job_data)
-            queued_jobs.append((job['trackId'], job.get('filePath', '')))
+            jobs.append(json.loads(data))
+        return jobs
 
-        self._process_tracks_parallel(queued_jobs)
-        return True
-    
-    def _mark_track_processing(self, track_id: str) -> bool:
-        """Claim a single track just before its worker starts.
-
-        The "scanStatus" condition is the corrupt-file gate. Every route into the Redis
-        queue converges on this claim, so this is the one place that can guarantee a
-        file the backend rejected never reaches Essentia. That matters because a corrupt
-        file which gets past it wedges a worker for the full 180-second decode timeout,
-        and then does it twice more before the retry ceiling condemns it.
-
-        Returns True if the track was claimed. A track that is not scan-valid is handed
-        back to the backend as 'pending' rather than silently dropped, so it gets
-        re-validated instead of sitting at 'queued' with nobody willing to take it.
-        """
+    def _current_claims(self, jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The jobs whose claim is still their record's open one. A job whose claim was re-issued (a lease
+        re-offer, a wipe, a restart) is dropped unanalysed: its report would be refused as stale."""
+        claims = {}
+        for job in jobs:
+            match = CLAIM_IN_JOB_ID.search(job.get('jobId') or '')
+            if match:
+                claims[job['trackId']] = (int(match.group(1)), int(match.group(2)))
+        if not claims:
+            return jobs
         cursor = self.db.get_cursor()
         try:
-            cursor.execute("""
-                UPDATE "Track"
-                SET "analysisStatus" = 'processing',
-                    "analysisStartedAt" = %s
-                WHERE id = %s
-                  AND "analysisStatus" IN ('pending', 'queued')
-                  AND "scanStatus" = 'valid'
-            """, (datetime.now(timezone.utc), track_id))
-            claimed = cursor.rowcount > 0
-
-            if not claimed:
-                # Either another worker claimed it first (its status is now 'processing'),
-                # or it never passed validation. Only the second case is ours to correct,
-                # and the status condition below is what tells the two apart.
-                cursor.execute("""
-                    UPDATE "Track"
-                    SET "analysisStatus" = 'pending'
-                    WHERE id = %s
-                      AND "analysisStatus" = 'queued'
-                      AND "scanStatus" <> 'valid'
-                """, (track_id,))
-                if cursor.rowcount > 0:
-                    logger.warning(
-                        f"Track {track_id} reached the analysis queue without passing "
-                        f"file validation; returned to the backend for re-validation"
-                    )
-
-            self.db.commit()
-            return claimed
-        except Exception as e:
-            logger.error(f"Failed to mark track {track_id} as processing: {e}")
-            self.db.rollback()
-            return False
+            cursor.execute(
+                'SELECT "trackId", attempt, redelivered FROM "TrackStage" '
+                'WHERE stage = %s AND status = %s AND "trackId" = ANY(%s)',
+                ('analysis', 'working', list(claims)),
+            )
+            open_claims = {row['trackId']: (row['attempt'], row['redelivered']) for row in cursor.fetchall()}
         finally:
             cursor.close()
+            self.db.commit()
+        current = []
+        for job in jobs:
+            claim = claims.get(job['trackId'])
+            if claim is None or open_claims.get(job['trackId']) == claim:
+                current.append(job)
+            else:
+                logger.info(f"Skipped {job['trackId']}: claim {job.get('jobId')} was re-issued")
+        return current
 
-    def _process_tracks_parallel(self, tracks: List[Tuple[str, str]]):
-        """Process multiple tracks in parallel using the process pool"""
-        if not tracks:
-            return
-
-        self._ensure_pool()
-        logger.info(f"Processing batch of {len(tracks)} tracks with {NUM_WORKERS} workers...")
-
-        # Mark tracks processing individually as they are submitted
-        start_time = time.time()
-        completed = 0
-        failed = 0
-
-        futures = {}
-        for t in tracks:
-            if not self._mark_track_processing(t[0]):
-                logger.debug(f"Track {t[0]} already claimed, skipping")
-                continue
-            futures[self.executor.submit(_analyze_track_in_process, t)] = t
-
+    def _fill(self) -> bool:
+        """Top the pool up to NUM_WORKERS jobs the moment a slot frees; no batch waits on its slowest track."""
+        jobs = self._take_jobs(NUM_WORKERS - len(self._in_flight), block=not self._in_flight)
+        if not jobs:
+            return False
         try:
-            for future in as_completed(futures, timeout=900):
-                try:
-                    track_id, file_path, features = future.result(timeout=180)
+            jobs = self._current_claims(jobs)
+        except Exception:
+            # Back to the head of the list in their order, so a failed lookup loses no job.
+            self.redis.lpush(ANALYSIS_QUEUE, *[json.dumps(job) for job in reversed(jobs)])
+            raise
+        if not jobs:
+            return True
+        self._ensure_pool()
+        for job in jobs:
+            future = self.executor.submit(_analyze_track_in_process, (job['trackId'], job.get('filePath', '')))
+            self._in_flight[future] = (job, time.time())
+        return True
 
-                    if features.get('_error'):
-                        self._save_failed(track_id, features['_error'])
-                        failed += 1
-                        logger.error(f"✗ Failed: {file_path} - {features['_error']}")
-                    else:
-                        self._save_results(track_id, file_path, features)
-                        completed += 1
-                        logger.info(f"✓ Completed: {file_path}")
-                except BrokenProcessPool:
-                    # Worker died (OOM, segfault) -- not the track's fault
-                    track_info = futures[future]
-                    self._save_failed(track_info[0], "Worker process died (OOM/crash)", is_timeout=True)
-                    failed += 1
-                    logger.error(f"✗ Worker death (no penalty): {track_info[1]}")
-                except Exception as e:
-                    track_info = futures[future]
-                    is_pool_death = "abruptly terminated" in str(e) or "broken" in str(e).lower()
-                    self._save_failed(track_info[0], f"Timeout or error: {e}", is_timeout=is_pool_death)
-                    failed += 1
-                    if is_pool_death:
-                        logger.error(f"✗ Worker death (no penalty): {track_info[1]} - {e}")
-                    else:
-                        logger.error(f"✗ Failed: {track_info[1]} - {e}")
+    def _collect(self, timeout: float):
+        """Save every finished job. A job past JOB_TIMEOUT_S means a stuck worker: the pool is killed and its
+        tracks come back through the server's lease, unreported and unpenalised."""
+        if not self._in_flight:
+            return
+        done, _ = wait(list(self._in_flight), timeout=timeout, return_when=FIRST_COMPLETED)
+        broken = False
+        for future in done:
+            job, _ = self._in_flight.pop(future)
+            broken = self._finish(future, job) or broken
+        now = time.time()
+        stuck = any(now - started > JOB_TIMEOUT_S for _, started in self._in_flight.values())
+        if broken or stuck:
+            for future, (job, _) in self._in_flight.items():
+                future.cancel()
+                logger.error(f"✗ {'Pool crash' if broken else 'Stuck worker'} (no penalty): {job.get('filePath', '')}")
+            self._in_flight.clear()
+            self._drop_pool()
+
+    def _finish(self, future, job: Dict[str, Any]) -> bool:
+        """Report one finished job; True when its worker process died."""
+        try:
+            _, file_path, features = future.result()
         except BrokenProcessPool:
-            # Pool broke during iteration -- all remaining futures are innocent
-            logger.error("BrokenProcessPool during batch -- resetting remaining tracks without penalty")
-            for future, track_info in futures.items():
-                if not future.done():
-                    future.cancel()
-                    self._save_failed(track_info[0], "Worker pool crashed (OOM/crash)", is_timeout=True)
-                    failed += 1
-                    logger.error(f"✗ Pool crash (no penalty): {track_info[1]}")
-            self._recreate_pool()
-        except TimeoutError:
-            for future, track_info in futures.items():
-                if not future.done():
-                    future.cancel()
-                    self._save_failed(track_info[0], "Batch timeout: analysis exceeded 15 minutes", is_timeout=True)
-                    failed += 1
-                    logger.error(f"✗ Batch timeout (no penalty): {track_info[1]}")
-            # Restart the pool to evict any stuck worker processes
-            try:
-                self.executor.shutdown(wait=False)
-            except Exception:
-                pass
-            self.executor = None
-            self.pool_active = False
+            logger.error(f"✗ Worker death (no penalty): {job.get('filePath', '')}")
+            return True
+        except Exception as e:
+            self._save_failed(job, f"Analysis error: {e}")
+            logger.error(f"✗ Failed: {job.get('filePath', '')} - {e}")
+            return False
+        if features.get('_error'):
+            self._save_failed(job, features['_error'])
+            logger.error(f"✗ Failed: {file_path} - {features['_error']}")
+        elif self._save_results(job, features):
+            logger.info(f"✓ Completed: {file_path}")
+        return False
 
-        elapsed = time.time() - start_time
-        rate = len(tracks) / elapsed if elapsed > 0 else 0
-        logger.info(f"Batch complete: {completed} succeeded, {failed} failed in {elapsed:.1f}s ({rate:.1f} tracks/sec)")
-    
-    def _save_results(self, track_id: str, file_path: str, features: Dict[str, Any]):
-        """Save analysis results to database and resolve any stale EnrichmentFailure record."""
+    def _save_results(self, job: Dict[str, Any], features: Dict[str, Any]) -> bool:
+        """Save analysis results; False when they could not be written, which is
+        reported as this track's failure. instrumentalness and acousticness are left
+        alone: CLAP is their only writer, and a re-analysis would null them.
+        V/A land in their own raw columns; the server derives the shared pair
+        from both analyzers' raws when it records the answer."""
+        track_id = job['trackId']
+        claim = CLAIM_IN_JOB_ID.search(job.get('jobId') or '')
+        if claim is None:
+            logger.warning(f"Job {job.get('jobId')} for track {track_id} names no claim; not written")
+            return False
         cursor = self.db.get_cursor()
         try:
+            # Written only while this job's claim is the record's open one, held to the commit: a wipe
+            # or a re-offer since the job was taken leaves the track for the job that holds it now.
+            cursor.execute(
+                'SELECT 1 FROM "TrackStage" WHERE "trackId" = %s AND stage = %s AND status = %s'
+                ' AND attempt = %s AND redelivered = %s FOR SHARE',
+                (track_id, 'analysis', 'working', int(claim.group(1)), int(claim.group(2))),
+            )
+            if cursor.fetchone() is None:
+                logger.warning(f"Track {track_id}'s claim {job.get('jobId')} was re-issued before the save; not written")
+                self.db.rollback()
+                return False
             cursor.execute("""
                 UPDATE "Track"
                 SET
@@ -1913,10 +1225,8 @@ class AnalysisWorker:
                     loudness = %s,
                     "dynamicRange" = %s,
                     danceability = %s,
-                    valence = %s,
-                    arousal = %s,
-                    instrumentalness = %s,
-                    acousticness = %s,
+                    "deamValence" = %s,
+                    "deamArousal" = %s,
                     "moodTags" = %s,
                     "essentiaGenres" = %s,
                     "moodHappy" = %s,
@@ -1928,13 +1238,9 @@ class AnalysisWorker:
                     "moodElectronic" = %s,
                     "danceabilityMl" = %s,
                     "analysisMode" = %s,
-                    "analysisStatus" = 'completed',
-                    "analysisStartedAt" = NULL,
                     "analysisVersion" = %s,
-                    "analyzedAt" = %s,
-                    "analysisError" = NULL
-                WHERE id = %s AND "analysisStatus" = 'processing'
-            """, (
+                    "analyzedAt" = now()
+                WHERE id = %s""", (
                 features['bpm'],
                 features['beatsCount'],
                 features['key'],
@@ -1946,8 +1252,6 @@ class AnalysisWorker:
                 features['danceability'],
                 features['valence'],
                 features['arousal'],
-                features['instrumentalness'],
-                features['acousticness'],
                 features['moodTags'],
                 features['essentiaGenres'],
                 features.get('moodHappy'),
@@ -1958,30 +1262,22 @@ class AnalysisWorker:
                 features.get('moodAcoustic'),
                 features.get('moodElectronic'),
                 features.get('danceabilityMl'),
-                features.get('analysisMode', 'standard'),
+                features['analysisMode'],
                 ESSENTIA_VERSION,
-                datetime.now(timezone.utc),
-                track_id
+                track_id,
             ))
             if cursor.rowcount == 0:
-                logger.warning(f"Track {track_id} was reset by cleanup before save completed, skipping")
+                logger.warning(f"Track {track_id} was deleted before the save; not written")
                 self.db.rollback()
-                return
-            # Resolve any stale EnrichmentFailure record from a previous attempt
-            cursor.execute("""
-                UPDATE "EnrichmentFailure"
-                SET resolved = true, "resolvedAt" = %s
-                WHERE "entityType" = 'audio' AND "entityId" = %s AND resolved = false
-            """, (datetime.now(timezone.utc), track_id))
+                return False
 
             self.db.commit()
 
-            # Publish completion event for Node audio completion subscriber
-            # Node subscribes and queues a BullMQ vibe embedding job (enrichment:vibe)
+            # The backend queues the vibe embedding job on this event.
             try:
                 completion_event = json.dumps({
                     "trackId": track_id,
-                    "filePath": file_path,
+                    "jobId": job.get('jobId'),
                     "status": "complete",
                 })
                 self.redis.publish("audio:analysis:complete", completion_event)
@@ -1992,183 +1288,39 @@ class AnalysisWorker:
         except Exception as e:
             logger.error(f"Failed to save results for {track_id}: {e}")
             self.db.rollback()
-        finally:
-            cursor.close()
-    
-    def _save_failed(self, track_id: str, error: str, is_timeout: bool = False):
-        """Mark track as failed.
-
-        If is_timeout=True, this was a batch timeout (innocent bystander) --
-        do NOT increment retryCount. Just reset to 'pending' so it gets
-        requeued without penalty.
-        """
-        cursor = self.db.get_cursor()
-        try:
-            if is_timeout:
-                cursor.execute("""
-                    UPDATE "Track"
-                    SET
-                        "analysisStatus" = 'pending',
-                        "analysisError" = %s,
-                        "analysisStartedAt" = NULL
-                    WHERE id = %s AND "analysisStatus" = 'processing'
-                """, (error[:500], track_id))
-            else:
-                cursor.execute("""
-                    UPDATE "Track"
-                    SET
-                        "analysisStatus" = 'failed',
-                        "analysisError" = %s,
-                        "analysisRetryCount" = COALESCE("analysisRetryCount", 0) + 1
-                    WHERE id = %s AND "analysisStatus" = 'processing'
-                    RETURNING "analysisRetryCount"
-                """, (error[:500], track_id))
-
-            if cursor.rowcount == 0:
-                logger.warning(f"Track {track_id} was reset by cleanup before failure marked, skipping")
-                self.db.rollback()
-                return
-
-            if not is_timeout:
-                result = cursor.fetchone()
-                retry_count = result['analysisRetryCount'] if result else 0
-                if retry_count >= MAX_RETRIES:
-                    logger.warning(f"Track {track_id} has permanently failed after {retry_count} attempts")
-                else:
-                    logger.info(f"Track {track_id} failed (attempt {retry_count}/{MAX_RETRIES}, will retry)")
-            else:
-                logger.info(f"Track {track_id} reset to pending (batch timeout, no penalty)")
-
-            self.db.commit()
-        except Exception as e:
-            logger.error(f"Failed to mark track as failed: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            self.db.rollback()
-        finally:
-            cursor.close()
-
-
-    def _ensure_scan_pool(self):
-        """Ensure the lightweight scan validation pool is running."""
-        if self.scan_executor is None:
-            self.scan_executor = ProcessPoolExecutor(
-                max_workers=2,
-                **_pool_recycle_kwargs(100),
-            )
-
-    def process_scan_queue(self):
-        """Process scan validation requests via a separate lightweight pool (non-blocking)."""
-        if self.is_paused or self._is_gate_closed():
+            self._save_failed(job, f"Saving the results failed: {e}")
             return False
-
-        SCAN_QUEUE = 'audio:scan:queue'
-        raw = self.redis.lpop(SCAN_QUEUE)
-        if raw is None:
-            return False
-
-        jobs = [json.loads(raw)]
-        while len(jobs) < 50:
-            more = self.redis.lpop(SCAN_QUEUE)
-            if not more:
-                break
-            jobs.append(json.loads(more))
-
-        self._ensure_scan_pool()
-        futures = {}
-        for job in jobs:
-            tid = job['trackId']
-            fp = job.get('filePath', '')
-            futures[self.scan_executor.submit(_validate_track_in_process, (tid, fp))] = tid
-
-        cursor = self.db.get_cursor()
-        try:
-            for future in as_completed(futures, timeout=300):
-                try:
-                    track_id, result = future.result(timeout=60)
-                except BrokenProcessPool:
-                    track_id = futures[future]
-                    cursor.execute("""
-                        UPDATE "Track"
-                        SET "scanStatus" = 'pending', "scanError" = NULL
-                        WHERE id = %s
-                    """, (track_id,))
-                    self.db.commit()
-                    logger.error(f"Scan worker died for {track_id}, reset to pending")
-                    continue
-                except Exception as e:
-                    track_id = futures[future]
-                    cursor.execute("""
-                        UPDATE "Track"
-                        SET "scanStatus" = 'pending', "scanError" = NULL
-                        WHERE id = %s
-                    """, (track_id,))
-                    self.db.commit()
-                    logger.error(f"Scan validation error for {track_id}: {e}")
-                    continue
-
-                try:
-                    if result['valid']:
-                        cursor.execute("""
-                            UPDATE "Track"
-                            SET "scanStatus" = 'valid', "scanError" = NULL
-                            WHERE id = %s
-                        """, (track_id,))
-                    else:
-                        cursor.execute("""
-                            UPDATE "Track"
-                            SET "scanStatus" = 'invalid', "scanError" = %s
-                            WHERE id = %s
-                        """, (result['error'][:500], track_id))
-                    self.db.commit()
-                except Exception as db_err:
-                    try:
-                        self.db.rollback()
-                    except Exception:
-                        pass
-                    logger.warning(f"[Scan] DB update failed for {track_id} (will retry via stale cleanup): {db_err}")
-
-            logger.info(f"Scan validation: processed {len(jobs)} tracks")
-        except (BrokenProcessPool, TimeoutError):
-            # Pool crash or timeout -- reset all unfinished scan tracks to pending
-            for future, tid in futures.items():
-                if not future.done():
-                    future.cancel()
-                    cursor.execute("""
-                        UPDATE "Track"
-                        SET "scanStatus" = 'pending', "scanError" = NULL
-                        WHERE id = %s
-                    """, (tid,))
-            self.db.commit()
-            logger.error("Scan pool crash/timeout -- reset remaining tracks to pending")
-            try:
-                if self.scan_executor:
-                    self.scan_executor.shutdown(wait=False)
-            except Exception:
-                pass
-            self.scan_executor = None
-        except Exception as e:
-            logger.error(f"Scan validation failed: {e}")
-            self.db.rollback()
         finally:
             cursor.close()
-
         return True
+
+    def _save_failed(self, job: Dict[str, Any], error: str):
+        """Report a failure to the backend over the completion channel; the
+        backend classifies it, runs the retry ladder, and owns every write."""
+        track_id = job['trackId']
+        try:
+            self.redis.publish("audio:analysis:complete", json.dumps({
+                "trackId": track_id,
+                "jobId": job.get('jobId'),
+                "status": "failed",
+                "error": error[:500],
+            }))
+            logger.error(f"Reported analysis failure for {track_id}: {error[:200]}")
+        except Exception as e:
+            logger.error(f"Failed to report analysis failure for {track_id}: {e}")
 
 
 def main():
-    """Main entry point"""
     if len(sys.argv) > 1 and sys.argv[1] == '--test':
-        # Test mode: analyze a single file
         if len(sys.argv) < 3:
             print("Usage: analyzer.py --test <audio_file>")
             sys.exit(1)
-        
+
         analyzer = AudioAnalyzer()
         result = analyzer.analyze(sys.argv[2])
         print(json.dumps(result, indent=2))
         return
-    
-    # Normal worker mode
+
     worker = AnalysisWorker()
     worker.start()
 

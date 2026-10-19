@@ -136,7 +136,7 @@ router.post("/login", async (req, res) => {
 });
 
 // POST /auth/logout - JWT is stateless, logout is handled client-side
-router.post("/logout", (req, res) => {
+router.post("/logout", (_req, res) => {
     // With JWT, logout is handled by client removing the token
     // No server-side session to destroy
     res.json({ message: "Logged out" });
@@ -236,7 +236,7 @@ router.post("/change-password", requireAuth, authLimiter, async (req, res) => {
         // Verify current password
         const user = await prisma.user.findUnique({
             where: { id: req.user!.id },
-            select: { id: true, passwordHash: true },
+            select: { id: true, username: true, role: true, passwordHash: true, tokenVersion: true },
         });
 
         if (!user) {
@@ -246,25 +246,29 @@ router.post("/change-password", requireAuth, authLimiter, async (req, res) => {
         const valid = await bcrypt.compare(currentPassword, user.passwordHash);
         if (!valid) {
             return res
-                .status(401)
+                .status(400)
                 .json({ error: "Current password is incorrect" });
         }
 
         // Update password and increment tokenVersion to invalidate all existing tokens
         const newPasswordHash = await bcrypt.hash(newPassword, 10);
-        await prisma.user.update({
+        const updated = await prisma.user.update({
             where: { id: req.user!.id },
             data: {
                 passwordHash: newPasswordHash,
                 tokenVersion: { increment: 1 },
             },
+            select: { id: true, username: true, role: true, tokenVersion: true },
         });
-        // The auth layer caches the user row, and tokenVersion is what revokes
-        // issued tokens -- without this the old tokens keep working until the
-        // cache TTL elapses.
+        // Revoke all pre-change tokens, including other devices, while keeping
+        // the current device signed in with a fresh pair of versioned tokens.
+        // Cache invalidation must happen AFTER the committed database update.
         invalidateUserCache(req.user!.id);
-
-        res.json({ message: "Password changed successfully" });
+        res.json({
+            message: "Password changed successfully",
+            token: generateToken(updated),
+            refreshToken: generateRefreshToken(updated),
+        });
     } catch (error) {
         logger.error("Change password error:", error);
         res.status(500).json({ error: "Failed to change password" });
@@ -272,7 +276,7 @@ router.post("/change-password", requireAuth, authLimiter, async (req, res) => {
 });
 
 // GET /auth/users (Admin only)
-router.get("/users", requireAuth, requireAdmin, async (req, res) => {
+router.get("/users", requireAuth, requireAdmin, async (_req, res) => {
     try {
         const users = await prisma.user.findMany({
             select: {

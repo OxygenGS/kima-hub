@@ -42,7 +42,6 @@ jest.mock("fluent-ffmpeg", () => {
     return mock;
 });
 
-jest.mock("@ffmpeg-installer/ffmpeg", () => ({ path: "/fake/ffmpeg" }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -119,7 +118,6 @@ function makeRes() {
 
 /**
  * A minimal PQueue-compatible class that enforces real concurrency limits.
- * Used to replace the CJS stub in concurrency tests.
  */
 class RealConcurrencyQueue {
     private concurrency: number;
@@ -252,7 +250,7 @@ describe("parseRangeHeader", () => {
 });
 
 // ---------------------------------------------------------------------------
-// streamFileWithRangeSupport -- range matrix (B8, B11)
+// streamFileWithRangeSupport -- range matrix
 // ---------------------------------------------------------------------------
 
 describe("streamFileWithRangeSupport range matrix", () => {
@@ -312,7 +310,7 @@ describe("streamFileWithRangeSupport range matrix", () => {
 });
 
 // ---------------------------------------------------------------------------
-// streamFileWithRangeSupport -- conditional requests (B4 / 1.5)
+// streamFileWithRangeSupport -- conditional requests
 // ---------------------------------------------------------------------------
 
 describe("streamFileWithRangeSupport conditional requests", () => {
@@ -389,10 +387,33 @@ describe("streamFileWithRangeSupport conditional requests", () => {
         await svc.streamFileWithRangeSupport(req, res, filePath, "audio/mpeg");
         expect(res._headers["Cache-Control"]).toBe("private, max-age=3600, must-revalidate");
     });
+
+    it("keeps shared audio out of the browser cache on 200 and partial 206", async () => {
+        const full = makeRes();
+        await svc.streamFileWithRangeSupport(makeReq(), full, filePath, "audio/mpeg", "private, no-store");
+        expect(full._status).toBe(200);
+        expect(full._headers["Cache-Control"]).toBe("private, no-store");
+
+        const partial = makeRes();
+        await svc.streamFileWithRangeSupport(
+            makeReq({ range: "bytes=0-19" }), partial, filePath, "audio/mpeg", "private, no-store"
+        );
+        expect(partial._status).toBe(206);
+        expect(partial._headers["Cache-Control"]).toBe("private, no-store");
+        expect(partial._headers["Content-Range"]).toBe("bytes 0-19/500");
+    });
+
+    it("keeps token-specific cache policy on conditional 304 responses", async () => {
+        const req = makeReq({ "if-none-match": computeEtag() });
+        const res = makeRes();
+        await svc.streamFileWithRangeSupport(req, res, filePath, "audio/mpeg", "private, no-store");
+        expect(res._status).toBe(304);
+        expect(res._headers["Cache-Control"]).toBe("private, no-store");
+    });
 });
 
 // ---------------------------------------------------------------------------
-// getCachedTranscode freshness -- mtime equality + size (B5 / 1.6)
+// getCachedTranscode freshness -- mtime equality + size
 // ---------------------------------------------------------------------------
 
 describe("getCachedTranscode freshness", () => {
@@ -413,14 +434,11 @@ describe("getCachedTranscode freshness", () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it("same mtime + same size -> cache hit (does not delete)", async () => {
+    function cachedRow(id: string, overrides: Record<string, unknown>) {
         const sourceStat = fs.statSync(sourcePath);
-        const cachedFilePath = path.join(tmpDir, "cached.mp3");
-        fs.writeFileSync(cachedFilePath, "mp3 data");
-
-        mockPrisma.findFirst.mockResolvedValue({
-            id: "row-1",
-            cachePath: "cached.mp3",
+        return {
+            id,
+            cachePath: `${id}.mp3`,
             sourceModified: sourceStat.mtime,
             sourceSize: BigInt(sourceStat.size),
             cacheSize: BigInt(8),
@@ -428,95 +446,50 @@ describe("getCachedTranscode freshness", () => {
             trackId: "t1",
             lastAccessed: new Date(),
             createdAt: new Date(),
-        } as any);
-        mockPrisma.update.mockResolvedValue({} as any);
+            ...overrides,
+        } as any;
+    }
 
-        const result = await (svc as any).getCachedTranscode(
-            "t1", "high", sourceStat.mtime, sourcePath
+    async function lookup(row: ReturnType<typeof cachedRow>) {
+        fs.writeFileSync(path.join(tmpDir, row.cachePath), "mp3 data");
+        mockPrisma.findFirst.mockResolvedValue(row);
+        mockPrisma.update.mockResolvedValue({} as any);
+        mockPrisma.delete.mockResolvedValue({} as any);
+        return (svc as any).getCachedTranscode(
+            "t1", "high", fs.statSync(sourcePath).mtime, sourcePath
         );
-        expect(result).toBe(cachedFilePath);
+    }
+
+    it("same mtime + same size -> cache hit (does not delete)", async () => {
+        const result = await lookup(cachedRow("row-1", {}));
+        expect(result).toBe(path.join(tmpDir, "row-1.mp3"));
         expect(mockPrisma.delete).not.toHaveBeenCalled();
     });
 
     it("same mtime but different size -> cache miss and row deleted", async () => {
-        const sourceStat = fs.statSync(sourcePath);
-        const cachedFilePath = path.join(tmpDir, "cached2.mp3");
-        fs.writeFileSync(cachedFilePath, "mp3 data");
-
-        mockPrisma.findFirst.mockResolvedValue({
-            id: "row-2",
-            cachePath: "cached2.mp3",
-            sourceModified: sourceStat.mtime,
-            sourceSize: BigInt(sourceStat.size + 999),
-            cacheSize: BigInt(8),
-            quality: "high",
-            trackId: "t1",
-            lastAccessed: new Date(),
-            createdAt: new Date(),
-        } as any);
-        mockPrisma.delete.mockResolvedValue({} as any);
-
-        const result = await (svc as any).getCachedTranscode(
-            "t1", "high", sourceStat.mtime, sourcePath
+        const result = await lookup(
+            cachedRow("row-2", { sourceSize: BigInt(fs.statSync(sourcePath).size + 999) })
         );
         expect(result).toBeNull();
         expect(mockPrisma.delete).toHaveBeenCalledWith({ where: { id: "row-2" } });
     });
 
     it("sourceSize 0 (legacy row) -> cache miss and row deleted", async () => {
-        const sourceStat = fs.statSync(sourcePath);
-        const cachedFilePath = path.join(tmpDir, "cached3.mp3");
-        fs.writeFileSync(cachedFilePath, "mp3 data");
-
-        mockPrisma.findFirst.mockResolvedValue({
-            id: "row-3",
-            cachePath: "cached3.mp3",
-            sourceModified: sourceStat.mtime,
-            sourceSize: 0n,
-            cacheSize: BigInt(8),
-            quality: "high",
-            trackId: "t1",
-            lastAccessed: new Date(),
-            createdAt: new Date(),
-        } as any);
-        mockPrisma.delete.mockResolvedValue({} as any);
-
-        const result = await (svc as any).getCachedTranscode(
-            "t1", "high", sourceStat.mtime, sourcePath
-        );
+        const result = await lookup(cachedRow("row-3", { sourceSize: 0n }));
         expect(result).toBeNull();
         expect(mockPrisma.delete).toHaveBeenCalledWith({ where: { id: "row-3" } });
     });
 
     it("different mtime -> cache miss and row deleted", async () => {
-        const sourceStat = fs.statSync(sourcePath);
-        const cachedFilePath = path.join(tmpDir, "cached4.mp3");
-        fs.writeFileSync(cachedFilePath, "mp3 data");
-
-        const olderMtime = new Date(sourceStat.mtime.getTime() - 10000);
-        mockPrisma.findFirst.mockResolvedValue({
-            id: "row-4",
-            cachePath: "cached4.mp3",
-            sourceModified: olderMtime,
-            sourceSize: BigInt(sourceStat.size),
-            cacheSize: BigInt(8),
-            quality: "high",
-            trackId: "t1",
-            lastAccessed: new Date(),
-            createdAt: new Date(),
-        } as any);
-        mockPrisma.delete.mockResolvedValue({} as any);
-
-        const result = await (svc as any).getCachedTranscode(
-            "t1", "high", sourceStat.mtime, sourcePath
-        );
+        const olderMtime = new Date(fs.statSync(sourcePath).mtime.getTime() - 10000);
+        const result = await lookup(cachedRow("row-4", { sourceModified: olderMtime }));
         expect(result).toBeNull();
         expect(mockPrisma.delete).toHaveBeenCalledWith({ where: { id: "row-4" } });
     });
 });
 
 // ---------------------------------------------------------------------------
-// transcodeToCache watchdog (B6 / 1.3)
+// transcodeToCache watchdog
 // ---------------------------------------------------------------------------
 
 describe("transcodeToCache watchdog", () => {
@@ -617,7 +590,7 @@ describe("transcodeToCache watchdog", () => {
 });
 
 // ---------------------------------------------------------------------------
-// transcodeQueue max concurrency (B6 / 1.3)
+// transcodeQueue max concurrency
 // ---------------------------------------------------------------------------
 
 describe("transcodeQueue max concurrency", () => {

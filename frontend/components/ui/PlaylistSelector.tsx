@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api";
 import { X, Plus, Music2, Check } from "lucide-react";
 import { GradientSpinner } from "./GradientSpinner";
+import { Button } from "@/components/ui/Button";
+import { useDialog } from "@/hooks/useDialog";
 
 interface PlaylistSelectorProps {
     isOpen: boolean;
@@ -47,8 +49,6 @@ export function PlaylistSelector({
         }
     }
 
-
-
     const loadPlaylists = async () => {
         try {
             setIsLoading(true);
@@ -60,6 +60,9 @@ export function PlaylistSelector({
             setIsLoading(false);
         }
     };
+    const dialogRef = useRef<HTMLDivElement>(null);
+    useDialog(dialogRef, isOpen, onClose);
+
     useEffect(() => {
         if (!isOpen) return;
         let cancelled = false;
@@ -161,15 +164,20 @@ export function PlaylistSelector({
             onClick={onClose}
         >
             <div
-                className="bg-linear-to-b from-[#121212] to-[#121212] rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col border border-white/10 animate-pop"
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="playlist-selector-title"
+                className="bg-[#121212] rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col border border-white/10 animate-pop"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 id="playlist-selector-title" className="text-2xl font-bold text-white">
                         Add to Playlist
                     </h2>
                     <button
                         onClick={onClose}
+                        aria-label="Close"
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     >
                         <X className="w-5 h-5 text-[var(--text-secondary)]" />
@@ -263,10 +271,12 @@ export function PlaylistSelector({
 
                 {isMulti && playlists.length > 0 && (
                     <div className="px-4 py-3 border-t border-white/10">
-                        <button
+                        <Button
+                            variant="primary"
+                            size="lg"
                             onClick={handleConfirm}
                             disabled={selected.size === 0 || isConfirming}
-                            className="w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed bg-brand hover:bg-[#d4a000] text-black disabled:bg-gray-700 disabled:text-gray-500"
+                            className="w-full"
                         >
                             {isConfirming ? (
                                 <GradientSpinner size="sm" />
@@ -275,7 +285,7 @@ export function PlaylistSelector({
                             ) : (
                                 "Select playlists"
                             )}
-                        </button>
+                        </Button>
                     </div>
                 )}
 
@@ -294,18 +304,18 @@ export function PlaylistSelector({
                             }
                             className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[var(--color-brand)] focus:bg-white/10 transition-all"
                         />
-                        <button
+                        <Button
+                            variant="primary"
                             onClick={handleCreatePlaylist}
                             disabled={
                                 !newPlaylistName.trim() ||
                                 isCreating ||
                                 isSaving
                             }
-                            className="px-5 py-3 bg-brand hover:bg-[#d4a000] disabled:bg-gray-700 disabled:cursor-not-allowed text-black font-bold rounded-lg transition-all flex items-center gap-2 disabled:text-gray-500"
                         >
                             <Plus className="w-5 h-5" />
                             <span className="hidden sm:inline">Create</span>
-                        </button>
+                        </Button>
                     </div>
                     <label className="flex items-center gap-3 cursor-pointer group">
                         <div className="relative">

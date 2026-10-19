@@ -1,42 +1,21 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import { featureDetection } from "./featureDetection";
 import { logger } from "../utils/logger";
+import { SELF_SCORE } from "./matching/formula";
+import { capRanked, matchingContext, rankMatches, type LibraryTrack } from "./matching/rank";
 
-export interface SimilarTrack {
-    id: string;
-    title: string;
+export interface SimilarTrack extends LibraryTrack {
     /**
-     * Seconds. Carried because the vibe queue is built straight from these rows, and the
-     * player treats duration as non-optional -- without it the seek bar, remaining time and
-     * total queue length are all NaN for every track in the queue. The two sibling vibe
-     * endpoints (/vibe/alchemy, /vibe/path) have always selected it; this one did not.
+     * 1 minus `similarity` before clamping: the matching formula's score scaled so the
+     * seed itself scores 1, or on installs without CLAP the feature similarity.
      */
-    duration: number;
     distance: number;
     similarity: number;
-    albumId: string;
-    albumTitle: string;
-    albumCoverUrl: string | null;
-    artistId: string;
-    artistName: string;
 }
 
-const WEIGHTS = {
-    clap: 0.55,
-    features: {
-        energy: 0.10,
-        valence: 0.09,
-        arousal: 0.08,
-        bpm: 0.07,
-        danceability: 0.05,
-        acousticness: 0.03,
-        instrumentalness: 0.02,
-        key: 0.01,
-    },
-};
-
-// Normalized weights for features-only mode (sum to 1.0)
-const FEATURES_ONLY_WEIGHTS = {
+/** Feature weights for installs without CLAP (they sum to 1). */
+export const FEATURES_ONLY_WEIGHTS = {
     energy: 0.222,
     valence: 0.200,
     arousal: 0.178,
@@ -47,24 +26,22 @@ const FEATURES_ONLY_WEIGHTS = {
     key: 0.022,
 };
 
+/**
+ * Similar tracks on the matching formula
+ * when the CLAP analyzer is installed; empty until the seed has matching data.
+ * Installs without CLAP rank on audio features.
+ */
 export async function findSimilarTracks(
     trackId: string,
     limit: number = 20
 ): Promise<SimilarTrack[]> {
     const features = await featureDetection.getFeatures();
 
-    if (features.vibeEmbeddings && features.musicCNN) {
-        logger.debug(`[HYBRID-SIMILARITY] Using hybrid mode for track ${trackId}`);
-        return findSimilarHybrid(trackId, limit);
+    if (features.vibeEmbeddings) {
+        return findSimilarByFormula(trackId, limit);
     }
 
-    if (features.vibeEmbeddings && !features.musicCNN) {
-        logger.debug(`[HYBRID-SIMILARITY] Using CLAP-only mode for track ${trackId}`);
-        return findSimilarClapOnly(trackId, limit);
-    }
-
-    if (features.musicCNN && !features.vibeEmbeddings) {
-        logger.debug(`[HYBRID-SIMILARITY] Using features-only mode for track ${trackId}`);
+    if (features.musicCNN) {
         return findSimilarFeaturesOnly(trackId, limit);
     }
 
@@ -72,151 +49,76 @@ export async function findSimilarTracks(
     return [];
 }
 
-async function findSimilarHybrid(
+async function findSimilarByFormula(
     trackId: string,
     limit: number
 ): Promise<SimilarTrack[]> {
-    // Fetch 5x candidates from CLAP to ensure good coverage after re-ranking
-    const candidateMultiplier = 5;
-
-    const results = await prisma.$queryRaw<SimilarTrack[]>`
-        WITH source AS (
-            SELECT
-                te.embedding,
-                t.energy, t.valence, t.arousal, t.bpm, t."danceabilityMl",
-                t.acousticness, t.instrumentalness, t.key, t."keyScale"
-            FROM track_embeddings te
-            JOIN "Track" t ON te.track_id = t.id
-            WHERE te.track_id = ${trackId}
-        ),
-        clap_candidates AS (
-            SELECT
-                te.track_id,
-                te.embedding <=> (SELECT embedding FROM source) as clap_dist,
-                GREATEST(0, 1 - (te.embedding <=> (SELECT embedding FROM source))) as clap_sim
-            FROM track_embeddings te
-            WHERE te.track_id != ${trackId}
-            ORDER BY te.embedding <=> (SELECT embedding FROM source)
-            LIMIT ${limit * candidateMultiplier}
-        )
-        SELECT
-            t.id,
-            t.title,
-            t.duration,
-            c.clap_dist as distance,
-            (
-                ${WEIGHTS.clap} * c.clap_sim +
-                ${WEIGHTS.features.energy} * (1 - ABS(COALESCE(t.energy, 0.5) - COALESCE(s.energy, 0.5))) +
-                ${WEIGHTS.features.valence} * (1 - ABS(COALESCE(t.valence, 0.5) - COALESCE(s.valence, 0.5))) +
-                ${WEIGHTS.features.arousal} * (1 - ABS(COALESCE(t.arousal, 0.5) - COALESCE(s.arousal, 0.5))) +
-                ${WEIGHTS.features.bpm} * bpm_similarity(t.bpm, s.bpm) +
-                ${WEIGHTS.features.danceability} * (1 - ABS(COALESCE(t."danceabilityMl", 0.5) - COALESCE(s."danceabilityMl", 0.5))) +
-                ${WEIGHTS.features.acousticness} * (1 - ABS(COALESCE(t.acousticness, 0.5) - COALESCE(s.acousticness, 0.5))) +
-                ${WEIGHTS.features.instrumentalness} * (1 - ABS(COALESCE(t.instrumentalness, 0.5) - COALESCE(s.instrumentalness, 0.5))) +
-                ${WEIGHTS.features.key} * key_similarity(t.key, t."keyScale", s.key, s."keyScale")
-            ) as similarity,
-            a.id as "albumId",
-            a.title as "albumTitle",
-            a."coverUrl" as "albumCoverUrl",
-            ar.id as "artistId",
-            ar.name as "artistName"
-        FROM clap_candidates c
-        JOIN "Track" t ON c.track_id = t.id
-        JOIN "Album" a ON t."albumId" = a.id
-        JOIN "Artist" ar ON a."artistId" = ar.id
-        CROSS JOIN source s
-        ORDER BY similarity DESC
-        LIMIT ${limit}
-    `;
-
-    return results;
-}
-
-async function findSimilarClapOnly(
-    trackId: string,
-    limit: number
-): Promise<SimilarTrack[]> {
-    const results = await prisma.$queryRaw<SimilarTrack[]>`
-        WITH source AS (
-            SELECT embedding FROM track_embeddings WHERE track_id = ${trackId}
-        )
-        SELECT
-            t.id,
-            t.title,
-            t.duration,
-            te.embedding <=> (SELECT embedding FROM source) as distance,
-            GREATEST(0, 1 - (te.embedding <=> (SELECT embedding FROM source))) as similarity,
-            a.id as "albumId",
-            a.title as "albumTitle",
-            a."coverUrl" as "albumCoverUrl",
-            ar.id as "artistId",
-            ar.name as "artistName"
-        FROM track_embeddings te
-        JOIN "Track" t ON te.track_id = t.id
-        JOIN "Album" a ON t."albumId" = a.id
-        JOIN "Artist" ar ON a."artistId" = ar.id
-        WHERE te.track_id != ${trackId}
-        ORDER BY distance
-        LIMIT ${limit}
-    `;
-
-    return results;
+    const ctx = await matchingContext([trackId]);
+    if (!ctx?.tracks.has(trackId)) return [];
+    const rows = await rankMatches(ctx, [{ trackId, weight: 1 }], { limit, counted: [trackId] });
+    return rows.map(({ score, ...track }) => {
+        const match = score / SELF_SCORE;
+        return { ...track, distance: 1 - match, similarity: Math.min(1, Math.max(0, match)) };
+    });
 }
 
 /**
- * Fallback path (DB-9): used by findSimilarTracks only when MusicCNN features
- * are available but CLAP embeddings are not (see the mode selection above) --
- * the hybrid and CLAP-only paths above are the well-trodden ones and are not
- * touched here. This is a full CROSS JOIN scan over every Track, computing
- * the weighted feature-similarity expression per row before ORDER BY/LIMIT;
- * cost scales with total track count, which is fine for typical self-hosted
- * library sizes. A cheap bpm/key prefilter was considered to prune candidates
- * before that computation, but bpm_similarity() normalizes BPM into a 70-140
- * band via repeated doubling/halving to catch half-/double-time matches
- * (e.g. 70 vs 140 BPM scores as near-identical) -- a naive `ABS(t.bpm - s.bpm)`
- * prefilter in the WHERE clause would incorrectly exclude those without
- * reimplementing the same normalization, so it was left out rather than risk
- * silently dropping valid matches for a low-traffic fallback.
+ * The weighted mean of feature closeness over the features both tracks have; a
+ * track pair with none scores the neutral 0.5. No BPM prefilter, because
+ * bpm_similarity folds half and double time together.
  */
-
 async function findSimilarFeaturesOnly(
     trackId: string,
     limit: number
 ): Promise<SimilarTrack[]> {
-    const results = await prisma.$queryRaw<SimilarTrack[]>`
+    const seed = await prisma.track.findUnique({
+        where: { id: trackId },
+        select: { albumId: true, album: { select: { artistId: true } } },
+    });
+    if (!seed) return [];
+
+    const w = FEATURES_ONLY_WEIGHTS;
+    const scored = Prisma.sql`
         WITH source AS (
             SELECT energy, valence, arousal, bpm, "danceabilityMl", acousticness, instrumentalness, key, "keyScale"
             FROM "Track"
             WHERE id = ${trackId}
+        ),
+        combined AS (
+            SELECT
+                t.id, t.title, t.duration,
+                a.id AS "albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
+                ar.id AS "artistId", ar.name AS "artistName",
+                (
+                    ${w.energy} * (CASE WHEN t.energy IS NULL OR s.energy IS NULL THEN 0 ELSE 1 - ABS(t.energy - s.energy) END)
+                    + ${w.valence} * (CASE WHEN t.valence IS NULL OR s.valence IS NULL THEN 0 ELSE 1 - ABS(t.valence - s.valence) END)
+                    + ${w.arousal} * (CASE WHEN t.arousal IS NULL OR s.arousal IS NULL THEN 0 ELSE 1 - ABS(t.arousal - s.arousal) END)
+                    + ${w.bpm} * (CASE WHEN t.bpm IS NULL OR s.bpm IS NULL THEN 0 ELSE bpm_similarity(t.bpm, s.bpm) END)
+                    + ${w.danceability} * (CASE WHEN t."danceabilityMl" IS NULL OR s."danceabilityMl" IS NULL THEN 0 ELSE 1 - ABS(t."danceabilityMl" - s."danceabilityMl") END)
+                    + ${w.acousticness} * (CASE WHEN t.acousticness IS NULL OR s.acousticness IS NULL THEN 0 ELSE 1 - ABS(t.acousticness - s.acousticness) END)
+                    + ${w.instrumentalness} * (CASE WHEN t.instrumentalness IS NULL OR s.instrumentalness IS NULL THEN 0 ELSE 1 - ABS(t.instrumentalness - s.instrumentalness) END)
+                    + ${w.key} * (CASE WHEN t.key IS NULL OR s.key IS NULL THEN 0 ELSE key_similarity(t.key, t."keyScale", s.key, s."keyScale") END)
+                ) AS num,
+                (
+                    ${w.energy} * (CASE WHEN t.energy IS NULL OR s.energy IS NULL THEN 0 ELSE 1 END)
+                    + ${w.valence} * (CASE WHEN t.valence IS NULL OR s.valence IS NULL THEN 0 ELSE 1 END)
+                    + ${w.arousal} * (CASE WHEN t.arousal IS NULL OR s.arousal IS NULL THEN 0 ELSE 1 END)
+                    + ${w.bpm} * (CASE WHEN t.bpm IS NULL OR s.bpm IS NULL THEN 0 ELSE 1 END)
+                    + ${w.danceability} * (CASE WHEN t."danceabilityMl" IS NULL OR s."danceabilityMl" IS NULL THEN 0 ELSE 1 END)
+                    + ${w.acousticness} * (CASE WHEN t.acousticness IS NULL OR s.acousticness IS NULL THEN 0 ELSE 1 END)
+                    + ${w.instrumentalness} * (CASE WHEN t.instrumentalness IS NULL OR s.instrumentalness IS NULL THEN 0 ELSE 1 END)
+                    + ${w.key} * (CASE WHEN t.key IS NULL OR s.key IS NULL THEN 0 ELSE 1 END)
+                ) AS den
+            FROM "Track" t
+            JOIN "Album" a ON t."albumId" = a.id
+            JOIN "Artist" ar ON a."artistId" = ar.id
+            CROSS JOIN source s
+            WHERE t.id <> ${trackId} AND t."missingSince" IS NULL
         )
-        SELECT
-            t.id,
-            t.title,
-            t.duration,
-            0 as distance,
-            (
-                ${FEATURES_ONLY_WEIGHTS.energy} * (1 - ABS(COALESCE(t.energy, 0.5) - COALESCE(s.energy, 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.valence} * (1 - ABS(COALESCE(t.valence, 0.5) - COALESCE(s.valence, 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.arousal} * (1 - ABS(COALESCE(t.arousal, 0.5) - COALESCE(s.arousal, 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.bpm} * bpm_similarity(t.bpm, s.bpm) +
-                ${FEATURES_ONLY_WEIGHTS.danceability} * (1 - ABS(COALESCE(t."danceabilityMl", 0.5) - COALESCE(s."danceabilityMl", 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.acousticness} * (1 - ABS(COALESCE(t.acousticness, 0.5) - COALESCE(s.acousticness, 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.instrumentalness} * (1 - ABS(COALESCE(t.instrumentalness, 0.5) - COALESCE(s.instrumentalness, 0.5))) +
-                ${FEATURES_ONLY_WEIGHTS.key} * key_similarity(t.key, t."keyScale", s.key, s."keyScale")
-            ) as similarity,
-            a.id as "albumId",
-            a.title as "albumTitle",
-            a."coverUrl" as "albumCoverUrl",
-            ar.id as "artistId",
-            ar.name as "artistName"
-        FROM "Track" t
-        JOIN "Album" a ON t."albumId" = a.id
-        JOIN "Artist" ar ON a."artistId" = ar.id
-        CROSS JOIN source s
-        WHERE t.id != ${trackId}
-        ORDER BY similarity DESC
-        LIMIT ${limit}
+        SELECT id, title, duration, "albumId", "albumTitle", "albumCoverUrl", "artistId", "artistName",
+               CASE WHEN den = 0 THEN 0.5 ELSE num / den END AS score
+        FROM combined
     `;
-
-    return results;
+    const rows = await capRanked(scored, [{ albumId: seed.albumId, artistId: seed.album.artistId }], limit);
+    return rows.map(({ score, ...track }) => ({ ...track, similarity: score, distance: 1 - score }));
 }

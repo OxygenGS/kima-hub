@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { useNotifications, useActiveDownloads } from "@/hooks/useNotifications";
 import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context";
 import { ActivityIconBar, type ActivityType } from "@/features/vibe/ActivityIconBar";
@@ -67,29 +67,30 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
             style={{ width: isOpen ? 380 : 48 }}
         >
             <div
+                id="activity-panel"
                 className="absolute inset-y-0 right-0 w-[380px] bg-[var(--bg-primary)] flex flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] rounded-lg"
                 style={{
                     transform: isOpen ? "translateX(0)" : "translateX(332px)",
                     willChange: "transform",
                 }}
             >
-                {/* Collapsed strip */}
                 <div
                     onClick={handleCollapse}
                     className={cn(
                         "absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors duration-200 z-(--z-raised)",
                         isOpen && "pointer-events-none opacity-0",
                     )}
-                    title="Open panel"
+                    title="open panel"
                 >
                     <ChevronLeft className="w-5 h-5 text-[var(--text-muted)]" />
                     {hasActivity && (
-                        <span className="absolute top-4 right-3 w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                        <span className="absolute top-4 right-3 w-1.5 h-1.5 rounded-full bg-brand" />
                     )}
                 </div>
 
-                {/* Expanded content */}
+                {/* Expanded content; inert while collapsed so its controls can't take focus. */}
                 <div
+                    inert={!isOpen}
                     className={cn(
                         "flex flex-col h-full transition-opacity duration-300",
                         isOpen ? "opacity-100" : "opacity-0 pointer-events-none",
@@ -104,10 +105,9 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
                         </div>
                     ) : (
                     <>
-                    {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                         <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-[#22c55e] rounded-full" />
+                            <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                             <span className="t-eyebrow">
                                 Feed
                             </span>
@@ -115,13 +115,12 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
                         <button
                             onClick={handleCollapse}
                             className="p-1 hover:bg-white/10 transition-colors duration-200"
-                            title="Collapse panel"
+                            title="collapse panel"
                         >
                             <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
                         </button>
                     </div>
 
-                    {/* Activity icon bar */}
                     <ActivityIconBar
                         expandedActivity={expandedActivity}
                         onToggleActivity={handleToggleActivity}

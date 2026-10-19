@@ -1,14 +1,6 @@
 /**
- * Auth Middleware Tests
- *
- * Tests the three exported middleware functions: requireAuth, requireAdmin,
- * requireAuthOrToken. Each test targets a specific code branch and asserts
- * on an observable outcome (status code, response body, req.user state,
- * next() called or not).
- *
- * No database is hit -- prisma.user.findUnique and prisma.apiKey.findUnique
- * are mocked. Real JWT signing/verification is used against the test secret
- * set in src/__mocks__/test-env.cjs.
+ * requireAuth, requireAdmin and requireAuthOrToken, branch by branch. Prisma is
+ * mocked; JWTs are really signed with the test secret from test-env.cjs.
  */
 
 import jwt from 'jsonwebtoken';
@@ -85,7 +77,7 @@ function validToken(
 }
 
 function expiredToken(userId = 'user-123', tokenVersion = 1): string {
-    // expiresIn: 0 produces an already-expired token
+    // expiresIn: 1 (one second): expired by the time the test uses it
     return jwt.sign(
         { userId, username: 'testuser', role: 'user', tokenVersion },
         TEST_SECRET,
@@ -133,7 +125,7 @@ describe('requireAuth', () => {
 
     it('returns 401 when Bearer token is empty string', async () => {
         const req = mockReq({ headers: { authorization: 'Bearer ' } });
-        const { res, status, json } = mockRes();
+        const { res, status } = mockRes();
         const next = mockNext();
 
         await requireAuth(req, res, next);
@@ -178,7 +170,7 @@ describe('requireAuth', () => {
     });
 
     it('returns 401 when token has no tokenVersion claim (legacy token format)', async () => {
-        // Old tokens issued before tokenVersion was added have no tokenVersion claim
+        // A token without a tokenVersion claim
         const legacyToken = jwt.sign(
             { userId: 'user-123', username: 'testuser', role: 'user' }, // no tokenVersion
             TEST_SECRET,
@@ -357,7 +349,6 @@ describe('user row cache', () => {
             await requireAuth(req, res, mockNext());
         }
 
-        // Five authenticated requests, one query. This was five.
         expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
     });
 
@@ -378,8 +369,7 @@ describe('user row cache', () => {
         await requireAdmin(req, res, next);
 
         expect(next).toHaveBeenCalledTimes(2);
-        // requireAdmin re-authenticated from scratch before; with req.user
-        // already populated it must not query again.
+        // With req.user already populated, requireAdmin must not query again.
         expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
     });
 

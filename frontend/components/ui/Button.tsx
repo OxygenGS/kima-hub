@@ -1,10 +1,38 @@
 import { ButtonHTMLAttributes, forwardRef, memo } from "react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
 import { GradientSpinner } from "./GradientSpinner";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: "primary" | "secondary" | "ghost" | "danger" | "ai" | "icon";
+    size?: "sm" | "md" | "lg";
     isLoading?: boolean;
+}
+
+const BASE =
+    "inline-flex items-center justify-center gap-2 min-h-[44px] rounded-lg font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
+
+const VARIANT = {
+    primary: "bg-brand hover:bg-brand-hover text-black",
+    secondary: "bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white border border-white/10 hover:border-white/20",
+    ghost: "text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)]",
+    danger: "text-danger hover:bg-danger/10 border border-danger/20 hover:border-danger/40",
+    ai: "bg-[var(--bg-hover)] hover:bg-brand/10 text-brand border border-[var(--border-subtle)] hover:border-brand/30",
+    icon: "w-11 h-11 text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)]",
+};
+
+const SIZE = {
+    sm: "px-3 text-xs",
+    md: "px-4 text-sm",
+    lg: "min-h-12 px-6 text-sm",
+};
+
+/* Button styling for elements that are not buttons, such as a Link. */
+export function buttonClass(
+    variant: NonNullable<ButtonProps["variant"]> = "secondary",
+    size: NonNullable<ButtonProps["size"]> = "md",
+    className?: string,
+) {
+    return cn(BASE, VARIANT[variant], variant !== "icon" && SIZE[size], className);
 }
 
 const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
@@ -12,6 +40,7 @@ const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
         {
             className,
             variant = "secondary",
+            size = "md",
             isLoading,
             children,
             disabled,
@@ -19,30 +48,16 @@ const Button = memo(forwardRef<HTMLButtonElement, ButtonProps>(
         },
         ref
     ) => {
-        const baseStyles =
-        "inline-flex items-center justify-center min-h-[44px] rounded-lg font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] disabled:opacity-50 disabled:cursor-not-allowed";
-
-        const variantStyles = {
-            primary:
-            "bg-brand hover:bg-brand-hover text-brand-contrast px-4 py-2 ",
-            secondary:
-            "bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] text-white px-4 py-2 border border-[var(--border-interactive)]",
-            ghost: "text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)] px-4 py-2",
-            danger: "text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 px-4 py-2",
-            ai: "bg-[var(--bg-hover)] hover:bg-brand/10 text-brand border border-[var(--border-subtle)] hover:border-brand/30 px-4 py-2",
-            icon: "w-11 h-11 text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-hover)]",
-        };
-
         return (
             <button
                 ref={ref}
-                className={cn(baseStyles, variantStyles[variant], className)}
+                className={buttonClass(variant, size, className)}
                 disabled={disabled || isLoading}
                 {...props}
             >
                 {isLoading ? (
                     <>
-                        <GradientSpinner size="sm" className="mr-2" />
+                        <GradientSpinner size="sm" />
                         {children}
                     </>
                 ) : (

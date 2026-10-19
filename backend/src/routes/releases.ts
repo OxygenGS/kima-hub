@@ -1,22 +1,51 @@
-import { logger } from "../utils/logger";
-
 /**
  * Release Radar API
  *
  * Provides upcoming and recent releases from:
  * 1. Lidarr monitored artists (via calendar API)
- * 2. Similar artists from user's library (Last.fm similar artists)
+ * 2. Similar artists from user's library (local similarity engine)
  */
 
 import { Router } from "express";
-import { lidarrService, CalendarRelease } from "../services/lidarr";
+import { logger } from "../utils/logger";
+import { lidarrService } from "../services/lidarr";
 import { prisma } from "../utils/db";
 import { ConfigurationError } from "../utils/errors";
 import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
+import { withAlbumArtwork } from "../services/artwork";
 import { z } from "zod";
 
 const router = Router();
 router.use(requireAuthOrToken);
+
+// Lidarr's Cover Art Archive address is empty for most unowned albums, so ask
+// the library's artwork providers instead.
+function withReleaseArtwork<
+    T extends { albumMbid?: string; artistName: string; title: string; coverUrl?: string | null },
+>(releases: T[]): Promise<T[]> {
+    return withAlbumArtwork(
+        releases,
+        (r) => ({
+            rgMbid: r.albumMbid,
+            artistName: r.artistName,
+            albumTitle: r.title,
+            candidateUrl: r.coverUrl,
+        }),
+        (r, coverUrl) => ({ ...r, coverUrl }),
+    );
+}
+
+/** The release-group mbids among `releases` that the library already owns. */
+async function ownedRgMbids<T extends { albumMbid: string }>(
+    releases: T[]
+): Promise<Set<string>> {
+    const candidates = [...new Set(releases.map(r => r.albumMbid).filter(Boolean))];
+    const rows = await prisma.album.findMany({
+        where: { rgMbid: { in: candidates } },
+        select: { rgMbid: true },
+    });
+    return new Set(rows.map(a => a.rgMbid).filter(Boolean));
+}
 
 interface ReleaseRadarResponse {
     upcoming: ReleaseItem[];
@@ -101,16 +130,11 @@ router.get("/radar", async (req, res) => {
         logger.debug(`[Releases] Found ${lidarrReleases.length} Lidarr releases`);
         logger.debug(`[Releases] Found ${unmonitoredSimilar.length} unmonitored similar artists`);
 
-        // 4. Get albums in library to check what user already has
-        const libraryAlbums = await prisma.album.findMany({
-            select: {
-                rgMbid: true,
-            }
-        });
-        const libraryAlbumMbids = new Set(libraryAlbums.map(a => a.rgMbid).filter(Boolean));
+        // 4. Check which of these releases the library owns, looking up only their MBIDs.
+        const libraryAlbumMbids = await ownedRgMbids(lidarrReleases);
 
         // 5. Transform Lidarr releases
-        const releases: ReleaseItem[] = lidarrReleases.map(release => {
+        const rawReleases: ReleaseItem[] = lidarrReleases.map(release => {
             const releaseTime = new Date(release.releaseDate).getTime();
             const isUpcoming = releaseTime > now.getTime();
             const inLibrary = release.hasFile || libraryAlbumMbids.has(release.albumMbid);
@@ -129,6 +153,8 @@ router.get("/radar", async (req, res) => {
                 canDownload: !inLibrary && !isUpcoming,
             };
         });
+
+        const releases = await withReleaseArtwork(rawReleases);
 
         // 6. Split into upcoming and recent
         const upcoming = releases
@@ -167,14 +193,16 @@ router.get("/upcoming", async (req, res) => {
         endDate.setDate(endDate.getDate() + daysAhead);
 
         const releases = await lidarrService.getCalendar(now, endDate);
-        
+
         // Sort by release date (soonest first)
         const sorted = releases.sort((a, b) => 
             new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime()
         );
 
+        const checked = await withReleaseArtwork(sorted);
+
         res.json({
-            releases: sorted,
+            releases: checked,
             count: sorted.length,
             daysAhead,
         });
@@ -199,11 +227,7 @@ router.get("/recent", async (req, res) => {
 
         const releases = await lidarrService.getCalendar(startDate, now);
         
-        // Get library albums to mark what's already downloaded
-        const libraryAlbums = await prisma.album.findMany({
-            select: { rgMbid: true }
-        });
-        const libraryMbids = new Set(libraryAlbums.map(a => a.rgMbid).filter(Boolean));
+        const libraryMbids = await ownedRgMbids(releases);
 
         // Filter to releases not in library and sort (newest first)
         const notInLibrary = releases
@@ -212,8 +236,10 @@ router.get("/recent", async (req, res) => {
                 new Date(b.releaseDate).getTime() - new Date(a.releaseDate).getTime()
             );
 
+        const checked = await withReleaseArtwork(notInLibrary);
+
         res.json({
-            releases: notInLibrary,
+            releases: checked,
             count: notInLibrary.length,
             daysBack,
             inLibraryCount: releases.length - notInLibrary.length,
@@ -259,13 +285,9 @@ router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), 
             `[Releases] Download requested: ${artistName} - ${albumTitle} (${albumMbid})`
         );
 
-        // Pre-create (or reuse an in-flight) DownloadJob so the download is trackable by
-        // id AND early config-error failures stay visible (acquireAlbum can exit BEFORE
-        // it would create its own job, otherwise leaving the client — already handed a
-        // success — with no trace). The dedup + create runs under the SAME distributed
-        // lock acquisitionService.createDownloadJob uses, so two concurrent taps for the
-        // same album can't both create a job / launch a download. Dynamic imports avoid
-        // circular deps.
+        // Pre-create (or reuse) the DownloadJob, so the download is trackable by id and
+        // early config errors stay visible. Dedup and create run under the lock
+        // createDownloadJob uses, so two taps cannot start two downloads.
         const { acquisitionService } = await import(
             "../services/acquisitionService"
         );
@@ -273,7 +295,7 @@ router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), 
 
         const jobWhere: any = {
             userId,
-            status: { in: ["pending", "downloading"] },
+            status: { in: ["pending", "processing"] },
         };
         if (albumMbid) jobWhere.targetMbid = albumMbid;
         else jobWhere.subject = `${artistName} - ${albumTitle}`;
@@ -321,13 +343,9 @@ router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), 
                     })
                     .catch(() => {});
 
-            // Route through the shared acquisition service — the same path discover and
-            // import use — so it honours the user's configured download source
-            // (Soulseek/Lidarr). Fire in the background against the pre-created job and
-            // return immediately; the client tracks progress via /downloads keyed by
-            // jobId. Config errors THROW (caught by .catch); acquisition-level failures
-            // resolve as { success:false } (handled in .then) — both mark the job failed
-            // so it doesn't sit "pending" forever.
+            // Use the shared acquisition service, which honours the user's download source.
+            // Runs in the background against the job; config errors throw, acquisition
+            // failures resolve {success:false}, and both mark the job failed.
             void acquisitionService
                 .acquireAlbum(
                     { albumTitle, artistName, mbid: albumMbid },
@@ -362,11 +380,8 @@ router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), 
     } catch (error: any) {
         logger.error("[Releases] Download error:", error.message);
 
-        // On a fresh install with no Lidarr configured this is the DEFAULT
-        // outcome of clicking Download: acquireAlbum throws rather than
-        // returning {success:false}, so the 502 branch above never sees it and
-        // the actionable message was logged and then dropped behind a generic
-        // 500. Matches the sibling handler in routes/discover.ts.
+        // With no Lidarr configured, acquireAlbum throws this; answer with its
+        // actionable message, not a generic 500.
         if (error instanceof ConfigurationError) {
             return res.status(400).json({
                 error: error.message,

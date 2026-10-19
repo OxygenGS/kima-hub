@@ -15,10 +15,8 @@ function AudioProviderInner({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const ctrl = new AudioController();
-        // The owned <audio> element + AudioContext must be created here (not in
-        // a lazy useState initializer) so Strict Mode's double-invoke
-        // create -> cleanup -> create cycle can't leak a duplicate DOM element;
-        // exposing the instance to the context value then requires this setState.
+        // Created in the effect rather than a useState initializer so Strict Mode's
+        // double invoke cannot leak a second <audio> element.
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setController(ctrl);
 
@@ -49,7 +47,7 @@ export function ConditionalAudioProvider({
     const pathname = usePathname();
     const { isAuthenticated, isLoading } = useAuth();
 
-    const publicPages = ["/login", "/register", "/onboarding", "/setup"];
+    const publicPages = ["/login", "/onboarding"];
     const isPublicPage = publicPages.some(p => pathname === p || pathname.startsWith(p + "/"));
 
     // Public pages: render children directly without audio providers

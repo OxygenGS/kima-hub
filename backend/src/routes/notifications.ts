@@ -3,6 +3,8 @@ import { logger } from "../utils/logger";
 import { notificationService } from "../services/notificationService";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../utils/db";
+import { z } from "zod";
+import { soulseekConfigured } from "../utils/soulseekConfigured";
 
 const router = Router();
 
@@ -53,6 +55,44 @@ router.get(
         }
     }
 );
+
+const clientNotificationSchema = z.object({
+    type: z.enum(["error", "system"]),
+    title: z.string().trim().min(1).max(120),
+    message: z.string().trim().max(500).optional(),
+    href: z.string().regex(/^\/[^/\\]/).max(200).optional(),
+});
+
+const CLIENT_ROWS_PER_USER = 50;
+
+/**
+ * POST /notifications
+ * Record an outcome the browser saw. One row per title, so a repeat replaces it,
+ * and only the newest 50 titles are kept.
+ */
+router.post("/", requireAuth, async (req: Request, res: Response) => {
+    const parsed = clientNotificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid notification" });
+    }
+    const { type, title, message, href } = parsed.data;
+    try {
+        const notification = await notificationService.create({
+            userId: req.user!.id,
+            type,
+            title,
+            message,
+            metadata: href ? { href } : undefined,
+            groupKey: `client:${title}`,
+            renotify: true,
+        });
+        await notificationService.trimGroup(req.user!.id, "client:", CLIENT_ROWS_PER_USER);
+        res.status(201).json(notification);
+    } catch (error: any) {
+        logger.error("Error creating notification:", error);
+        res.status(500).json({ error: "Failed to create notification" });
+    }
+});
 
 /**
  * POST /notifications/:id/read
@@ -152,7 +192,6 @@ router.get(
                 take: 100, // Fetch more to account for duplicates
             });
 
-            // Deduplicate by subject - keep only the most recent entry per album
             const seen = new Set<string>();
             const deduplicated = downloads.filter((download) => {
                 if (seen.has(download.subject)) {
@@ -162,7 +201,6 @@ router.get(
                 return true; // Keep first occurrence (most recent due to ordering)
             });
 
-            // Return top 50 after deduplication
             res.json(deduplicated.slice(0, 50));
         } catch (error: any) {
             logger.error("Error fetching download history:", error);
@@ -253,7 +291,6 @@ router.post(
     requireAuth,
     async (req: Request, res: Response) => {
         try {
-            // Get the failed download
             const failedJob = await prisma.downloadJob.findFirst({
                 where: {
                     id: req.params.id,
@@ -285,13 +322,11 @@ router.post(
                     });
                 }
 
-                // Mark old job as cleared
                 await prisma.downloadJob.update({
                     where: { id: failedJob.id },
                     data: { cleared: true },
                 });
 
-                // Validate playlist ownership and pending track exists
                 const playlist = await prisma.playlist.findUnique({
                     where: { id: playlistId },
                 });
@@ -321,7 +356,7 @@ router.post(
                     where: {
                         userId: req.user!.id,
                         targetMbid: retryTargetId,
-                        status: { in: ["pending", "processing", "downloading"] },
+                        status: { in: ["pending", "processing"] },
                         cleared: { not: true },
                     },
                 });
@@ -381,10 +416,7 @@ router.post(
                     });
                 }
 
-                if (
-                    !settings?.soulseekUsername ||
-                    !settings?.soulseekPassword
-                ) {
+                if (!soulseekConfigured(settings)) {
                     await prisma.downloadJob.update({
                         where: { id: newJobRecord.id },
                         data: {
@@ -454,25 +486,20 @@ router.post(
                             });
 
                             try {
-                                const { scanQueue } = await import(
-                                    "../workers/queues"
+                                const { requestScan } = await import(
+                                    "../workers/scanRequest"
                                 );
-                                await scanQueue.add(
-                                    "scan",
-                                    {
-                                        userId: req.user!.id,
-                                        source: "retry-pending-track",
-                                        albumMbid:
-                                            pendingTrack.albumMbid || undefined,
-                                        artistMbid:
-                                            pendingTrack.artistMbid ||
-                                            undefined,
-                                    },
-                                    {
-                                        priority: 1,
-                                        removeOnComplete: true,
-                                    }
-                                );
+                                await requestScan({
+                                    userId: req.user!.id,
+                                    source: "retry-pending-track",
+                                    albumMbid:
+                                        pendingTrack.albumMbid || undefined,
+                                    artistMbid:
+                                        pendingTrack.artistMbid ||
+                                        undefined,
+                                    priority: 1,
+                                    removeOnComplete: true,
+                                });
                             } catch {
                                 // Best-effort; job status already reflects download
                             }
@@ -518,7 +545,7 @@ router.post(
                         where: {
                             userId: req.user!.id,
                             targetMbid: failedJob.targetMbid,
-                            status: { in: ["pending", "processing", "downloading"] },
+                            status: { in: ["pending", "processing"] },
                             cleared: { not: true },
                         },
                     });
@@ -532,13 +559,11 @@ router.post(
                     }
                 }
 
-                // Mark old job as cleared
                 await prisma.downloadJob.update({
                     where: { id: failedJob.id },
                     data: { cleared: true },
                 });
 
-                // Create a NEW download job record for the retry
                 const newJobRecord = await prisma.downloadJob.create({
                     data: {
                         userId: req.user!.id,
@@ -620,13 +645,13 @@ router.post(
                                 `[Retry] ✓ Soulseek downloaded ${result.successful} tracks for ${artistName} - ${albumTitle}`
                             );
 
-                            // Trigger library scan
-                            const { scanQueue } = await import(
-                                "../workers/queues"
+                            // Trigger library scan (full walk — the
+                            // download folder is not recorded, so there is
+                            // nothing narrower to scan)
+                            const { requestScan } = await import(
+                                "../workers/scanRequest"
                             );
-                            await scanQueue.add("scan", {
-                                paths: [],
-                                fullScan: false,
+                            await requestScan({
                                 userId: req.user!.id,
                                 source: "retry-spotify-import",
                             });
@@ -649,7 +674,6 @@ router.post(
                                         artistName,
                                         albumTitle,
                                         failedJob.targetMbid,
-                                        req.user!.id,
                                         false
                                     );
 
@@ -692,7 +716,6 @@ router.post(
                 return res.json({ success: true, newJobId: newJobRecord.id });
             }
 
-            // Validate that we have the required MBIDs
             if (!failedJob.targetMbid) {
                 return res
                     .status(400)
@@ -704,7 +727,7 @@ router.post(
                 where: {
                     userId: req.user!.id,
                     targetMbid: failedJob.targetMbid,
-                    status: { in: ["pending", "processing", "downloading"] },
+                    status: { in: ["pending", "processing"] },
                     cleared: { not: true },
                 },
             });
@@ -717,13 +740,11 @@ router.post(
                 });
             }
 
-            // Mark old job as cleared
             await prisma.downloadJob.update({
                 where: { id: failedJob.id },
                 data: { cleared: true },
             });
 
-            // Extract parameters from the failed job
             // Subject is typically "Artist - Album" format
             const subjectParts = failedJob.subject.split(" - ");
             const artistName = subjectParts[0] || failedJob.subject;
@@ -732,7 +753,6 @@ router.post(
                 subjectParts[1] ||
                 failedJob.subject;
 
-            // Create a NEW download job record for the retry
             const newJobRecord = await prisma.downloadJob.create({
                 data: {
                     userId: req.user!.id,
@@ -745,19 +765,15 @@ router.post(
                 },
             });
 
-            // Import the download manager dynamically to avoid circular deps
             const { simpleDownloadManager } = await import(
                 "../services/simpleDownloadManager"
             );
 
-            // Start download with the correct positional arguments
-            // startDownload(jobId, artistName, albumTitle, albumMbid, userId, isDiscovery)
             const result = await simpleDownloadManager.startDownload(
                 newJobRecord.id,
                 artistName,
                 albumTitle,
                 failedJob.targetMbid,
-                req.user!.id,
                 false // isDiscovery
             );
 

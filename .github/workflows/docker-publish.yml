@@ -4,141 +4,208 @@ on:
     push:
         tags:
             - "v*"
-    workflow_dispatch:
-        inputs:
-            version:
-                description: "Version tag (e.g., v1.0.0)"
-                required: true
-                type: string
+
+# Only explicitly created stable version tags trigger publishing; protect tags in repo settings.
+# Build on native runners; never use QEMU. Do not automatically update :latest.
+concurrency:
+    group: stable-publish-all-tags
+    cancel-in-progress: false
 
 jobs:
-    build:
+    validate-release:
+        name: Validate stable release version and branch
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            version: ${{ steps.version.outputs.version }}
+            source: ${{ steps.version.outputs.source }}
+        steps:
+            - name: Checkout branch history for stable-tag verification
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Require stable SemVer and trusted release context
+              id: version
+              shell: bash
+              env:
+                  EVENT_NAME: ${{ github.event_name }}
+                  REF_NAME: ${{ github.ref_name }}
+                  REF_TYPE: ${{ github.ref_type }}
+                  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+              run: |
+                  set -euo pipefail
+                  if [ "$EVENT_NAME" != "push" ] || [ "$REF_TYPE" != "tag" ]; then
+                      echo "Stable publishing only runs on an explicitly created tag." >&2
+                      exit 1
+                  fi
+                  VERSION="$REF_NAME"
+
+                  # Never tag pre-release builds as :latest.
+                  if ! [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+                      echo "Not a stable version: $VERSION" >&2
+                      echo "Use the separate prerelease workflow for candidates." >&2
+                      exit 1
+                  fi
+                  # A tag on an unmerged feature branch must never ship as stable.
+                  if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+                      echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
+                      exit 1
+                  fi
+                  python3 .github/ci/check-release-metadata.py --tag "$VERSION"
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+                  echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    native-build:
+        name: Native ${{ matrix.arch }} - build, scan and stage stable image
+        needs: [validate-release]
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - arch: amd64
+                      runner: ubuntu-latest
+                    - arch: arm64
+                      runner: ubuntu-24.04-arm
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 180
         permissions:
             contents: read
             packages: write
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Set GHCR image name
+            - uses: actions/checkout@v4
+            - name: Free runner disk space
+              shell: bash
               run: |
-                  OWNER="${{ github.repository_owner }}"
-                  echo "GHCR_IMAGE_NAME=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_ENV"
-
-            - name: Free up disk space
-              run: |
-                  sudo rm -rf /usr/share/dotnet
-                  sudo rm -rf /opt/ghc
-                  sudo rm -rf /usr/local/share/boost
-                  sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
-
-            - name: Login to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
-
-            # ---- Image scan (reports, does not block) --------------------
-            # Build the Intel image on its own first and scan it before anything
-            # is published. This costs almost nothing on top of the real build:
-            # the multi-architecture step below reuses the identical cached
-            # layers for its Intel leg.
-            #
-            # WHY THIS REPORTS RATHER THAN BLOCKS. It was written to block, then
-            # run against a real build of this image (arm64, locally, 2026-08-23)
-            # and it failed on 19 findings — none of which anyone would act on
-            # before a release:
-            #
-            #   8  Go stdlib CVEs inside wandb-core. wandb is a hard dependency
-            #      of laion-clap; nothing here imports it, and the binary is
-            #      never executed.
-            #   1  torch 2.5.1 -> 2.6.0 (CVE-2025-32434). The 2.5.1 pin is
-            #      deliberate; a mismatched torch ABI is what caused #165.
-            #   7  Node packages, most of them inside npm's OWN bundled
-            #      node_modules rather than this project's dependency tree.
-            #   1  /etc/ssl/private/ssl-cert-snakeoil.key — Debian's throwaway
-            #      self-signed placeholder from the ssl-cert package. Skipped
-            #      below; it is not a secret in any meaningful sense.
-            #
-            # A gate that stops a release over a placeholder key and an unused
-            # telemetry binary trains people to bypass it, which is worse than
-            # not having one. So: report every run, keep it visible in the job
-            # summary, and turn `--exit-code 1` back on once the baseline is
-            # something a failure would genuinely mean. The dependency scan in
-            # security.yml DOES block, and passes clean.
-            - name: Build image for scanning (amd64)
+                  sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+                  df -h /
+            - uses: docker/setup-buildx-action@v3
+            - name: Build and load native stable image without publishing
               uses: docker/build-push-action@v5
               with:
                   context: .
                   file: ./Dockerfile
-                  build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
+                  platforms: linux/${{ matrix.arch }}
                   push: false
                   load: true
-                  tags: kima:scan
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
-                  platforms: linux/amd64
-
-            - name: Install Trivy
+                  tags: kima:stable-scan
+                  build-args: |
+                      NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
+                  labels: |
+                      org.opencontainers.image.revision=${{ needs.validate-release.outputs.source }}
+                      org.opencontainers.image.version=${{ needs.validate-release.outputs.version }}
+                  cache-from: type=gha,scope=stable-${{ matrix.arch }}
+                  cache-to: type=gha,mode=max,scope=stable-${{ matrix.arch }}
+            - name: Verify native image architecture and source label
+              shell: bash
+              env:
+                  ARCH: ${{ matrix.arch }}
+                  SOURCE: ${{ needs.validate-release.outputs.source }}
+              run: |
+                  set -euo pipefail
+                  test "$(docker image inspect kima:stable-scan --format '{{.Architecture}}')" = "$ARCH"
+                  test "$(docker image inspect kima:stable-scan --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE"
+            - name: Install pinned Trivy
               uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
               with:
                   version: v0.74.0
                   cache: true
-
-            - name: Scan the image (report only)
-              if: always()
+            - name: Block fixable HIGH and CRITICAL on exact native image
+              shell: bash
+              env:
+                  ARCH: ${{ matrix.arch }}
               run: |
+                  set -euo pipefail
+                  trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
+                    --format json --output "$RUNNER_TEMP/stable-image-vulnerabilities.json" kima:stable-scan
+                  python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+                  python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/stable-image-vulnerabilities.json" "$ARCH"
+            - name: Block secrets embedded in exact native image
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  trivy image --scanners secret --ignorefile .trivyignore \
+                    --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+                    --exit-code 1 --format table kima:stable-scan
+            - uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Push only the verified native staging image
+              shell: bash
+              env:
+                  VERSION: ${{ needs.validate-release.outputs.version }}
+                  ARCH: ${{ matrix.arch }}
+                  SOURCE: ${{ needs.validate-release.outputs.source }}
+                  OWNER: ${{ github.repository_owner }}
+              run: |
+                  set -euo pipefail
+                  IMAGE="ghcr.io/${OWNER,,}/kima-hub"
+                  short="${SOURCE:0:12}"
+                  stage="${IMAGE}:stable-stage-${VERSION}-${short}-${ARCH}"
+                  docker tag kima:stable-scan "$stage"
+                  docker push "$stage"
+                  echo "Scanned native $ARCH staged at $stage" >> "$GITHUB_STEP_SUMMARY"
+
+    assemble:
+        name: Assemble and verify both stable architectures before release
+        needs: [validate-release, native-build]
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        permissions:
+            contents: read
+            packages: write
+        steps:
+            - uses: docker/setup-buildx-action@v3
+            - uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+            - name: Publish version manifest only after both native scans
+              shell: bash
+              env:
+                  VERSION: ${{ needs.validate-release.outputs.version }}
+                  SOURCE: ${{ needs.validate-release.outputs.source }}
+                  OWNER: ${{ github.repository_owner }}
+              run: |
+                  set -euo pipefail
+                  IMAGE="ghcr.io/${OWNER,,}/kima-hub"
+                  short="${SOURCE:0:12}"
+                  stable="${IMAGE}:${VERSION}"
+                  # Never overwrite a previously published immutable stable version.
+                  if docker buildx imagetools inspect "$stable" >/dev/null 2>&1; then
+                      echo "Refusing to overwrite existing stable tag $stable" >&2
+                      exit 1
+                  fi
+                  docker buildx imagetools create -t "$stable" \
+                      "${IMAGE}:stable-stage-${VERSION}-${short}-amd64" \
+                      "${IMAGE}:stable-stage-${VERSION}-${short}-arm64"
+                  docker buildx imagetools inspect --raw "$stable" |
+                    python3 -c '
+                  import json,sys
+                  obj=json.load(sys.stdin)
+                  platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in obj.get("manifests",[])}
+                  assert {("linux","amd64"),("linux","arm64")} <= platforms, f"Missing stable platform: {platforms}"
+                  print("Both native architectures present in stable OCI index")
+                  '
+                  digest="$(docker buildx imagetools inspect "$stable" |
+                      sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
+                  [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
                   {
-                    echo '### Image scan — HIGH/CRITICAL with a fix available'
-                    echo ''
-                    echo '```'
-                    trivy image \
-                      --scanners vuln,secret \
-                      --severity HIGH,CRITICAL \
-                      --ignore-unfixed \
-                      --ignorefile .trivyignore \
-                      --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
-                      --exit-code 0 \
-                      --format table \
-                      kima:scan 2>&1
-                    echo '```'
+                      echo "### Stable multiarch candidate assembled"
+                      echo "Version: $VERSION"
+                      echo "Exact source: $SOURCE"
+                      echo "Image: $stable"
+                      echo "Immutable manifest: ${IMAGE}@${digest}"
+                      echo "Both native images passed fixable-vulnerability and secret scans."
+                      echo "No :latest alias changed; promote only with separate explicit authorization."
                   } >> "$GITHUB_STEP_SUMMARY"
 
-            - name: Build and push
-              uses: docker/build-push-action@v5
-              with:
-                  context: .
-                  file: ./Dockerfile
-                  build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=chillverse
-                  push: true
-                  tags: |
-                      ${{ env.GHCR_IMAGE_NAME }}:${{ steps.version.outputs.version }}
-                      ${{ env.GHCR_IMAGE_NAME }}:latest
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
-                  platforms: linux/amd64,linux/arm64
-
     create-release:
-        needs: [build]
+        needs: [assemble, validate-release]
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -146,20 +213,11 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Extract version
-              id: version
-              run: |
-                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                    echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-                  fi
-
             - name: Create Release
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: ${{ steps.version.outputs.version }}
-                  name: Kima ${{ steps.version.outputs.version }}
+                  tag_name: ${{ needs.validate-release.outputs.version }}
+                  name: Kima ${{ needs.validate-release.outputs.version }}
                   body: |
                       ## Quick Start
 
@@ -169,10 +227,12 @@ jobs:
                         -p 3030:3030 \
                         -v /path/to/your/music:/music \
                         -v kima_data:/data \
-                        ghcr.io/oxygengs/kima-hub:${{ steps.version.outputs.version }}
+                        ghcr.io/oxygengs/kima-hub:${{ needs.validate-release.outputs.version }}
                       ```
 
                       Then open http://localhost:3030 and create your account!
+
+                      The :latest alias remains unchanged pending separate approval.
 
                       ## Documentation
 

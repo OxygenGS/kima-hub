@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SettingsSection, SettingsRow } from "../ui";
+import { SettingsSection, SettingsRow, SettingsInput } from "../ui";
 import { useAuth } from "@/lib/auth-context";
-import { useBranding } from "@/lib/branding-context";
 import { api } from "@/lib/api";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
+import { Button } from "@/components/ui/Button";
+import { copyText } from "@/lib/clipboard";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface ApiKey {
     id: string;
@@ -16,7 +18,6 @@ interface ApiKey {
 
 export function SubsonicSection() {
     const { user } = useAuth();
-    const { branding } = useBranding();
 
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [generating, setGenerating] = useState(false);
@@ -72,6 +73,8 @@ export function SubsonicSection() {
         }
     };
 
+    const [confirmRevoke, setConfirmRevoke] = useState<{ id: string; name: string } | null>(null);
+
     const handleRevoke = async (id: string) => {
         setRevoking(id);
         try {
@@ -85,10 +88,6 @@ export function SubsonicSection() {
         }
     };
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-    };
-
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString(undefined, {
             year: "numeric",
@@ -99,7 +98,6 @@ export function SubsonicSection() {
 
     return (
         <SettingsSection id="subsonic" title="Native Apps">
-            {/* Connection Info */}
             <SettingsRow
                 label="Server URL"
                 description="Enter this in your Subsonic-compatible client. Admins can set a persistent URL in Storage settings."
@@ -109,8 +107,8 @@ export function SubsonicSection() {
                         {serverUrl}
                     </span>
                     <button
-                        onClick={() => copyToClipboard(serverUrl)}
-                        className="text-xs text-brand hover:text-[#f97316] transition-colors shrink-0"
+                        onClick={() => void copyText(serverUrl)}
+                        className="text-xs text-brand hover:text-brand-hover transition-colors shrink-0"
                     >
                         Copy
                     </button>
@@ -119,36 +117,32 @@ export function SubsonicSection() {
 
             <SettingsRow
                 label="Username"
-                description={`Use your ${branding.name} username in the client`}
+                description="Use your Kima username in the client"
             >
                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
                     {user?.username}
                 </span>
             </SettingsRow>
 
-            {/* Token Generation */}
             <SettingsRow
                 label="API Token"
                 description="Generate a token to use as the password in your client"
             >
                 <div className="flex flex-col gap-2">
-                    <input
-                        type="text"
+                    <SettingsInput
                         value={deviceName}
-                        onChange={(e) => setDeviceName(e.target.value)}
+                        onChange={setDeviceName}
                         placeholder="Client name (e.g. Amperfy, Symfonium, DSub)"
-                        className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg tabular-nums
-                            placeholder:text-[var(--text-muted)] focus:outline-none focus:border-white/20 w-full"
                     />
                     <div className="inline-flex items-center gap-3">
-                        <button
+                        <Button
+                            variant="primary"
+                            size="sm"
                             onClick={handleGenerate}
                             disabled={generating}
-                            className="px-4 py-2 bg-brand text-black text-xs font-semibold rounded-lg
-                                hover:bg-[#f97316] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             {generating ? "Generating..." : "Generate Token"}
-                        </button>
+                        </Button>
                         <InlineStatus
                             status={status}
                             message={message}
@@ -158,10 +152,9 @@ export function SubsonicSection() {
                 </div>
             </SettingsRow>
 
-            {/* Newly generated token display */}
             {newToken && (
                 <div className="py-4 space-y-3 border-t border-b border-white/5">
-                    <p className="text-xs text-[#f59e0b]">
+                    <p className="text-xs text-warning">
                         Save this key — it won&apos;t be shown again.
                     </p>
                     <div className="flex items-start gap-2 min-w-0 overflow-hidden">
@@ -169,8 +162,8 @@ export function SubsonicSection() {
                             {newToken}
                         </code>
                         <button
-                            onClick={() => copyToClipboard(newToken)}
-                            className="text-xs text-brand hover:text-[#f97316] transition-colors shrink-0 pt-2"
+                            onClick={() => void copyText(newToken)}
+                            className="text-xs text-brand hover:text-brand-hover transition-colors shrink-0 pt-2"
                         >
                             Copy
                         </button>
@@ -178,7 +171,6 @@ export function SubsonicSection() {
                 </div>
             )}
 
-            {/* Setup guide — shown after a token has been generated */}
             {newToken && (
                 <SettingsRow
                     label="Setup Guide"
@@ -186,13 +178,12 @@ export function SubsonicSection() {
                 >
                     <div className="space-y-1 text-xs tabular-nums text-[var(--text-muted)]">
                         <p>1. Server URL — paste the URL above</p>
-                        <p>2. Username — your {branding.name} username</p>
+                        <p>2. Username — your Kima username</p>
                         <p>3. Password / API key — paste the token above</p>
                     </div>
                 </SettingsRow>
             )}
 
-            {/* Existing API keys */}
             {apiKeys.length > 0 && (
                 <SettingsRow
                     label="Active Tokens"
@@ -212,9 +203,9 @@ export function SubsonicSection() {
                                     </p>
                                 </div>
                                 <button
-                                    onClick={() => handleRevoke(key.id)}
+                                    onClick={() => setConfirmRevoke({ id: key.id, name: key.name })}
                                     disabled={revoking === key.id}
-                                    className="text-xs tabular-nums text-red-400 hover:text-red-300 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="text-xs tabular-nums text-danger-light hover:brightness-125 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {revoking === key.id ? "Revoking..." : "Revoke"}
                                 </button>
@@ -223,6 +214,17 @@ export function SubsonicSection() {
                     </div>
                 </SettingsRow>
             )}
+            <ConfirmDialog
+                isOpen={confirmRevoke !== null}
+                onClose={() => setConfirmRevoke(null)}
+                onConfirm={() => {
+                    if (confirmRevoke) void handleRevoke(confirmRevoke.id);
+                    setConfirmRevoke(null);
+                }}
+                title="Revoke this token?"
+                message={`${confirmRevoke?.name ?? "This token"} stops working at once. The app using it needs a new token to connect again.`}
+                confirmText="Revoke"
+            />
         </SettingsSection>
     );
 }

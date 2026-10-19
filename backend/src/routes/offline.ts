@@ -97,7 +97,7 @@ router.post("/albums/:id/download", requireMusicPermission("canDownloadTracks"),
                 discNumber: track.discNumber,
                 discSubtitle: track.discSubtitle,
                 duration: track.duration,
-                streamUrl: `/library/tracks/${track.id}/stream?quality=${selectedQuality}`,
+                streamUrl: `/api/library/tracks/${track.id}/stream?quality=${selectedQuality}`,
             })),
             estimatedSizeMb,
         };
@@ -115,16 +115,77 @@ router.post("/albums/:id/download", requireMusicPermission("canDownloadTracks"),
 });
 
 // POST /offline/tracks/:id/complete (called by mobile after download)
-router.post("/tracks/:id/complete", async (req, res) => {
+// The reported size feeds quota accounting, so it must be finite, positive and
+// plausible for the track's duration and quality; the quota is re-checked first.
+const completeDownloadSchema = z.object({
+    localPath: z.string().min(1),
+    quality: z.enum(["original", "high", "medium", "low"]),
+    fileSizeMb: z.coerce.number().finite().positive(),
+});
+
+// Upper bound in MB per second of audio per tier, with headroom above the
+// tier's nominal bitrate (a 3-minute "low" file can't honestly exceed
+// ~5.4 MB, the bound allows 5.4). Original is the untouched file.
+const maxMbPerSecond: Record<"original" | "high" | "medium" | "low", number> = {
+    original: 1.2,  // 24-bit/192 kHz stereo PCM is 1.152 MB/s
+    high: 0.06,     // nominal 320 kbps
+    medium: 0.04,   // nominal 192 kbps
+    low: 0.03,      // nominal 128 kbps
+};
+
+router.post("/tracks/:id/complete", requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
         const userId = req.user!.id;
         const trackId = req.params.id;
-        const { localPath, quality, fileSizeMb } = req.body;
 
-        if (!localPath || !quality || !fileSizeMb) {
+        const parsed = completeDownloadSchema.safeParse(req.body);
+        if (!parsed.success) {
             return res
                 .status(400)
                 .json({ error: "localPath, quality, and fileSizeMb required" });
+        }
+        const { localPath, quality, fileSizeMb } = parsed.data;
+
+        const track = await prisma.track.findUnique({
+            where: { id: trackId },
+            select: { id: true, duration: true },
+        });
+        if (!track) {
+            return res.status(404).json({ error: "Track not found" });
+        }
+
+        const plausibleMaxMb = track.duration * maxMbPerSecond[quality];
+        if (track.duration > 0 && fileSizeMb > plausibleMaxMb) {
+            return res.status(400).json({
+                error: `fileSizeMb ${fileSizeMb} exceeds the maximum ${plausibleMaxMb.toFixed(1)} MB for a ${track.duration}s ${quality} track`,
+            });
+        }
+
+        // Quota re-check against actual stored rows: replace any previous
+        // size for this exact track+quality pair before comparing to the cap.
+        const [settings, existing] = await Promise.all([
+            prisma.userSettings.findUnique({ where: { userId } }),
+            prisma.cachedTrack.findUnique({
+                where: {
+                    userId_trackId_quality: { userId, trackId, quality },
+                },
+            }),
+        ]);
+        if (settings) {
+            const cacheSum = await prisma.cachedTrack.aggregate({
+                where: { userId },
+                _sum: { fileSizeMb: true },
+            });
+            const currentWithoutThis =
+                (cacheSum._sum.fileSizeMb || 0) - (existing?.fileSizeMb || 0);
+            if (currentWithoutThis + fileSizeMb > settings.maxCacheSizeMb) {
+                return res.status(400).json({
+                    error: "Cache size limit exceeded",
+                    currentSize: currentWithoutThis,
+                    maxSize: settings.maxCacheSizeMb,
+                    needed: fileSizeMb,
+                });
+            }
         }
 
         const cachedTrack = await prisma.cachedTrack.upsert({
@@ -140,11 +201,11 @@ router.post("/tracks/:id/complete", async (req, res) => {
                 trackId,
                 localPath,
                 quality,
-                fileSizeMb: parseFloat(fileSizeMb),
+                fileSizeMb,
             },
             update: {
                 localPath,
-                fileSizeMb: parseFloat(fileSizeMb),
+                fileSizeMb,
                 lastAccessedAt: new Date(),
             },
         });

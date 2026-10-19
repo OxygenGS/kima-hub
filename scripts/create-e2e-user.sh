@@ -1,15 +1,7 @@
 #!/usr/bin/env bash
-# Create the E2E test user inside a running Kima Docker container.
-# Usage: bash scripts/create-e2e-user.sh
-#
-# Reads KIMA_TEST_USERNAME and KIMA_TEST_PASSWORD from env.
-# If not set, defaults to username "kima_e2e" and a random password.
-# The chosen credentials are printed at the end -- capture them for Playwright.
-#
-# Env vars:
-#   KIMA_TEST_USERNAME  -- test username (default: kima_e2e)
-#   KIMA_TEST_PASSWORD  -- test password (default: randomly generated)
-#   KIMA_CONTAINER      -- container name (default: kima-test)
+# Creates the E2E test user inside a running Kima container and prints the
+# credentials for Playwright. Env: KIMA_TEST_USERNAME (default kima_e2e),
+# KIMA_TEST_PASSWORD (default random), KIMA_CONTAINER (default kima-test).
 
 set -euo pipefail
 
@@ -38,10 +30,14 @@ HASH=$(docker exec -e "TEST_PASS=${TEST_PASS}" "${CONTAINER}" bash -c '
 # Write SQL to a temp file inside the container to avoid dollar sign expansion.
 # The bcrypt hash contains $2b$10$... which bash would mangle if embedded in
 # a double-quoted string passed to docker exec.
-docker exec -e "HASH=${HASH}" -e "TEST_USER=${TEST_USER}" "${CONTAINER}" bash -c '
+# The hardened AIO enforces peer authentication for local Unix sockets:
+# only the matching operating-system PostgreSQL account can connect as
+# the postgres DB role. Test setup therefore uses that restricted local path
+# instead of weakening pg_hba.conf or exposing a database password.
+docker exec -u postgres -e "HASH=${HASH}" -e "TEST_USER=${TEST_USER}" "${CONTAINER}" bash -c '
   # Heredoc is unquoted so ${TEST_USER} and ${HASH} expand (env vars set via -e above).
   # SQL single quotes are plain literals here -- no shell escaping needed.
-  psql -U kima -d kima <<ENDSQL
+  psql -v ON_ERROR_STOP=1 -U postgres -d kima <<ENDSQL
 INSERT INTO "User" (id, username, "passwordHash", role, "onboardingComplete")
 VALUES ('\''e2e_test_user_kima'\'', '\''${TEST_USER}'\'', '\''${HASH}'\'', '\''admin'\'', true)
 ON CONFLICT (username) DO UPDATE

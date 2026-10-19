@@ -8,6 +8,14 @@
 import PQueue from "p-queue";
 import { logger } from "../utils/logger";
 
+/**
+ * Queue priority for work a person is waiting on (a page view). Background
+ * enrichment queues at 0; during a full-library pass this is what keeps an
+ * artist page from sitting behind thousands of queued sweep calls on the
+ * 1-req/s services.
+ */
+export const INTERACTIVE_PRIORITY = 10;
+
 interface RateLimitConfig {
     /** Requests per interval */
     intervalCap: number;
@@ -22,7 +30,6 @@ interface RateLimitConfig {
 }
 
 interface ServiceConfig {
-    lastfm: RateLimitConfig;
     musicbrainz: RateLimitConfig;
     deezer: RateLimitConfig;
     lidarr: RateLimitConfig;
@@ -32,17 +39,12 @@ interface ServiceConfig {
     wikidata: RateLimitConfig;
     fanart: RateLimitConfig;
     itunes: RateLimitConfig;
+    acoustid: RateLimitConfig;
+    listenbrainz: RateLimitConfig;
 }
 
 // Service-specific rate limit configurations
 const SERVICE_CONFIGS: ServiceConfig = {
-    lastfm: {
-        intervalCap: 3, // 3 requests per second (Last.fm allows 5, but we're conservative)
-        interval: 1000,
-        concurrency: 2,
-        maxRetries: 3,
-        baseDelay: 1000,
-    },
     musicbrainz: {
         intervalCap: 1, // 1 request per second (MusicBrainz is strict)
         interval: 1100, // Slightly over 1 second to be safe
@@ -72,8 +74,8 @@ const SERVICE_CONFIGS: ServiceConfig = {
         baseDelay: 1000,
     },
     lrclib: {
-        intervalCap: 2, // LRCLIB - conservative
-        interval: 1000,
+        intervalCap: 1, // LRCLIB documents 20 requests/minute
+        interval: 3000,
         concurrency: 1,
         maxRetries: 1,
         baseDelay: 1000,
@@ -106,6 +108,20 @@ const SERVICE_CONFIGS: ServiceConfig = {
         maxRetries: 2,
         baseDelay: 2000,
     },
+    acoustid: {
+        intervalCap: 3, // 3 requests per second - matches AcoustID's shared-client-key limit
+        interval: 1000,
+        concurrency: 1,
+        maxRetries: 1,
+        baseDelay: 2000,
+    },
+    listenbrainz: {
+        intervalCap: 1, // ListenBrainz asks clients for at most 1 request/second
+        interval: 1100, // Slightly over 1 second to be safe
+        concurrency: 1,
+        maxRetries: 2,
+        baseDelay: 2000,
+    },
 };
 
 type ServiceName = keyof ServiceConfig;
@@ -120,9 +136,6 @@ interface CircuitState {
 class GlobalRateLimiter {
     private queues: Map<ServiceName, PQueue> = new Map();
     private circuitBreakers: Map<ServiceName, CircuitState> = new Map();
-    private globalPaused = false;
-    private globalPauseUntil = 0;
-    private concurrencyMultiplier = 1; // 1-5 multiplier for user-configurable speed
 
     constructor() {
         // Initialize queues for each service
@@ -164,13 +177,6 @@ class GlobalRateLimiter {
 
         if (!queue || !config) {
             throw new Error(`Unknown service: ${service}`);
-        }
-
-        // Check global pause
-        if (this.globalPaused && Date.now() < this.globalPauseUntil) {
-            const waitTime = this.globalPauseUntil - Date.now();
-            logger.debug(`Global rate limit pause - waiting ${waitTime}ms`);
-            await this.sleep(waitTime);
         }
 
         // Check circuit breaker
@@ -268,12 +274,14 @@ class GlobalRateLimiter {
         baseDelay: number,
         error?: any
     ): number {
-        // Check for Retry-After header
+        // A Retry-After of 0 says nothing about when to come back and an immediate retry is what rate limiting
+        // punishes, so it falls through to backoff. A wait past the cap is not slept through in one request;
+        // the stage's own retry ladder asks again later.
         const retryAfter = error?.response?.headers?.["retry-after"];
         if (retryAfter) {
             const parsed = parseInt(retryAfter, 10);
-            if (!isNaN(parsed)) {
-                return parsed * 1000; // Convert to ms
+            if (!isNaN(parsed) && parsed > 0) {
+                return Math.min(parsed * 1000, 60000);
             }
         }
 
@@ -284,65 +292,12 @@ class GlobalRateLimiter {
     }
 
     /**
-     * Pause all requests globally (for severe rate limiting)
-     */
-    pauseAll(durationMs: number) {
-        this.globalPaused = true;
-        this.globalPauseUntil = Date.now() + durationMs;
-        logger.warn(`Global rate limiter paused for ${durationMs}ms`);
-    }
-
-    /**
-     * Resume all requests
-     */
-    resume() {
-        this.globalPaused = false;
-        this.globalPauseUntil = 0;
-        logger.debug("Global rate limiter resumed");
-    }
-
-    /**
-     * Get queue statistics
-     */
-    getStats(): Record<ServiceName, { pending: number; size: number }> {
-        const stats: any = {};
-        for (const [service, queue] of this.queues.entries()) {
-            stats[service] = {
-                pending: queue.pending,
-                size: queue.size,
-            };
-        }
-        return stats;
-    }
-
-    /**
-     * Wait for all pending requests to complete
-     */
-    async drain(): Promise<void> {
-        const promises = Array.from(this.queues.values()).map((queue) =>
-            queue.onIdle()
-        );
-        await Promise.all(promises);
-    }
-
-    /**
-     * Clear all pending requests
-     */
-    clear() {
-        for (const queue of this.queues.values()) {
-            queue.clear();
-        }
-    }
-
-    /**
      * Update concurrency multiplier for parallel enrichment processing
      * This allows power users to increase enrichment speed while respecting API rate limits
      * @param multiplier 1-5, where 1 is conservative and 5 is maximum
      */
     updateConcurrencyMultiplier(multiplier: number) {
         const clampedMultiplier = Math.max(1, Math.min(5, multiplier));
-        this.concurrencyMultiplier = clampedMultiplier;
-        
         logger.debug(`[Rate Limiter] Updating concurrency multiplier to ${clampedMultiplier}`);
         
         // Update all service queues with new concurrency
@@ -360,13 +315,6 @@ class GlobalRateLimiter {
         }
     }
 
-    /**
-     * Get current concurrency multiplier
-     */
-    getConcurrencyMultiplier(): number {
-        return this.concurrencyMultiplier;
-    }
-
     private sleep(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -376,4 +324,4 @@ class GlobalRateLimiter {
 export const rateLimiter = new GlobalRateLimiter();
 
 // Export types for use in other services
-export type { ServiceName, RateLimitConfig };
+export type { ServiceName };

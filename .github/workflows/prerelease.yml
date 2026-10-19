@@ -1,119 +1,193 @@
 name: Pre-release Image
 
-# A pre-release image you push on purpose, not on a timer.
-#
-# This replaces the old nightly build, which pushed a two-architecture image to
-# Docker Hub every single night whether anything had changed or not -- and which
-# then failed eleven nights running without anyone noticing, because nothing
-# watched it and it opened no issue.
-#
-# Two ways in: push the branch named `prerelease`, or press Run workflow on the
-# Actions tab. Either way the image goes ONLY to this repository's GitHub
-# Container Registry. Docker Hub is the public release channel and stays
-# using version tags -- see docker-publish.yml.
-#
-# It builds BOTH architectures deliberately. The ARM leg is the fragile one: it
-# compiles PyTorch from source whenever a prebuilt wheel is missing, and that is
-# exactly what breaks a release build while the Intel leg looks fine. Proving
-# ARM here, before you tag, is the whole reason this workflow exists.
-
+# Manual only. Each architecture builds on a native runner, never in QEMU.
+# The two platform-specific staging tags are pushed only after scanning the
+# EXACT image. The combined prerelease tag is built after both jobs succeed.
 on:
-    push:
-        branches: [prerelease]
-    workflow_dispatch:
-        inputs:
-            tag_suffix:
-                description: "Extra tag for this build, e.g. rc1 gives :prerelease-rc1"
-                required: false
-                type: string
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: "Optional suffix only, e.g. v111-rc2 (do not type tag_suffix)"
+        required: false
+        type: string
 
 concurrency:
-    group: prerelease
-    cancel-in-progress: true
+  group: prerelease-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-    build:
-        name: Build & Push Pre-release (ghcr.io only)
-        runs-on: ubuntu-latest
-        timeout-minutes: 90
-        permissions:
-            contents: read
-            packages: write
+  validate:
+    name: Validate candidate release metadata and suffix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      short: ${{ steps.meta.outputs.short }}
+      suffix: ${{ steps.meta.outputs.suffix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate fork version and changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/ci/check-release-metadata.py --self-test
+          python3 .github/ci/check-release-metadata.py --candidate
+      - name: Validate suffix BEFORE expensive Docker builds
+        id: meta
+        shell: bash
+        env:
+          TAG_SUFFIX: ${{ inputs.tag_suffix }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TAG_SUFFIX" ] && ! [[ "$TAG_SUFFIX" =~ ^[a-z0-9][a-z0-9.-]{0,31}$ ]]; then
+            echo "Use just v111-rc2, without the tag_suffix label." >&2
+            exit 1
+          fi
+          short="$(git rev-parse --short=7 HEAD)"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "suffix=$TAG_SUFFIX" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_OUTPUT"
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+  native-build:
+    name: Native ${{ matrix.arch }} - build, scan and stage image
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk for audio/ML image
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and load native image - no registry push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: kima:prerelease-scan
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=prerelease
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=prerelease-${{ needs.validate.outputs.short }}
+          cache-from: type=gha,scope=prerelease-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=prerelease-${{ matrix.arch }}
+      - name: Assert image architecture
+        env:
+          EXPECTED: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect kima:prerelease-scan --format '{{.Architecture}}')" = "$EXPECTED"
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Block fixable HIGH/CRITICAL vulnerabilities in this image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
+            --format json --output "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" kima:prerelease-scan
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/prerelease-image-vulnerabilities.json" "$ARCH"
+      - name: Block embedded secrets before image push
+        run: |
+          set -euo pipefail
+          trivy image --scanners secret --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 --format table kima:prerelease-scan
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push precisely the scanned native image to staging tag
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          SHORT: ${{ needs.validate.outputs.short }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          arch_tag="${IMAGE}:prerelease-${SHORT}-${ARCH}"
+          docker tag kima:prerelease-scan "$arch_tag"
+          docker push "$arch_tag"
+          echo "Successfully scanned and staged native $ARCH image at $arch_tag" >> "$GITHUB_STEP_SUMMARY"
 
-            - name: Set image name
-              run: |
-                  OWNER="${{ github.repository_owner }}"
-                  echo "GHCR_IMAGE=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_ENV"
+  assemble:
+    name: Assemble verified AMD64 and ARM64 manifest
+    needs: [validate, native-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compose, verify and publish candidate (never latest)
+        env:
+          IMAGE: ${{ needs.validate.outputs.image }}
+          SHORT: ${{ needs.validate.outputs.short }}
+          SUFFIX: ${{ needs.validate.outputs.suffix }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="${IMAGE}:prerelease-${SHORT}"
+          tags=(-t "$candidate")
+          if [ -n "$SUFFIX" ]; then
+            tags+=(-t "${IMAGE}:prerelease-${SUFFIX}")
+          fi
+          docker buildx imagetools create "${tags[@]}" \
+            "${IMAGE}:prerelease-${SHORT}-amd64" \
+            "${IMAGE}:prerelease-${SHORT}-arm64"
 
-            # The image carries PyTorch, twelve ML models and a full Postgres,
-            # so a default runner runs out of disk partway through the build.
-            - name: Free up disk space
-              run: |
-                  sudo rm -rf /usr/share/dotnet
-                  sudo rm -rf /opt/ghc
-                  sudo rm -rf /usr/local/share/boost
-                  sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
-
-            - name: Login to GitHub Container Registry
-              uses: docker/login-action@v3
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Get short SHA
-              id: sha
-              run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-            - name: Compose tag list
-              id: tags
-              run: |
-                  TAGS="${GHCR_IMAGE}:prerelease"$'\n'"${GHCR_IMAGE}:prerelease-${{ steps.sha.outputs.short }}"
-                  if [ -n "${{ inputs.tag_suffix }}" ]; then
-                    TAGS="${TAGS}"$'\n'"${GHCR_IMAGE}:prerelease-${{ inputs.tag_suffix }}"
-                  fi
-                  {
-                    echo 'list<<TAGS_EOF'
-                    echo "${TAGS}"
-                    echo 'TAGS_EOF'
-                  } >> "$GITHUB_OUTPUT"
-
-            - name: Build and push pre-release
-              uses: docker/build-push-action@v5
-              with:
-                  context: .
-                  file: ./Dockerfile
-                  push: true
-                  tags: ${{ steps.tags.outputs.list }}
-                  # Makes the running app show "1.10.0-prerelease" rather than a
-                  # bare version, so nobody mistakes one for a release.
-                  build-args: |
-                      NEXT_PUBLIC_BUILD_TYPE=prerelease
-                  labels: |
-                      org.opencontainers.image.revision=${{ github.sha }}
-                      org.opencontainers.image.version=prerelease-${{ steps.sha.outputs.short }}
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
-                  platforms: linux/amd64,linux/arm64
-
-            - name: Summary
-              run: |
-                  {
-                    echo "### Pre-release image published"
-                    echo ""
-                    echo "Both architectures built, so a release tag off this commit should build too."
-                    echo ""
-                    echo '```'
-                    echo "docker pull ${GHCR_IMAGE}:prerelease-${{ steps.sha.outputs.short }}"
-                    echo '```'
-                  } >> "$GITHUB_STEP_SUMMARY"
+          docker buildx imagetools inspect --raw "$candidate" |
+            python3 -c '
+          import json,sys
+          index=json.load(sys.stdin)
+          platforms={(m.get("platform",{}).get("os"),m.get("platform",{}).get("architecture")) for m in index.get("manifests",[])}
+          assert {("linux","amd64"),("linux","arm64")} <= platforms, f"Missing architecture: {platforms}"
+          print("Verified native AMD64 + ARM64 index")
+          '
+          digest="$(docker buildx imagetools inspect "$candidate" | sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          # The moving :prerelease alias is changed only once the combined
+          # platform index has passed inspection.
+          docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          {
+            echo "### Verified multiarchitecture pre-release candidate"
+            echo "Source commit: $SOURCE_SHA"
+            echo "Immutable OCI index: ${IMAGE}@${digest}"
+            echo "Pinned candidate: $candidate"
+            if [ -n "$SUFFIX" ]; then
+              echo "Named candidate: ${IMAGE}:prerelease-${SUFFIX}"
+            fi
+            echo "Each native platform's exact loaded image passed vulnerability and secret scanning before GHCR staging."
+            echo "NO stable tag, :latest update, merge, or production installation change."
+          } >> "$GITHUB_STEP_SUMMARY"

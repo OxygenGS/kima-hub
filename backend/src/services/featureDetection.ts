@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { redisClient } from "../utils/redis";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
+import { fpcalcPresent } from "./fpcalc";
 
 // Analyzer script paths in the Docker image
 const ESSENTIA_ANALYZER_PATH = "/app/audio-analyzer/analyzer.py";
@@ -11,6 +12,8 @@ interface AvailableFeatures {
     musicCNN: boolean;
     vibeEmbeddings: boolean;
     audiobookshelfEnabled: boolean;
+    /** chromaprint fpcalc binary present — gates the AcoustID identity path. */
+    fpcalc: boolean;
 }
 
 const HEARTBEAT_TTL = 300000; // 5 minutes
@@ -26,20 +29,29 @@ class FeatureDetectionService {
             return this.cache;
         }
 
-        const [musicCNN, vibeEmbeddings, audiobookshelfEnabled] = await Promise.all([
-            this.checkMusicCNN(),
-            this.checkCLAP(),
-            this.checkAudiobookshelf(),
-        ]);
+        const [musicCNN, vibeEmbeddings, audiobookshelfEnabled, fpcalc] =
+            await Promise.all([
+                this.checkMusicCNN(),
+                this.checkCLAP(),
+                this.checkAudiobookshelf(),
+                this.checkFpcalc(),
+            ]);
 
-        this.cache = { musicCNN, vibeEmbeddings, audiobookshelfEnabled };
+        this.cache = { musicCNN, vibeEmbeddings, audiobookshelfEnabled, fpcalc };
         this.lastCheck = now;
 
         logger.debug(
-            `[FEATURE-DETECTION] Features: musicCNN=${musicCNN}, vibeEmbeddings=${vibeEmbeddings}, audiobookshelf=${audiobookshelfEnabled}`
+            `[FEATURE-DETECTION] Features: musicCNN=${musicCNN}, vibeEmbeddings=${vibeEmbeddings}, audiobookshelf=${audiobookshelfEnabled}, fpcalc=${fpcalc}`
         );
 
         return this.cache;
+    }
+
+    private async workerAlive(heartbeatKey: string): Promise<boolean> {
+        const heartbeat = await redisClient.get(heartbeatKey);
+        if (!heartbeat) return false;
+        const timestamp = parseInt(heartbeat, 10);
+        return !isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL;
     }
 
     private async checkMusicCNN(): Promise<boolean> {
@@ -49,13 +61,7 @@ class FeatureDetectionService {
                 return true;
             }
 
-            const heartbeat = await redisClient.get("audio:worker:heartbeat");
-            if (heartbeat) {
-                const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
-                    return true;
-                }
-            }
+            if (await this.workerAlive("audio:worker:heartbeat")) return true;
 
             const trackWithEnergy = await prisma.track.findFirst({
                 where: { energy: { not: null } },
@@ -80,13 +86,7 @@ class FeatureDetectionService {
                 return true;
             }
 
-            const heartbeat = await redisClient.get("clap:worker:heartbeat");
-            if (heartbeat) {
-                const timestamp = parseInt(heartbeat, 10);
-                if (!isNaN(timestamp) && Date.now() - timestamp < HEARTBEAT_TTL) {
-                    return true;
-                }
-            }
+            if (await this.workerAlive("clap:worker:heartbeat")) return true;
 
             const embeddingCount = await prisma.trackEmbedding.count();
             return embeddingCount > 0;
@@ -107,6 +107,14 @@ class FeatureDetectionService {
             logger.error("[FEATURE-DETECTION] Error checking Audiobookshelf:", error);
             return false;
         }
+    }
+
+    /**
+     * fpcalc gates the AcoustID fingerprint path; ACOUSTID_DISABLED=true turns it
+     * off even when the binary exists. Probed once per process.
+     */
+    private checkFpcalc(): boolean {
+        return fpcalcPresent();
     }
 
     invalidateCache(): void {

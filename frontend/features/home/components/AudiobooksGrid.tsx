@@ -1,83 +1,36 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import { Audiobook } from "../types";
 import { HorizontalCarousel, CarouselItem } from "@/components/ui/HorizontalCarousel";
-import { memo, type CSSProperties } from "react";
-import { cn } from "@/utils/cn";
+import { cascadeStyle } from "@/lib/motion";
+import { memo } from "react";
+import { MediaCard } from "@/components/cards/MediaCard";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AudiobooksGridProps {
     audiobooks: Audiobook[];
 }
 
-interface AudiobookCardProps {
-    audiobook: Audiobook;
-    index: number;
-}
-
-const AudiobookCard = memo(function AudiobookCard({
-    audiobook,
-    index,
-}: AudiobookCardProps) {
-    const staggered = index < 8;
-
-    return (
-        <CarouselItem>
-            <Link
-                href={`/audiobooks/${audiobook.id}`}
-                data-tv-card
-                data-tv-card-index={index}
-                tabIndex={0}
-                className={cn(
-                    "group block",
-                    staggered && "animate-rise [animation-delay:calc(var(--i)*45ms)]",
-                )}
-                style={staggered ? { "--i": index } as CSSProperties : undefined}
-            >
-                <div className="relative bg-[var(--bg-primary)] border border-white/10 rounded-lg overflow-hidden hover:border-[#f59e0b]/40 transition-[border-color] duration-150 mx-1">
-                    <div className="relative aspect-square">
-                        <div className="w-full h-full bg-[#181818] flex items-center justify-center overflow-hidden">
-                            {audiobook.coverUrl ? (
-                                <Image
-                                    src={api.getCoverArtUrl(audiobook.coverUrl, 300)}
-                                    alt={audiobook.title}
-                                    fill
-                                    sizes="180px"
-                                    className="object-cover group-hover:scale-110 transition-transform duration-150"
-                                    unoptimized
-                                />
-                            ) : (
-                                <BookOpen className="w-10 h-10 text-[var(--text-muted)]" />
-                            )}
-                        </div>
-                    </div>
-                    <div className="h-0.5 bg-gradient-to-r from-[#f59e0b] to-[#d97706] scale-x-0 group-hover:scale-x-100 transition-transform duration-150" />
-                    <div className="relative z-10 p-3 bg-gradient-to-b from-[#0a0a0a] to-[#0f0f0f]">
-                        <h3 className="text-sm font-bold text-white truncate tracking-tight">
-                            {audiobook.title}
-                        </h3>
-                        <p className="text-xs tabular-nums text-[var(--text-muted)] truncate mt-0.5">
-                            {audiobook.author || "Audiobook"}
-                        </p>
-                    </div>
-                </div>
-            </Link>
-        </CarouselItem>
-    );
-});
-
 const AudiobooksGrid = memo(function AudiobooksGrid({ audiobooks }: AudiobooksGridProps) {
+    const { t } = useLanguage();
     return (
-        <HorizontalCarousel>
+        <HorizontalCarousel style={cascadeStyle(audiobooks.length)}>
             {audiobooks.map((audiobook, index) => (
-                <AudiobookCard
-                    key={audiobook.id}
-                    audiobook={audiobook}
-                    index={index}
-                />
+                <CarouselItem key={audiobook.id}>
+                    <MediaCard
+                        href={`/audiobooks/${audiobook.id}`}
+                        title={audiobook.title}
+                        subtitle={audiobook.author || t("Audiobook")}
+                        imageUrl={audiobook.coverUrl ? api.getCoverArtUrl(audiobook.coverUrl, 300) : null}
+                        fallbackIcon={BookOpen}
+                        type="audiobook"
+                        index={index}
+                        sizes="180px"
+                        className="mx-1"
+                    />
+                </CarouselItem>
             ))}
         </HorizontalCarousel>
     );

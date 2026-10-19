@@ -1,11 +1,6 @@
 /**
- * Task 8 GATE 4 -- DELETE /discover/batch marks a cancelled batch `failed`,
- * not `completed`, so the Task-3 /current fallback (which queries
- * status="completed") skips it instead of reading it as a successful empty week.
- *
- * Failure path FIRST: prove the cancelled batch is written failed+completedAt+
- * errorMessage, and prove that a batch in that state is invisible to the
- * completed-only lookup that drives /current.
+ * DELETE /discover/batch marks the cancelled batch failed with completedAt and a
+ * message, so the completed-only lookup behind /current skips it.
  */
 
 jest.mock('../../utils/db', () => ({
@@ -39,7 +34,6 @@ jest.mock('../../middleware/auth', () => ({
     },
 }));
 
-jest.mock('../../services/lastfm', () => ({ lastFmService: {} }));
 jest.mock('../../workers/queues', () => ({
     discoverQueue: {
         getJob: jest.fn(),
@@ -62,6 +56,15 @@ import express from 'express';
 import request from 'supertest';
 import discoverRoutes from '../discover';
 import { prisma } from '../../utils/db';
+import { redisClient } from '../../utils/redis';
+import { closeClient } from '../../utils/closeRedisClient';
+
+afterAll(async () => {
+    // The router pulls in services/listenBrainz, which opens the shared Redis
+    // client at import. Left open, Jest finishes the suite and outlives the
+    // process on that socket.
+    await closeClient(redisClient);
+});
 
 function makeApp() {
     const app = express();
@@ -70,7 +73,7 @@ function makeApp() {
     return app;
 }
 
-describe('DELETE /discover/batch -- cancel marks the batch failed, not completed (Task 8)', () => {
+describe('DELETE /discover/batch -- cancel marks the batch failed, not completed', () => {
     let app: express.Application;
 
     beforeAll(() => { app = makeApp(); });
@@ -92,9 +95,8 @@ describe('DELETE /discover/batch -- cancel marks the batch failed, not completed
         expect(res.body.success).toBe(true);
         expect(res.body.batchesCancelled).toBe(1);
 
-        // DISCRIMINATOR: the batch update MUST set status="failed". The original
-        // defect set it to "completed", which the /current fallback would read as
-        // a real (empty) week.
+        // The batch must be "failed", not "completed": the /current fallback
+        // would read a completed batch as a real (empty) week.
         expect((prisma.discoveryBatch.update as jest.Mock).mock.calls.length).toBe(1);
         const updateArgs = (prisma.discoveryBatch.update as jest.Mock).mock.calls[0][0];
         expect(updateArgs.where).toEqual({ id: 'batch-stuck-1' });
@@ -110,14 +112,10 @@ describe('DELETE /discover/batch -- cancel marks the batch failed, not completed
 
     it('CONSEQUENCE: a failed (cancelled) batch is excluded from the /current completed-only lookup', async () => {
         // The /current fallback queries discoveryBatch with status:"completed".
-        // A Prisma mock filtered by that where-clause returns null for a batch
-        // that is "failed" -- prove the handler then falls back to the calendar
-        // week (stale=false) rather than serving the cancelled batch's week.
-        (prisma.discoveryBatch.findFirst as jest.Mock).mockImplementation((q: any) => {
-            // Only a completed batch would be returned; our only batch is failed.
-            if (q?.where?.status === 'completed') return Promise.resolve(null);
-            return Promise.resolve(null);
-        });
+        // That lookup finds nothing for a batch that is "failed" -- prove the
+        // handler then falls back to the calendar week (stale=false) rather
+        // than serving the cancelled batch's week.
+        (prisma.discoveryBatch.findFirst as jest.Mock).mockResolvedValue(null);
         (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([]);
         (prisma.unavailableAlbum.findMany as jest.Mock).mockResolvedValue([]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue([]);

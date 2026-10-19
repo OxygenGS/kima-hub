@@ -113,6 +113,33 @@ codec="$(docker exec "$name" ffprobe -v error -select_streams a:0 \
 test "$codec" = mp3
 echo "PASS: MP3 is independently recognized by ffprobe"
 
+echo "---- Real waveform decode through authenticated HTTP API ----"
+waveform="$url/api/library/tracks/$track/waveform"
+status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$waveform")"
+assert_status 401 "$status" "Anonymous waveform denied"
+status="$(curl -sS --max-time 45 -o "$tmp/waveform.json" -D "$tmp/waveform.headers" -w '%{http_code}' \
+    -H "Authorization: Bearer $admin_token" "$waveform")"
+assert_status 200 "$status" "Authenticated real FFmpeg waveform"
+grep -qi '^cache-control: private, max-age=86400' "$tmp/waveform.headers"
+grep -qi '^vary:.*authorization' "$tmp/waveform.headers"
+grep -qi '^vary:.*cookie' "$tmp/waveform.headers"
+echo "PASS: authenticated waveform must not enter shared HTTP caches"
+python3 - "$tmp/waveform.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    payload = json.load(handle)
+peaks = payload["peaks"]
+assert payload["count"] == 400 and len(peaks) == 400, payload
+assert all(isinstance(x, (int, float)) and 0 <= x <= 1 for x in peaks)
+assert max(peaks) > 0.5, "Non-silent fixture decoded as silence"
+print("PASS: system FFmpeg decoded non-silent PCM into 400 normalized waveform peaks")
+PY
+curl -fsS --max-time 20 -H "Authorization: Bearer $admin_token" \
+    "$waveform" -o "$tmp/waveform-cached.json"
+cmp "$tmp/waveform.json" "$tmp/waveform-cached.json"
+echo "PASS: cached waveform API response matches first computation"
+
+
 echo "---- Stream-scoped ticket and negative authorization cases ----"
 ticket="$(curl -fsS --max-time 20 -X POST \
     -H "Authorization: Bearer $admin_token" \
@@ -154,19 +181,19 @@ curl -fsS --max-time 20 -H "Authorization: Bearer $viewer_token" \
     "$url/api/playback-state" | python3 -c \
     'import json,sys; d=json.load(sys.stdin); assert d["trackId"]=="ci-audio-track"; assert d["queue"][0]["id"]=="ci-audio-track"; assert d["isShuffle"]; print("Queue persisted")'
 
-echo "---- Check listening history was recorded asynchronously ----"
-played=false
-for i in $(seq 1 10); do
-    count="$(docker exec -u postgres "$name" psql -d kima -Atc \
-        "SELECT count(*) FROM \"Play\" WHERE \"trackId\"='$track'")"
-    if [ "$count" -gt 0 ]; then
-        played=true
-        break
-    fi
-    sleep 1
-done
-test "$played" = true
-echo "PASS: Streaming wrote play history"
+echo "---- Verify streaming does not fabricate a completed listen ----"
+# The source is only three seconds long. v1.11 requires a separate POST /plays
+# with actual listened time, and never records tracks <= 30 seconds.
+count="$(docker exec -u postgres "$name" psql -d kima -Atc \
+    "SELECT count(*) FROM \"Play\" WHERE \"trackId\"='$track'")"
+test "$count" = 0
+curl -fsS --max-time 20 -H "Authorization: Bearer $viewer_token" \
+    -H 'Content-Type: application/json' -d "{\"trackId\":\"$track\",\"secondsListened\":3}" \
+    "$url/api/plays" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d == {"recorded":False,"reason":"too-short"}, d'
+count="$(docker exec -u postgres "$name" psql -d kima -Atc \
+    "SELECT count(*) FROM \"Play\" WHERE \"trackId\"='$track'")"
+test "$count" = 0
+echo "PASS: Short streams and explicit short play reports do not inflate history"
 
 echo "---- Reject traversal beyond the music library ----"
 docker exec -i -u postgres "$name" psql -d kima -v ON_ERROR_STOP=1 <<'SQL'

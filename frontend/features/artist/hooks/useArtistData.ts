@@ -25,12 +25,18 @@ export function useArtistData() {
             try {
                 return await api.getArtist(id);
             } catch {
-                return await api.getArtistDiscovery(id);
+                try {
+                    return await api.getArtistDiscovery(id);
+                } catch (error) {
+                    // Neither the library nor MusicBrainz has it: that is "not found", not a failure.
+                    if ((error as { status?: number }).status === 404) return null;
+                    throw error;
+                }
             }
         },
         enabled: !!id,
         staleTime: 10 * 60 * 1000,
-        retry: 1,
+        retry: (failures, error) => (error as { status?: number }).status !== 404 && failures < 1,
     });
 
     // Refetch when downloads complete (active count decreases)
@@ -40,7 +46,6 @@ export function useArtistData() {
             prevActiveCountRef.current > 0 &&
             currentActiveCount < prevActiveCountRef.current
         ) {
-            // Downloads have completed, refresh data
             refetch();
         }
         prevActiveCountRef.current = currentActiveCount;
@@ -52,7 +57,6 @@ export function useArtistData() {
         return artist.id && !artist.id.includes("-") ? "library" : "discovery";
     }, [artist]);
 
-    // Sort state: 'year' or 'dateAdded'
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
 
     // Sort albums by year or dateAdded (auto-memoized by React Compiler)
@@ -74,10 +78,6 @@ export function useArtistData() {
                   return b.year - a.year;
               }
           });
-
-    // Handle errors - only show toast once, don't auto-navigate
-    // The page component should handle displaying a "not found" state
-    // Don't call router.back() as it causes navigation loops
 
     return {
         artist,

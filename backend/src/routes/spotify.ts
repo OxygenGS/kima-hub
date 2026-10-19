@@ -1,16 +1,15 @@
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
-import rateLimit from "express-rate-limit";
+import { createRateLimiter } from "../middleware/rateLimiter";
 import { withRetry } from "../utils/async";
 import { logger } from "../utils/logger";
 import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
 import { safeError } from "../utils/errors";
 import { z } from "zod";
 import { spotifyService } from "../services/spotify";
-import { spotifyImportService } from "../services/spotifyImport";
+import { spotifyImportService, getImportJob } from "../services/spotifyImport";
 import { deezerService } from "../services/deezer";
-import { songLinkService } from "../services/songlink";
 import { readSessionLog, getSessionLogPath } from "../utils/playlistLogger";
 import { parseM3U } from "../services/m3uParser";
 
@@ -50,6 +49,21 @@ const quickImportSchema = z.object({
     playlistName: z.string().min(1).max(200).optional(),
 });
 
+// Every supported playlist source, with the URL shape the quick import accepts;
+// the preview check only needs the domain half of each pair.
+const PLAYLIST_URL_PREFIXES: Array<[string, string]> = [
+    ["spotify.com", "/playlist/"],
+    ["deezer.com", "/playlist/"],
+    ["deezer.com", "/playlist:"],
+    ["youtube.com", "/playlist"],
+    ["music.youtube.com", "/playlist"],
+    ["youtube.com", "/watch"],
+    ["youtu.be", "/"],
+    ["soundcloud.com", "/"],
+    ["bandcamp.com", "/"],
+    ["mixcloud.com", "/"],
+];
+
 /**
  * POST /api/spotify/parse
  * Parse a Spotify URL and return basic info
@@ -65,7 +79,7 @@ router.post("/parse", async (req, res) => {
             });
         }
 
-        // For now, only support playlists
+        // Only playlists can be imported
         if (parsed.type !== "playlist") {
             return res.status(400).json({
                 error: `Only playlist imports are supported. Got: ${parsed.type}`,
@@ -78,7 +92,7 @@ router.post("/parse", async (req, res) => {
             url: `https://open.spotify.com/playlist/${parsed.id}`,
         });
     } catch (error) {
-        if (error instanceof Error && error.name === "ZodError") {
+        if (error instanceof z.ZodError) {
             return res.status(400).json({ error: "Invalid request body" });
         }
         safeError(res, "Spotify parse", error);
@@ -92,23 +106,19 @@ router.post("/parse", async (req, res) => {
  */
 router.post("/preview/start", async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
         const { url } = parseUrlSchema.parse(req.body);
 
-        const supportedDomains = ["spotify.com", "deezer.com", "youtube.com", "youtu.be", "music.youtube.com", "soundcloud.com", "bandcamp.com", "mixcloud.com"];
-        if (!supportedDomains.some(domain => url.includes(domain))) {
+        if (!PLAYLIST_URL_PREFIXES.some(([domain]) => url.includes(domain))) {
             return res.status(400).json({
                 error: "Invalid URL. Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud.",
             });
         }
 
         logger.debug(`[Playlist Import] Starting preview job for: ${url}`);
-        const { jobId } = await spotifyImportService.startPreviewJob(url, req.user.id);
+        const { jobId } = await spotifyImportService.startPreviewJob(url, req.user!.id);
         res.json({ jobId });
     } catch (error) {
-        if (error instanceof Error && error.name === "ZodError") {
+        if (error instanceof z.ZodError) {
             return res.status(400).json({ error: "Invalid request body" });
         }
         safeError(res, "Playlist preview start", error);
@@ -122,15 +132,12 @@ router.post("/preview/start", async (req, res) => {
  */
 router.get("/preview/:jobId", async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
         const { jobId } = req.params;
         const result = await spotifyImportService.getPreviewResult(jobId);
         if (!result) {
             return res.json({ status: "pending" });
         }
-        if (result.userId && result.userId !== req.user.id) {
+        if (result.userId && result.userId !== req.user!.id) {
             return res.status(403).json({ error: "Not authorized to view this preview" });
         }
         res.json(result);
@@ -145,32 +152,19 @@ router.get("/preview/:jobId", async (req, res) => {
  */
 router.post("/import/quick", requireMusicPermission("canRequestAlbums"), requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
         const { url, playlistName } = quickImportSchema.parse(req.body);
 
-        const isValidUrl = url.includes("spotify.com/playlist/")
-            || url.includes("deezer.com/playlist/")
-            || url.includes("deezer.com/playlist:")
-            || url.includes("youtube.com/playlist")
-            || url.includes("music.youtube.com/playlist")
-            || url.includes("youtube.com/watch")
-            || url.includes("youtu.be/")
-            || url.includes("soundcloud.com/")
-            || url.includes("bandcamp.com/")
-            || url.includes("mixcloud.com/");
-        if (!isValidUrl) {
+        if (!PLAYLIST_URL_PREFIXES.some(([domain, path]) => url.includes(domain + path))) {
             return res.status(400).json({
                 error: "Invalid URL. Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud.",
             });
         }
 
-        const { jobId } = await spotifyImportService.quickImport(url, req.user.id, playlistName);
+        const { jobId } = await spotifyImportService.quickImport(url, req.user!.id, playlistName);
 
         res.json({ jobId });
     } catch (error) {
-        if (error instanceof Error && error.name === "ZodError") {
+        if (error instanceof z.ZodError) {
             return res.status(400).json({ error: "Invalid request body" });
         }
         safeError(res, "Quick import", error);
@@ -183,16 +177,12 @@ router.post("/import/quick", requireMusicPermission("canRequestAlbums"), require
  */
 router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicPermission("canDownloadTracks"), async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
         const { spotifyPlaylistId, url, playlistName, albumMbidsToDownload, previewJobId } =
             importSchema.parse(req.body);
-        const userId = req.user.id;
+        const userId = req.user!.id;
 
         let preview;
         if (previewJobId) {
-            // Use cached preview from the async preview job
             const stored = await spotifyImportService.getPreviewResult(previewJobId);
             if (!stored || stored.status !== "completed" || !stored.preview) {
                 return res.status(400).json({
@@ -204,7 +194,7 @@ router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicP
             }
             preview = stored.preview;
         } else {
-            // Fallback: regenerate synchronously (backwards compatibility)
+            // No preview job: build the preview now
             const effectiveUrl =
                 url?.trim() ||
                 `https://open.spotify.com/playlist/${spotifyPlaylistId}`;
@@ -252,7 +242,7 @@ router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicP
             message: "Import started",
         });
     } catch (error) {
-        if (error instanceof Error && error.name === "ZodError") {
+        if (error instanceof z.ZodError) {
             return res.status(400).json({ error: "Invalid request body" });
         }
         safeError(res, "Spotify import", error);
@@ -265,18 +255,14 @@ router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicP
  */
 router.get("/import/:jobId/status", async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
         const { jobId } = req.params;
-        const userId = req.user.id;
+        const userId = req.user!.id;
 
-        const job = await spotifyImportService.getJob(jobId);
+        const job = await getImportJob(jobId);
         if (!job) {
             return res.status(404).json({ error: "Import job not found" });
         }
 
-        // Ensure user owns this job
         if (job.userId !== userId) {
             return res
                 .status(403)
@@ -295,10 +281,7 @@ router.get("/import/:jobId/status", async (req, res) => {
  */
 router.get("/imports", async (req, res) => {
     try {
-        if (!req.user) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-        const userId = req.user.id;
+        const userId = req.user!.id;
         const jobs = await spotifyImportService.getUserJobs(userId);
         res.json(jobs);
     } catch (error) {
@@ -313,15 +296,13 @@ router.get("/imports", async (req, res) => {
 router.post("/import/:jobId/refresh", async (req, res) => {
     try {
         const { jobId } = req.params;
-        if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-        const userId = req.user.id;
+        const userId = req.user!.id;
 
-        const job = await spotifyImportService.getJob(jobId);
+        const job = await getImportJob(jobId);
         if (!job) {
             return res.status(404).json({ error: "Import job not found" });
         }
 
-        // Ensure user owns this job
         if (job.userId !== userId) {
             return res
                 .status(403)
@@ -352,12 +333,11 @@ router.post("/import/:jobId/cancel", async (req, res) => {
         const { jobId } = req.params;
         const userId = req.user!.id;
 
-        const job = await spotifyImportService.getJob(jobId);
+        const job = await getImportJob(jobId);
         if (!job) {
             return res.status(404).json({ error: "Import job not found" });
         }
 
-        // Ensure user owns this job
         if (job.userId !== userId) {
             return res
                 .status(403)
@@ -378,12 +358,9 @@ router.post("/import/:jobId/cancel", async (req, res) => {
     }
 });
 
-const m3uImportLimiter = rateLimit({
+const m3uImportLimiter = createRateLimiter({
     windowMs: 60 * 1000,
     max: 5,
-    standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false },
     message: { error: "Too many M3U imports, please wait a minute" },
 });
 
@@ -400,7 +377,6 @@ router.post("/import/m3u", m3uImportLimiter, (req, res, next) => {
     });
 }, async (req, res) => {
     try {
-        if (!req.user) return res.status(401).json({ error: "Unauthorized" });
         if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
         const playlistName = req.body.playlistName?.trim();
@@ -416,7 +392,7 @@ router.post("/import/m3u", m3uImportLimiter, (req, res, next) => {
         }
 
         const result = await spotifyImportService.importFromM3U(
-            req.user.id,
+            req.user!.id,
             playlistName,
             entries,
         );
@@ -434,7 +410,7 @@ router.post("/import/m3u", m3uImportLimiter, (req, res, next) => {
  * GET /api/spotify/import/session-log
  * Get the current session log for debugging import issues
  */
-router.get("/import/session-log", async (req, res) => {
+router.get("/import/session-log", async (_req, res) => {
     try {
         const log = readSessionLog();
         const logPath = getSessionLogPath();

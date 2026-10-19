@@ -108,63 +108,11 @@ interface LidarrLink {
 export interface LidarrRootFolder {
   id: number;
   path: string;
+  defaultQualityProfileId?: number;
+  defaultMetadataProfileId?: number;
   accessible: boolean;
   freeSpace: number;
   totalSpace: number;
-}
-
-export interface LidarrQualityProfile {
-  id: number;
-  name: string;
-  upgradeAllowed: boolean;
-  cutoff: number;
-  items: Array<{
-    id: number;
-    name: string;
-    quality?: {
-      id: number;
-      name: string;
-    };
-    allowed: boolean;
-  }>;
-}
-
-export interface LidarrWebhookPayload {
-  eventType: 'Grab' | 'Download' | 'AlbumDownload' | 'TrackRetag' | 'Rename' | 'ImportFailure';
-  artist?: {
-    id: number;
-    name: string;
-    mbId?: string;
-  };
-  album?: {
-    id: number;
-    title: string;
-    mbId?: string;
-  };
-  release?: {
-    id: number;
-    title: string;
-    mbId?: string;
-  };
-  downloadId?: string;
-  albumId?: number;
-  trackFiles?: Array<{
-    id: number;
-    path: string;
-    quality: string;
-  }>;
-}
-
-export interface LidarrAddAlbumRequest {
-  foreignAlbumId: string;
-  monitored: boolean;
-  qualityProfileId: number;
-  metadataProfileId: number;
-  rootFolderPath: string;
-  addOptions: {
-    searchForNewAlbum: boolean;
-  };
-  tags?: number[];
 }
 
 export interface LidarrAddArtistRequest {
@@ -195,8 +143,12 @@ export interface LidarrQueueItem {
   trackedDownloadStatus: string;
   trackedDownloadState: string;
   statusMessages: { title: string; messages: string[] }[];
+  albumId?: number;
+  /** The download client's own warning, such as "The download is stalled with no connections". */
+  errorMessage?: string;
   sizeleft?: number;
   size?: number;
+  added?: string;
 }
 
 export interface LidarrQueueResponse {
@@ -209,26 +161,17 @@ export interface LidarrQueueResponse {
 export interface LidarrHistoryRecord {
   id: number;
   albumId: number;
-  downloadId: string;
+  downloadId?: string;
   eventType: string;
+  sourceTitle: string;
   date: string;
-  data: {
-    droppedPath?: string;
-    importedPath?: string;
-  };
-  album: {
+  data: Record<string, string>;
+  album?: {
     id: number;
     title: string;
     foreignAlbumId: string;
   };
-  artist: {
-    name: string;
+  artist?: {
+    artistName: string;
   };
-}
-
-export interface LidarrHistoryResponse {
-  page: number;
-  pageSize: number;
-  totalRecords: number;
-  records: LidarrHistoryRecord[];
 }

@@ -1,15 +1,6 @@
 /**
- * GET /podcasts/:id must not return a show's entire back catalogue.
- *
- * The detail query had an orderBy and no take, while the subscription list
- * beside it was already bounded. Measured upstream against a real feed: The
- * Daily returned 2,944 episodes and 6.27 MB in one response, every time the
- * screen opened, because the payload grew with the show's AGE rather than with
- * what anyone reads.
- *
- * `episodes` keeps its name and stays newest-first so a client that predates
- * paging still renders; these tests pin that, the cap, and the companion
- * endpoint that serves the rest.
+ * GET /podcasts/:id caps `episodes`, newest first, so old clients still render;
+ * the paging endpoint serves the rest.
  */
 
 jest.mock('../../utils/db', () => ({
@@ -30,7 +21,6 @@ jest.mock('../../middleware/auth', () => ({
 }));
 
 jest.mock('../../services/rss-parser', () => ({ rssParserService: {} }));
-jest.mock('../../services/podcastCache', () => ({ podcastCacheService: {} }));
 jest.mock('../../services/deezer', () => ({ deezerService: {}, mergeAndDedupePodcasts: jest.fn() }));
 jest.mock('../../utils/ssrf', () => ({ validateUrlForFetch: jest.fn() }));
 jest.mock('axios', () => ({ default: { get: jest.fn() }, get: jest.fn() }));
@@ -82,7 +72,7 @@ describe('podcast episode paging', () => {
 
         await request(app).get('/podcasts/p1');
 
-        // The defect was an orderBy with no take. `take` is the whole fix.
+        // The query orders by date and takes a page.
         const args = (prisma.podcast.findUnique as jest.Mock).mock.calls[0][0];
         expect(args.include.episodes.take).toBe(50);
         expect(args.include.episodes.skip).toBe(0);
@@ -142,6 +132,34 @@ describe('podcast episode paging', () => {
         const args = (prisma.podcastEpisode.findMany as jest.Mock).mock.calls[0][0];
         expect(args.take).toBe(50);
         expect(args.skip).toBe(100);
+    });
+
+    it('pages from the oldest end when asked, on both endpoints', async () => {
+        (prisma.podcast.findUnique as jest.Mock).mockResolvedValue({
+            id: 'p1', title: 'x', author: '', description: '',
+            imageUrl: null, feedUrl: '', episodes: episodes(50),
+        });
+        (prisma.podcastEpisode.findMany as jest.Mock).mockResolvedValue(episodes(50));
+
+        await request(app).get('/podcasts/p1?order=oldest');
+        const detailArgs = (prisma.podcast.findUnique as jest.Mock).mock.calls[0][0];
+        expect(detailArgs.include.episodes.orderBy).toEqual({ publishedAt: 'asc' });
+
+        await request(app).get('/podcasts/p1/episodes?order=oldest');
+        const pageArgs = (prisma.podcastEpisode.findMany as jest.Mock).mock.calls[0][0];
+        expect(pageArgs.orderBy).toEqual({ publishedAt: 'asc' });
+    });
+
+    it('keeps newest-first as the default order', async () => {
+        (prisma.podcast.findUnique as jest.Mock).mockResolvedValue({
+            id: 'p1', title: 'x', author: '', description: '',
+            imageUrl: null, feedUrl: '', episodes: episodes(50),
+        });
+
+        await request(app).get('/podcasts/p1');
+
+        const args = (prisma.podcast.findUnique as jest.Mock).mock.calls[0][0];
+        expect(args.include.episodes.orderBy).toEqual({ publishedAt: 'desc' });
     });
 
     it('refuses episodes for a podcast the user is not subscribed to', async () => {

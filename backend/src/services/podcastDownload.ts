@@ -2,22 +2,23 @@ import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { config, USER_AGENT } from "../config";
 import fs from "fs/promises";
+import { createWriteStream } from "fs";
 import path from "path";
 import axios from "axios";
 import { validateUrlForFetch } from "../utils/ssrf";
 import { upstreamHeaderNumber } from "../utils/upstreamHeaders";
 
 /**
- * PodcastDownloadService - Background download and caching of podcast episodes
- * 
- * Features:
- * - Non-blocking background downloads when episodes are played
- * - 30-day cache expiry with automatic cleanup
- * - Proper range request support for cached files
+ * Background download and caching of podcast episodes when played, with range
+ * support for cached files and 30-day expiry.
  */
 
 // Track in-progress downloads to avoid duplicates
 const downloadingEpisodes = new Set<string>();
+
+// Cache and completeness checks accept a 1% size difference: some servers and
+// filesystems are inconsistent at the byte level.
+const SIZE_TOLERANCE = 0.01;
 
 // Track download progress (episodeId -> { bytesDownloaded, totalBytes })
 interface DownloadProgress {
@@ -74,7 +75,7 @@ async function validateCachedFile(episodeId: string): Promise<string | null> {
                     const expected = episode.fileSize;
                     const actual = stats.size;
                     const variance = Math.abs(actual - expected) / expected;
-                    if (variance > 0.01) {
+                    if (variance > SIZE_TOLERANCE) {
                         logger.debug(
                             `[PODCAST-DL] Episode size mismatch vs episode.fileSize for ${episodeId}: actual ${actual} vs expected ${expected} (variance ${Math.round(
                                 variance * 100
@@ -108,7 +109,7 @@ async function validateCachedFile(episodeId: string): Promise<string | null> {
             const actualSize = stats.size;
             const variance = Math.abs(actualSize - expectedSize) / expectedSize;
 
-            if (expectedSize > 0 && variance > 0.01) {
+            if (expectedSize > 0 && variance > SIZE_TOLERANCE) {
                 logger.debug(`[PODCAST-DL] Size mismatch for ${episodeId}: actual ${actualSize} vs expected ${Math.round(expectedSize)}, deleting`);
                 await fs.unlink(cachedPath).catch(() => {});
                 await prisma.podcastDownload.deleteMany({ where: { episodeId } });
@@ -126,6 +127,7 @@ async function validateCachedFile(episodeId: string): Promise<string | null> {
         }
         return null;
     } catch {
+        // A missing or unreadable file is no cache; the caller downloads afresh.
         return null;
     }
 }
@@ -275,7 +277,7 @@ async function performDownload(
         });
         
         // Write to temp file first with progress tracking
-        const writeStream = (await import('fs')).createWriteStream(tempPath);
+        const writeStream = createWriteStream(tempPath);
         let bytesDownloaded = 0;
         let lastLogTime = Date.now();
         
@@ -324,14 +326,13 @@ async function performDownload(
         }
         
         // Check completeness when we know an expected size (prefer Content-Length).
-        // Allow a small variance because some servers are inconsistent at the byte level.
         if (expectedBytes > 0) {
             const variance = Math.abs(stats.size - expectedBytes) / expectedBytes;
-            if (variance > 0.01) {
-            const percentComplete = Math.round((stats.size / expectedBytes) * 100);
-            logger.error(`[PODCAST-DL] Incomplete download for ${episodeId}: ${stats.size}/${expectedBytes} bytes (${percentComplete}%)`);
-            await fs.unlink(tempPath).catch(() => {});
-            throw new Error(`Download incomplete: got ${stats.size} bytes, expected ${expectedBytes}`);
+            if (variance > SIZE_TOLERANCE) {
+                const percentComplete = Math.round((stats.size / expectedBytes) * 100);
+                logger.error(`[PODCAST-DL] Incomplete download for ${episodeId}: ${stats.size}/${expectedBytes} bytes (${percentComplete}%)`);
+                await fs.unlink(tempPath).catch(() => {});
+                throw new Error(`Download incomplete: got ${stats.size} bytes, expected ${expectedBytes}`);
             }
         }
         

@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { cn } from "@/utils/cn";
+import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { formatTime } from "@/lib/format";
 
 interface SeekSliderProps {
     /** Current progress percentage (0-100) */
@@ -35,6 +37,7 @@ export function SeekSlider({
     showHandle = true,
     variant = "default",
 }: SeekSliderProps) {
+    const { t } = useLanguage();
     const [isDragging, setIsDragging] = useState(false);
     const [previewProgress, setPreviewProgress] = useState<number | null>(null);
     const sliderRef = useRef<HTMLDivElement>(null);
@@ -71,7 +74,6 @@ export function SeekSlider({
         (e: React.TouchEvent<HTMLDivElement>) => {
             if (!isDragging || !canSeek) return;
 
-            // Find the touch that we're tracking
             const touch = Array.from(e.touches).find(
                 (t) => t.identifier === touchIdentifierRef.current
             );
@@ -92,7 +94,6 @@ export function SeekSlider({
         (e: React.TouchEvent<HTMLDivElement>) => {
             if (!isDragging || !canSeek) return;
 
-            // Check if the touch we're tracking ended
             const touchEnded = !Array.from(e.touches).some(
                 (t) => t.identifier === touchIdentifierRef.current
             );
@@ -160,7 +161,6 @@ export function SeekSlider({
         [isDragging, canSeek, calculateProgress, duration, onSeek]
     );
 
-    // Add global mouse event listeners when dragging
     useEffect(() => {
         if (isDragging) {
             window.addEventListener("mousemove", handleMouseMove);
@@ -176,19 +176,53 @@ export function SeekSlider({
     const displayProgress =
         previewProgress !== null ? previewProgress : progress;
     const isActive = canSeek && hasMedia;
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const currentTime = (Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0)) / 100) * safeDuration;
 
-    // Determine tooltip text
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (!isActive || safeDuration <= 0) return;
+
+        let newTime: number;
+        switch (e.key) {
+            case "ArrowLeft":
+            case "ArrowDown":
+                newTime = Math.max(0, currentTime - 5);
+                break;
+            case "ArrowRight":
+            case "ArrowUp":
+                newTime = Math.min(safeDuration, currentTime + 5);
+                break;
+            case "PageDown":
+                newTime = Math.max(0, currentTime - 10);
+                break;
+            case "PageUp":
+                newTime = Math.min(safeDuration, currentTime + 10);
+                break;
+            case "Home":
+                newTime = 0;
+                break;
+            case "End":
+                newTime = safeDuration;
+                break;
+            default:
+                return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (newTime !== currentTime) onSeek(newTime);
+    };
+
     const getTooltipText = () => {
         if (!hasMedia) return undefined;
         if (!canSeek) {
-            return downloadProgress !== null
-                ? `Downloading ${downloadProgress}%... Seek will be available when cached`
-                : "Downloading... Seeking will be available when cached";
+            return downloadProgress != null
+                ? `${t("downloading")} ${downloadProgress}%... ${t("seek will be available when cached")}`
+                : t("downloading... seeking will be available when cached");
         }
-        return isDragging ? "Release to seek" : "Click or drag to seek";
+        return t(isDragging ? "release to seek" : "click or drag to seek");
     };
 
-    // Variant-specific styles
     const getVariantStyles = () => {
         switch (variant) {
             case "minimal":
@@ -196,9 +230,9 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/[0.15]",
                     progress: isActive
-                        ? "bg-[#eab308]"
+                        ? "bg-brand"
                         : hasMedia
-                        ? "bg-[#eab308]/50"
+                        ? "bg-brand/50"
                         : "bg-gray-600",
                 };
             case "overlay":
@@ -206,7 +240,7 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/20",
                     progress: isActive
-                        ? "bg-gradient-to-r from-[#eab308] to-[#f97316]"
+                        ? "bg-gradient-to-r from-brand to-brand-dark"
                         : "bg-white/40",
                 };
             default:
@@ -214,7 +248,7 @@ export function SeekSlider({
                     container: "h-1",
                     track: "bg-white/[0.15]",
                     progress: isActive
-                        ? "bg-[#eab308] group-hover:bg-[#eab308]"
+                        ? "bg-brand group-hover:bg-brand"
                         : hasMedia
                         ? "bg-white/50"
                         : "bg-gray-600",
@@ -227,6 +261,15 @@ export function SeekSlider({
     return (
         <div
             ref={sliderRef}
+            role="slider"
+            aria-label={t("Playback position")}
+            aria-disabled={!isActive || safeDuration <= 0}
+            aria-valuemin={0}
+            aria-valuemax={Math.floor(safeDuration)}
+            aria-valuenow={Math.floor(currentTime)}
+            aria-valuetext={`${formatTime(currentTime)} / ${formatTime(safeDuration)}`}
+            tabIndex={isActive && safeDuration > 0 ? 0 : -1}
+            onKeyDown={handleKeyDown}
             className={cn(
                 "relative rounded-full transition-all",
                 styles.container,
@@ -253,7 +296,7 @@ export function SeekSlider({
                 {showHandle && isActive && (
                     <div
                         className={cn(
-                            "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#eab308] rounded-full transition-opacity ",
+                            "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-brand rounded-full transition-opacity ",
                             isDragging
                                 ? "opacity-100 scale-125"
                                 : "opacity-0 group-hover:opacity-100"
@@ -262,7 +305,6 @@ export function SeekSlider({
                 )}
             </div>
 
-            {/* Visual feedback when dragging */}
             {isDragging && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap">
                     {Math.floor((displayProgress / 100) * duration)}s

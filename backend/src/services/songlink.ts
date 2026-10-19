@@ -16,12 +16,26 @@ export interface SongLinkResult {
 }
 
 class SongLinkService {
+    // The cache only saves requests: a Redis failure counts as a miss on read and a lost entry on write,
+    // and the lookup goes on to the API instead of failing.
+    private async cacheGet(key: string): Promise<string | null> {
+        try {
+            return await redisClient.get(key);
+        } catch {
+            return null;
+        }
+    }
+
+    private async cacheSet(key: string, ttlSeconds: number, value: string): Promise<void> {
+        try {
+            await redisClient.setex(key, ttlSeconds, value);
+        } catch {}
+    }
+
     async resolve(url: string): Promise<SongLinkResult | null> {
         const cacheKey = `songlink:${url}`;
-        try {
-            const cached = await redisClient.get(cacheKey);
-            if (cached) return cached === "null" ? null : JSON.parse(cached);
-        } catch {}
+        const cached = await this.cacheGet(cacheKey);
+        if (cached) return cached === "null" ? null : JSON.parse(cached);
 
         try {
             const response = await rateLimiter.execute("songlink", () =>
@@ -61,14 +75,12 @@ class SongLinkService {
                 };
             }
 
-            try {
-                await redisClient.setex(cacheKey, 604800, JSON.stringify(result));
-            } catch {}
+            await this.cacheSet(cacheKey, 604800, JSON.stringify(result));
 
             return result;
         } catch (err: any) {
             if (err.response?.status === 404) {
-                try { await redisClient.setex(cacheKey, 3600, "null"); } catch {}
+                await this.cacheSet(cacheKey, 3600, "null");
                 return null;
             }
             logger.warn(`song.link resolve failed for ${url}:`, err.message);

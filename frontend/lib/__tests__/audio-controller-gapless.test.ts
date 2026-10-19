@@ -1,13 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AudioController } from "../audio-controller";
 
-// ---------------------------------------------------------------------------
-// Fakes -- deliberately simpler than audio-controller-prime.test.ts's: these
-// tests exercise the dual-element gapless swap, which is NOT iOS-gated
-// (INV-2/4: both elements are bare off-iOS), so a plain desktop UA is used
-// throughout. vitest.config.ts runs this suite under environment: "node", so
-// document/window/navigator/localStorage must be stubbed per-test.
-// ---------------------------------------------------------------------------
+// Fakes for the dual-element gapless swap, which is not iOS-gated, so a desktop
+// UA is used. Browser globals are stubbed per test.
 
 function createFakeAudioElement() {
     const listeners: Record<string, Array<() => void>> = {};
@@ -124,7 +119,7 @@ function makeEligible(
     url: string,
     durationS: number,
 ): void {
-    controller.setUpcoming2B(url, trackId, durationS);
+    controller.setExpectedNext(url, trackId, durationS);
     controller.preloadNext();
     audioNext.duration = durationS;
     audioNext.__fire("canplay");
@@ -154,7 +149,7 @@ describe("AudioController -- gapless swap: eligible", () => {
         makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 210);
 
         // The swap `.play()` call must happen synchronously inside the native
-        // `ended` tail (INV-1) -- assert it fired before any microtask flush.
+        // `ended` tail -- assert it fired before any microtask flush.
         audio.__fire("ended");
         expect(audioNext.play).toHaveBeenCalledTimes(1);
 
@@ -193,18 +188,18 @@ describe("AudioController -- gapless swap: eligible", () => {
         expect(endedCb).not.toHaveBeenCalled();
     });
 
-    it("carries the current volume/mute onto the reused idle element (FIX B)", async () => {
+    it("carries the current volume/mute onto the reused idle element", async () => {
         const { controller, audio, audioNext } = newController();
 
         controller.setVolume(0.4);
-        // Both elements immediately carry the volume (FIX B, site 1).
+        // Both elements immediately carry the volume.
         expect(audioNext.volume).toBe(0.4);
 
         makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 100);
 
         // Poison the element that will become the reused idle -- setVolume(0.4)
         // above already wrote 0.4 onto it, so without this the test would pass
-        // even if the swap-time re-sync lines (FIX B) were deleted.
+        // even if the swap-time re-sync lines were deleted.
         audio.volume = 1;
         audio.muted = true;
 
@@ -241,14 +236,14 @@ describe("AudioController -- gapless swap: not eligible", () => {
     it("preloadedTrackId mismatching expectedNextTrackId is not eligible", () => {
         const { controller, audio, audioNext } = newController();
 
-        controller.setUpcoming2B("http://x.com/b.mp3", "track-2", 100);
+        controller.setExpectedNext("http://x.com/b.mp3", "track-2", 100);
         controller.preloadNext();
         audioNext.duration = 100;
         audioNext.__fire("canplay");
 
         // Queue mutated after the preload was issued -- now expecting a
         // different track than what was actually buffered.
-        controller.setUpcoming2B("http://x.com/c.mp3", "track-3", 120);
+        controller.setExpectedNext("http://x.com/c.mp3", "track-3", 120);
 
         audio.currentTime = 100;
         audio.duration = 100;
@@ -263,7 +258,7 @@ describe("AudioController -- gapless swap: not eligible", () => {
 // ---------------------------------------------------------------------------
 
 describe("AudioController -- gapless swap: play() rejection", () => {
-    it("falls through to native-ended without any partial mutation (FIX A ordering)", async () => {
+    it("falls through to native-ended without any partial mutation", async () => {
         const { controller, audio, audioNext } = newController();
         const endedCb = vi.fn();
         controller.on("ended", endedCb);
@@ -296,14 +291,14 @@ describe("AudioController -- gapless swap: play() rejection", () => {
 // ---------------------------------------------------------------------------
 
 describe("AudioController -- gapless swap: repeat-one suppression", () => {
-    it("clearUpcoming2B() (the React layer's repeat-one guard) closes the eligibility gate even with a ready idle buffer", () => {
+    it("clearExpectedNext() (the React layer's repeat-one guard) closes the eligibility gate even with a ready idle buffer", () => {
         const { controller, audio, audioNext } = newController();
 
         makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 100);
 
         // Simulates the audio-controls-context effect that fires when
         // repeatMode -> "one": the preload is no longer a valid next track.
-        controller.clearUpcoming2B();
+        controller.clearExpectedNext();
 
         audio.currentTime = 100;
         audio.duration = 100;
@@ -314,7 +309,7 @@ describe("AudioController -- gapless swap: repeat-one suppression", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Generation guard: a manual skip / ctrl.load() races the swap's play() (FIX 4)
+// Generation guard: a manual skip / ctrl.load() races the swap's play()
 // ---------------------------------------------------------------------------
 
 describe("AudioController -- gapless swap: generation guard", () => {

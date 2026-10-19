@@ -12,18 +12,16 @@ import {
 } from "../../utils/dateFilters";
 import { shuffleArray } from "../../utils/shuffle";
 import { LIBRARY_TRACK_WHERE, LIBRARY_LOCATION } from "../../services/libraryFilters";
-import { toAudioFeaturesDTO } from "../../utils/audioFeatures";
-import { config } from "../../config";
+import { NOT_MISSING } from "../../utils/libraryEligibility";
+import { toAudioFeaturesDTO, AUDIO_FEATURE_SELECT } from "../../utils/audioFeatures";
 import { resolveWithinMusicRoot } from "./trackPath";
-import path from "path";
+import { parseLimit } from "./paging";
 import fs from "fs";
 
 const TRACK_SORT_MAP: Record<string, any> = {
   name: { title: "asc" as const },
   "name-desc": { title: "desc" as const },
 };
-
-const MAX_LIMIT = 10000;
 
 const router = Router();
 
@@ -41,7 +39,7 @@ router.get("/recently-listened", async (req, res) => {
             source: { in: ["LIBRARY", "DISCOVERY_KEPT"] },
             track: {
               album: {
-                location: "LIBRARY",
+                location: LIBRARY_LOCATION,
               },
             },
           },
@@ -113,7 +111,6 @@ router.get("/recently-listened", async (req, res) => {
       })
       .slice(0, Math.ceil(limitNum / 3));
 
-    const items: any[] = [];
     const artistsMap = new Map();
 
     for (const play of recentPlays) {
@@ -125,7 +122,6 @@ router.get("/recently-listened", async (req, res) => {
           lastPlayedAt: play.playedAt,
         });
       }
-      if (items.length >= limitNum) break;
     }
 
     const combined = [
@@ -209,7 +205,7 @@ router.get("/recently-added", async (req, res) => {
 
     const recentAlbums = await prisma.album.findMany({
       where: {
-        location: "LIBRARY",
+        location: LIBRARY_LOCATION,
         tracks: { some: {} },
       },
       orderBy: { lastSynced: "desc" },
@@ -240,7 +236,7 @@ router.get("/recently-added", async (req, res) => {
       by: ["artistId"],
       where: {
         artistId: { in: artistIds },
-        location: "LIBRARY",
+        location: LIBRARY_LOCATION,
         tracks: { some: {} },
       },
       _count: { id: true },
@@ -273,10 +269,7 @@ router.get("/tracks", async (req, res) => {
       offset: offsetParam = "0",
       sortBy = "name",
     } = req.query;
-    const limit = Math.min(
-      parseInt(limitParam as string, 10) || 100,
-      MAX_LIMIT,
-    );
+    const limit = parseLimit(limitParam, 100);
     const offset = parseInt(offsetParam as string, 10) || 0;
 
     let orderBy: any;
@@ -296,7 +289,7 @@ router.get("/tracks", async (req, res) => {
         where,
         skip: offset,
         take: limit,
-        orderBy,
+        orderBy: [orderBy, { id: "asc" }],
         include: {
           album: {
             include: {
@@ -332,12 +325,10 @@ router.get("/tracks", async (req, res) => {
 router.get("/tracks/shuffle", async (req, res) => {
   try {
     const { limit: limitParam = "100" } = req.query;
-    const limit = Math.min(
-      parseInt(limitParam as string, 10) || 100,
-      MAX_LIMIT,
-    );
+    const limit = parseLimit(limitParam, 100);
 
-    const totalTracks = await prisma.track.count({ where: LIBRARY_TRACK_WHERE });
+    const playable = { ...LIBRARY_TRACK_WHERE, ...NOT_MISSING, corrupt: false };
+    const totalTracks = await prisma.track.count({ where: playable });
 
     if (totalTracks === 0) {
       return res.json({ tracks: [], total: 0 });
@@ -346,7 +337,7 @@ router.get("/tracks/shuffle", async (req, res) => {
     let tracksData;
     if (totalTracks <= limit) {
       tracksData = await prisma.track.findMany({
-        where: LIBRARY_TRACK_WHERE,
+        where: playable,
         include: {
           album: {
             include: {
@@ -362,12 +353,11 @@ router.get("/tracks/shuffle", async (req, res) => {
       });
       tracksData = shuffleArray(tracksData);
     } else {
-      // Interpolates the shared constant rather than repeating the string, so a
-      // change to what "owned" means reaches this raw-SQL path too. A Prisma
-      // where-object cannot be used here -- this draws random ids in SQL.
+      // Random ids are drawn in SQL, so the playable rule is written out here.
       const randomIds = await prisma.$queryRaw<{ id: string }[]>`
                 SELECT id FROM "Track"
-                WHERE EXISTS (SELECT 1 FROM "Album" a WHERE a.id = "Track"."albumId" AND a.location = ${LIBRARY_LOCATION})
+                WHERE EXISTS (SELECT 1 FROM "Album" a WHERE a.id = "Track"."albumId" AND a.location = 'LIBRARY')
+                  AND "Track"."missingSince" IS NULL AND "Track".corrupt = false
                 ORDER BY RANDOM()
                 LIMIT ${limit}
             `;
@@ -390,10 +380,7 @@ router.get("/tracks/shuffle", async (req, res) => {
         },
       });
 
-      for (let i = tracksData.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [tracksData[i], tracksData[j]] = [tracksData[j], tracksData[i]];
-      }
+      tracksData = shuffleArray(tracksData);
     }
 
     const tracks = tracksData.slice(0, limit).map((track) => ({
@@ -524,81 +511,67 @@ router.get("/tracks/:id/lyrics", async (req, res) => {
   }
 });
 
-    router.get("/tracks/:id", async (req, res) => {
-      try {
-        const track = await prisma.track.findUnique({
-          where: { id: req.params.id },
-          select: {
-            id: true,
-            title: true,
-            duration: true,
-            bpm: true,
-            energy: true,
-            valence: true,
-            arousal: true,
-            danceability: true,
-            keyScale: true,
-            instrumentalness: true,
-            analysisMode: true,
-            moodHappy: true,
-            moodSad: true,
-            moodRelaxed: true,
-            moodAggressive: true,
-            moodParty: true,
-            moodAcoustic: true,
-            moodElectronic: true,
-            album: {
-              include: {
-                artist: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
+router.get("/tracks/:id", async (req, res) => {
+  try {
+    const track = await prisma.track.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        title: true,
+        duration: true,
+        ...AUDIO_FEATURE_SELECT,
+        album: {
+          include: {
+            artist: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
-        });
-
-      if (!track) {
-        return res.status(404).json({ error: "Track not found" });
-      }
-
-      const formattedTrack = {
-        id: track.id,
-        title: track.title,
-        artist: {
-          name: track.album?.artist?.name || "Unknown Artist",
-          id: track.album?.artist?.id,
         },
-        album: {
-          title: track.album?.title || "Unknown Album",
-          coverArt: track.album?.coverUrl,
-          id: track.album?.id,
-        },
-        duration: track.duration,
-        audioFeatures: toAudioFeaturesDTO(track),
-      };
+      },
+    });
 
-      res.json(formattedTrack);
-      } catch (error) {
+    if (!track) {
+      return res.status(404).json({ error: "Track not found" });
+    }
+
+    const formattedTrack = {
+      id: track.id,
+      title: track.title,
+      artist: {
+        name: track.album?.artist?.name || "Unknown Artist",
+        id: track.album?.artist?.id,
+      },
+      album: {
+        title: track.album?.title || "Unknown Album",
+        coverArt: track.album?.coverUrl,
+        id: track.album?.id,
+      },
+      duration: track.duration,
+      audioFeatures: toAudioFeaturesDTO(track),
+    };
+
+    res.json(formattedTrack);
+  } catch (error) {
     logger.error("Get track error:", error);
     res.status(500).json({ error: "Failed to fetch track" });
-      }
-    });
+  }
+});
 
 router.delete("/tracks/:id", requireAdmin, async (req, res) => {
   try {
-const track = await prisma.track.findUnique({
-  where: { id: req.params.id },
-  include: {
-    album: {
+    const track = await prisma.track.findUnique({
+      where: { id: req.params.id },
       include: {
-        artist: true,
+        album: {
+          include: {
+            artist: true,
+          },
+        },
       },
-    },
-  },
-});
+    });
 
     if (!track) {
       return res.status(404).json({ error: "Track not found" });
@@ -646,6 +619,9 @@ router.get("/genres", async (_req, res) => {
     );
 
     const minTracks = 15;
+    // An artist's tracks may live in the DISCOVER pile as well as the owned
+    // library; only owned tracks may feed the genre tallies (the whole point
+    // of the libraryFilters rule).
     const genreResults = await prisma.$queryRaw<
       { genre: string; track_count: bigint }[]
     >`
@@ -655,6 +631,7 @@ router.get("/genres", async (_req, res) => {
             JOIN "Album" a ON a."artistId" = ar.id
             JOIN "Track" t ON t."albumId" = a.id
             WHERE ar.genres IS NOT NULL
+              AND a.location = 'LIBRARY'
             GROUP BY LOWER(g.genre)
             HAVING COUNT(DISTINCT t.id) >= ${minTracks}
             ORDER BY track_count DESC
@@ -724,7 +701,6 @@ router.get("/radio", async (req, res) => {
     }
 
     let trackIds: string[] = [];
-    let vibeSourceFeatures: any = null;
 
     switch (type) {
       case "discovery":
@@ -821,6 +797,25 @@ router.get("/radio", async (req, res) => {
 
       case "mood":
         const moodValue = ((value as string) || "").toLowerCase();
+        // The five named moods are the mood-bucket verdicts, as on the mood page;
+        // the other values are audio-feature filters.
+        const BUCKET_MOODS: Record<string, "happy" | "sad" | "chill" | "aggressive" | "party"> = {
+          happy: "happy",
+          melancholy: "sad",
+          chill: "chill",
+          intense: "aggressive",
+          dance: "party",
+        };
+        if (BUCKET_MOODS[moodValue]) {
+            const bucketRows = await prisma.moodBucket.findMany({
+                where: { mood: BUCKET_MOODS[moodValue] },
+                select: { trackId: true },
+                orderBy: { score: "desc" },
+                take: limitNum * 3,
+            });
+            trackIds = bucketRows.map((r) => r.trackId);
+            break;
+        }
         let moodWhere: any = { analysisStatus: "completed" };
 
         switch (moodValue) {
@@ -829,31 +824,6 @@ router.get("/radio", async (req, res) => {
               analysisStatus: "completed",
               energy: { gte: 0.7 },
               bpm: { gte: 120 },
-            };
-            break;
-          case "chill":
-            moodWhere = {
-              analysisStatus: "completed",
-              OR: [{ energy: { lte: 0.4 } }, { arousal: { lte: 0.4 } }],
-            };
-            break;
-          case "happy":
-            moodWhere = {
-              analysisStatus: "completed",
-              valence: { gte: 0.6 },
-              energy: { gte: 0.5 },
-            };
-            break;
-          case "melancholy":
-            moodWhere = {
-              analysisStatus: "completed",
-              OR: [{ valence: { lte: 0.4 } }, { keyScale: "minor" }],
-            };
-            break;
-          case "dance":
-            moodWhere = {
-              analysisStatus: "completed",
-              danceability: { gte: 0.7 },
             };
             break;
           case "acoustic":
@@ -869,9 +839,7 @@ router.get("/radio", async (req, res) => {
             };
             break;
           default:
-            moodWhere = {
-              lastfmTags: { has: moodValue },
-            };
+            return res.status(400).json({ error: `Unknown mood: ${moodValue}` });
         }
 
         const moodTracks = await prisma.track.findMany({
@@ -1055,7 +1023,7 @@ router.get("/radio", async (req, res) => {
         });
         let similarArtistIds = similarInLibrary.map((s) => s.toArtistId);
         logger.debug(
-          `[Radio:artist] Found ${similarArtistIds.length} Last.fm similar artists in library`,
+          `[Radio:artist] Found ${similarArtistIds.length} similar artists in library`,
         );
 
         if (similarArtistIds.length < 5 && libraryArtistIds.size > 0) {
@@ -1193,420 +1161,6 @@ router.get("/radio", async (req, res) => {
         );
         break;
 
-      case "vibe":
-        const sourceTrackId = value as string;
-        if (!sourceTrackId) {
-          return res
-            .status(400)
-            .json({ error: "Track ID required for vibe matching" });
-        }
-
-        logger.debug(
-          `[Radio:vibe] Starting vibe match for track: ${sourceTrackId}`,
-        );
-
-        const sourceTrack = (await prisma.track.findUnique({
-          where: { id: sourceTrackId },
-          include: {
-            album: {
-              select: {
-                artistId: true,
-                genres: true,
-                artist: { select: { id: true, name: true } },
-              },
-            },
-          },
-        })) as any;
-
-        if (!sourceTrack) {
-          return res.status(404).json({ error: "Track not found" });
-        }
-
-        const isEnhancedAnalysis =
-          sourceTrack.analysisMode === "enhanced" ||
-          (sourceTrack.moodHappy !== null && sourceTrack.moodSad !== null);
-
-        logger.debug(
-          `[Radio:vibe] Source: "${sourceTrack.title}" by ${sourceTrack.album.artist.name}`,
-        );
-        logger.debug(
-          `[Radio:vibe] Analysis mode: ${
-            isEnhancedAnalysis ? "ENHANCED" : "STANDARD"
-          }`,
-        );
-        logger.debug(
-          `[Radio:vibe] Source features: BPM=${sourceTrack.bpm}, Energy=${sourceTrack.energy}, Valence=${sourceTrack.valence}`,
-        );
-        if (isEnhancedAnalysis) {
-          logger.debug(
-            `[Radio:vibe] ML Moods: Happy=${sourceTrack.moodHappy}, Sad=${sourceTrack.moodSad}, Relaxed=${sourceTrack.moodRelaxed}, Aggressive=${sourceTrack.moodAggressive}, Party=${sourceTrack.moodParty}, Acoustic=${sourceTrack.moodAcoustic}, Electronic=${sourceTrack.moodElectronic}`,
-          );
-        }
-
-        vibeSourceFeatures = {
-          bpm: sourceTrack.bpm,
-          energy: sourceTrack.energy,
-          valence: sourceTrack.valence,
-          arousal: sourceTrack.arousal,
-          danceability: sourceTrack.danceability,
-          keyScale: sourceTrack.keyScale,
-          instrumentalness: sourceTrack.instrumentalness,
-          moodHappy: sourceTrack.moodHappy,
-          moodSad: sourceTrack.moodSad,
-          moodRelaxed: sourceTrack.moodRelaxed,
-          moodAggressive: sourceTrack.moodAggressive,
-          moodParty: sourceTrack.moodParty,
-          moodAcoustic: sourceTrack.moodAcoustic,
-          moodElectronic: sourceTrack.moodElectronic,
-          analysisMode: isEnhancedAnalysis ? "enhanced" : "standard",
-        };
-
-        let vibeMatchedIds: string[] = [];
-        const sourceArtistId = sourceTrack.album.artistId;
-
-        const hasAudioData =
-          sourceTrack.bpm || sourceTrack.energy || sourceTrack.valence;
-
-        if (hasAudioData) {
-          const analyzedVibeCandiates = await prisma.track.findMany({
-            where: {
-              id: { not: sourceTrackId },
-              analysisStatus: "completed",
-            },
-            take: 500,
-            select: {
-              id: true,
-              bpm: true,
-              energy: true,
-              valence: true,
-              arousal: true,
-              danceability: true,
-              keyScale: true,
-              moodTags: true,
-              lastfmTags: true,
-              essentiaGenres: true,
-              instrumentalness: true,
-              moodHappy: true,
-              moodSad: true,
-              moodRelaxed: true,
-              moodAggressive: true,
-              moodParty: true,
-              moodAcoustic: true,
-              moodElectronic: true,
-              danceabilityMl: true,
-              analysisMode: true,
-            },
-          });
-
-          logger.debug(
-            `[Radio:vibe] Found ${analyzedVibeCandiates.length} analyzed tracks to compare`,
-          );
-
-          if (analyzedVibeCandiates.length > 0) {
-            const calculateEnhancedValence = (track: any): number => {
-              const happy = track.moodHappy ?? 0.5;
-              const sad = track.moodSad ?? 0.5;
-              const party = (track as any).moodParty ?? 0.5;
-              const isMajor = track.keyScale === "major";
-              const isMinor = track.keyScale === "minor";
-              const modeValence = isMajor ? 0.3 : isMinor ? -0.2 : 0;
-              const moodValence = happy * 0.35 + party * 0.25 + (1 - sad) * 0.2;
-              const audioValence =
-                (track.energy ?? 0.5) * 0.1 +
-                (track.danceabilityMl ?? track.danceability ?? 0.5) * 0.1;
-
-              return Math.max(
-                0,
-                Math.min(1, moodValence + modeValence + audioValence),
-              );
-            };
-
-            const calculateEnhancedArousal = (track: any): number => {
-              const aggressive = track.moodAggressive ?? 0.5;
-              const party = (track as any).moodParty ?? 0.5;
-              const relaxed = track.moodRelaxed ?? 0.5;
-              const acoustic = (track as any).moodAcoustic ?? 0.5;
-              const energy = track.energy ?? 0.5;
-              const bpm = track.bpm ?? 120;
-              const moodArousal = aggressive * 0.3 + party * 0.2;
-              const energyArousal = energy * 0.25;
-              const tempoArousal =
-                Math.max(0, Math.min(1, (bpm - 60) / 120)) * 0.15;
-              const calmReduction =
-                (1 - relaxed) * 0.05 + (1 - acoustic) * 0.05;
-
-              return Math.max(
-                0,
-                Math.min(
-                  1,
-                  moodArousal + energyArousal + tempoArousal + calmReduction,
-                ),
-              );
-            };
-
-            const detectOOD = (track: any): boolean => {
-              const coreMoods = [
-                track.moodHappy ?? 0.5,
-                track.moodSad ?? 0.5,
-                track.moodRelaxed ?? 0.5,
-                track.moodAggressive ?? 0.5,
-              ];
-
-              const minMood = Math.min(...coreMoods);
-              const maxMood = Math.max(...coreMoods);
-
-              const allHigh = minMood > 0.7 && maxMood - minMood < 0.3;
-              const allNeutral =
-                Math.abs(maxMood - 0.5) < 0.15 &&
-                Math.abs(minMood - 0.5) < 0.15;
-
-              return allHigh || allNeutral;
-            };
-
-            const octaveAwareBPMDistance = (
-              bpm1: number,
-              bpm2: number,
-            ): number => {
-              if (!bpm1 || !bpm2) return 0;
-
-              const normalizeToOctave = (bpm: number): number => {
-                if (!bpm || bpm <= 0 || !isFinite(bpm)) return 120;
-                while (bpm < 77) bpm *= 2;
-                while (bpm > 154) bpm /= 2;
-                return bpm;
-              };
-
-              const norm1 = normalizeToOctave(bpm1);
-              const norm2 = normalizeToOctave(bpm2);
-
-              const logDistance = Math.abs(Math.log2(norm1) - Math.log2(norm2));
-              return Math.min(logDistance, 1);
-            };
-
-            const buildFeatureVector = (track: any): number[] => {
-              const isOOD = detectOOD(track);
-
-              const getMoodValue = (
-                value: number | null,
-                defaultValue: number,
-              ): number => {
-                if (!value) return defaultValue;
-                if (!isOOD) return value;
-                return 0.2 + Math.max(0, Math.min(0.6, value - 0.2));
-              };
-
-              const enhancedValence = calculateEnhancedValence(track);
-              const enhancedArousal = calculateEnhancedArousal(track);
-
-              return [
-                getMoodValue(track.moodHappy, 0.5) * 1.3,
-                getMoodValue(track.moodSad, 0.5) * 1.3,
-                getMoodValue(track.moodRelaxed, 0.5) * 1.3,
-                getMoodValue(track.moodAggressive, 0.5) * 1.3,
-                getMoodValue((track as any).moodParty, 0.5) * 1.3,
-                getMoodValue((track as any).moodAcoustic, 0.5) * 1.3,
-                getMoodValue((track as any).moodElectronic, 0.5) * 1.3,
-                track.energy ?? 0.5,
-                enhancedArousal,
-                track.danceabilityMl ?? track.danceability ?? 0.5,
-                track.instrumentalness ?? 0.5,
-                1 - octaveAwareBPMDistance(track.bpm ?? 120, 120),
-                enhancedValence,
-              ];
-            };
-
-            const cosineSimilarity = (a: number[], b: number[]): number => {
-              let dot = 0,
-                magA = 0,
-                magB = 0;
-              for (let i = 0; i < a.length; i++) {
-                dot += a[i] * b[i];
-                magA += a[i] * a[i];
-                magB += b[i] * b[i];
-              }
-              if (magA === 0 || magB === 0) return 0;
-              return dot / (Math.sqrt(magA) * Math.sqrt(magB));
-            };
-
-            const computeTagBonus = (
-              sourceTags: string[],
-              sourceGenres: string[],
-              trackTags: string[],
-              trackGenres: string[],
-            ): number => {
-              const sourceSet = new Set(
-                [...sourceTags, ...sourceGenres].map((t) => t.toLowerCase()),
-              );
-              const trackSet = new Set(
-                [...trackTags, ...trackGenres].map((t) => t.toLowerCase()),
-              );
-              if (sourceSet.size === 0 || trackSet.size === 0) return 0;
-              const overlap = [...sourceSet].filter((tag) =>
-                trackSet.has(tag),
-              ).length;
-              return Math.min(0.05, overlap * 0.01);
-            };
-
-            const sourceVector = buildFeatureVector(sourceTrack);
-            const bothEnhanced = isEnhancedAnalysis;
-
-            const scored = analyzedVibeCandiates.map((t) => {
-              const targetEnhanced =
-                t.analysisMode === "enhanced" ||
-                (t.moodHappy !== null && t.moodSad !== null);
-              const useEnhanced = bothEnhanced && targetEnhanced;
-
-              const targetVector = buildFeatureVector(t as any);
-
-              let score = cosineSimilarity(sourceVector, targetVector);
-
-              const tagBonus = computeTagBonus(
-                sourceTrack.lastfmTags || [],
-                sourceTrack.essentiaGenres || [],
-                t.lastfmTags || [],
-                t.essentiaGenres || [],
-              );
-
-              const finalScore = score * 0.95 + tagBonus;
-
-              return {
-                id: t.id,
-                score: finalScore,
-                enhanced: useEnhanced,
-              };
-            });
-
-            const minThreshold = isEnhancedAnalysis ? 0.4 : 0.5;
-            const goodMatches = scored
-              .filter((t) => t.score > minThreshold)
-              .sort((a, b) => b.score - a.score);
-
-            vibeMatchedIds = goodMatches.map((t) => t.id);
-            const enhancedCount = goodMatches.filter((t) => t.enhanced).length;
-            logger.debug(
-              `[Radio:vibe] Audio matching found ${
-                vibeMatchedIds.length
-              } tracks (>${minThreshold * 100}% similarity)`,
-            );
-            logger.debug(
-              `[Radio:vibe] Enhanced matches: ${enhancedCount}, Standard matches: ${
-                goodMatches.length - enhancedCount
-              }`,
-            );
-
-            if (goodMatches.length > 0) {
-              logger.debug(
-                `[Radio:vibe] Top match score: ${goodMatches[0].score.toFixed(
-                  2,
-                )} (${goodMatches[0].enhanced ? "enhanced" : "standard"})`,
-              );
-            }
-          }
-        }
-
-        if (vibeMatchedIds.length < limitNum) {
-          const vibeArtistFallbackTracks = await prisma.track.findMany({
-            where: {
-              album: { artistId: sourceArtistId },
-              id: { notIn: [sourceTrackId, ...vibeMatchedIds] },
-            },
-            select: { id: true },
-          });
-          const newIds = vibeArtistFallbackTracks.map((t) => t.id);
-          vibeMatchedIds = [...vibeMatchedIds, ...newIds];
-          logger.debug(
-            `[Radio:vibe] Fallback A (same artist): added ${newIds.length} tracks, total: ${vibeMatchedIds.length}`,
-          );
-        }
-
-        if (vibeMatchedIds.length < limitNum) {
-          const ownedArtistIds = await prisma.ownedAlbum.findMany({
-            select: { artistId: true },
-            distinct: ["artistId"],
-          });
-          const libraryArtistSet = new Set(
-            ownedArtistIds.map((o) => o.artistId),
-          );
-          libraryArtistSet.delete(sourceArtistId);
-
-          const similarArtists = await prisma.similarArtist.findMany({
-            where: {
-              fromArtistId: sourceArtistId,
-              toArtistId: { in: Array.from(libraryArtistSet) },
-            },
-            orderBy: { weight: "desc" },
-            take: 10,
-          });
-
-          if (similarArtists.length > 0) {
-            const similarArtistTracks = await prisma.track.findMany({
-              where: {
-                album: {
-                  artistId: {
-                    in: similarArtists.map((s) => s.toArtistId),
-                  },
-                },
-                id: {
-                  notIn: [sourceTrackId, ...vibeMatchedIds],
-                },
-              },
-              select: { id: true },
-            });
-            const newIds = similarArtistTracks.map((t) => t.id);
-            vibeMatchedIds = [...vibeMatchedIds, ...newIds];
-            logger.debug(
-              `[Radio:vibe] Fallback B (similar artists): added ${newIds.length} tracks, total: ${vibeMatchedIds.length}`,
-            );
-          }
-        }
-
-        const sourceGenres = (sourceTrack.album.genres as string[]) || [];
-        if (vibeMatchedIds.length < limitNum && sourceGenres.length > 0) {
-          const vibeGenreTracks = await prisma.track.findMany({
-            where: {
-              trackGenres: {
-                some: {
-                  genre: {
-                    name: {
-                      in: sourceGenres,
-                      mode: "insensitive",
-                    },
-                  },
-                },
-              },
-              id: { notIn: [sourceTrackId, ...vibeMatchedIds] },
-            },
-            select: { id: true },
-            take: limitNum,
-          });
-          const newIds = vibeGenreTracks.map((t) => t.id);
-          vibeMatchedIds = [...vibeMatchedIds, ...newIds];
-          logger.debug(
-            `[Radio:vibe] Fallback C (same genre): added ${newIds.length} tracks, total: ${vibeMatchedIds.length}`,
-          );
-        }
-
-        if (vibeMatchedIds.length < limitNum) {
-          const randomTracks = await prisma.track.findMany({
-            where: {
-              id: { notIn: [sourceTrackId, ...vibeMatchedIds] },
-            },
-            select: { id: true },
-            take: limitNum - vibeMatchedIds.length,
-          });
-          const newIds = randomTracks.map((t) => t.id);
-          vibeMatchedIds = [...vibeMatchedIds, ...newIds];
-          logger.debug(
-            `[Radio:vibe] Fallback D (random): added ${newIds.length} tracks, total: ${vibeMatchedIds.length}`,
-          );
-        }
-
-        trackIds = vibeMatchedIds;
-        logger.debug(
-          `[Radio:vibe] Final vibe queue: ${trackIds.length} tracks`,
-        );
-        break;
-
       case "all":
       default:
         const allTracks = await prisma.track.findMany({
@@ -1616,10 +1170,12 @@ router.get("/radio", async (req, res) => {
         trackIds = allTracks.map((t) => t.id);
     }
 
-    const finalIds =
-      type === "vibe"
-        ? trackIds.slice(0, limitNum)
-        : shuffleArray(trackIds).slice(0, limitNum);
+    // Every station draws only tracks that can play: the file is present and not corrupt.
+    const playable = await prisma.track.findMany({
+      where: { id: { in: trackIds }, ...NOT_MISSING, corrupt: false },
+      select: { id: true },
+    });
+    const finalIds = shuffleArray(playable.map((t) => t.id)).slice(0, limitNum);
 
     if (finalIds.length === 0) {
       return res.json({ tracks: [] });
@@ -1648,141 +1204,7 @@ router.get("/radio", async (req, res) => {
       },
     });
 
-    let orderedTracks = tracks;
-    if (type === "vibe") {
-      const trackMap = new Map(tracks.map((t) => [t.id, t]));
-      orderedTracks = finalIds
-        .map((id) => trackMap.get(id))
-        .filter((t): t is (typeof tracks)[0] => t !== undefined);
-    }
-
-    if (type === "vibe" && vibeSourceFeatures) {
-      logger.debug("\n" + "=".repeat(100));
-      logger.debug("VIBE QUEUE ANALYSIS - Source Track");
-      logger.debug("=".repeat(100));
-
-      const srcTrack = await prisma.track.findUnique({
-        where: { id: value as string },
-        include: {
-          album: { include: { artist: { select: { name: true } } } },
-          trackGenres: {
-            include: { genre: { select: { name: true } } },
-          },
-        },
-      });
-
-      if (srcTrack) {
-        logger.debug(
-          `SOURCE: "${srcTrack.title}" by ${srcTrack.album.artist.name}`,
-        );
-        logger.debug(`  Album: ${srcTrack.album.title}`);
-        logger.debug(
-          `  Analysis Mode: ${(srcTrack as any).analysisMode || "unknown"}`,
-        );
-        logger.debug(
-          `  BPM: ${srcTrack.bpm?.toFixed(1) || "N/A"} | Energy: ${
-            srcTrack.energy?.toFixed(2) || "N/A"
-          } | Valence: ${srcTrack.valence?.toFixed(2) || "N/A"}`,
-        );
-        logger.debug(
-          `  Danceability: ${
-            srcTrack.danceability?.toFixed(2) || "N/A"
-          } | Arousal: ${
-            srcTrack.arousal?.toFixed(2) || "N/A"
-          } | Key: ${srcTrack.keyScale || "N/A"}`,
-        );
-        logger.debug(
-          `  ML Moods: Happy=${
-            (srcTrack as any).moodHappy?.toFixed(2) || "N/A"
-          }, Sad=${(srcTrack as any).moodSad?.toFixed(2) || "N/A"}, Relaxed=${
-            (srcTrack as any).moodRelaxed?.toFixed(2) || "N/A"
-          }, Aggressive=${
-            (srcTrack as any).moodAggressive?.toFixed(2) || "N/A"
-          }`,
-        );
-        logger.debug(
-          `  Genres: ${
-            srcTrack.trackGenres.map((tg) => tg.genre.name).join(", ") || "N/A"
-          }`,
-        );
-        logger.debug(
-          `  Last.fm Tags: ${
-            ((srcTrack as any).lastfmTags || []).join(", ") || "N/A"
-          }`,
-        );
-        logger.debug(
-          `  Mood Tags: ${
-            ((srcTrack as any).moodTags || []).join(", ") || "N/A"
-          }`,
-        );
-      }
-
-      logger.debug("\n" + "-".repeat(100));
-      logger.debug(
-        `VIBE QUEUE - ${orderedTracks.length} tracks (showing up to 50, SORTED BY MATCH SCORE)`,
-      );
-      logger.debug("-".repeat(100));
-      logger.debug(
-        `${"#".padEnd(3)} | ${"TRACK".padEnd(35)} | ${"ARTIST".padEnd(
-          20,
-        )} | ${"BPM".padEnd(6)} | ${"ENG".padEnd(5)} | ${"VAL".padEnd(
-          5,
-        )} | ${"H".padEnd(4)} | ${"S".padEnd(4)} | ${"R".padEnd(
-          4,
-        )} | ${"A".padEnd(4)} | MODE    | GENRES`,
-      );
-      logger.debug("-".repeat(100));
-
-      orderedTracks.slice(0, 50).forEach((track, i) => {
-        const t = track as any;
-        const title = track.title.substring(0, 33).padEnd(35);
-        const artist = track.album.artist.name.substring(0, 18).padEnd(20);
-        const bpm = track.bpm
-          ? track.bpm.toFixed(0).padEnd(6)
-          : "N/A".padEnd(6);
-        const energy =
-          track.energy !== null
-            ? track.energy.toFixed(2).padEnd(5)
-            : "N/A".padEnd(5);
-        const valence =
-          track.valence !== null
-            ? track.valence.toFixed(2).padEnd(5)
-            : "N/A".padEnd(5);
-        const happy =
-          t.moodHappy !== null
-            ? t.moodHappy.toFixed(2).padEnd(4)
-            : "N/A".padEnd(4);
-        const sad =
-          t.moodSad !== null ? t.moodSad.toFixed(2).padEnd(4) : "N/A".padEnd(4);
-        const relaxed =
-          t.moodRelaxed !== null
-            ? t.moodRelaxed.toFixed(2).padEnd(4)
-            : "N/A".padEnd(4);
-        const aggressive =
-          t.moodAggressive !== null
-            ? t.moodAggressive.toFixed(2).padEnd(4)
-            : "N/A".padEnd(4);
-        const mode = (t.analysisMode || "std").substring(0, 7).padEnd(8);
-        const genres = track.trackGenres
-          .slice(0, 3)
-          .map((tg) => tg.genre.name)
-          .join(", ");
-
-        logger.debug(
-          `${String(i + 1).padEnd(
-            3,
-          )} | ${title} | ${artist} | ${bpm} | ${energy} | ${valence} | ${happy} | ${sad} | ${relaxed} | ${aggressive} | ${mode} | ${genres}`,
-        );
-      });
-
-      if (orderedTracks.length > 50) {
-        logger.debug(`... and ${orderedTracks.length - 50} more tracks`);
-      }
-
-      logger.debug("=".repeat(100) + "\n");
-    }
-
-    const transformedTracks = orderedTracks.map((track) => ({
+    const transformedTracks = tracks.map((track) => ({
       id: track.id,
       title: track.title,
       duration: track.duration,
@@ -1799,20 +1221,9 @@ router.get("/radio", async (req, res) => {
         title: track.album.title,
         coverArt: track.album.coverUrl,
       },
-        ...(vibeSourceFeatures && {
-          audioFeatures: toAudioFeaturesDTO(track),
-        }),
     }));
 
-    const finalTracks =
-      type === "vibe" ? transformedTracks : shuffleArray(transformedTracks);
-
-    const response: any = { tracks: finalTracks };
-    if (vibeSourceFeatures) {
-      response.sourceFeatures = vibeSourceFeatures;
-    }
-
-    res.json(response);
+    res.json({ tracks: shuffleArray(transformedTracks) });
   } catch (error) {
     logger.error("Radio endpoint error:", error);
     res.status(500).json({ error: "Failed to get radio tracks" });

@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { normalizeArtistName } from "../../utils/artistNormalization";
+import fs from "fs";
+import path from "path";
+import { normalizeArtistName } from "../../services/artistIdentity";
 import { requireAdmin } from "../../middleware/auth";
 import { prisma, Prisma } from "../../utils/db";
 import { redisClient } from "../../utils/redis";
 import { logger } from "../../utils/logger";
-import { lastFmService } from "../../services/lastfm";
-import { deezerService } from "../../services/deezer";
+import { getSimilarArtists } from "../../services/artistSimilarity";
 import { musicBrainzService } from "../../services/musicbrainz";
 import { dataCacheService } from "../../services/dataCache";
 import {
@@ -19,29 +20,120 @@ import {
   getArtistDisplaySummary,
 } from "../../utils/metadataOverrides";
 import { safeError } from "../../utils/errors";
-import { hasRealMbid } from "../../services/artistIdentity";
+import { isMbid } from "../../services/artistIdentity";
+import { failureCause } from "../../utils/outcome";
 import pLimit from "p-limit";
 import { toAudioFeaturesDTO } from "../../utils/audioFeatures";
 import { resolveWithinMusicRoot } from "./trackPath";
+import { parseLimit } from "./paging";
+import { findArtistArtwork, withAlbumArtwork } from "../../services/artwork";
+import { listenBrainzService } from "../../services/listenBrainz";
+import { deezerService } from "../../services/deezer";
+import { LIBRARY_LOCATION } from "../../services/libraryFilters";
+import { editionlessKey } from "../../services/albumIdentity";
+import { getEffectiveYear } from "../../utils/dateFilters";
 
-// Alphabetical ordering reads `sortName`, not `name`: the article-stripped,
-// unaccented, lowercased value written by `artistSortName` and backfilled by
-// the artist_identity migration. Sorting on the raw name files "The Beatles"
-// under T and orders "Bjork" away from "Björk". The column is indexed, so this
-// is not a cost.
-//
-// NOTE: `name`/`name-desc` do not reach this map -- they take the raw-SQL
-// branch below, which orders on the same `sortName` column. This map covers
-// the remaining keys and the fallback. Both paths must keep agreeing; they did
-// not before, and the raw-SQL side stripped only "the" while the rest of the
-// system stripped eleven articles across four languages.
+// Alphabetical sorts use `sortName` (article-stripped, unaccented,
+// lowercased; indexed). `name`/`name-desc` take the raw-SQL branch below,
+// which orders on the same column, and must keep agreeing with this map.
 const ARTIST_SORT_MAP: Record<string, any> = {
   name: { sortName: "asc" as const },
   "name-desc": { sortName: "desc" as const },
   tracks: { totalTrackCount: "desc" as const },
 };
 
-const MAX_LIMIT = 10000;
+// The shape both artist-list branches return: the raw-SQL name-sort query
+// and the Prisma `select` below produce it independently.
+type ArtistListRow = {
+  id: string;
+  mbid: string | null;
+  name: string;
+  heroUrl: string | null;
+  userHeroUrl: string | null;
+  libraryAlbumCount: number;
+  discoveryAlbumCount: number;
+  totalTrackCount: number;
+};
+
+type SimilarArtistSource = {
+  name: string;
+  mbid?: string | null;
+  match: number;
+};
+
+// Flags each similar artist that is in the library (with its owned album count)
+// and gives it an image: the library's own, else whatever findArtistArtwork finds.
+async function resolveSimilarArtists(similar: SimilarArtistSource[]) {
+  // normalizeArtistName writes normalizedName and folds accents and
+  // ampersands, so lowercasing alone would miss "Sigur Rós" or "Hall & Oates".
+  const similarNames = similar.map((s) => normalizeArtistName(s.name));
+  const similarMbids = similar
+    .map((s) => s.mbid)
+    .filter(Boolean) as string[];
+
+  const libraryMatches = await prisma.artist.findMany({
+    where: {
+      OR: [
+        { normalizedName: { in: similarNames } },
+        ...(similarMbids.length > 0 ? [{ mbid: { in: similarMbids } }] : []),
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      normalizedName: true,
+      mbid: true,
+      heroUrl: true,
+      _count: {
+        select: {
+          albums: {
+            where: {
+              location: LIBRARY_LOCATION,
+              tracks: { some: {} },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const libraryByName = new Map(
+    libraryMatches.map((a) => [
+      a.normalizedName?.toLowerCase() || a.name.toLowerCase(),
+      a,
+    ]),
+  );
+  const libraryByMbid = new Map(
+    libraryMatches.filter((a) => a.mbid).map((a) => [a.mbid!, a]),
+  );
+
+  const imageLimit = pLimit(3);
+  return Promise.all(
+    similar.map((s) => imageLimit(async () => {
+      const libraryArtist =
+        (s.mbid && libraryByMbid.get(s.mbid)) ||
+        libraryByName.get(s.name.toLowerCase());
+
+      let image = libraryArtist?.heroUrl || null;
+      if (!image) {
+        image =
+          (await findArtistArtwork({ name: s.name, mbid: s.mbid || undefined }))
+            ?.url ?? null;
+      }
+
+      return {
+        id: libraryArtist?.id || s.name,
+        name: s.name,
+        mbid: s.mbid || null,
+        coverArt: image,
+        albumCount: 0,
+        ownedAlbumCount: libraryArtist?._count?.albums || 0,
+        weight: s.match,
+        inLibrary: !!libraryArtist,
+      };
+    })),
+  );
+}
 
 const router = Router();
 
@@ -84,7 +176,7 @@ router.get("/artists", async (req, res) => {
       sortBy = "name",
     } = req.query;
 
-    const limit = Math.min(parseInt(limitParam as string, 10) || 50, MAX_LIMIT);
+    const limit = parseLimit(limitParam, 50);
     const offset = parseInt(offsetParam as string, 10) || 0;
 
     const orderBy = ARTIST_SORT_MAP[sortBy as string] ?? {
@@ -112,83 +204,69 @@ router.get("/artists", async (req, res) => {
       where.name = { contains: query as string, mode: "insensitive" };
     }
 
-    const [artists, total] = await prisma.$transaction(
-      async (tx) => {
-        if (sortBy === "name" || sortBy === "name-desc") {
-          const whereSql = buildArtistListWhereSql(filter as string, query as string);
-          const direction = sortBy === "name-desc"
-            ? Prisma.sql`DESC`
-            : Prisma.sql`ASC`;
+    let artists: ArtistListRow[];
+    let total: number;
 
-          const artistsByName = await tx.$queryRaw<
-            {
-              id: string;
-              mbid: string | null;
-              name: string;
-              heroUrl: string | null;
-              userHeroUrl: string | null;
-              libraryAlbumCount: number;
-              discoveryAlbumCount: number;
-              totalTrackCount: number;
-            }[]
-          >`
-            SELECT
-              a.id,
-              a.mbid,
-              a.name,
-              a."heroUrl",
-              a."userHeroUrl",
-              a."libraryAlbumCount",
-              a."discoveryAlbumCount",
-              a."totalTrackCount"
-            FROM "Artist" a
-            ${whereSql}
-            ORDER BY
-              a."sortName" ${direction},
-              a.id ASC
-            LIMIT ${limit}
-            OFFSET ${offset}
-          `;
+    if (sortBy === "name" || sortBy === "name-desc") {
+      const whereSql = buildArtistListWhereSql(filter as string, query as string);
+      const direction = sortBy === "name-desc"
+        ? Prisma.sql`DESC`
+        : Prisma.sql`ASC`;
 
-          const countRows = await tx.$queryRaw<{ total: bigint }[]>`
-            SELECT COUNT(*)::bigint AS total
-            FROM "Artist" a
-            ${whereSql}
-          `;
+      artists = await prisma.$queryRaw<ArtistListRow[]>`
+        SELECT
+          a.id,
+          a.mbid,
+          a.name,
+          a."heroUrl",
+          a."userHeroUrl",
+          a."libraryAlbumCount",
+          a."discoveryAlbumCount",
+          a."totalTrackCount"
+        FROM "Artist" a
+        ${whereSql}
+        ORDER BY
+          a."sortName" ${direction},
+          a.id ASC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `;
 
-          return [artistsByName, Number(countRows[0]?.total ?? 0)] as const;
-        }
+      const countRows = await prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*)::bigint AS total
+        FROM "Artist" a
+        ${whereSql}
+      `;
+      total = Number(countRows[0]?.total ?? 0);
+    } else {
+      const findManyArgs: Parameters<typeof prisma.artist.findMany>[0] = {
+        where,
+        take: limit,
+        orderBy: [orderBy, { id: "asc" }],
+        select: {
+          id: true,
+          mbid: true,
+          name: true,
+          heroUrl: true,
+          userHeroUrl: true,
+          libraryAlbumCount: true,
+          discoveryAlbumCount: true,
+          totalTrackCount: true,
+        },
+      };
 
-        const findManyArgs: Parameters<typeof tx.artist.findMany>[0] = {
-          where,
-          take: limit,
-          orderBy,
-          select: {
-            id: true,
-            mbid: true,
-            name: true,
-            heroUrl: true,
-            userHeroUrl: true,
-            libraryAlbumCount: true,
-            discoveryAlbumCount: true,
-            totalTrackCount: true,
-          },
-        };
+      if (cursor) {
+        findManyArgs.cursor = { id: cursor as string };
+        findManyArgs.skip = 1;
+      } else {
+        findManyArgs.skip = offset;
+      }
 
-        if (cursor) {
-          findManyArgs.cursor = { id: cursor as string };
-          findManyArgs.skip = 1;
-        } else {
-          findManyArgs.skip = offset;
-        }
-
-        return Promise.all([
-          tx.artist.findMany(findManyArgs),
-          tx.artist.count({ where }),
-        ]);
-      },
-      { timeout: 30000 },
-    );
+      [artists, total] = await Promise.all([
+        prisma.artist.findMany(findManyArgs),
+        prisma.artist.count({ where }),
+      ]);
+    }
 
     const imageMap = await dataCacheService.getArtistImagesBatch(
       artists.map((a) => ({
@@ -210,7 +288,7 @@ router.get("/artists", async (req, res) => {
 
       return {
         id: artist.id,
-        mbid: hasRealMbid(artist.mbid) ? artist.mbid : null,
+        mbid: isMbid(artist.mbid) ? artist.mbid : null,
         name: artist.name,
         heroUrl: coverArt,
         coverArt,
@@ -343,12 +421,11 @@ router.get("/artists/:id", async (req, res) => {
       ownedAlbums: true,
     };
 
-    const decodedName = decodeURIComponent(idParam);
     const artist = await prisma.artist.findFirst({
       where: {
         OR: [
           { id: idParam },
-          { name: { equals: decodedName, mode: "insensitive" } },
+          { name: { equals: idParam, mode: "insensitive" } },
           { mbid: idParam },
         ],
       },
@@ -362,41 +439,8 @@ router.get("/artists/:id", async (req, res) => {
     let albumsWithOwnership = [];
     const ownedRgMbids = new Set(artist.ownedAlbums.map((o) => o.rgMbid));
 
-    let effectiveMbid = artist.mbid;
-    if (!effectiveMbid || (effectiveMbid.startsWith("temp-") && artist.enrichmentStatus !== "unresolvable")) {
-      logger.debug(
-        ` Artist has temp/no MBID, searching MusicBrainz for ${artist.name}...`,
-      );
-      try {
-        const searchResults = await musicBrainzService.searchArtist(
-          artist.name,
-          1,
-        );
-        if (searchResults.length > 0) {
-          effectiveMbid = searchResults[0].id;
-          logger.debug(`  Found MBID: ${effectiveMbid}`);
-
-          try {
-            await prisma.artist.update({
-              where: { id: artist.id },
-              data: { mbid: effectiveMbid },
-            });
-          } catch (mbidError: any) {
-            if (mbidError.code === "P2002") {
-              logger.debug(
-                `MBID ${effectiveMbid} already exists for another artist, skipping update`,
-              );
-            } else {
-              logger.error(`  ✗ Failed to update MBID:`, mbidError);
-            }
-          }
-        } else {
-          logger.debug(`  ✗ No MusicBrainz match found for ${artist.name}`);
-        }
-      } catch (error) {
-        logger.error(` MusicBrainz search failed:`, error);
-      }
-    }
+    // The id belongs to enrichment; a page view never searches for or stores one.
+    const effectiveMbid = artist.mbid;
 
     const dbAlbums = artist.albums.map((album) => ({
       ...album,
@@ -415,7 +459,7 @@ router.get("/artists/:id", async (req, res) => {
 
     // Inline guard, not a boolean intermediate: the type predicate has to be in
     // the condition for effectiveMbid to narrow to string inside the block.
-    if (hasRealMbid(effectiveMbid)) {
+    if (isMbid(effectiveMbid)) {
       try {
         const discoCacheKey = `discography:${effectiveMbid}`;
         let releaseGroups: any[] = [];
@@ -428,16 +472,30 @@ router.get("/artists/:id", async (req, res) => {
           );
         } else {
           logger.debug(`[Artist] Fetching discography from MusicBrainz...`);
-          releaseGroups = await musicBrainzService.getReleaseGroups(
+          const fetched = await musicBrainzService.getReleaseGroups(
             effectiveMbid,
             ["album", "ep"],
             100,
+            { interactive: true },
           );
-          await redisClient.setex(
-            discoCacheKey,
-            24 * 60 * 60,
-            JSON.stringify(releaseGroups),
-          );
+          if (fetched.kind === "answered") {
+            releaseGroups = fetched.value;
+            await redisClient.setex(
+              discoCacheKey,
+              24 * 60 * 60,
+              JSON.stringify(releaseGroups),
+            );
+          } else if (fetched.kind === "absent") {
+            logger.debug(
+              `[Artist] MusicBrainz has no release-groups for ${effectiveMbid}`,
+            );
+          } else {
+            // A failed question is not "no discography" — the catch
+            // below serves database albums and logs the real cause.
+            throw new Error(
+              `Discography lookup ${fetched.kind}: ${failureCause(fetched)}`,
+            );
+          }
         }
 
         logger.debug(
@@ -471,44 +529,29 @@ router.get("/artists/:id", async (req, res) => {
           `  Filtered to ${filteredReleaseGroups.length} studio albums/EPs`,
         );
 
-        const mbAlbums = await Promise.all(
-          filteredReleaseGroups.map(async (rg: any) => {
-            let coverUrl = null;
+        const mbAlbums = filteredReleaseGroups.map((rg: any) => ({
+          id: rg.id,
+          rgMbid: rg.id,
+          title: rg.title,
+          year: rg["first-release-date"]
+            ? parseInt(rg["first-release-date"].substring(0, 4))
+            : null,
+          type: rg["primary-type"],
+          coverUrl: null as string | null,
+          coverArt: null as string | null,
+          artistId: artist.id,
+          owned: ownedRgMbids.has(rg.id),
+          trackCount: 0,
+          tracks: [],
+          source: "musicbrainz" as const,
+        }));
 
-            const cacheKey = `caa:${rg.id}`;
-            try {
-              const cached = await redisClient.get(cacheKey);
-              if (cached && cached !== "NOT_FOUND") {
-                coverUrl = cached;
-              }
-            } catch (err) {
-              // Redis error, continue without cover
-            }
-
-            return {
-              id: rg.id,
-              rgMbid: rg.id,
-              title: rg.title,
-              year: rg["first-release-date"]
-                ? parseInt(rg["first-release-date"].substring(0, 4))
-                : null,
-              type: rg["primary-type"],
-              coverUrl,
-              coverArt: coverUrl,
-              artistId: artist.id,
-              owned: ownedRgMbids.has(rg.id),
-              trackCount: 0,
-              tracks: [],
-              source: "musicbrainz" as const,
-            };
-          }),
-        );
-
-        const dbAlbumTitles = new Set(
-          dbAlbums.map((a) => a.title.toLowerCase()),
-        );
-        const mbAlbumsFiltered = mbAlbums.filter(
-          (a) => !dbAlbumTitles.has(a.title.toLowerCase()),
+        const inLibrary = new Set(dbAlbums.map((a) => a.rgMbid).filter(Boolean));
+        const inLibraryTitles = new Set(dbAlbums.map((a) => editionlessKey(a.title)));
+        const mbAlbumsFiltered = await withAlbumArtwork(
+          mbAlbums.filter((a) => !inLibrary.has(a.rgMbid) && !inLibraryTitles.has(editionlessKey(a.title))),
+          (album) => ({ rgMbid: album.rgMbid, artistName: artist.name, albumTitle: album.title }),
+          (album, coverUrl) => ({ ...album, coverUrl, coverArt: coverUrl }),
         );
 
         albumsWithOwnership = [...dbAlbums, ...mbAlbumsFiltered];
@@ -533,145 +576,241 @@ router.get("/artists/:id", async (req, res) => {
     }
 
     const allTracks = artist.albums.flatMap((a) => a.tracks);
-    let topTracks = allTracks.slice(0, 10);
+    let topTracks: any[];
 
     const userId = req.user!.id;
-    const trackIds = allTracks.map((t) => t.id);
-    const userPlays = await prisma.play.groupBy({
-      by: ["trackId"],
-      where: {
-        userId,
-        trackId: { in: trackIds },
-      },
-      _count: {
-        id: true,
-      },
-    });
-    const userPlayCounts = new Map(
-      userPlays.map((p) => [p.trackId, p._count.id]),
-    );
 
-    const topTracksCacheKey = `top-tracks:${artist.id}`;
-    try {
-      const cachedTopTracks = await redisClient.get(topTracksCacheKey);
-      let lastfmTopTracks: any[] = [];
+    // Popular tracks: real global popularity, not an echo of the user's own
+    // listens. ListenBrainz sitewide top recordings first (needs the user's
+    // scrobble token), Deezer's artist-top as the no-token fallback; both are
+    // joined against the owned library so owned rows play and unowned rows
+    // preview. When both sources are unavailable the local floor applies:
+    // the user's most played by this artist, then MB first-release date.
+    let popularitySource = "local";
+    {
+      const ownedByMbid = new Map<string, any>();
+      const ownedByTitle = new Map<string, any>();
+      for (const t of allTracks) {
+        if (t.recordingMbid) ownedByMbid.set(t.recordingMbid, t);
+        const bare = t.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase();
+        if (bare && !ownedByTitle.has(bare)) ownedByTitle.set(bare, t);
+      }
+      const joinOwned = (
+        rows: Array<{
+          key: string;
+          title: string;
+          albumName?: string | null;
+          coverUrl?: string | null;
+          previewUrl?: string | null;
+          durationMs?: number;
+          listeners: number;
+          playCount: number;
+        }>
+      ): any[] => {
+        const seen = new Set<string>();
+        const joined: any[] = [];
+        for (const r of rows) {
+          const owned =
+            ownedByMbid.get(r.key) ||
+            ownedByTitle.get(r.title.toLowerCase()) ||
+            ownedByTitle.get(
+              r.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase()
+            );
+          // Two global rows can join to the same owned track (the Radio Edit
+          // and the album cut of one song): keep the first, higher-ranked one.
+          const dedupeKey = owned ? owned.id : `dz:${r.key}`;
+          if (seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+          if (owned) {
+            joined.push({
+              ...owned,
+              playCount: r.playCount,
+              listeners: r.listeners,
+              userPlayCount: owned.playCount ?? 0,
+              popularitySource: "global",
+              album: { ...owned.album, coverArt: owned.album?.coverUrl },
+            });
+          } else {
+            joined.push({
+              id: `dz:${r.key}`,
+              title: r.title,
+              duration: Math.round((r.durationMs || 0) / 1000) || 0,
+              playCount: r.playCount,
+              listeners: r.listeners,
+              userPlayCount: 0,
+              popularitySource: "global",
+              previewUrl: r.previewUrl || null,
+              album: {
+                id: null,
+                title: r.albumName || "Unknown Album",
+                coverUrl: r.coverUrl || null,
+                coverArt: r.coverUrl || null,
+              },
+            });
+          }
+        }
+        return joined;
+      };
 
-      if (cachedTopTracks && cachedTopTracks !== "NOT_FOUND") {
-        lastfmTopTracks = JSON.parse(cachedTopTracks);
+      let global: any[] = [];
+      if (isMbid(effectiveMbid)) {
+        try {
+          const lb = await listenBrainzService.getTopRecordingsForArtist(effectiveMbid, userId, 10);
+          if (lb.length > 0) {
+            global = joinOwned(
+              lb.map((r) => ({
+                key: r.recordingMbid,
+                title: r.title,
+                albumName: r.releaseName,
+                durationMs: r.lengthMs,
+                listeners: r.listeners,
+                playCount: r.playCount,
+              }))
+            );
+            popularitySource = "listenbrainz";
+          }
+        } catch (lbError) {
+          logger.warn(
+            `[Artist] ListenBrainz top recordings failed for ${artist.name}:`,
+            lbError
+          );
+        }
+      }
+      if (global.length === 0) {
+        try {
+          const dz = await deezerService.getArtistTopTracks(artist.name, 10);
+          if (dz.length > 0) {
+            global = joinOwned(
+              dz.map((r) => ({
+                key: r.title.toLowerCase(),
+                title: r.title,
+                albumName: r.album,
+                coverUrl: r.coverUrl,
+                previewUrl: r.previewUrl,
+                durationMs: r.durationMs,
+                listeners: 0,
+                playCount: r.rank,
+              }))
+            );
+            popularitySource = "deezer";
+          }
+        } catch (dzError) {
+          logger.warn(
+            `[Artist] Deezer top tracks failed for ${artist.name}:`,
+            dzError
+          );
+        }
+      }
+      topTracks = global;
+      logger.debug(
+        `[Artist] Popular tracks from ${popularitySource} (${global.length})`,
+      );
+    }
+    if (topTracks.length === 0) {
+      const played = await prisma.$queryRaw<
+        Array<{
+          id: string;
+          title: string;
+          duration: number;
+          albumId: string;
+          albumTitle: string;
+          albumCoverUrl: string | null;
+          artistId: string;
+          artistName: string;
+          playCount: bigint;
+        }>
+      >`
+        SELECT t.id, t.title, t.duration,
+               t."albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
+               a."artistId", ar.name AS "artistName",
+               COUNT(p.id)::bigint AS "playCount"
+        FROM "Track" t
+        JOIN "Album" a ON a.id = t."albumId"
+        JOIN "Artist" ar ON ar.id = a."artistId"
+        JOIN "Play" p ON p."trackId" = t.id AND p."userId" = ${userId}
+        WHERE a."artistId" = ${artist.id}
+        GROUP BY t.id, t.title, t.duration, t."albumId", a.title, a."coverUrl", a."artistId", ar.name
+        HAVING COUNT(p.id) > 0
+        ORDER BY COUNT(p.id) DESC, MAX(p."playedAt") DESC
+        LIMIT 10
+      `;
+      if (played.length > 0) {
+        topTracks = played.map((t) => ({
+          ...t,
+          playCount: Number(t.playCount),
+          listeners: 0,
+          userPlayCount: Number(t.playCount),
+          album: {
+            id: t.albumId,
+            title: t.albumTitle,
+            artistId: t.artistId,
+            coverUrl: t.albumCoverUrl,
+            artist: { id: t.artistId, name: t.artistName, mbid: "" },
+            coverArt: t.albumCoverUrl,
+          },
+        }));
         logger.debug(
-          `[Artist] Using cached top tracks (${lastfmTopTracks.length})`,
+          `[Artist] Top tracks from local listens (${played.length})`,
         );
       } else {
-        const validMbid =
-          hasRealMbid(effectiveMbid)
-            ? effectiveMbid
-            : "";
-        lastfmTopTracks = await lastFmService.getArtistTopTracks(
-          validMbid,
-          artist.name,
-          10,
-        );
-        await redisClient.setex(
-          topTracksCacheKey,
-          24 * 60 * 60,
-          JSON.stringify(lastfmTopTracks),
-        );
-        logger.debug(`[Artist] Cached ${lastfmTopTracks.length} top tracks`);
-      }
-
-      const normalizeTitle = (title: string): string => {
-        return title
-          .toLowerCase()
-          .replace(/\s*\((?:cover|remix|remaster(?:ed)?|deluxe|bonus track|acoustic|instrumental|radio edit|clean|explicit|feat\.?\s[^)]*|ft\.?\s[^)]*|[^)]*\s(?:remix|mix|version|edit))\)/gi, '')
-          .trim();
-      };
-
-      const stripSuffixes = (title: string): string => {
-        return title
-          .toLowerCase()
-          .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '')
-          .replace(/\s+-\s*(?:remaster(?:ed)?|deluxe|single|bonus|acoustic|live|remix|clean|explicit|anniversary|expanded|special|mono|stereo)(?:\s[^-]*)?$/gi, '')
-          .trim();
-      };
-
-      const isLiveTrack = (title: string): boolean => {
-        return /\(live[^)]*\)/i.test(title) || /\s-\s*live\b/i.test(title);
-      };
-
-      const tracksByExactTitle = new Map<string, (typeof allTracks)[0]>();
-      const tracksByNormTitle = new Map<string, (typeof allTracks)[0]>();
-      const tracksByStrippedTitle = new Map<string, (typeof allTracks)[0]>();
-      for (const track of allTracks) {
-        if (isLiveTrack(track.title)) continue;
-        const exact = track.title.toLowerCase();
-        const norm = normalizeTitle(track.title);
-        const stripped = stripSuffixes(track.title);
-        if (!tracksByExactTitle.has(exact)) {
-          tracksByExactTitle.set(exact, track);
-        }
-        if (!tracksByNormTitle.has(norm)) {
-          tracksByNormTitle.set(norm, track);
-        }
-        if (!tracksByStrippedTitle.has(stripped)) {
-          tracksByStrippedTitle.set(stripped, track);
-        }
-      }
-
-      const combinedTracks: any[] = [];
-
-      for (const lfmTrack of lastfmTopTracks) {
-        if (isLiveTrack(lfmTrack.name)) continue;
-
-        const exactKey = lfmTrack.name.toLowerCase();
-        const normKey = normalizeTitle(lfmTrack.name);
-        const strippedKey = stripSuffixes(lfmTrack.name);
-        const matchedTrack = tracksByExactTitle.get(exactKey) || tracksByNormTitle.get(normKey) || tracksByStrippedTitle.get(strippedKey);
-
-        if (matchedTrack) {
-          combinedTracks.push({
-            ...matchedTrack,
-            playCount: lfmTrack.playcount ? parseInt(lfmTrack.playcount) : 0,
-            listeners: lfmTrack.listeners ? parseInt(lfmTrack.listeners) : 0,
-            userPlayCount: userPlayCounts.get(matchedTrack.id) || 0,
-            album: {
-              ...matchedTrack.album,
-              coverArt: matchedTrack.album.coverUrl,
-            },
-          });
-        } else {
-          combinedTracks.push({
-            id: `lastfm-${artist.mbid || artist.name}-${lfmTrack.name}`,
-            title: lfmTrack.name,
-            playCount: lfmTrack.playcount ? parseInt(lfmTrack.playcount) : 0,
-            listeners: lfmTrack.listeners ? parseInt(lfmTrack.listeners) : 0,
-            duration: lfmTrack.duration
-              ? Math.floor(parseInt(lfmTrack.duration) / 1000)
-              : 0,
-            url: lfmTrack.url,
-            album: {
-              title: lfmTrack.album?.["#text"] || "Unknown Album",
-              coverArt: artist.heroUrl || null,
-            },
+        // Cold start: earliest-released tracks per MusicBrainz, falling back
+        // to the plain first-10 slice when MB has nothing.
+        try {
+          const fetched = isMbid(effectiveMbid)
+            ? await musicBrainzService.getReleaseGroups(effectiveMbid, ["album"], 50)
+            : null;
+          const rgs = fetched?.kind === "answered" ? fetched.value : [];
+          const releaseDateByRg = new Map<string, string>();
+          for (const rg of rgs as Array<{
+            id: string;
+            "first-release-date"?: string;
+          }>) {
+            if (rg["first-release-date"]) {
+              releaseDateByRg.set(rg.id, rg["first-release-date"]);
+            }
+          }
+          const dated = allTracks
+            .map((t) => {
+              const album = artist.albums.find((a) => a.id === t.albumId);
+              const date =
+                (album && releaseDateByRg.get(album.rgMbid)) ||
+                (album?.year ? `${album.year}-01-01` : "9999");
+              return { t, date: String(date) };
+            })
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(0, 10)
+            .map(({ t, date }) => ({
+              ...t,
+              playCount: 0,
+              listeners: 0,
+              userPlayCount: 0,
+              releaseDate: date === "9999" ? null : date,
+              album: {
+                ...t.album,
+                coverArt: t.album.coverUrl,
+              },
+            }));
+          topTracks = dated;
+          logger.debug(
+            `[Artist] No local plays; top tracks by MB first-release-date (${dated.length})`,
+          );
+        } catch (mbError) {
+          logger.warn(
+            `[Artist] MB first-release fallback failed for ${artist.name}:`,
+            mbError,
+          );
+          topTracks = allTracks.slice(0, 10).map((t) => ({
+            ...t,
+            playCount: 0,
+            listeners: 0,
             userPlayCount: 0,
-          });
+            album: {
+              ...t.album,
+              coverArt: t.album.coverUrl,
+            },
+          }));
         }
       }
-
-      topTracks = combinedTracks.slice(0, 10);
-    } catch (error) {
-      logger.error(
-        `Failed to get Last.fm top tracks for ${artist.name}:`,
-        error,
-      );
-      topTracks = topTracks.map((t) => ({
-        ...t,
-        userPlayCount: userPlayCounts.get(t.id) || 0,
-        album: {
-          ...t.album,
-          coverArt: t.album.coverUrl,
-        },
-        audioFeatures: toAudioFeaturesDTO(t),
-      }));
     }
 
     const heroUrl = await dataCacheService.getArtistImage(
@@ -694,97 +833,7 @@ router.get("/artists/:id", async (req, res) => {
         `[Artist] Using ${enrichedSimilar.length} similar artists from enriched JSON`,
       );
 
-      // normalizeArtistName, not toLowerCase: it is what WRITES normalizedName,
-      // and it also folds accents and ampersands. A lowercase-only key misses
-      // every artist whose name carries one -- "Sigur Rós" is stored
-      // "sigur ros", "Hall & Oates" as "hall and oates" -- so those artists
-      // were silently absent from the in-library similar list.
-      const similarNames = enrichedSimilar
-        .slice(0, 10)
-        .map((s) => normalizeArtistName(s.name));
-      const similarMbids = enrichedSimilar
-        .slice(0, 10)
-        .map((s) => s.mbid)
-        .filter(Boolean) as string[];
-
-      const libraryMatches = await prisma.artist.findMany({
-        where: {
-          OR: [
-            { normalizedName: { in: similarNames } },
-            ...(similarMbids.length > 0
-              ? [{ mbid: { in: similarMbids } }]
-              : []),
-          ],
-        },
-        select: {
-          id: true,
-          name: true,
-          normalizedName: true,
-          mbid: true,
-          heroUrl: true,
-          _count: {
-            select: {
-              albums: {
-                where: {
-                  location: "LIBRARY",
-                  tracks: { some: {} },
-                },
-              },
-            },
-          },
-        },
-      });
-
-      const libraryByName = new Map(
-        libraryMatches.map((a) => [
-          a.normalizedName?.toLowerCase() || a.name.toLowerCase(),
-          a,
-        ]),
-      );
-      const libraryByMbid = new Map(
-        libraryMatches.filter((a) => a.mbid).map((a) => [a.mbid!, a]),
-      );
-
-      const deezerLimit = pLimit(3);
-      const similarWithImages = await Promise.all(
-        enrichedSimilar.slice(0, 10).map((s) => deezerLimit(async () => {
-          const libraryArtist =
-            (s.mbid && libraryByMbid.get(s.mbid)) ||
-            libraryByName.get(s.name.toLowerCase());
-
-          let image = libraryArtist?.heroUrl || null;
-
-          if (!image) {
-            try {
-              const cacheKey = `deezer-artist-image:${s.name}`;
-              const cached = await redisClient.get(cacheKey);
-              if (cached && cached !== "NOT_FOUND") {
-                image = cached;
-              } else {
-                image = await deezerService.getArtistImage(s.name);
-                if (image) {
-                  await redisClient.setex(cacheKey, 24 * 60 * 60, image);
-                }
-              }
-            } catch (err) {
-              // Deezer failed, leave null
-            }
-          }
-
-          return {
-            id: libraryArtist?.id || s.name,
-            name: s.name,
-            mbid: s.mbid || null,
-            coverArt: image,
-            albumCount: 0,
-            ownedAlbumCount: libraryArtist?._count?.albums || 0,
-            weight: s.match,
-            inLibrary: !!libraryArtist,
-          };
-        })),
-      );
-
-      similarArtists = similarWithImages;
+      similarArtists = await resolveSimilarArtists(enrichedSimilar.slice(0, 10));
     } else {
       const cachedSimilar = await redisClient.get(similarCacheKey);
       if (cachedSimilar && cachedSimilar !== "NOT_FOUND") {
@@ -793,95 +842,20 @@ router.get("/artists/:id", async (req, res) => {
           `[Artist] Using cached similar artists (${similarArtists.length})`,
         );
       } else {
-        logger.debug(`[Artist] Fetching similar artists from Last.fm...`);
+        logger.debug(`[Artist] Fetching similar artists (ListenBrainz, then Deezer)...`);
 
         try {
           const validMbid =
-            hasRealMbid(effectiveMbid)
+            isMbid(effectiveMbid)
               ? effectiveMbid
               : "";
-          const lastfmSimilar = await lastFmService.getSimilarArtists(
+          const similar = await getSimilarArtists(
             validMbid,
             artist.name,
             10,
           );
 
-          const similarNames = lastfmSimilar.map((s: any) =>
-            normalizeArtistName(s.name),
-          );
-          const similarMbids = lastfmSimilar
-            .map((s: any) => s.mbid)
-            .filter(Boolean) as string[];
-
-          const libraryMatches = await prisma.artist.findMany({
-            where: {
-              OR: [
-                { normalizedName: { in: similarNames } },
-                ...(similarMbids.length > 0
-                  ? [{ mbid: { in: similarMbids } }]
-                  : []),
-              ],
-            },
-            select: {
-              id: true,
-              name: true,
-              normalizedName: true,
-              mbid: true,
-              heroUrl: true,
-              _count: {
-                select: {
-                  albums: {
-                    where: {
-                      location: "LIBRARY",
-                      tracks: { some: {} },
-                    },
-                  },
-                },
-              },
-            },
-          });
-
-          const libraryByName = new Map(
-            libraryMatches.map((a) => [
-              a.normalizedName?.toLowerCase() || a.name.toLowerCase(),
-              a,
-            ]),
-          );
-          const libraryByMbid = new Map(
-            libraryMatches.filter((a) => a.mbid).map((a) => [a.mbid!, a]),
-          );
-
-          const lastfmDeezerLimit = pLimit(3);
-          const similarWithImages = await Promise.all(
-            lastfmSimilar.map((s: any) => lastfmDeezerLimit(async () => {
-              const libraryArtist =
-                (s.mbid && libraryByMbid.get(s.mbid)) ||
-                libraryByName.get(s.name.toLowerCase());
-
-              let image = libraryArtist?.heroUrl || null;
-
-              if (!image) {
-                try {
-                  image = await deezerService.getArtistImage(s.name);
-                } catch (err) {
-                  // Deezer failed, leave null
-                }
-              }
-
-              return {
-                id: libraryArtist?.id || s.name,
-                name: s.name,
-                mbid: s.mbid || null,
-                coverArt: image,
-                albumCount: 0,
-                ownedAlbumCount: libraryArtist?._count?.albums || 0,
-                weight: s.match,
-                inLibrary: !!libraryArtist,
-              };
-            })),
-          );
-
-          similarArtists = similarWithImages;
+          similarArtists = await resolveSimilarArtists(similar);
 
           await redisClient.setex(
             similarCacheKey,
@@ -898,13 +872,23 @@ router.get("/artists/:id", async (req, res) => {
       }
     }
 
+    // Both album sections on the artist page are year-ordered. The array above is assembled
+    // database-first then MusicBrainz, so its raw order is acquisition order: an artist's
+    // unowned albums came back looking random, and the web renders this order directly.
+    const albumsByYear = [...albumsWithOwnership].sort((a, b) => {
+      const av = getEffectiveYear(a) ?? -1;
+      const bv = getEffectiveYear(b) ?? -1;
+      if (av !== bv) return bv - av;
+      return String(a.title).localeCompare(String(b.title));
+    });
+
     res.json({
       ...artist,
-      mbid: hasRealMbid(artist.mbid) ? artist.mbid : null,
+      mbid: isMbid(artist.mbid) ? artist.mbid : null,
       coverArt: heroUrl,
       bio: getArtistDisplaySummary(artist),
       genres: getMergedGenres(artist),
-      albums: albumsWithOwnership,
+      albums: albumsByYear,
       topTracks,
       similarArtists,
     });
@@ -930,10 +914,6 @@ router.delete("/artists/:id", requireAdmin, async (req, res) => {
     if (!artist) {
       return res.status(404).json({ error: "Artist not found" });
     }
-
-    const { config } = await import("../../config");
-    const path = await import("path");
-    const fs = await import("fs");
 
     let deletedFiles = 0;
     const artistFoldersToDelete = new Set<string>();
@@ -1060,7 +1040,7 @@ router.delete("/artists/:id", requireAdmin, async (req, res) => {
 
     let lidarrDeleted = false;
     let lidarrError: string | null = null;
-    if (hasRealMbid(artist.mbid)) {
+    if (isMbid(artist.mbid)) {
       try {
         const { lidarrService } = await import("../../services/lidarr");
         const lidarrResult = await lidarrService.deleteArtist(

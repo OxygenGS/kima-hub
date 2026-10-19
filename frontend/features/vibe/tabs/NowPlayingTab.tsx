@@ -3,10 +3,14 @@
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { Music } from "lucide-react";
-import Image from "next/image";
 import { api } from "@/lib/api";
+import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export function NowPlayingTab() {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
 
@@ -19,7 +23,7 @@ export function NowPlayingTab() {
             <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
                 <Music className="w-10 h-10 text-[var(--text-muted)] mb-4" />
                 <p className="text-sm text-[var(--text-muted)]">
-                    Start listening to see what&apos;s playing here
+                    {t("Start listening to see what's playing here")}
                 </p>
             </div>
         );
@@ -28,16 +32,14 @@ export function NowPlayingTab() {
     return (
         <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-4">
-                {/* Album art */}
                 <div className="relative aspect-square w-full max-w-[280px] mx-auto rounded-lg overflow-hidden bg-[#181818]">
                     {coverUrl ? (
-                        <Image
+                        <CachedImage
                             src={coverUrl}
-                            alt={currentTrack.album?.title || "Album art"}
+                            alt={currentTrack.album?.title || t("Album art")}
                             fill
                             sizes="280px"
                             className="object-cover"
-                            unoptimized
                         />
                     ) : (
                         <div className="w-full h-full flex items-center justify-center">
@@ -45,17 +47,16 @@ export function NowPlayingTab() {
                         </div>
                     )}
                     {isPlaying && (
-                        <div className="absolute bottom-2 right-2 w-2.5 h-2.5 rounded-full bg-[#1db954] animate-pulse" />
+                        <div className="absolute bottom-2 right-2 w-2.5 h-2.5 rounded-full bg-brand animate-pulse" />
                     )}
                 </div>
 
-                {/* Track info */}
                 <div className="text-center">
                     <p className="text-lg font-semibold text-white truncate">
                         {currentTrack.title}
                     </p>
                     <p className="text-sm text-[var(--text-secondary)] truncate">
-                        {currentTrack.artist?.name || "Unknown Artist"}
+                        {currentTrack.artist?.name || t("Unknown Artist")}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)] truncate">
                         {currentTrack.album?.title}

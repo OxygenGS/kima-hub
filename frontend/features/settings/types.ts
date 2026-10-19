@@ -1,13 +1,14 @@
-/**
- * Settings Types
- * Centralized type definitions for the settings feature
- */
-
 export interface UserSettings {
     playbackQuality: "original" | "high" | "medium" | "low";
     wifiOnly: boolean;
     offlineEnabled: boolean;
     maxCacheSizeMb: number;
+    /** True when the user saved an LB scrobble token; the value itself is never returned. */
+    hasListenbrainzToken?: boolean;
+    /** Whether the public live feed shows what this user is playing. */
+    shareLiveListening?: boolean;
+    /** True only for the user whose listening the server's public feed shares. */
+    liveSharingAvailable?: boolean;
 }
 
 export interface SystemSettings {
@@ -17,13 +18,11 @@ export interface SystemSettings {
     lidarrApiKey: string;
     lidarrQualityProfileId: number | null;
     lidarrMetadataProfileId: number | null;
-    // AI Services
-    openaiEnabled: boolean;
-    openaiApiKey: string;
-    openaiModel: string;
+    lidarrRemoveJunk: boolean;
+    // Artwork & fingerprinting
     fanartEnabled: boolean;
     fanartApiKey: string;
-    lastfmApiKey: string;
+    acoustidApiKey: string | null;
     // Audiobookshelf
     audiobookshelfEnabled: boolean;
     audiobookshelfUrl: string;
@@ -43,10 +42,11 @@ export interface SystemSettings {
     downloadPath: string;
     // Advanced
     transcodeCacheMaxGb: number;
+    /** How many tracks the play queue may hold, per user. */
+    maxQueueLength: number;
     maxCacheSizeMb: number;
     autoSync: boolean;
     autoEnrichMetadata: boolean;
-    audioAnalyzerWorkers: number;
     soulseekConcurrentDownloads: number;
     // Download Preferences
     downloadSource: "soulseek" | "lidarr";
@@ -55,12 +55,18 @@ export interface SystemSettings {
     publicUrl: string;
 }
 
-export interface ApiKey {
-    id: string;
-    name: string;
-    keyPreview?: string;
-    createdAt: string;
-    lastUsed?: string | null;
-    lastUsedAt?: string | null;
+export interface ConnectionTestResult {
+    success: boolean;
+    version?: string;
+    error?: string;
 }
 
+/**
+ * Whether Soulseek can be used: slskd holds its own Soulseek account and needs
+ * only its address; Kima's own client needs the account itself. Mirrors the
+ * server's utils/soulseekConfigured.ts.
+ */
+export function soulseekConfigured(settings: Pick<SystemSettings, "soulseekMode" | "slskdUrl" | "soulseekUsername" | "soulseekPassword">): boolean {
+    if (settings.soulseekMode === "slskd") return !!settings.slskdUrl?.trim();
+    return !!(settings.soulseekUsername?.trim() && settings.soulseekPassword?.trim());
+}

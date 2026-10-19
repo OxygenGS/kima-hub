@@ -1,18 +1,12 @@
 /**
- * Organization worker for Singles directory
- *
- * With direct soulseek-ts integration, downloads go straight to Singles/Artist/Album/
- * This file now only handles:
- * 1. One-time migration of existing Soulseek/ files to Singles/ structure
- * 2. Legacy slskd job cleanup (if any remain from before migration)
+ * Singles folder organisation: the one-time move of old Soulseek/ files into
+ * Singles/Artist/Album/.
  */
 
-import { logger } from "../utils/logger";
 import path from "path";
-import fs from "fs";
-import { readdir, copyFile, unlink, mkdir, rmdir, writeFile, stat } from "fs/promises";
+import { readdir, copyFile, unlink, mkdir, rmdir, writeFile, stat, rename } from "fs/promises";
 import { sessionLog } from "../utils/playlistLogger";
-import { prisma } from "../utils/db";
+import { getSystemSettings } from "../utils/systemSettings";
 
 /** Async existsSync equivalent -- avoids blocking the event loop on a stat check. */
 async function pathExists(p: string): Promise<boolean> {
@@ -22,6 +16,31 @@ async function pathExists(p: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+/** True when the error means source and destination are on different volumes. */
+function isCrossDevice(err: unknown): boolean {
+    return (err as NodeJS.ErrnoException)?.code === "EXDEV";
+}
+
+/**
+ * Move a file with no window where it exists in neither place: rename on one
+ * volume; across volumes copy, check the size, then delete the original.
+ */
+async function moveFile(src: string, dest: string): Promise<void> {
+    try {
+        await rename(src, dest);
+        return;
+    } catch (err) {
+        if (!isCrossDevice(err)) throw err;
+    }
+    await copyFile(src, dest);
+    const expected = (await stat(src)).size;
+    if ((await stat(dest)).size !== expected) {
+        await unlink(dest).catch(() => {});
+        throw new Error(`Copy of ${src} came up short — original kept`);
+    }
+    await unlink(src);
 }
 
 /**
@@ -90,6 +109,7 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
     sessionLog('ORGANIZE', `Found ${audioFiles.length} files to migrate`);
 
     let migrated = 0;
+    let failed = 0;
     for (const filePath of audioFiles) {
         try {
             // Get relative path from Soulseek folder
@@ -135,17 +155,18 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
                 await mkdir(destDir, { recursive: true });
             } catch (err: any) {
                 sessionLog('ORGANIZE', `Failed to create directory ${destDir}: ${err.message}`, 'WARN');
+                failed++; // marker stays unwritten so this file is retried
                 continue; // Skip this file, try next
             }
 
-            // Move file (copy then delete original)
-            await copyFile(filePath, destFile);
-            await unlink(filePath);
+            // Move file with verification (rename, or copy → verify → unlink).
+            await moveFile(filePath, destFile);
             migrated++;
 
             sessionLog('ORGANIZE', `Migrated: ${filename} -> Singles/${artist}/${album}/`);
         } catch (err: any) {
             sessionLog('ORGANIZE', `Failed to migrate ${filePath}: ${err.message}`, 'WARN');
+            failed++; // marker stays unwritten so this file is retried
         }
     }
 
@@ -174,79 +195,36 @@ async function migrateExistingSoulseekFiles(musicPath: string): Promise<void> {
         // Ignore cleanup errors
     }
 
-    // Mark migration as complete
-    try {
-        await writeFile(migrationMarker, new Date().toISOString());
-    } catch (e) {
-        // Ignore
-    }
-
-    sessionLog('ORGANIZE', `Migration complete: ${migrated}/${audioFiles.length} files moved to Singles`);
-}
-
-/**
- * Clean up any legacy slskd download jobs that are stuck in processing
- * This handles the transition from slskd Docker sidecar to direct soulseek-ts
- */
-async function cleanupLegacySlskdJobs(): Promise<void> {
-    try {
-        // Find any old slskd jobs that are still processing
-        const legacyJobs = await prisma.downloadJob.findMany({
-            where: {
-                status: "processing",
-                metadata: {
-                    path: ["source"],
-                    equals: "slskd",
-                },
-            },
-        });
-
-        if (legacyJobs.length > 0) {
-            sessionLog('ORGANIZE', `Found ${legacyJobs.length} legacy slskd jobs to clean up`);
-
-            for (const job of legacyJobs) {
-                await prisma.downloadJob.update({
-                    where: { id: job.id },
-                    data: {
-                        status: "failed",
-                        error: "slskd integration replaced with direct soulseek-ts connection",
-                        completedAt: new Date(),
-                    },
-                });
-                sessionLog('ORGANIZE', `Marked legacy job ${job.id} (${job.subject}) as failed`);
-            }
+    // Write the completion marker only when nothing failed, so the next run
+    // retries what is left (moved files skip on the destination check).
+    if (failed === 0) {
+        try {
+            await writeFile(migrationMarker, new Date().toISOString());
+        } catch (e) {
+            // Ignore
         }
-    } catch (err: any) {
-        sessionLog('ORGANIZE', `Failed to clean up legacy jobs: ${err.message}`, 'WARN');
+        sessionLog('ORGANIZE', `Migration complete: ${migrated}/${audioFiles.length} files moved to Singles`);
+    } else {
+        sessionLog(
+            'ORGANIZE',
+            `Migration incomplete: ${migrated} moved, ${failed} failed — next organize will retry the rest`,
+            'WARN',
+        );
     }
 }
 
 /**
- * Main organization function
- * With direct soulseek-ts, this mainly handles migration and cleanup
+ * Move files from the old Soulseek/ folder into Singles/Artist/Album/.
  */
 export async function organizeSingles(): Promise<void> {
     sessionLog('ORGANIZE', '=== STARTING SINGLES ORGANIZATION ===');
 
-    // Get music path from environment variable
-    let musicPath = process.env.MUSIC_PATH;
-
-    // If not in env, try reading from .env file in project root
-    if (!musicPath) {
-        try {
-            const envPath = path.join(process.cwd(), "..", ".env");
-            const envContent = fs.readFileSync(envPath, "utf-8");
-            const match = envContent.match(/^MUSIC_PATH=(.+)$/m);
-            if (match) {
-                musicPath = match[1].trim().replace(/^["']|["']$/g, "");
-            }
-        } catch (error) {
-            // .env file doesn't exist or can't be read
-        }
-    }
+    // The music folder comes from the settings row, like every download writer, never from env.
+    const settings = await getSystemSettings();
+    const musicPath = settings?.musicPath;
 
     if (!musicPath) {
-        const error = "MUSIC_PATH is not set. Cannot organize downloads.";
+        const error = "Music path is not configured — set it on the Settings page.";
         sessionLog('ORGANIZE', error, 'ERROR');
         throw new Error(error);
     }
@@ -255,9 +233,6 @@ export async function organizeSingles(): Promise<void> {
 
     // Run one-time migration of existing Soulseek files
     await migrateExistingSoulseekFiles(musicPath);
-
-    // Clean up any legacy slskd jobs
-    await cleanupLegacySlskdJobs();
 
     sessionLog('ORGANIZE', '=== ORGANIZATION COMPLETE ===');
 }

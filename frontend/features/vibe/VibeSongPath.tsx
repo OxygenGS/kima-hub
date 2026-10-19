@@ -1,45 +1,32 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { X, Search, Route, ArrowRight } from "lucide-react";
-import { api } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { X, Route, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
+import type { LibraryIndex } from "./librarySearch";
+import { useTrackFinder } from "./useTrackFinder";
+import { FinderNote, TrackFinderResults, TrackSearchInput } from "./TrackFinder";
 
 interface VibeSongPathProps {
+    library: LibraryIndex;
     onStartPath: (startId: string, endId: string) => void;
     onClose: () => void;
 }
 
-export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
+export function VibeSongPath({ library, onStartPath, onClose }: VibeSongPathProps) {
+    const { locale } = useLanguage();
+    const t = (label: string) => translate(locale, label);
     const [startQuery, setStartQuery] = useState("");
     const [endQuery, setEndQuery] = useState("");
     const [startTrackId, setStartTrackId] = useState<string | null>(null);
     const [endTrackId, setEndTrackId] = useState<string | null>(null);
     const [activeInput, setActiveInput] = useState<"start" | "end" | null>(null);
 
-    const { data: startResults } = useQuery({
-        queryKey: ["track-search", "start", startQuery],
-        queryFn: async () => {
-            if (startQuery.length < 2) return [];
-            const result = await api.vibeSearch(startQuery, 10);
-            return result.tracks;
-        },
-        enabled: startQuery.length >= 2 && activeInput === "start",
-        staleTime: 30000,
-    });
-
-    const { data: endResults } = useQuery({
-        queryKey: ["track-search", "end", endQuery],
-        queryFn: async () => {
-            if (endQuery.length < 2) return [];
-            const result = await api.vibeSearch(endQuery, 10);
-            return result.tracks;
-        },
-        enabled: endQuery.length >= 2 && activeInput === "end",
-        staleTime: 30000,
-    });
-
-    const searchResults = activeInput === "start" ? startResults : activeInput === "end" ? endResults : undefined;
+    const activeQuery = activeInput === "start" ? startQuery : activeInput === "end" ? endQuery : "";
+    const pickedAlready = activeInput === "start" ? !!startTrackId : activeInput === "end" ? !!endTrackId : true;
+    const finder = useTrackFinder(library, activeQuery, !!activeInput && !pickedAlready);
 
     const selectTrack = useCallback((track: { id: string; title: string; artist: { name: string } }) => {
         const label = `${track.title} - ${track.artist.name}`;
@@ -54,79 +41,54 @@ export function VibeSongPath({ onStartPath, onClose }: VibeSongPathProps) {
         }
     }, [activeInput]);
 
+    const sameTrack = !!startTrackId && startTrackId === endTrackId;
     const handleSubmit = useCallback(() => {
-        if (startTrackId && endTrackId) {
+        if (startTrackId && endTrackId && startTrackId !== endTrackId) {
             onStartPath(startTrackId, endTrackId);
         }
     }, [startTrackId, endTrackId, onStartPath]);
 
     return (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-scene) w-[calc(100vw-2rem)] sm:w-96 bg-black/90 backdrop-blur-lg border border-white/10 rounded-xl p-4">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-(--z-scene-panel) w-[calc(100%-1.5rem)] sm:w-96 max-h-[calc(100%-5rem)] overflow-y-auto overscroll-contain border border-white/10 bg-[rgb(12,8,20)] shadow-[0_12px_32px_-12px_rgba(0,0,0,0.7)] rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-[var(--text-primary)] flex items-center gap-2">
-                    <Route className="w-4 h-4" /> Song Path
+                    <Route className="w-4 h-4" /> {t("Song Path")}
                 </h3>
-                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-white" aria-label="Close song path">
+                <button onClick={onClose} className="text-[var(--text-muted)] hover:text-white" aria-label={t("Close song path")}>
                     <X className="w-4 h-4" />
                 </button>
             </div>
 
             <div className="space-y-2">
-                <div className="relative">
-                    <label htmlFor="path-start" className="sr-only">Start track</label>
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
-                    <input
-                        id="path-start"
-                        type="text"
-                        value={startQuery}
-                        onChange={(e) => { setStartQuery(e.target.value); setStartTrackId(null); }}
-                        onFocus={() => setActiveInput("start")}
-                        placeholder="Start track..."
-                        className="w-full pl-8 pr-3 py-2 bg-white/8 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
-                    />
-                </div>
+                <TrackSearchInput
+                    id="path-start"
+                    label={t("Start track")}
+                    value={startQuery}
+                    onChange={(e) => { setStartQuery(e.target.value); setStartTrackId(null); }}
+                    onFocus={() => setActiveInput("start")}
+                    placeholder={t("Start: a track, artist or sound")}
+                />
 
                 <div className="flex justify-center" aria-hidden="true">
                     <ArrowRight className="w-4 h-4 text-[var(--text-muted)]" />
                 </div>
 
-                <div className="relative">
-                    <label htmlFor="path-end" className="sr-only">End track</label>
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
-                    <input
-                        id="path-end"
-                        type="text"
-                        value={endQuery}
-                        onChange={(e) => { setEndQuery(e.target.value); setEndTrackId(null); }}
-                        onFocus={() => setActiveInput("end")}
-                        placeholder="End track..."
-                        className="w-full pl-8 pr-3 py-2 bg-white/8 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/20"
-                    />
-                </div>
+                <TrackSearchInput
+                    id="path-end"
+                    label={t("End track")}
+                    value={endQuery}
+                    onChange={(e) => { setEndQuery(e.target.value); setEndTrackId(null); }}
+                    onFocus={() => setActiveInput("end")}
+                    placeholder={t("End: a track, artist or sound")}
+                />
             </div>
 
-            {activeInput && searchResults && searchResults.length > 0 && (
-                <div className="mt-2 max-h-40 overflow-y-auto border border-white/10 rounded-lg">
-                    {searchResults.map(track => (
-                        <button
-                            key={track.id}
-                            onClick={() => selectTrack(track)}
-                            className="w-full px-3 py-2 hover:bg-white/10 text-left"
-                        >
-                            <p className="text-sm text-[var(--text-primary)] truncate">{track.title}</p>
-                            <p className="text-xs text-[var(--text-muted)] truncate">{track.artist.name}</p>
-                        </button>
-                    ))}
-                </div>
-            )}
+            <TrackFinderResults finder={finder} query={activeQuery} onPick={selectTrack} className="mt-2" />
 
-            <button
-                onClick={handleSubmit}
-                disabled={!startTrackId || !endTrackId}
-                className="w-full mt-3 px-3 py-2 bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:hover:bg-white/10 rounded-lg text-sm text-[var(--text-primary)] hover:text-white flex items-center justify-center gap-2 transition-colors"
-            >
-                <Route className="w-4 h-4" /> Generate Path
-            </button>
+            {sameTrack && <FinderNote className="mt-2">{t("Pick a different track for the end.")}</FinderNote>}
+            <Button className="w-full mt-3" onClick={handleSubmit} disabled={!startTrackId || !endTrackId || sameTrack}>
+                <Route className="w-4 h-4" /> {t("Generate Path")}
+            </Button>
         </div>
     );
 }

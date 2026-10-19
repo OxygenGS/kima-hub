@@ -1,0 +1,34 @@
+name: Nonroot AIO production wiring and unit guards
+on:
+  push:
+    branches: [feature/v111-nonroot-production-integration]
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - runtime/**
+      - .github/ci/v111-aio-runtime-smoke.sh
+      - .github/ci/check-aio-service-boundaries.sh
+      - .github/workflows/nonroot-production-guards.yml
+permissions:
+  contents: read
+jobs:
+  privilege-unit:
+    name: Nonroot fail-closed startup and ownership guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove root-required bootstrap and nonroot ownership policy
+        run: python3 -m unittest discover -s runtime -p 'test_*.py' -v
+      - name: Assert runtime wiring is mandatory, not experimental
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -Fc 'python3 /app/nonroot-services.py configure' Dockerfile)" = 1
+          grep -Fq 'COPY runtime/nonroot_services.py /app/nonroot-services.py' Dockerfile
+          grep -Fq 'docker exec "$name" python3 /app/nonroot-services.py audit' .github/ci/v111-aio-runtime-smoke.sh
+          if grep -nE 'KIMA_NONROOT_EXPERIMENT|nonroot-experiment\.py' runtime/nonroot_services.py Dockerfile; then
+            echo 'Prototype activation leaked into production source' >&2
+            exit 1
+          fi
+          echo 'Mandatory source wiring: PASS'

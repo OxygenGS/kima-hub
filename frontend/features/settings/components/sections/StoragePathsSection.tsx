@@ -2,24 +2,24 @@
 
 import { SettingsSection, SettingsRow, SettingsInput } from "../ui";
 import { SystemSettings } from "../../types";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface StoragePathsSectionProps {
     settings: SystemSettings;
     onUpdate: (updates: Partial<SystemSettings>) => void;
-    onTest: (service: string) => Promise<{ success: boolean; version?: string; error?: string }>;
-    isTesting: boolean;
 }
 
 export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionProps) {
+    const { t } = useLanguage();
     return (
         <SettingsSection
             id="storage"
-            title="Storage"
-            description="Configure storage paths for your music library"
+            title={t("Storage")}
+            description={t("Configure storage paths for your music library")}
         >
             <SettingsRow
-                label="Server URL"
-                description="Public base URL used by native app clients. Leave blank to auto-detect."
+                label={t("Server URL")}
+                description={t("Public base URL used by native app clients. Leave blank to auto-detect.")}
             >
                 <SettingsInput
                     value={settings.publicUrl}
@@ -30,8 +30,8 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
             </SettingsRow>
 
             <SettingsRow
-                label="Music library path"
-                description="Path to your music library"
+                label={t("Music library path")}
+                description={t("Path to your music library")}
             >
                 <SettingsInput
                     value={settings.musicPath}
@@ -42,8 +42,8 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
             </SettingsRow>
 
             <SettingsRow
-                label="Download path"
-                description="Path for new downloads"
+                label={t("Download path")}
+                description={t("Path for new downloads")}
             >
                 <SettingsInput
                     value={settings.downloadPath}

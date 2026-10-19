@@ -2,12 +2,8 @@
  * Waveform route tests -- peak math (computeWaveformPeaks) and route contract.
  */
 
-/* ---------------------------------------------------------------------------
- * Mocks — order matters because they are hoisted above the imports below.
- * (waveform.ts's module-level `inFlight` map self-clears in a `finally` block
- * after each computation completes, so there is no cross-test leak — and no
- * beforeEach reset of it is possible, since it isn't exported.)
- * --------------------------------------------------------------------------- */
+/* Mocks are hoisted above the imports. waveform.ts clears its `inFlight` map
+ * in a `finally`, so nothing leaks between tests. */
 
 // -- child_process (spawn) --
 jest.mock("child_process", () => ({
@@ -60,8 +56,7 @@ import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { prisma } from "../../../utils/db";
 import { redisClient } from "../../../utils/redis";
-import { logger } from "../../../utils/logger";
-import { computeWaveformPeaks, PEAK_COUNT } from "../waveform";
+import { computeWaveformPeaks, PEAK_COUNT, WAVEFORM_FFMPEG_TIMEOUT_MS } from "../waveform";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,13 +77,7 @@ function makePcm(samples: number[], byteOffset = 0): Buffer {
     return buf;
 }
 
-/**
- * Independent reference implementation of the peak algorithm, computed directly
- * from the sample array (no PCM streaming / carry logic). Used as an ORACLE:
- * any mutation of computeWaveformPeaks's mini-block aggregation, bucket
- * boundary (ceil/floor), or normalisation makes its output diverge from this,
- * so an exact `toEqual` assertion catches it — unlike shape-only checks.
- */
+/** Reference peaks computed straight from the samples, used as the exact expected output. */
 function expectedPeaks(samples: number[]): number[] {
     const MINI_BLOCK = 100;
     const miniBlocks: number[] = [];
@@ -117,18 +106,7 @@ function expectedPeaks(samples: number[]): number[] {
     return peaks;
 }
 
-/**
- * Create a fake process whose stdout emits data chunks and then emits
- * 'close' with the given exit code.  This mirrors what the real ffmpeg
- * process does.
- *
- * The fake process object has `stdout` and `stderr` properties (EventEmitters)
- * so that the handler's `ff.stdout.on(...)` and `ff.stderr.on(...)` calls
- * work correctly.
- *
- * @param dataChunks  Buffers emitted via stdout 'data' events.
- * @param exitCode    The code passed to the 'close' event.
- */
+/** A fake ffmpeg process: stdout emits `dataChunks`, then 'close' with `exitCode`. */
 function makeFakeProcess(
     dataChunks: Buffer[],
     exitCode = 0,
@@ -192,7 +170,7 @@ describe("computeWaveformPeaks", () => {
         const samples = Array.from({ length: 4000 }, () => 32767);
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const peaks = await computeWaveformPeaks("/music/test.mp3");
         expect(peaks).toHaveLength(PEAK_COUNT);
@@ -202,7 +180,7 @@ describe("computeWaveformPeaks", () => {
         const samples = Array.from({ length: 4000 }, () => 32767);
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const peaks = await computeWaveformPeaks("/music/test.mp3");
         for (const v of peaks) {
@@ -215,7 +193,7 @@ describe("computeWaveformPeaks", () => {
         const samples = Array.from({ length: 4000 }, () => 0);
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const peaks = await computeWaveformPeaks("/music/test.mp3");
         for (const v of peaks) {
@@ -232,7 +210,7 @@ describe("computeWaveformPeaks", () => {
         );
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const peaks = await computeWaveformPeaks("/music/test.mp3");
         expect(peaks).toHaveLength(PEAK_COUNT);
@@ -271,15 +249,14 @@ describe("computeWaveformPeaks", () => {
         );
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const peaks = await computeWaveformPeaks("/music/test.mp3");
         expect(peaks).toHaveLength(PEAK_COUNT);
     });
 
     it("carry byte across chunk boundaries yields identical peaks to whole-buffer", async () => {
-        // Values vary per mini-block so a corrupted/shifted straddling sample
-        // changes the result (a constant signal would hide the bug).
+        // Values vary per mini-block so a shifted straddling sample changes the result.
         const samples = Array.from({ length: 4000 }, (_, i) =>
             (Math.floor(i / 100) * 6151) % 32768,
         );
@@ -300,8 +277,61 @@ describe("computeWaveformPeaks", () => {
         expect(whole).toEqual(expectedPeaks(samples));
     });
 
+    it("disables ffmpeg network protocols, stdin and non-audio streams", async () => {
+        makeFakeProcess([makePcm([123, -456, 789])]);
+        await computeWaveformPeaks("/music/track.mp3");
+        const [executable, args, options] = (spawn as jest.Mock).mock.calls[0];
+        expect(executable).toBe(process.env.FFMPEG_PATH || "ffmpeg");
+        expect(args).toEqual(expect.arrayContaining([
+            "-nostdin", "-protocol_whitelist", "file,pipe", "-vn", "-sn", "-dn",
+        ]));
+        expect(args.indexOf("-protocol_whitelist")).toBeLessThan(args.indexOf("-i"));
+        expect(options.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    });
+
+    it("rejects a failed decode even after ffmpeg produced partial PCM", async () => {
+        makeFakeProcess([makePcm([32767, 100, -100])], 1);
+        await expect(computeWaveformPeaks("/music/truncated.mp3"))
+            .rejects.toThrow("ffmpeg exited 1");
+    });
+
+    it("bounds an unresponsive ffmpeg process and kills it", async () => {
+        jest.useFakeTimers();
+        try {
+            const ff = new EventEmitter() as EventEmitter & {
+                stdout: EventEmitter; stderr: EventEmitter; kill: jest.Mock;
+            };
+            ff.stdout = new EventEmitter();
+            ff.stderr = new EventEmitter();
+            ff.kill = jest.fn();
+            (spawn as jest.Mock).mockReturnValue(ff);
+            const result = computeWaveformPeaks("/music/hanging.mp3");
+            const assertion = expect(result).rejects.toThrow("ffmpeg waveform timed out");
+            jest.advanceTimersByTime(WAVEFORM_FFMPEG_TIMEOUT_MS);
+            await assertion;
+            expect(ff.kill).toHaveBeenCalledWith("SIGKILL");
+            // Late close after force-kill must not change the settled result.
+            ff.emit("close", null);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it("handles a malformed ffmpeg stdout stream error without crashing", async () => {
+        const ff = new EventEmitter() as EventEmitter & {
+            stdout: EventEmitter; stderr: EventEmitter;
+        };
+        ff.stdout = new EventEmitter();
+        ff.stderr = new EventEmitter();
+        (spawn as jest.Mock).mockReturnValue(ff);
+        const result = computeWaveformPeaks("/music/spawn-error.mp3");
+        ff.emit("error", new Error("spawn ENOENT"));
+        await expect(result).rejects.toThrow("spawn ENOENT");
+        ff.emit("close", -1);
+    });
+
     it("rejects when ffmpeg exits with non-zero code and no data", async () => {
-        const { process: fakeProc } = makeFakeProcess([], 1);
+        makeFakeProcess([], 1);
 
         await expect(computeWaveformPeaks("/music/nonexistent.mp3")).rejects.toThrow(
             "ffmpeg exited 1",
@@ -368,7 +398,7 @@ describe("GET /tracks/:id/waveform", () => {
         const samples = Array.from({ length: 4000 }, () => 32767);
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const res = await request(app).get("/api/library/tracks/track-1/waveform");
         expect(res.status).toBe(200);
@@ -377,7 +407,9 @@ describe("GET /tracks/:id/waveform", () => {
         expect(res.body.peaks).toHaveLength(PEAK_COUNT);
         expect(res.body.count).toBe(PEAK_COUNT);
         // Verify the Cache-Control header is set.
-        expect(res.headers["cache-control"]).toBe("public, max-age=86400");
+        expect(res.headers["cache-control"]).toBe("private, max-age=86400");
+        expect(res.headers["vary"]).toContain("Authorization");
+        expect(res.headers["vary"]).toContain("Cookie");
     });
 
     it("Redis cache-HIT returns cached payload without spawning ffmpeg", async () => {
@@ -425,7 +457,7 @@ describe("GET /tracks/:id/waveform", () => {
         const samples = Array.from({ length: 4000 }, () => 32767);
         const pcm = makePcm(samples);
 
-        const { stdout: fakeStdout, process: fakeProc } = makeFakeProcess([pcm]);
+        makeFakeProcess([pcm]);
 
         const res = await request(app).get("/api/library/tracks/track-1/waveform");
         expect(res.status).toBe(200);
@@ -448,7 +480,7 @@ describe("GET /tracks/:id/waveform", () => {
         (redisClient.get as jest.Mock).mockResolvedValue(null);
 
         // Create a fake process that exits with an error.
-        const { process: fakeProc } = makeFakeProcess([], 1);
+        makeFakeProcess([], 1);
 
         const res = await request(app).get("/api/library/tracks/track-1/waveform");
         expect(res.status).toBe(500);

@@ -6,6 +6,14 @@ import { rateLimiter } from "./rateLimiter";
 class CoverArtService {
     private readonly baseUrl = "https://coverartarchive.org";
 
+    private async cacheResult(cacheKey: string, ttlSeconds: number, value: string): Promise<void> {
+        try {
+            await redisClient.setex(cacheKey, ttlSeconds, value);
+        } catch (err) {
+            logger.warn("Redis set error:", err);
+        }
+    }
+
     async getCoverArt(rgMbid: string): Promise<string | null> {
         const cacheKey = `caa:${rgMbid}`;
 
@@ -21,10 +29,7 @@ class CoverArtService {
             // Use rate limiter to prevent overwhelming Cover Art Archive
             const response = await rateLimiter.execute("coverart", () =>
                 axios.get(`${this.baseUrl}/release-group/${rgMbid}`, {
-                    // CAA is a slow public mirror -- cold responses from a
-                    // home connection routinely exceed the axios default
-                    // budget, and a timeout null kept every "available"
-                    // album card on artist pages a placeholder forever.
+                    // The Cover Art Archive is slow; cold responses often exceed axios's default.
                     timeout: 15000,
                 })
             );
@@ -37,32 +42,19 @@ class CoverArtService {
                 const coverUrl =
                     frontImage.thumbnails?.large || frontImage.image;
 
-                try {
-                    await redisClient.setex(cacheKey, 2592000, coverUrl); // 30 days
-                } catch (err) {
-                    logger.warn("Redis set error:", err);
-                }
-
+                await this.cacheResult(cacheKey, 2592000, coverUrl); // 30 days
                 return coverUrl;
             }
-            
-            // No front image found - cache negative result
-            try {
-                await redisClient.setex(cacheKey, 604800, "NOT_FOUND"); // 7 days
-            } catch (err) {
-                // Ignore
-            }
+
+            await this.cacheResult(cacheKey, 604800, "NOT_FOUND"); // 7 days
         } catch (error: any) {
             if (error.response?.status === 404) {
-                // No cover art available - cache the negative result
-                try {
-                    await redisClient.setex(cacheKey, 604800, "NOT_FOUND"); // 7 days
-                } catch (err) {
-                    // Ignore
-                }
+                await this.cacheResult(cacheKey, 604800, "NOT_FOUND"); // 7 days
                 return null;
             }
-            logger.error(`Cover art error for ${rgMbid}:`, error.message);
+            // Anything but a 404 is a failed request, not "no cover".
+            logger.warn(`Cover art error for ${rgMbid}:`, error.message);
+            throw error;
         }
 
         return null;
