@@ -74,6 +74,10 @@ jobs:
           records=[]
           local_body=local.body.run(patches)
           official_body=official.body.run(patches)
+          print('Local embedding tensor shape:',local_body.shape)
+          print('Official embedding tensor shape:',official_body.shape)
+          print('Official network ONNX inputs:',[(p.name,p.shape) for p in official.body.session.get_inputs()])
+          print('Official network ONNX outputs:',[(p.name,p.shape) for p in official.body.session.get_outputs()])
           if local_body.shape==official_body.shape:
               norms=np.linalg.norm(local_body,axis=1)*np.linalg.norm(official_body,axis=1)
               cos=(local_body*official_body).sum(1)/np.maximum(norms,1e-20)
@@ -100,7 +104,7 @@ jobs:
                   row['error_type']=type(e).__name__
                   row['error_message']=str(e)[:200]
               records.append(row)
-              print(head,row['status'],row.get('max_abs_diff'))
+              print(head,row['status'],row.get('max_abs_diff'),row.get('error_message',''))
 
           report={
               'release_source_sha':'41a2d0db6488ce2ebb67978c3ec7512f8918673e',
