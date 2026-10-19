@@ -1,0 +1,117 @@
+name: Experimental native rc3 nonroot backend and analyzers (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/v111-nonroot-services-experiment]
+    paths:
+      - .github/workflows/experiment-v111-nonroot-services.yml
+      - .github/ci/nonroot-experiment/**
+      - .github/ci/check-aio-service-boundaries.sh
+      - .github/ci/v111-aio-runtime-smoke.sh
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: nonroot-services-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  nonroot-runtime:
+    name: Nonroot backend and audio - ${{ matrix.arch }} (no publish)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+      BASE_IMAGE: ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843
+    steps:
+      - name: Checkout isolated experiment
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run fail-closed path and startup unit tests
+        run: python3 -m unittest discover -s .github/ci/nonroot-experiment -p 'test_*.py' -v
+      - name: Free disk for exact published image
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+      - name: Authenticate read-only to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assert original rc3 source and build local-only experiment layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$BASE_IMAGE"
+          test "$(docker image inspect "$BASE_IMAGE" --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect "$BASE_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+          docker build --pull=false -t kima-hub:aio-ci-smoke -f .github/ci/nonroot-experiment/Dockerfile .github/ci/nonroot-experiment
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{ index .Config.Labels "org.oxygengs.experiment" }}')" = nonroot-services-ci-only-not-release
+      - name: Prove inaccessible music fails without changing its ownership or mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint bash kima-hub:aio-ci-smoke -c '
+            set -euo pipefail
+            chmod 700 /music
+            before="$(stat -c "%u:%g:%a" /music)"
+            if python3 /app/nonroot-experiment.py configure; then
+              echo "FAIL: inaccessible music was silently accepted" >&2
+              exit 1
+            fi
+            test "$(stat -c "%u:%g:%a" /music)" = "$before"
+            echo "Inaccessible music fails closed, mode and owner unchanged: PASS"
+          '
+      - name: Offline MusiCNN model parity as actual nonroot audio user
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --memory=6g --security-opt no-new-privileges:true \
+            --entrypoint gosu -w /ci-gate \
+            --mount "type=bind,src=$PWD/services/audio-analyzer,dst=/ci-gate,readonly" \
+            kima-hub:aio-ci-smoke kimaaudio env HOME=/home/kimaaudio PYTHONDONTWRITEBYTECODE=1 \
+            python3 convert_musicnn.py gate /app/models /app/models/musicnn-answers.npz
+      - name: Offline CLAP audio and text parity as actual nonroot audio user
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --memory=6g --security-opt no-new-privileges:true \
+            --entrypoint gosu -w /app/audio-analyzer-clap \
+            kima-hub:aio-ci-smoke kimaaudio env HOME=/home/kimaaudio PYTHONDONTWRITEBYTECODE=1 \
+            python3 verify_runtime.py
+      - name: Test complete AIO, EN/NL, real audio/auth and restart with all three services unprivileged
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/ci/v111-aio-runtime-smoke.sh')
+          text = path.read_text()
+          hook = 'bash .github/ci/check-aio-service-boundaries.sh "$name"\n'
+          assert text.count(hook) == 2, 'Fresh and restart boundary gates both required'
+          text = text.replace(hook, hook + 'docker exec "$name" python3 /app/nonroot-experiment.py audit\n')
+          path.write_text(text)
+          PY
+          AIO_SMOKE_WITH_CLAP=1 AIO_SMOKE_NONROOT_ANALYZERS=1 bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Record experiment scope, not release sign-off
+        shell: bash
+        run: |
+          {
+            echo "### Native $ARCH nonroot service experiment: PASS"
+            echo "Backend and both analyzers use separate nonroot backend/audio identities, zero effective/permitted capabilities and no-new-privileges, checked before and after container recreation."
+            echo "Root bootstrap and Supervisor remain. Persisted secret files and Supervisor socket deny service-user access."
+            echo "12 startup/path unit tests, inaccessible-music fail-closed test, offline MusiCNN and CLAP parity, full audio/auth/EN-NL and persisted restart passed."
+            echo "CI-local overlay only. No push, package publication, stable tag, PR7 change or independently operated installation."
+            echo "Production bind-mount ownership/GPU compatibility, concurrent hostile volume writers, historical upgrades/independent rollback and security/licensing/human decisions remain outside this experiment."
+          } >> "$GITHUB_STEP_SUMMARY"
