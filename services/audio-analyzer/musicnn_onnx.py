@@ -112,6 +112,19 @@ class MusicnnBody:
         self.on_gpu = self.session.get_providers()[0] == 'CUDAExecutionProvider'
         self.group = GPU_GROUP if self.on_gpu else CPU_GROUP
         self._input = self.session.get_inputs()[0].name
+        # A fork-converted graph exposes only its 200-d embedding output.
+        # Official UPF ONNX exposes two outputs: 50-tag 'activations' first,
+        # then the 200-d 'embeddings'. Never silently feed 50-tag predictions
+        # into the mood/danceability heads that expect 200 values.
+        outputs = self.session.get_outputs()
+        selected = next((out for out in outputs if out.name == 'embeddings'), None)
+        if selected is None:
+            if len(outputs) != 1:
+                raise ValueError('Ambiguous MusiCNN outputs; missing named embeddings')
+            selected = outputs[0]
+        if selected.shape and isinstance(selected.shape[-1], int) and selected.shape[-1] != EMBEDDING_SIZE:
+            raise ValueError(f'MusiCNN output {selected.name} is not {EMBEDDING_SIZE}-dimensional')
+        self._embedding_output = selected.name
 
     def run(self, patches: np.ndarray) -> np.ndarray:
         """``(patches, 200)`` embeddings, the patches fed ``group`` at a time."""
@@ -123,7 +136,7 @@ class MusicnnBody:
             real = part.shape[0]
             if real < self.group:
                 part = np.concatenate([part, np.zeros((self.group - real, PATCH_FRAMES, BANDS), np.float32)])
-            out.append(self.session.run(None, {self._input: part})[0][:real])
+            out.append(self.session.run([self._embedding_output], {self._input: part})[0][:real])
         return np.concatenate(out)
 
 
