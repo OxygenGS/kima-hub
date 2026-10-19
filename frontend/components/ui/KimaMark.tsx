@@ -1,10 +1,30 @@
+"use client";
+
+import Image from "next/image";
 import { BRAND_GRADIENT_CSS } from "@/lib/brandGradient";
+import { useBranding } from "@/lib/branding-context";
 
 /**
- * The Kima mark: the waveform logo filled with the brand gradient, amber at the top through rose and violet
- * to azure, its hue swaying ±14° over 16 s like the mobile app's drift mark. Still under reduced motion.
+ * Use the installation logo when customized. Keep the animated waveform as
+ * the neutral fallback when an administrator has not uploaded a logo.
  */
 export function KimaMark({ size, className = "" }: { size: number; className?: string }) {
+    const { branding } = useBranding();
+
+    if (branding.hasCustomLogo) {
+        return (
+            <Image
+                src={branding.logoUrl}
+                alt={branding.name + " logo"}
+                width={size}
+                height={size}
+                unoptimized
+                className={`inline-block shrink-0 object-contain ${className}`}
+                style={{ width: size, height: size }}
+            />
+        );
+    }
+
     return (
         <span
             role="img"
