@@ -1,5 +1,8 @@
+"use client";
+
 import { Download, Radio } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
 import type { Album, ArtistSource } from "../types";
 
@@ -28,10 +31,11 @@ export function ArtistActionBar({
     isPlayingThisArtist,
     onPause,
 }: ArtistActionBarProps) {
+    const { canRequestAlbums } = useMusicPermissions();
     const availableAlbums = albums.filter(
         (album) => album.availability !== "unavailable"
     );
-    const showDownloadAll = source === "discovery" || availableAlbums.length > 0;
+    const showDownloadAll = canRequestAlbums && (source === "discovery" || availableAlbums.length > 0);
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library";
 
