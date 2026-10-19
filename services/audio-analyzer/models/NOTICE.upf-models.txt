@@ -1,0 +1,41 @@
+UPF / MTG MusiCNN model provenance
+================================
+
+The original model notice identifies Universitat Pompeu Fabra as the model
+copyright holder, 2019-2021. LICENSE-upf-models in this directory reproduces
+services/audio-analyzer/pb/LICENSE-upf-models byte-for-byte, including its
+third-party attributions. It has not been rewritten or replaced by the
+application's GPL license.
+
+This directory contains the following ONNX conversions of the corresponding
+original TensorFlow PB files preserved in services/audio-analyzer/pb/:
+
+msd-musicnn-1.onnx
+danceability-msd-musicnn-1.onnx
+deam-msd-musicnn-2.onnx
+emomusic-msd-musicnn-2.onnx
+mood_acoustic-msd-musicnn-1.onnx
+mood_aggressive-msd-musicnn-1.onnx
+mood_electronic-msd-musicnn-1.onnx
+mood_happy-msd-musicnn-1.onnx
+mood_party-msd-musicnn-1.onnx
+mood_relaxed-msd-musicnn-1.onnx
+mood_sad-msd-musicnn-1.onnx
+
+Conversion and verification source:
+services/audio-analyzer/convert_musicnn.py
+services/audio-analyzer/musicnn_onnx.py
+https://github.com/OxygenGS/kima-hub
+Original model provider:
+https://essentia.upf.edu/models.html
+https://essentia.upf.edu/licensing_information.html
+
+These are the repository's converted files, not a replacement by newly
+downloaded first-party ONNX assets. Adding this notice changes no model
+weights, reference answers, or inference behavior.
+
+The preserved upstream notice names CC BY-NC-ND 4.0 but links to a BY-NC-SA
+legal code. The provider's pages also differ. This provenance notice does
+not resolve that discrepancy, relicense the models, imply endorsement,
+or claim a new permission or unrestricted commercial rights. The release
+licensing review must establish the applicable grant and required notices.

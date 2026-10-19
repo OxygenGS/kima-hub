@@ -1,0 +1,93 @@
+name: Model notice preservation (NO PUBLISH)
+
+on:
+  push:
+    branches: [main, feature/upstream-v111-implementation]
+    paths:
+      - services/audio-analyzer/models/**
+      - services/audio-analyzer/pb/LICENSE-upf-models
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/model-notices.yml
+  pull_request:
+    paths:
+      - services/audio-analyzer/models/**
+      - services/audio-analyzer/pb/LICENSE-upf-models
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/model-notices.yml
+
+permissions:
+  contents: read
+
+jobs:
+  preserve-notices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify unchanged upstream notice, provenance, inventory and negative cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('services/audio-analyzer')
+          original = (root / 'pb/LICENSE-upf-models').read_bytes()
+          shipped = (root / 'models/LICENSE-upf-models').read_bytes()
+          notice = (root / 'models/NOTICE.upf-models.txt').read_text()
+          dockerfile = Path('Dockerfile').read_text()
+          models = {p.name for p in (root / 'models').glob('*.onnx')}
+          expected = {'msd-musicnn-1.onnx', 'danceability-msd-musicnn-1.onnx',
+              'deam-msd-musicnn-2.onnx', 'emomusic-msd-musicnn-2.onnx',
+              *{'mood_' + mood + '-msd-musicnn-1.onnx' for mood in
+                ('acoustic', 'aggressive', 'electronic', 'happy', 'party', 'relaxed', 'sad')}}
+          copy_line = 'COPY services/audio-analyzer/models/ /app/models/'
+          def verify(src, dst, note, docker, inventory):
+              assert src == dst, 'Copied upstream notice changed'
+              blob = hashlib.sha1(b'blob ' + str(len(src)).encode() + b'\0' + src).hexdigest()
+              assert blob == '3d4d1d7a661028694a96ce550b7e9e02921acc42', 'Upstream notice changed: review required'
+              assert inventory == expected and len(inventory) == 11, 'Unexpected model inventory'
+              assert all(name in note for name in inventory), 'Incomplete model provenance'
+              assert copy_line in docker.splitlines(), 'Runtime directory COPY changed'
+          verify(original, shipped, notice, dockerfile, models)
+          negatives = (
+              (original, shipped + b'changed', notice, dockerfile, models),
+              (original + b'changed', shipped + b'changed', notice, dockerfile, models),
+              (original, shipped, notice.replace('deam-msd-musicnn-2.onnx', ''), dockerfile, models),
+              (original, shipped, notice, dockerfile.replace(copy_line, ''), models),
+              (original, shipped, notice, dockerfile, models - {'msd-musicnn-1.onnx'}),
+          )
+          for args in negatives:
+              try:
+                  verify(*args)
+              except AssertionError:
+                  continue
+              raise AssertionError('A negative notice/inventory test was accepted')
+          print('Exact original notice, 11-model inventory, provenance and 5 negative checks: PASS')
+          PY
+      - name: Prove notices survive actual Docker COPY and repository dockerignore
+        shell: bash
+        run: |
+          set -euo pipefail
+          name=ci-upf-model-notices
+          if docker container inspect "$name" >/dev/null 2>&1; then
+            echo 'Refusing an existing test container' >&2; exit 1
+          fi
+          printf '%s\n' 'FROM scratch' 'COPY services/audio-analyzer/models/ /app/models/' > "$RUNNER_TEMP/Dockerfile.model-notices"
+          docker build -t kima-upf-notices-ci -f "$RUNNER_TEMP/Dockerfile.model-notices" .
+          docker create --name "$name" kima-upf-notices-ci /not-started >/dev/null
+          trap 'docker rm "$name" >/dev/null 2>&1 || true' EXIT
+          docker cp "$name:/app/models/LICENSE-upf-models" "$RUNNER_TEMP/LICENSE-upf-models"
+          docker cp "$name:/app/models/NOTICE.upf-models.txt" "$RUNNER_TEMP/NOTICE.upf-models.txt"
+          cmp services/audio-analyzer/pb/LICENSE-upf-models "$RUNNER_TEMP/LICENSE-upf-models"
+          cmp services/audio-analyzer/models/NOTICE.upf-models.txt "$RUNNER_TEMP/NOTICE.upf-models.txt"
+          {
+            echo '### Original model notice and provenance packaging: PASS'
+            echo 'Byte-identical upstream notice and model provenance survived Docker COPY with the repository dockerignore.'
+            echo 'Scratch packaging test only. No model or image uploaded, no image published, no license grant or stable approval inferred.'
+            echo 'The already-published rc3 remains unchanged; a future full candidate must independently verify these files in its actual image.'
+          } >> "$GITHUB_STEP_SUMMARY"
