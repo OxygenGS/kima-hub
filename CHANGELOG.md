@@ -2,6 +2,13 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
+## OxygenGS fork v1.11.1 — release preparation (unpublished)
+
+Patch release for v1.11.0:
+- Restored administrator controls to grant and revoke album requests and individual track downloads for standard users.
+- Display the configured installation logo in the top navigation instead of always displaying the built-in waveform.
+- No changes to existing database migrations or persistent volumes.
+
 ## OxygenGS fork v1.11.0 — released 2026-10-19
 
 The first combined OxygenGS release based on official upstream [Kima Hub v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0).
