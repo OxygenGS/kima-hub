@@ -1,0 +1,129 @@
+name: Compare UPF official ONNX inference to v1.11 (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/prerelease-f31e589-verification]
+    paths: [.github/workflows/audit-v111-upf-official-onnx-output-parity.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inference-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@v4
+        with:
+          ref: 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+          persist-credentials: false
+      - name: Prepare isolated inference tools
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU-only inference dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==1.26.4' 'onnxruntime==1.19.2'
+      - name: Compare first-party ONNX and repository outputs (report mismatches)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit/official
+          python - <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          official_root=Path('audit/official')
+          heads={
+              'msd-musicnn-1':'feature-extractors/musicnn/',
+              'danceability-msd-musicnn-1':'classification-heads/danceability/',
+              'deam-msd-musicnn-2':'classification-heads/deam/',
+              'emomusic-msd-musicnn-2':'classification-heads/emomusic/',
+              'mood_acoustic-msd-musicnn-1':'classification-heads/mood_acoustic/',
+              'mood_aggressive-msd-musicnn-1':'classification-heads/mood_aggressive/',
+              'mood_electronic-msd-musicnn-1':'classification-heads/mood_electronic/',
+              'mood_happy-msd-musicnn-1':'classification-heads/mood_happy/',
+              'mood_party-msd-musicnn-1':'classification-heads/mood_party/',
+              'mood_relaxed-msd-musicnn-1':'classification-heads/mood_relaxed/',
+              'mood_sad-msd-musicnn-1':'classification-heads/mood_sad/',
+          }
+          for stem,prefix in heads.items():
+              url='https://essentia.upf.edu/models/'+prefix+stem+'.onnx'
+              with urlopen(Request(url,headers={'User-Agent':'OxygenGS-parity-check/1.0'}),timeout=45) as r:
+                  data=r.read(15_000_001)
+              assert 1000<len(data)<=15_000_000, 'Official asset size out of bounds: '+stem
+              (official_root/(stem+'.onnx')).write_bytes(data)
+
+          import numpy as np
+          import onnxruntime as ort
+          sys.path.insert(0,str(Path('services/audio-analyzer').resolve()))
+          from musicnn_onnx import MusicnnOnnx
+
+          local=MusicnnOnnx('services/audio-analyzer/models',use_gpu=False,threads=1)
+          official=MusicnnOnnx(str(official_root),use_gpu=False,threads=1)
+          expected=set(local.heads())
+          assert len(expected)==10 and set(official.heads())==expected
+
+          # Deterministic, synthetic nonnegative 187x96 MusiCNN mel patches.
+          patches=np.random.default_rng(2026).uniform(0,1,size=(2,187,96)).astype(np.float32)
+          records=[]
+          local_body=local.body.run(patches)
+          official_body=official.body.run(patches)
+          if local_body.shape==official_body.shape:
+              norms=np.linalg.norm(local_body,axis=1)*np.linalg.norm(official_body,axis=1)
+              cos=(local_body*official_body).sum(1)/np.maximum(norms,1e-20)
+              embedding_min_cosine=float(cos.min())
+              body_max_diff=float(np.max(np.abs(local_body-official_body)))
+          else:
+              embedding_min_cosine=None
+              body_max_diff=None
+
+          for head in sorted(expected):
+              row={'model':head,'status':'not_tested'}
+              try:
+                  expected_value=local.predict(head,local_body)
+                  actual_value=official.predict(head,official_body)
+                  row['local_shape']=list(expected_value.shape)
+                  row['official_shape']=list(actual_value.shape)
+                  if expected_value.shape != actual_value.shape:
+                      row['status']='incompatible_output_shape'
+                  else:
+                      row['max_abs_diff']=float(np.abs(expected_value-actual_value).max())
+                      row['status']='near_equal' if row['max_abs_diff']<=1e-4 else 'different'
+              except Exception as e:
+                  row['status']='inference_error'
+                  row['error_type']=type(e).__name__
+                  row['error_message']=str(e)[:200]
+              records.append(row)
+              print(head,row['status'],row.get('max_abs_diff'))
+
+          report={
+              'release_source_sha':'41a2d0db6488ce2ebb67978c3ec7512f8918673e',
+              'comparison':'exact official UPF-hosted ONNX vs fork-converted ONNX using deterministic synthetic mel input',
+              'body_local_shape':list(local_body.shape),
+              'body_official_shape':list(official_body.shape),
+              'body_min_cosine':embedding_min_cosine,
+              'body_max_abs_diff':body_max_diff,
+              'head_results':records,
+              'fully_close_parity':bool(embedding_min_cosine is not None and embedding_min_cosine>=0.99999 and all(r['status']=='near_equal' for r in records)),
+              'rights_holder_permission':'PENDING: first-party distribution does not automatically license redistribution by this fork',
+              'release_disposition':'NO-GO pending model license clearance and all remaining stable acceptance',
+          }
+          Path('audit/official-onnx-output-parity.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+          print('Official UPF full ONNX inference parity:',report['fully_close_parity'])
+          print('Official audio embedding cosine:',embedding_min_cosine)
+          PY
+          echo 'Results are informational: mismatch does not change the rc3 application or grant distribution rights.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain numerical compatibility report only
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v111-upf-official-onnx-inference-report
+          path: audit/official-onnx-output-parity.json
+          if-no-files-found: warn
+          retention-days: 30
