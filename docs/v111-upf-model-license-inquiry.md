@@ -22,6 +22,10 @@ The fork [OxygenGS/kima-hub](https://github.com/OxygenGS/kima-hub) contains a **
 
 The fork uses `services/audio-analyzer/convert_musicnn.py` for ONNX conversion and ships the ONNX artifacts with the publicly downloadable Docker image. Its original `services/audio-analyzer/pb/LICENSE-upf-models` notice names **CC BY-NC-ND 4.0** but links to a **CC BY-NC-SA 4.0 legalcode** URL in the introductory text, while UPF's other model documentation also refers to BY-NC-SA. The Dockerfile copies `services/audio-analyzer/models/` into `/app/models/` and does **not** copy the `pb/LICENSE-upf-models` file into the image with those ONNX files.
 
+## Verified first-party ONNX alternative
+
+All eleven model filenames also occur in UPF's officially published ONNX directories, and [our read-only native-source numerical comparison #39208570035](https://github.com/OxygenGS/kima-hub/actions/runs/39208570035) confirmed cosine 1.0 for **200-d embedding outputs** and all ten head results within 1.43×10⁻⁶ on synthetic inputs. This is a compatibility observation, **not rights permission**. Ask UPF explicitly whether redistributing **its unmodified first-party ONNX versions** is allowed even if redistribution of our independently converted model weights is not. This may provide a compliant model path if the rights owner approves.
+
 ## Ready-to-send request (requires manual sending)
 
 **To:** mtg-info@upf.edu  
@@ -35,9 +39,10 @@ We are reviewing our obligations before a new stable release and would appreciat
 
 1. Which **specific license and version** governs these eleven source model files? The supplied license notice calls them CC BY-NC-ND 4.0, but links to a BY-NC-SA legalcode URL; the official Essentia models page also describes BY-NC-SA 4.0. Which grant controls these exact older MusiCNN models?
 2. Does that license permit **converting the original graphs and weights to ONNX and publicly distributing those converted files** in a GPLv3 application/Docker image? Is any additional consent needed because of the NoDerivatives clause?
-3. What conditions apply to **free, open-source public distribution, self-hosting and possible commercial use by downstream users**, even when the software itself is distributed without charge?
-4. Which **copyright attribution, full legal text, corresponding source/weights notices, conversion provenance or additional files** must be included inside the Docker image and public source repository?
-5. If existing terms do not allow this, can you specify the **required alternative license or written permission** and the appropriate process for obtaining it?
+3. UPF's own model server appears to publish **all eleven matching models directly as ONNX files**. We have downloaded those official files and verified numerically equivalent classification results (10/10 outputs within 1.43×10⁻⁶, embeddings cosine 1.0) on a deterministic test signal. In place of our independent conversions, may we **redistribute the unmodified official UPF-hosted ONNX files** inside a freely downloadable GPLv3 Docker image? If different, please specify terms separately for UPF-original ONNX and our own converted ONNX.
+4. What conditions apply to **free, open-source public distribution, self-hosting and possible commercial use by downstream users**, even when the software itself is distributed without charge?
+5. Which **copyright attribution, full legal text, corresponding source/weights notices, conversion provenance or additional files** must be included inside the Docker image and public source repository?
+6. If existing terms do not allow this, can you specify the **required alternative license or written permission** and the appropriate process for obtaining it?
 
 The original and converted files are published at: https://github.com/OxygenGS/kima-hub/tree/feature/upstream-v111-implementation/services/audio-analyzer
 
