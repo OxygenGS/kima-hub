@@ -44,6 +44,13 @@ start_aio() {
     if [ "${AIO_SMOKE_WITH_CLAP:-0}" != "1" ]; then
         options+=(-e DISABLE_CLAP=true)
     fi
+    if [ -n "${AIO_SMOKE_OFFICIAL_MODELS_DIR:-}" ]; then
+        # No image modification. Read-only, transient runner-host model files.
+        test -d "$AIO_SMOKE_OFFICIAL_MODELS_DIR"
+        test -f "$GITHUB_WORKSPACE/services/audio-analyzer/musicnn_onnx.py"
+        options+=(-v "$AIO_SMOKE_OFFICIAL_MODELS_DIR:/app/models:ro")
+        options+=(-v "$GITHUB_WORKSPACE/services/audio-analyzer/musicnn_onnx.py:/app/audio-analyzer/musicnn_onnx.py:ro")
+    fi
     docker run -d --name "$name" \
         --memory=6g \
         -p 127.0.0.1:3130:3030 \
@@ -52,6 +59,28 @@ start_aio() {
         "${options[@]}" \
         "$image" >/dev/null
 }
+assert_official_upf_runtime() {
+    if [ -z "\${AIO_SMOKE_OFFICIAL_MODELS_DIR:-}" ]; then return; fi
+    docker exec "$name" bash -c 'cd /app/models && sha256sum --status -c official-upf-onnx.sha256'
+    docker exec -i "$name" python3 - <<'PY'
+import sys
+import numpy as np
+sys.path.insert(0, '/app/audio-analyzer')
+from musicnn_onnx import MusicnnOnnx
+m = MusicnnOnnx('/app/models', use_gpu=False, threads=1)
+assert m.body._embedding_output == 'embeddings', 'UPF model must use 200d embedding output'
+patches = np.random.default_rng(2026).uniform(0,1,size=(2,187,96)).astype(np.float32)
+data = m.body.run(patches)
+assert data.shape == (2,200), f'UPF embeddings shape {data.shape}'
+heads = m.heads()
+assert len(heads) == 10, heads
+for name in heads:
+    result=m.predict(name,data)
+    assert result is not None and result.shape[0] == 2 and np.isfinite(result).all(), name
+print('Official UPF ONNX production loader: 200d embeddings + all 10 classification heads PASS')
+PY
+}
+
 assert_clap_started() {
     if [ "${AIO_SMOKE_WITH_CLAP:-0}" != "1" ]; then return; fi
     local state=""
@@ -87,6 +116,7 @@ echo "---- Boot actual fresh merged v1.11 AIO with empty data and music ----"
 start_aio
 wait_ready
 assert_clap_started
+assert_official_upf_runtime
 bash .github/ci/check-aio-service-boundaries.sh "$name"
 
 echo "---- Confirm vendored CLAP audio license ships with runtime ----"
@@ -158,6 +188,7 @@ docker rm "$name" >/dev/null
 start_aio
 wait_ready
 assert_clap_started
+assert_official_upf_runtime
 bash .github/ci/check-aio-service-boundaries.sh "$name"
 secret_after="$(docker exec "$name" sha256sum /data/secrets/session_secret | cut -d' ' -f1)"
 test "$secret_before" = "$secret_after"

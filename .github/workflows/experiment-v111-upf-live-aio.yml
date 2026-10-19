@@ -1,0 +1,105 @@
+name: Experimental native rc3 AIO with official UPF ONNX (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/v111-upf-onnx-dual-output-experiment]
+    paths:
+      - .github/workflows/experiment-v111-upf-live-aio.yml
+      - .github/ci/v111-aio-runtime-smoke.sh
+      - services/audio-analyzer/musicnn_onnx.py
+      - services/audio-analyzer/official-upf-onnx.sha256
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  official-model-runtime:
+    name: Live ${{ matrix.arch }} AIO with official UPF ONNX (no image push)
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+      IMAGE: ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843
+    steps:
+      - name: Checkout isolated experiment (not PR7, no source publication)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Free disk for actual published AIO layers
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+      - name: Authenticate read-only to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull exact published rc3 image and assert original code + architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$IMAGE"
+          docker tag "$IMAGE" kima-hub:aio-ci-smoke
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "41a2d0db6488ce2ebb67978c3ec7512f8918673e"
+      - name: Prepare disposable model directory and download 11 SHA256-pinned UPF ONNX assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="ci-upf-copy-models"
+          if docker container inspect "$name" >/dev/null 2>&1; then exit 1; fi
+          docker create --name "$name" kima-hub:aio-ci-smoke >/dev/null
+          mkdir -p "$RUNNER_TEMP/official-upf-models"
+          docker cp "$name:/app/models/." "$RUNNER_TEMP/official-upf-models/"
+          docker rm "$name" >/dev/null
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/official-upf-models"
+          cp services/audio-analyzer/official-upf-onnx.sha256 "$RUNNER_TEMP/official-upf-models/"
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          model_dir=Path(os.environ["RUNNER_TEMP"])/"official-upf-models"
+          expected={}
+          for line in (model_dir/"official-upf-onnx.sha256").read_text().splitlines():
+              if not line or line.startswith("#"): continue
+              digest,name=line.split()
+              assert name.endswith(".onnx") and len(digest)==64
+              assert name not in expected
+              expected[name]=digest
+          assert len(expected)==11
+          for name,digest in sorted(expected.items()):
+              stem=name.removesuffix(".onnx")
+              folder="feature-extractors/musicnn/" if stem=="msd-musicnn-1" else "classification-heads/"+stem.split("-")[0]+"/"
+              url="https://essentia.upf.edu/models/"+folder+name
+              with urlopen(Request(url,headers={"User-Agent":"OxygenGS-ephemeral-model-compatibility-test/1.0"}),timeout=45) as r:
+                  data=r.read(15_000_001)
+              assert 1000<len(data)<=15_000_000, f"Unexpected official file size {name}"
+              assert hashlib.sha256(data).hexdigest()==digest, f"Changed/incorrect official model {name}"
+              (model_dir/name).write_bytes(data)
+              print(f"{name}: official SHA256 verified")
+          PY
+          (cd "$RUNNER_TEMP/official-upf-models" && sha256sum -c official-upf-onnx.sha256)
+          echo 'Official model assets checked locally on disposable runner only (no uploads)'
+      - name: Run real rc3 fresh install + persisted restart + CLAP + EN/NL and auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          AIO_SMOKE_WITH_CLAP=1 \
+          AIO_SMOKE_OFFICIAL_MODELS_DIR="$RUNNER_TEMP/official-upf-models" \
+            bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Note boundaries of experimental model compatibility
+        shell: bash
+        run: |
+          echo "### Native $ARCH official-UPF model swap in exact rc3 AIO: PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Only ephemeral read-only model+loader bind mounts on runner; no image rebuilt, published or uploaded." >> "$GITHUB_STEP_SUMMARY"
+          echo "This is not an actual released model update, a license grant, or a production restore test." >> "$GITHUB_STEP_SUMMARY"
