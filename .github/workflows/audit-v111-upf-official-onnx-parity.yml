@@ -1,0 +1,91 @@
+name: Compare v1.11 MusiCNN ONNX with UPF-published ONNX (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/prerelease-f31e589-verification]
+    paths: [.github/workflows/audit-v111-upf-official-onnx-parity.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  official-onnx-provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Read exact frozen v1.11 source
+        uses: actions/checkout@v4
+        with:
+          ref: 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+          persist-credentials: false
+      - name: Compare repository ONNX bytes to first-party UPF-hosted ONNX
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          root = Path('services/audio-analyzer/models')
+          wanted = {
+              'msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/feature-extractors/musicnn/msd-musicnn-1.onnx',
+              'danceability-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/danceability/danceability-msd-musicnn-1.onnx',
+              'deam-msd-musicnn-2.onnx': 'https://essentia.upf.edu/models/classification-heads/deam/deam-msd-musicnn-2.onnx',
+              'emomusic-msd-musicnn-2.onnx': 'https://essentia.upf.edu/models/classification-heads/emomusic/emomusic-msd-musicnn-2.onnx',
+              'mood_acoustic-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_acoustic/mood_acoustic-msd-musicnn-1.onnx',
+              'mood_aggressive-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_aggressive/mood_aggressive-msd-musicnn-1.onnx',
+              'mood_electronic-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_electronic/mood_electronic-msd-musicnn-1.onnx',
+              'mood_happy-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_happy/mood_happy-msd-musicnn-1.onnx',
+              'mood_party-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_party/mood_party-msd-musicnn-1.onnx',
+              'mood_relaxed-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_relaxed/mood_relaxed-msd-musicnn-1.onnx',
+              'mood_sad-msd-musicnn-1.onnx': 'https://essentia.upf.edu/models/classification-heads/mood_sad/mood_sad-msd-musicnn-1.onnx',
+          }
+          actual = {p.name for p in root.glob('*.onnx')}
+          assert set(wanted) == actual, f'Unexpected model set: missing={set(wanted)-actual}, extra={actual-set(wanted)}'
+          records = []
+          for name, url in wanted.items():
+              local = (root / name).read_bytes()
+              req = Request(url, headers={'User-Agent':'OxygenGS-licensing-byte-comparison/1.0'})
+              with urlopen(req, timeout=45) as response:
+                  official = response.read(15_000_000 + 1)
+                  assert len(official) <= 15_000_000, f'Official file too large: {name}'
+              assert len(official) > 1000, f'Unexpectedly small remote file: {name}'
+              entry = {
+                  'model':name,
+                  'official_source_url':url,
+                  'local_bytes':len(local),
+                  'official_bytes':len(official),
+                  'local_sha256':hashlib.sha256(local).hexdigest(),
+                  'official_sha256':hashlib.sha256(official).hexdigest(),
+                  'byte_identical': local == official,
+              }
+              records.append(entry)
+              print(name, 'MATCH' if entry['byte_identical'] else 'DIFFERENT', f"local={len(local)} official={len(official)}")
+          result = {
+              'source_sha':'41a2d0db6488ce2ebb67978c3ec7512f8918673e',
+              'host':'essentia.upf.edu (first-party UPF/MTG model server)',
+              'models_compared':len(records),
+              'identical_count':sum(x['byte_identical'] for x in records),
+              'different_count':sum(not x['byte_identical'] for x in records),
+              'files':records,
+              'license_decision':'PENDING. Even identical first-party artifacts do not themselves grant redistribution rights.',
+          }
+          Path('audit/v111-upf-onnx-parity.json').write_text(json.dumps(result,indent=2,sort_keys=True)+'\n')
+          print(f"UPF first-party provenance: {result['identical_count']}/11 byte-identical, {result['different_count']}/11 different")
+          PY
+          {
+            echo '### Model bytes vs official first-party UPF ONNX files'
+            echo 'See retained JSON: exact source URL, size, SHA256 and match status for each of 11 models.'
+            echo '**No license granted or CVE waived.**'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain exact model SHA256 evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v111-upf-first-party-onnx-byte-parity
+          path: audit/v111-upf-onnx-parity.json
+          if-no-files-found: warn
+          retention-days: 30
