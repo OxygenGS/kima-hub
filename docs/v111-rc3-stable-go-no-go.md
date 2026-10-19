@@ -1,7 +1,7 @@
 # OxygenGS Kima Hub v1.11.0 — rc3 to stable GO / NO-GO
 
 **Decision status: NO-GO for stable until outstanding human/security gates are explicitly closed.**
-Reviewed 18 October 2026. This packet records the exact, independently tested public release candidate, **not permission to merge, publish a stable tag, promote `:latest` or touch an independently operated installation**. The scope is public OxygenGS application source and disposable GitHub CI.
+Reviewed 19 October 2026. This packet records the exact, independently tested public release candidate, **not permission to merge, publish a stable tag, promote `:latest` or touch an independently operated installation**. The scope is public OxygenGS application source and disposable GitHub CI.
 
 ## Locked candidate identity
 
@@ -34,6 +34,12 @@ Do not substitute the earlier `rc2` digest or a mutable `:prerelease` alias for 
 
 - [x] [Published rc3 native AMD64+ARM64 Supervisor and secret-file access audit **2/2 passed**](https://github.com/OxygenGS/kima-hub/actions/runs/39205826071): on separately booted real digest-pulled images, database/session/encryption files are root-owned and deny group/other access; root-owned Supervisor Unix sockets deny other access; `kimaweb`, `postgres` and `redis` were unable to read those files or invoke Supervisor commands. This supports **compensating control evidence** but does NOT convert the backend or analyzers from root or remove the underlying package findings.
 - [x] [Isolated opt-in non-root Essentia/CLAP worker experiment **9/9 native checks passed**](https://github.com/OxygenGS/kima-hub/actions/runs/39166887367) with effective UID 998 after bootstrap, checked on restart on both platforms. **Not integrated into #7, not in published rc3**; backend still root, existing bind-mounted music permissions and optional GPU-model ownership have not been confirmed.
+
+### New non-root backend plus both analyzers: isolated viability, not shipped
+
+- [x] [Initial local-only rc3 overlay **2/2 native AMD64/ARM64 passed**, #39213286962](https://github.com/OxygenGS/kima-hub/actions/runs/39213286962), source `96e5ccf6cdc3f59cd077aa51545e5d37b5fc7a19`. Actual backend and both analyzer processes dropped to separate non-root backend/audio identities, with zero effective/permitted capabilities, no-new-privileges and denied secret-file/Supervisor access. Offline MusiCNN/CLAP and actual AIO audio/auth/EN-NL/recreation checks passed. Root bootstrap and Supervisor remain; this is not a rootless container.
+- The initial CPU smoke did not cover the shared GPU control directory. Source review found and corrected a backend projection permission regression in `84fbfb55d662bdaecbff36faf124bee732a4a81e`. [Expanded run #39214012851](https://github.com/OxygenGS/kima-hub/actions/runs/39214012851) adds 19 unit tests, real two-UID GPU state exchange, denied cross-file writes/unlinks and actual backend projection checks on both boots. **Exact completion status and evidence are maintained in the [non-root services experiment report](v111-nonroot-services-experiment.md)**; do not infer that outcome from the initial CPU run.
+- [ ] **Production mitigation still OPEN:** the overlay is not integrated into #7 or published rc3. Review production ownership/migration and shared IPC policy, real GPU operation, library writes and independent old-image rollback before selective source integration and a new independently verified candidate. The experiment branch inherits older prototype changes and must not be bulk-merged. The official UPF-model replacement is a separate experiment and has not been combined with this overlay. No CVE finding, model-rights hold or human acceptance gate is waived by these tests.
 
 ### First-party ONNX substitution viability (not approved or shipped)
 
