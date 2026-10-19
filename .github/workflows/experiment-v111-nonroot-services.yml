@@ -73,6 +73,13 @@ jobs:
             test "$(stat -c "%u:%g:%a" /music)" = "$before"
             echo "Inaccessible music fails closed, mode and owner unchanged: PASS"
           '
+      - name: Test real two-UID GPU state exchange without a GPU or downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint python3 \
+            --mount "type=bind,src=$PWD/.github/ci/nonroot-experiment/permission_smoke.py,dst=/app/nonroot-permission-smoke.py,readonly" \
+            kima-hub:aio-ci-smoke /app/nonroot-permission-smoke.py
       - name: Offline MusiCNN model parity as actual nonroot audio user
         shell: bash
         run: |
@@ -111,7 +118,7 @@ jobs:
             echo "### Native $ARCH nonroot service experiment: PASS"
             echo "Backend and both analyzers use separate nonroot backend/audio identities, zero effective/permitted capabilities and no-new-privileges, checked before and after container recreation."
             echo "Root bootstrap and Supervisor remain. Persisted secret files and Supervisor socket deny service-user access."
-            echo "12 startup/path unit tests, inaccessible-music fail-closed test, offline MusiCNN and CLAP parity, full audio/auth/EN-NL and persisted restart passed."
+            echo "19 unit tests, inaccessible-music denial, two-UID GPU IPC boundaries, offline MusiCNN/CLAP parity, actual backend GPU projection, full audio/auth/EN-NL and persisted restart passed."
             echo "CI-local overlay only. No push, package publication, stable tag, PR7 change or independently operated installation."
-            echo "Production bind-mount ownership/GPU compatibility, concurrent hostile volume writers, historical upgrades/independent rollback and security/licensing/human decisions remain outside this experiment."
+            echo "Actual CUDA/GPU inference, production bind-mount ownership, hostile shared volumes/compromised-service IPC races, historical upgrades/independent rollback and security/licensing/human decisions remain outside this experiment."
           } >> "$GITHUB_STEP_SUMMARY"

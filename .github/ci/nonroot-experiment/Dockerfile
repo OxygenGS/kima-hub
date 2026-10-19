@@ -6,11 +6,15 @@ RUN groupadd --system kimabackend \
     && useradd --system --gid kimabackend --create-home --home-dir /home/kimabackend --shell /usr/sbin/nologin kimabackend \
     && groupadd --system kimaaudio \
     && useradd --system --gid kimaaudio --create-home --home-dir /home/kimaaudio --shell /usr/sbin/nologin kimaaudio \
-    && mkdir -p /app/nonroot-hf /home/kimaaudio/.cache/numba \
+    && groupadd --system kimaruntime \
+    && usermod -a -G kimaruntime kimabackend \
+    && usermod -a -G kimaruntime kimaaudio \
+    && mkdir -p /app/nonroot-hf /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
     && cp -a /root/.cache/huggingface/hub /app/nonroot-hf/hub \
     && chown -R root:root /app/nonroot-hf \
     && chmod -R a+rX,go-w /app/nonroot-hf \
     && chown -R kimaaudio:kimaaudio /home/kimaaudio \
+    && chown -R kimabackend:kimabackend /home/kimabackend \
     && chmod 750 /home/kimaaudio /home/kimabackend
 # Copy only existing public offline cache files, not secrets or /root ownership.
 ENV KIMA_NONROOT_EXPERIMENT=1 \
@@ -23,7 +27,9 @@ COPY nonroot.py /app/nonroot-experiment.py
 RUN chmod 644 /app/nonroot-experiment.py \
     && python3 /app/nonroot-experiment.py patch-start \
     && gosu kimaaudio test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
-    && gosu kimaaudio test -w "$NUMBA_CACHE_DIR"
+    && gosu kimabackend test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
+    && gosu kimaaudio test -w "$NUMBA_CACHE_DIR" \
+    && gosu kimabackend test -w /home/kimabackend/.cache/numba
 LABEL org.oxygengs.experiment="nonroot-services-ci-only-not-release"
-# Inherit rc3 tini/start.sh. Root is retained for bootstrap and supervisor;
-# only the actual backend/analyzer service processes drop privileges.
+# Root is retained for bootstrap and supervisor. Actual application processes
+# drop to their own UID/GID and the single nonprivileged GPU IPC group.
