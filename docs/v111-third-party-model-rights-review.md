@@ -1,0 +1,27 @@
+# v1.11.0 / rc3 — distribution rights and model license review
+
+**Status: OWNER REVIEW REQUIRED / stable NO-GO pending written license clearance.** Recorded 19 October 2026. This is a rights-provenance inventory, **not** a legal opinion or grant of permission. Do not interpret successful CI, public availability of weights, an embedded Apache notice, or shipping a CC license file as a license to distribute transformed model weights.
+
+## Exact reviewed artifacts
+
+- Combined [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7), source `41a2d0db6488ce2ebb67978c3ec7512f8918673e`.
+- Published rc3 `ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843`, independently tested AMD64/ARM64.
+- Application repository `LICENSE`: **GNU GPL version 3**.
+- Dockerfile compiles Essentia from a pinned MTG source commit, copies the converted `services/audio-analyzer/models/*.onnx` weights into `/app/models`, creates CLAP ONNX weights and copies `services/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0`. The Dockerfile **does not copy** `services/audio-analyzer/pb/LICENSE-upf-models` to `/app/models`; `services/audio-analyzer/models/` has model/checksum/reference files only. **Do not claim the UPF model license is included with the shipped ONNX files.**
+- The original, 12-model `services/audio-analyzer/pb/*.pb` set carries `services/audio-analyzer/pb/LICENSE-upf-models`, whose preamble names **CC BY-NC-ND 4.0** and commercial licensing by arrangement with UPF. **Its introductory text also links to a CC BY-NC-SA legalcode URL** despite naming NoDerivatives, creating an internal inconsistency that must be clarified with the rights holder. The actual license grant for the converted copies cannot be inferred from that discrepancy.
+- The 12 committed `services/audio-analyzer/models/*.onnx` files are programmatically converted versions of those model graphs, using `convert_musicnn.py`; 11 heads plus 1 shared network. The published-image model license must be reviewed for all transformed weight/graph artifacts, not just the original PB directory.
+- MTG's official [Essentia licensing overview](https://essentia.upf.edu/licensing_information.html) describes Essentia library open terms as **AGPLv3** and lists model licenses as **CC BY-NC-ND 4.0** (with proprietary terms available from MTG). MTG's [models overview](https://essentia.upf.edu/models.html) independently says MTG-created models are **CC BY-NC-SA 4.0** and available under proprietary terms. This discrepancy is not silently reconciled here: ask MTG/UPF to identify the exact valid model-file license and any ONNX redistributions authorized by that license.
+- LAION [`laion/clap-htsat-unfused` model page](https://huggingface.co/laion/clap-htsat-unfused) advertises Apache-2.0; the Dockerfile downloads pinned original weights and a separate [Xenova ONNX-derived text model](https://huggingface.co/Xenova/clap-htsat-unfused). The full model-file lineage, all transformed CLAP weights, and retained notices still need a human attribution/provenance review. The presence of an Apache-2.0 vendored-code license does not itself settle *all* model/data rights.
+- The image includes Python/Node/FFmpeg/native runtime components. Their full license and source-offer obligations (GPL/AGPL vs relevant library exceptions and redistributed objects) remain review items.
+
+## Required release-owner decisions
+
+- [ ] Determine the **controlling written license**, applicable version and official rights owner for every redistributed original UPF PB and converted ONNX model; resolve the repository notice's ND-vs-SA URL contradiction and MTG's conflicting website descriptions.
+- [ ] Confirm in writing that **ONNX graph/weight conversion and public redistribution** are permitted under the controlling model license or obtain separate permission. A `NoDerivatives` license should **not be assumed** to permit distribution of transformed models. A copy of a license notice by itself does not create missing permission.
+- [ ] Determine the permitted **commercial/noncommercial** scope of a publicly distributable Docker image. An open-source application license does not remove a model's noncommercial or redistribution restrictions.
+- [ ] If authorized, ship the required UPF model license, provenance and attribution *inside* any future distribution as directed by the licensor. **Current rc3 lacks that copied model-license file alongside `/app/models`**; any Dockerfile fix requires a newer candidate and full tests, not retagging rc3.
+- [ ] Verify actual Essentia AGPLv3 and full GPLv3/AGPL/native/Python/Node notices, corresponding-source obligations, model attribution, and any additional licensed assets.
+- [ ] Record reviewer name, rights-holder evidence link, explicit release decision and date in [stable GO/NO-GO record](v111-rc3-stable-go-no-go.md).
+- [ ] Assess already published rc3 distribution and decide whether any remedial action is needed; do not silently delete, move, relicense or replace published artifacts without owner approval.
+
+**Outcome until clearance:** Automated code and security checks stay green, but **stable release must remain NO-GO** for licensing and security/manual acceptance. This document intentionally contains no assertions of confirmed infringement, no claim of a completed legal review, and no modification to user installations.
