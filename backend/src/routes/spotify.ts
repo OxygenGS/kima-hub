@@ -368,7 +368,7 @@ const m3uImportLimiter = createRateLimiter({
  * POST /api/spotify/import/m3u
  * Upload an M3U file, parse it, match tracks against library, create playlist.
  */
-router.post("/import/m3u", m3uImportLimiter, (req, res, next) => {
+router.post("/import/m3u", requireMusicPermission("canRequestAlbums"), requireMusicPermission("canDownloadTracks"), m3uImportLimiter, (req, res, next) => {
     m3uUpload.single("file")(req, res, (err) => {
         if (err) {
             return res.status(400).json({ error: err.message });
