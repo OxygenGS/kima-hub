@@ -37,7 +37,7 @@ Do not substitute the earlier `rc2` digest or a mutable `:prerelease` alias for 
 
 ### Distribution and model-rights license hold
 
-- [ ] **Rights-owner license clearance required**: see [third-party model rights review](v111-third-party-model-rights-review.md). The repo embeds 12 converted MusiCNN ONNX graphs derived from PB models carrying a UPF/MTG notice naming CC BY-NC-ND 4.0, whose accompanying URL unexpectedly refers to BY-NC-SA. MTG's model/licensing websites also provide differing ND/SA descriptions. Confirm legal permission to distribute converted weights and applicable commercial scope. The rc3 Dockerfile copies `models/*.onnx` but **does not copy** `pb/LICENSE-upf-models` into `/app/models`. Adding a notice file alone does **not** prove rights to distribute derivatives. Do not tag stable until this review is formally signed off.
+- [ ] **Rights-owner license clearance required**: see [third-party model rights review](v111-third-party-model-rights-review.md). The repo embeds 11 converted MusiCNN ONNX graphs derived from PB models carrying a UPF/MTG notice naming CC BY-NC-ND 4.0, whose accompanying URL unexpectedly refers to BY-NC-SA. MTG's model/licensing websites also provide differing ND/SA descriptions. Confirm legal permission to distribute converted weights and applicable commercial scope. The rc3 Dockerfile copies `models/*.onnx` but **does not copy** `pb/LICENSE-upf-models` into `/app/models`. Adding a notice file alone does **not** prove rights to distribute derivatives. Do not tag stable until this review is formally signed off.
 
 ## Blocking decisions before public stable publication
 

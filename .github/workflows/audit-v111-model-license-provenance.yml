@@ -1,0 +1,78 @@
+name: Audit v1.11 model license provenance (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/prerelease-f31e589-verification]
+    paths: [.github/workflows/audit-v111-model-license-provenance.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  model-rights-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read exact release candidate source (read-only)
+        uses: actions/checkout@v4
+        with:
+          ref: 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+          persist-credentials: false
+      - name: Inventory originals, conversions and bundled notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          root = Path('.')
+          pb = root / 'services/audio-analyzer/pb'
+          converted = root / 'services/audio-analyzer/models'
+          docker = (root / 'Dockerfile').read_text()
+          license_text = (pb / 'LICENSE-upf-models').read_text()
+          originals = sorted(p.stem for p in pb.glob('*.pb'))
+          onnx = sorted(p.stem for p in converted.glob('*.onnx'))
+          assert len(originals) == 11, f'Unexpected original PB model count: {len(originals)}'
+          assert onnx == originals, 'Original PB and converted ONNX names differ'
+          assert 'Attribution-NonCommercial-NoDerivatives 4.0' in license_text
+          assert 'creativecommons.org/licenses/by-nc-sa/4.0/legalcode' in license_text
+          assert 'COPY services/audio-analyzer/models/ /app/models/' in docker
+
+          notice_file_in_model_folder = (converted / 'LICENSE-upf-models').is_file()
+          explicit_docker_license_copy = (
+              'COPY services/audio-analyzer/pb/LICENSE-upf-models' in docker
+              or 'COPY services/audio-analyzer/pb/ /app/models/' in docker
+          )
+          observed = {
+              'release_source': '41a2d0db6488ce2ebb67978c3ec7512f8918673e',
+              'original_pb_count': len(originals),
+              'converted_onnx_count': len(onnx),
+              'matching_model_basenames': originals,
+              'notice_claims_no_derivatives': True,
+              'notice_links_share_alike_url': True,
+              'model_notice_present_in_copied_model_folder': notice_file_in_model_folder,
+              'explicit_docker_copy_of_model_notice': explicit_docker_license_copy,
+              'human_rights_owner_signoff': 'PENDING, not inferred from files or CI',
+              'stable_release_disposition': 'NO-GO pending written permission for converted ONNX redistribution',
+          }
+          Path('audit/v111-model-rights-evidence.json').write_text(json.dumps(observed, indent=2, sort_keys=True) + '\n')
+          print('11 PB-to-ONNX file pairs confirmed; notice discrepancy recorded.')
+          print('Notice included by existing Dockerfile:', notice_file_in_model_folder or explicit_docker_license_copy)
+          print('This CI job does not grant rights or waive the stable release gate.')
+          PY
+          {
+            echo "### Exact v1.11 model provenance evidence"
+            echo "11 original PB files = 11 converted ONNX files; file names match."
+            echo "The original notice names ND but links to an SA legalcode."
+            echo "The current Dockerfile does not explicitly ship the UPF model license alongside its ONNX artifacts."
+            echo "**Stable release rights clearance: PENDING. This green evidence run is NOT legal approval.**"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain provenance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: v111-model-rights-source-evidence
+          path: audit/v111-model-rights-evidence.json
+          if-no-files-found: error
+          retention-days: 30
