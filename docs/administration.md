@@ -18,8 +18,8 @@ Enrichment is how Kima works out what is in your library. It runs in the backgro
 
 - **Sync New:** sync the library (and Audiobookshelf, when connected) and enrich what is new.
 - **Retry what didn't work:** run every incomplete song again. Complete songs are skipped and nothing is deleted.
-- **Start over on everything** (admin): process the whole library again. Existing matches are kept and nothing is deleted. It takes about as long as a first enrichment (see [How it is worked out](../README.md#how-it-is-worked-out)).
-- **Wipe and re-run** (admin): clear what Kima worked out about your music (which recording each track is, audio analysis, vibe data, the vibe map, artist bios and similar artists) and work it out again. Your music, playlists, plays, likes and edits stay. It takes about as long as a first enrichment (roughly 1 minute per 100 songs with a GPU; see [How it is worked out](../README.md#how-it-is-worked-out)), and the vibe map comes back when it finishes. Use it after upgrading to 1.11, which changes how everything is worked out.
+- **Start over on everything** (admin): process the whole library again. Existing matches are kept and nothing is deleted. It takes about as long as a first enrichment (see [enrichment settings](#library-enrichment)).
+- **Wipe and re-run** (admin): clear what Kima worked out about your music (which recording each track is, audio analysis, vibe data, the vibe map, artist bios and similar artists) and work it out again. Your music, playlists, plays, likes and edits stay. It takes about as long as a first enrichment (roughly 1 minute per 100 songs with a GPU; see [enrichment settings](#library-enrichment)), and the vibe map comes back when it finishes. Use it after upgrading to 1.11, which changes how everything is worked out.
 - **Pause**, **Resume** and **Stop** appear while enrichment is running.
 
 Two switches below them, **Auto sync library** and **Auto enrich metadata**, keep library changes and new content up to date automatically.
@@ -41,7 +41,7 @@ Two switches below them, **Auto sync library** and **Auto enrich metadata**, kee
 
 ## Users
 
-**Settings > Users** creates accounts with a username, a password of at least 6 characters and a role of User or Admin, and deletes them. Administrators see the server-wide settings; users see only their own. Each account has its own plays, playlists and Subsonic tokens.
+**Settings > Users** creates accounts with a username, a password of at least 6 characters and a role of User or Admin, and deletes them. Administrators can also control music acquisition and download rights per account; see [user permissions](user-permissions.md). Administrators see the server-wide settings; users see only their own. Each account has its own plays, playlists and Subsonic tokens.
 
 If you are locked out of every administrator account, see `ADMIN_RESET_PASSWORD` in [configuration.md](configuration.md#common-options).
 

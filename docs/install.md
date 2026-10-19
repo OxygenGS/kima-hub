@@ -1,56 +1,47 @@
-# Install and update the OxygenGS Kima Hub fork
+# Install OxygenGS Kima Hub
 
-This guide covers the **OxygenGS fork** and its published container image. It is not the installation guide for the original upstream project. Source development, public image publishing and each person's own deployment are independent activities. No personal host name, hypervisor container ID, network address or volume location belongs in the fork's release metadata.
+**Current fork release:** [v1.11.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.0) — based on upstream Kima Hub v1.11.0, with OxygenGS branding, per-user music permissions, extra security controls and English/Dutch interface selection.
 
-## Published version versus development
+Use the versioned **OxygenGS** image, not the upstream `chevron7locked/kima` image. The GitHub release entry and the container publication are separate steps: confirm that the [Docker publish workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) has succeeded before pulling a newly released tag. Never assume an image exists just because the release page exists.
 
-- **Current published OxygenGS stable:** `ghcr.io/oxygengs/kima-hub:v1.10.0`. This tag exists; it remains the default in the supplied production Compose templates until a new stable release is published.
-- **Combined Kima v1.11 + English/Dutch interface:** under development in [Draft PR #7](https://github.com/OxygenGS/kima-hub/pull/7) stacked on Draft #6 and #5. Its frontend/backend package versions being 1.11.0 does **not** mean an OxygenGS v1.11 image or tag has been released.
-- **Candidate/pre-release:** only use an explicitly published OxygenGS pre-release tag after the release notes identify it. A development branch, CI image built with `no push`, or official upstream image is **not** a published OxygenGS candidate.
+## Fresh installation
 
-## Choose a setup
-
-| File or method | Purpose |
-| --- | --- |
-| `docker run ghcr.io/oxygengs/kima-hub:v1.10.0` | Published all-in-one fork image |
-| `docker-compose.prod.yml` | Published all-in-one fork image with configurable `VERSION` |
-| `docker-compose.server.yml` | All-in-one fork plus optional companion download services |
-| `docker-compose.services.yml` | Companion services without the Kima app |
-| `docker-compose.yml` | Separate services built from the repository for source development |
-| `docker-compose.dev.yml` | Development databases and analyzers |
-
-For the source build, follow [development.md](development.md). Do not substitute an upstream image for the OxygenGS fork; doing so would omit our fork-specific features.
-
-## Fresh all-in-one installation
-
-Use only a version that has actually been published in [OxygenGS releases](https://github.com/OxygenGS/kima-hub/releases).
+An all-in-one container runs the web app, API, PostgreSQL, Redis and audio analyzers. Replace `/absolute/path/to/music` with an existing folder containing your music.
 
 ```bash
 docker run -d \
   --name kima \
   -p 3030:3030 \
-  -v /path/to/your/music:/music \
+  -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.10.0
+  --restart unless-stopped \
+  ghcr.io/oxygengs/kima-hub:v1.11.0
 ```
 
-Open `http://localhost:3030` and create the first administrator account.
+Open [http://localhost:3030](http://localhost:3030), complete onboarding and create your administrator account.
 
-- `/music` is your library mount.
-- `/data` stores database state, application secrets and caches. Preserve this volume through updates.
-- Port 3030 is the public web interface. Database services remain internal to the all-in-one image.
+- **`/music`** is the music library; keep its host path consistent.
+- **`/data`** is the complete persistent database, job/caching state and generated secrets. Keep it through updates and always back it up.
+- **3030** is the web UI port. Internal API/database ports are not meant to be separately published.
 
-### Docker Compose
+### Docker Compose / Dockge
+
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Both let you select the desired **published** release with `VERSION=v1.11.0`.
+
+```bash
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.11.0 docker compose -f docker-compose.prod.yml up -d
+```
+
+A minimal standalone Compose configuration:
 
 ```yaml
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:v1.10.0
-    container_name: kima
+    image: ghcr.io/oxygengs/kima-hub:v1.11.0
     ports:
       - "3030:3030"
     volumes:
-      - /path/to/your/music:/music
+      - /absolute/path/to/music:/music
       - kima_data:/data
     restart: unless-stopped
 
@@ -58,38 +49,35 @@ volumes:
   kima_data:
 ```
 
-The repository's `docker-compose.prod.yml` and `docker-compose.server.yml` already default to the published fork tag. Their `VERSION` variable lets you pin a different **existing, verified** release later; do not point it to an unpublished tag.
+For development builds, see [development](development.md); `docker-compose.yml` runs the separate source services rather than the released AIO image.
 
-If you bind-mount `/data` on Linux instead of using a named volume, check permissions and create the required directories before startup:
+## Updating
 
-```bash
-mkdir -p /path/to/kima-data/postgres /path/to/kima-data/redis
-```
+**Do not update an existing installation by simply swapping Docker tags.** The application can migrate its database automatically. An older image cannot necessarily start on data that has been migrated.
 
-## Safe updates and independent rollback
+1. Record the current image/tag and the actual `/music` and `/data` mounts. These are installation-specific details and should not be committed to this public repository.
+2. Stop the existing stack and make a **cold backup of the entire original `/data` volume**, including `/data/secrets`, plus the Compose configuration.
+3. Verify a full restore to a **different volume**. Keep the original snapshot unchanged for rollback.
+4. Choose an explicitly published, verified image digest or versioned tag, then upgrade a nonproduction copy first.
+5. On an approved installation update, verify accounts, playlists, audio/seek, downloads, per-user rights and language preferences. For rollback, restore the separate **pre-upgrade** data snapshot before restarting the old image.
 
-Database migrations can be irreversible. Before changing a running installation:
-
-1. Identify the actual container image and Compose project, the mounted `/data` location and the music mount. Treat these as **private deployment facts**, not repository build settings.
-2. Take a **cold backup of the complete original `/data` volume and Compose configuration**. Verify that the backup can be restored to a **separate test volume**.
-3. Choose a tested **published OxygenGS tag or digest**, never a floating `:latest` tag for a controlled update.
-4. Test the candidate in a disposable environment with synthetic or separately copied data before applying any upgrade to real data.
-5. Only after an explicit deployment decision, update the pinned image and start the stack. Check login, users, media library, playback, integrations and permissions.
-
-For exact commands and the non-destructive rollback procedure see [safe-aio-updates.md](safe-aio-updates.md). **Never run `docker compose down -v` when preserving data. Never start an old image on a database that a newer image has migrated.** Rollback requires the complete pre-upgrade snapshot restored to an independent volume.
+Follow the full [safe AIO update and rollback guide](safe-aio-updates.md). Never use `docker compose down -v` to update a database you want to keep.
 
 ## Release channels
 
-**Stable:** use the versioned image referenced in [OxygenGS releases](https://github.com/OxygenGS/kima-hub/releases). The existing stable version is:
+| Channel | Docker image | Usage |
+| --- | --- | --- |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.11.0` | Current versioned OxygenGS release; verify GHCR publishing first |
+| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.10.0` | Older release for **unmodified, original** v1.10 data only |
+| Pre-release | A specific published `prerelease-...` tag/digest | Testing only, not a production upgrade path |
+| `:latest` | Not automatically promoted | Avoid for controlled upgrades |
 
-```bash
-docker pull ghcr.io/oxygengs/kima-hub:v1.10.0
-```
+[All GitHub releases](https://github.com/OxygenGS/kima-hub/releases) · [GHCR package](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 
-**Pre-release:** the fork's manual publishing workflow can produce a separately tagged GHCR pre-release after explicit approval. A pre-release is **not** automatically published when PR CI passes and should not be used with the current real-data volume. Only pull a pre-release when the fork's release notes confirm its actual tag and digest. Stable publishing must not promote it silently to `:latest`.
+## Installing on a phone
 
-**Upstream comparison:** official `chevron7locked/kima` images are used in isolated migration/rollback **test fixtures** only. They are not the default installation image of the OxygenGS fork.
+Kima can be installed as a progressive web app: use **Add to Home Screen** in mobile Safari or **Install app** in Chrome on Android. On supported TV browsers the `?tv=1` URL option selects the TV view. The selected English/Dutch interface language is stored **in the browser**, not synchronized to every device.
 
-## Mobile devices and TV
+## Need help?
 
-Kima is a progressive web app. In Android Chrome use *Install app* or *Add to Home screen*. On iPhone/iPad use Safari's Share menu and *Add to Home Screen*. TV browser support depends on the device; `?tv=1` forces the dedicated TV layout. The experimental EN/NL language selector is part of the combined development branch and will be available in a published fork release only after acceptance.
+See [configuration](configuration.md), [using Kima](using-kima.md), [user permissions](user-permissions.md), [security](security.md) or the [fork's GitHub issues](https://github.com/OxygenGS/kima-hub/issues). For optional integrations and GPU configuration, use [integrations](integrations.md) and [GPU](gpu.md).

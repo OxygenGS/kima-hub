@@ -98,4 +98,4 @@ The root `Dockerfile` builds the all-in-one image. `docker-compose.yml` builds t
 
 ## Releases
 
-Stable releases are made by pushing a version tag. They publish to Docker Hub and GitHub Container Registry. A preview image is built on demand from the `prerelease` branch, or from the **Pre-release Image** workflow, and publishes to GitHub Container Registry only. See [install.md](install.md#release-channels).
+Stable releases are built from explicitly tagged `main` commits by `.github/workflows/docker-publish.yml`, scanned separately on native AMD64 and ARM64 runners, and published to **GitHub Container Registry (GHCR)** only. The optional **Pre-release Image** workflow is manual-only and does not change the stable tag or `:latest`. See [release channels](install.md#release-channels).
