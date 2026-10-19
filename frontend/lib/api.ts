@@ -549,6 +549,13 @@ class ApiClient {
         });
     }
 
+    async patch<T = unknown>(endpoint: string, data: unknown): Promise<T> {
+        return this.request<T>(endpoint, {
+            method: "PATCH",
+            body: JSON.stringify(data),
+        });
+    }
+
     async delete<T = unknown>(endpoint: string): Promise<T> {
         return this.request<T>(endpoint, {
             method: "DELETE",
