@@ -51,7 +51,7 @@ def check(root: Path, tag: str | None) -> str:
     notes = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     version_heading = re.compile(
         rf"^## OxygenGS fork v{re.escape(backend)} — "
-        rf"(?:released [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}|release preparation \\(unpublished\\))$",
+        rf"(?:released [0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}|release preparation \(unpublished\))$",
         re.MULTILINE,
     )
     if not version_heading.search(notes):
@@ -72,7 +72,7 @@ def self_test() -> None:
                 encoding="utf-8")
         (root / "CHANGELOG.md").write_text("## OxygenGS fork v1.11.0 — release preparation (unpublished)\n", encoding="utf-8")
         assert check(root, "v1.11.0") == "1.11.0"
-        (root / "CHANGELOG.md").write_text("## OxygenGS fork v1.11.0 — released 2026-10-19\\n", encoding="utf-8")
+        (root / "CHANGELOG.md").write_text("## OxygenGS fork v1.11.0 — released 2026-10-19\n", encoding="utf-8")
         assert check(root, "v1.11.0") == "1.11.0"
         for invalid in ("v1.10.0", "v1.11.0-rc1", "v01.11.0", "latest", "v1.11.1"):
             try:
