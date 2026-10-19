@@ -57,6 +57,7 @@ jobs:
                   data=r.read(15_000_001)
               assert 1000<len(data)<=15_000_000, 'Official asset size out of bounds: '+stem
               (official_root/(stem+'.onnx')).write_bytes(data)
+              print('OFFICIAL_HASH',stem+'.onnx',hashlib.sha256(data).hexdigest())
 
           import numpy as np
           import onnxruntime as ort
