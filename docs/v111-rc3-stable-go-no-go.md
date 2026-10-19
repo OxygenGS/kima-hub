@@ -30,6 +30,15 @@ Do not substitute the earlier `rc2` digest or a mutable `:prerelease` alias for 
 - [x] [Additional native published-rc3 binary inspection 2/2 passed](https://github.com/OxygenGS/kima-hub/actions/runs/39167206438): `zlib1g` contains no MiniZip installed paths and the shipped `libz.so.1` does not export the known vulnerable MiniZip zip entrypoint on either architecture. This corroborates [Debian's Bookworm CVE-2023-45853 non-built code explanation](https://security-tracker.debian.org/tracker/CVE-2023-45853). Package-specific evidence **requires a human recorded disposition**; scanner findings stay visible.
 - [x] Recorded `libmbedcrypto7` and `libmbedtls14` inventory facts on both rc3 native platforms; **not** a finding waiver or proof that other Mbed TLS call paths are safe.
 
+### Additional native secret and Supervisor control isolation audit
+
+- [x] [Published rc3 native AMD64+ARM64 Supervisor and secret-file access audit **2/2 passed**](https://github.com/OxygenGS/kima-hub/actions/runs/39205826071): on separately booted real digest-pulled images, database/session/encryption files are root-owned and deny group/other access; root-owned Supervisor Unix sockets deny other access; `kimaweb`, `postgres` and `redis` were unable to read those files or invoke Supervisor commands. This supports **compensating control evidence** but does NOT convert the backend or analyzers from root or remove the underlying package findings.
+- [x] [Isolated opt-in non-root Essentia/CLAP worker experiment **9/9 native checks passed**](https://github.com/OxygenGS/kima-hub/actions/runs/39166887367) with effective UID 998 after bootstrap, checked on restart on both platforms. **Not integrated into #7, not in published rc3**; backend still root, existing bind-mounted music permissions and optional GPU-model ownership have not been confirmed.
+
+### Distribution and model-rights license hold
+
+- [ ] **Rights-owner license clearance required**: see [third-party model rights review](v111-third-party-model-rights-review.md). The repo embeds 12 converted MusiCNN ONNX graphs derived from PB models carrying a UPF/MTG notice naming CC BY-NC-ND 4.0, whose accompanying URL unexpectedly refers to BY-NC-SA. MTG's model/licensing websites also provide differing ND/SA descriptions. Confirm legal permission to distribute converted weights and applicable commercial scope. The rc3 Dockerfile copies `models/*.onnx` but **does not copy** `pb/LICENSE-upf-models` into `/app/models`. Adding a notice file alone does **not** prove rights to distribute derivatives. Do not tag stable until this review is formally signed off.
+
 ## Blocking decisions before public stable publication
 
 - [ ] **OS risk disposition, security reviewer and owner:** decide each of the eight Debian CRITICAL scanner findings, including documented potential non-applicability vs actual linked/reachable code and compensating controls. Do not suppress findings or interpret `FixedVersion` absent as safe. See [detailed Debian advisory analysis](v111-rc2-security-disposition.md) and the exact rc3 audit evidence. Assign reviewer/date and record explicit accept/remediate/escalate disposition.
