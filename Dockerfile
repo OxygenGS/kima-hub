@@ -403,6 +403,35 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
     rm -f /usr/bin/ftp /usr/bin/tftp /usr/bin/telnet 2>/dev/null || true && \
     rm -rf /var/lib/apt/lists/*
 
+# Application processes use private, non-root identities. The initial
+# database bootstrap and root Supervisor remain privileged. Root-generated
+# credentials are read by the launcher before dropping the service UID.
+RUN groupadd --system kimabackend \
+    && useradd --system --gid kimabackend --create-home --home-dir /home/kimabackend --shell /usr/sbin/nologin kimabackend \
+    && groupadd --system kimaaudio \
+    && useradd --system --gid kimaaudio --create-home --home-dir /home/kimaaudio --shell /usr/sbin/nologin kimaaudio \
+    && groupadd --system kimaruntime \
+    && usermod -a -G kimaruntime kimabackend \
+    && usermod -a -G kimaruntime kimaaudio \
+    && mkdir -p /app/nonroot-hf /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
+    && cp -a /root/.cache/huggingface/hub /app/nonroot-hf/hub \
+    && chown -R root:root /app/nonroot-hf \
+    && chmod -R a+rX,go-w /app/nonroot-hf \
+    && chown -R kimaaudio:kimaaudio /home/kimaaudio \
+    && chown -R kimabackend:kimabackend /home/kimabackend \
+    && chmod 750 /home/kimaaudio /home/kimabackend
+# The tokenizer cache is public, pinned and read-only; never widen /root.
+ENV HF_HOME=/app/nonroot-hf \
+    HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    CLAP_ROBERTA_TOKENIZER_JSON=/app/nonroot-hf/hub/models--roberta-base/snapshots/e2da8e2f811d1448a5b465c236feacd80ffbac7b/tokenizer.json
+COPY runtime/nonroot_services.py /app/nonroot-services.py
+RUN chmod 644 /app/nonroot-services.py \
+    && gosu kimaaudio test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
+    && gosu kimabackend test -r "$CLAP_ROBERTA_TOKENIZER_JSON" \
+    && gosu kimaaudio test -w /home/kimaaudio/.cache/numba \
+    && gosu kimabackend test -w /home/kimabackend/.cache/numba
+
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -522,7 +551,7 @@ set -e
 
 # AIO startup requires root for persistent volume preparation and the initial
 # PostgreSQL role/migration bootstrap. Supervisord drops privileges for the
-# frontend, PostgreSQL and Redis. Backend/analyzer privilege review remains open.
+# frontend, PostgreSQL and Redis. This build also drops backend/analyzer UIDs.
 
 echo ""
 echo "============================================================"
@@ -786,6 +815,7 @@ open('/etc/supervisor/conf.d/kima.conf', 'w').write(conf)
     echo "CLAP audio analyzer disabled (DISABLE_CLAP=${DISABLE_CLAP})"
 fi
 
+python3 /app/nonroot-services.py configure
 echo "Starting Kima..."
 exec env \
     NODE_ENV=production \

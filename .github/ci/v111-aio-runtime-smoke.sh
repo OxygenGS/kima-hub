@@ -88,6 +88,9 @@ start_aio
 wait_ready
 assert_clap_started
 bash .github/ci/check-aio-service-boundaries.sh "$name"
+if [ "${AIO_SMOKE_WITH_CLAP:-0}" = "1" ]; then
+    docker exec "$name" python3 /app/nonroot-services.py audit
+fi
 
 echo "---- Confirm vendored CLAP audio license ships with runtime ----"
 docker exec "$name" test -r /app/audio-analyzer-clap/LICENSE.huggingface-transformers-apache-2.0
@@ -159,6 +162,9 @@ start_aio
 wait_ready
 assert_clap_started
 bash .github/ci/check-aio-service-boundaries.sh "$name"
+if [ "${AIO_SMOKE_WITH_CLAP:-0}" = "1" ]; then
+    docker exec "$name" python3 /app/nonroot-services.py audit
+fi
 secret_after="$(docker exec "$name" sha256sum /data/secrets/session_secret | cut -d' ' -f1)"
 test "$secret_before" = "$secret_after"
 test "$db_secret_before" = "$(docker exec "$name" sha256sum /data/secrets/database_password | cut -d' ' -f1)"

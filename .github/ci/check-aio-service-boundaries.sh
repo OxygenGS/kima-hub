@@ -88,7 +88,7 @@ for name, allow_db, required in (
     try:
         raw_env = Path(env_file).read_bytes()
     except PermissionError:
-        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb"}.get(name)
+        user = {"postgres": "postgres", "redis": "redis", "frontend": "kimaweb", "audio-analyzer": "kimaaudio", "audio-analyzer-clap": "kimaaudio"}.get(name)
         if user is None:
             raise
         raw_env = subprocess.run(
