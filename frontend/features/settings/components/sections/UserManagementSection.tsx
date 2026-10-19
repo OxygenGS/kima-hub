@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
-import { SettingsSection, SettingsInput, SettingsSelect } from "../ui";
+import { SettingsSection, SettingsInput, SettingsSelect, SettingsToggle } from "../ui";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -13,6 +13,8 @@ interface User {
     id: string;
     username: string;
     role: "user" | "admin";
+    canRequestAlbums: boolean;
+    canDownloadTracks: boolean;
     createdAt: string;
 }
 
@@ -29,6 +31,8 @@ export function UserManagementSection() {
     const [createMessage, setCreateMessage] = useState("");
     const [deleteStatus, setDeleteStatus] = useState<StatusType>("idle");
     const [deleteMessage, setDeleteMessage] = useState("");
+    const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+    const [permissionError, setPermissionError] = useState<Record<string, string>>({});
 
     useEffect(() => {
         loadUsers();
@@ -72,6 +76,31 @@ export function UserManagementSection() {
             setCreateMessage(error instanceof Error ? error.message : "Failed");
         } finally {
             setCreating(false);
+        }
+    };
+
+    const updatePermission = async (
+        target: User,
+        permission: "canRequestAlbums" | "canDownloadTracks",
+        enabled: boolean
+    ) => {
+        if (updatingUserId !== null || target.role !== "user") return;
+        setUpdatingUserId(target.id);
+        setPermissionError((previous) => ({ ...previous, [target.id]: "" }));
+        try {
+            const updated = await api.patch<User>(`/auth/users/${target.id}/permissions`, {
+                [permission]: enabled,
+            });
+            setUsers((previous) => previous.map((user) =>
+                user.id === target.id ? { ...user, ...updated } : user
+            ));
+        } catch (error: unknown) {
+            setPermissionError((previous) => ({
+                ...previous,
+                [target.id]: error instanceof Error ? error.message : "Unable to update permissions",
+            }));
+        } finally {
+            setUpdatingUserId(null);
         }
     };
 
@@ -171,7 +200,7 @@ export function UserManagementSection() {
                                     <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-semibold text-brand">
                                         {user.username[0].toUpperCase()}
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                         <div className="text-sm font-medium text-white">
                                             {user.username}
                                             {currentUser?.id === user.id && (
@@ -181,6 +210,33 @@ export function UserManagementSection() {
                                         <div className="text-xs tabular-nums text-[var(--text-muted)]">
                                             {user.role === "admin" ? "Admin" : "User"}
                                         </div>
+                                        {user.role === "user" && (
+                                            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <SettingsToggle
+                                                        label={`Allow ${user.username} to request albums`}
+                                                        checked={user.canRequestAlbums === true}
+                                                        disabled={updatingUserId !== null}
+                                                        onChange={(enabled) => void updatePermission(user, "canRequestAlbums", enabled)}
+                                                    />
+                                                    <span className="text-xs text-[var(--text-secondary)]">Request albums</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <SettingsToggle
+                                                        label={`Allow ${user.username} to download tracks`}
+                                                        checked={user.canDownloadTracks === true}
+                                                        disabled={updatingUserId !== null}
+                                                        onChange={(enabled) => void updatePermission(user, "canDownloadTracks", enabled)}
+                                                    />
+                                                    <span className="text-xs text-[var(--text-secondary)]">Download tracks</span>
+                                                </div>
+                                                {permissionError[user.id] && (
+                                                    <p role="alert" className="w-full text-xs text-danger-light">
+                                                        {permissionError[user.id]}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
