@@ -3,7 +3,7 @@ name: Experimental v1.11 official UPF dual-output loader (NO PUBLISH)
 on:
   push:
     branches: [feature/v111-upf-onnx-dual-output-experiment]
-    paths: [.github/workflows/experiment-v111-upf-onnx-loader.yml, services/audio-analyzer/musicnn_onnx.py]
+    paths: [.github/workflows/experiment-v111-upf-onnx-loader.yml, services/audio-analyzer/musicnn_onnx.py, services/audio-analyzer/official-upf-onnx.sha256]
 
 permissions:
   contents: read
@@ -51,11 +51,24 @@ jobs:
               'mood_relaxed-msd-musicnn-1':'classification-heads/mood_relaxed/',
               'mood_sad-msd-musicnn-1':'classification-heads/mood_sad/',
           }
+          # Immutable reviewed first-party download hashes. Remote changes must
+          # fail rather than silently altering model behaviour/supply chain.
+          sha_file=Path('services/audio-analyzer/official-upf-onnx.sha256')
+          expected_hashes={}
+          for line in sha_file.read_text().splitlines():
+              if not line or line.startswith('#'): continue
+              digest,filename=line.split()
+              assert len(digest)==64 and filename.endswith('.onnx'), 'Invalid pinned model digest line'
+              assert filename not in expected_hashes, 'Duplicate pinned model filename'
+              expected_hashes[filename]=digest
+          assert set(expected_hashes)=={stem+'.onnx' for stem in heads}, 'Official ONNX hash manifest does not match 11 models'
+
           for stem,prefix in heads.items():
               url='https://essentia.upf.edu/models/'+prefix+stem+'.onnx'
               with urlopen(Request(url,headers={'User-Agent':'OxygenGS-parity-check/1.0'}),timeout=45) as r:
                   data=r.read(15_000_001)
               assert 1000<len(data)<=15_000_000, 'Official asset size out of bounds: '+stem
+              assert hashlib.sha256(data).hexdigest()==expected_hashes[stem+'.onnx'], 'UPF-hosted ONNX changed or unexpected model bytes: '+stem
               (official_root/(stem+'.onnx')).write_bytes(data)
               print('OFFICIAL_HASH',stem+'.onnx',hashlib.sha256(data).hexdigest())
 

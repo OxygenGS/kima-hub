@@ -1,0 +1,13 @@
+# First-party UPF/MTG ONNX SHA256; observed 2026-10-19, from official server, not redistribution permission.
+# Used only by the non-publishing inference experiment.
+c38f0d428bc02dfec79b50dbe6044c5371fe766340b9f6c1b43e1c5b0d5ef278  danceability-msd-musicnn-1.onnx
+2cb8f33f188d73fcb651f7c065b049959166c7852f454a59c13e66fe2c092bde  deam-msd-musicnn-2.onnx
+f9e6ac891f07c30d8b8d53b93a760f9bd0c7c45686241b5a4386ce34cda66407  emomusic-msd-musicnn-2.onnx
+9be58be7362d67ad685b84586ad5e7cf6f0144ae76335584f26e8beadd3a973f  mood_acoustic-msd-musicnn-1.onnx
+28121d76b36549584f99d3ab2f2ea11561dd5a2617ae15c2d83b9a4cd96ae9a8  mood_aggressive-msd-musicnn-1.onnx
+7897d6782608e4dd271812850bd88a4af5f23111b04ba923ddf9c7a36ce8ac34  mood_electronic-msd-musicnn-1.onnx
+250db7b11d058af80c13cec62f3b2e3712cd241d9a07c5a2f42239fe4362d9ac  mood_happy-msd-musicnn-1.onnx
+7c241f230d8ac259de3a4763bdd60673977ffc2459478e355858eaa3731b42d2  mood_party-msd-musicnn-1.onnx
+0f80db5cbbb4913687875a03174d734f49acdcce02b7247aaeade8463d18e04a  mood_relaxed-msd-musicnn-1.onnx
+3861d5611dcaad31f1377875a58b92d9673486cbc2776ad4e3194462a751a894  mood_sad-msd-musicnn-1.onnx
+49668ffec47e52e94b96f45930bb46a28a1368d4bdfb5c05378fa834aca616e1  msd-musicnn-1.onnx
