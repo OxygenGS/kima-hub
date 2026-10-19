@@ -1,0 +1,102 @@
+name: Nonroot full-volume upgrade and rollback (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/v111-nonroot-services-experiment]
+    paths:
+      - .github/workflows/experiment-v111-nonroot-recovery.yml
+      - .github/ci/nonroot-recovery/**
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: nonroot-recovery-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  recovery:
+    name: Recovery ${{ matrix.source }} - ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - source: upstream-v110
+            arch: amd64
+            runner: ubuntu-latest
+          - source: upstream-v111
+            arch: amd64
+            runner: ubuntu-latest
+          - source: rc3
+            arch: amd64
+            runner: ubuntu-latest
+          - source: rc3
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      SOURCE: ${{ matrix.source }}
+      ARCH: ${{ matrix.arch }}
+      AIO_SMOKE_NONROOT_ANALYZERS: '1'
+      BASE_IMAGE: ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843
+    steps:
+      - name: Checkout isolated recovery verification
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert hosted native runner and test guards before containers exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = OxygenGS/kima-hub
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = default
+          case "$ARCH:$(uname -m)" in
+            amd64:x86_64|arm64:aarch64) ;;
+            *) echo 'Not a native runner' >&2; exit 1 ;;
+          esac
+          python3 -m unittest discover -s .github/ci/nonroot-experiment -p 'test_*.py' -v
+          python3 -m unittest discover -s .github/ci/nonroot-recovery -p 'test_*.py' -v
+          python3 .github/ci/nonroot-recovery/prepare.py prepare "$SOURCE" "$ARCH"
+          bash -n "$RUNNER_TEMP/nonroot-rehearsal.sh"
+          bash -n .github/ci/nonroot-recovery/hooks.sh
+      - name: Free disposable runner disk
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+      - name: Authenticate read-only to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull immutable rc3 and build local-only nonroot layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$BASE_IMAGE"
+          test "$(docker image inspect "$BASE_IMAGE" --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect "$BASE_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+          docker build --pull=false -t kima-hub:aio-ci-smoke -f .github/ci/nonroot-experiment/Dockerfile .github/ci/nonroot-experiment
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{ index .Config.Labels "org.oxygengs.experiment" }}')" = nonroot-services-ci-only-not-release
+          echo "CI-only overlay identity: $(docker image inspect kima-hub:aio-ci-smoke --format '{{.Id}}')"
+      - name: Cold-copy upgrade, nonroot audio, recreation and independent original-image rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/nonroot-rehearsal.sh" | tee "$RUNNER_TEMP/nonroot-recovery-result.log"
+      - name: Record passed recovery scope without publishing data or an image
+        shell: bash
+        run: |
+          {
+            echo "### Nonroot recovery $SOURCE / $ARCH: PASS"
+            echo "35 unit tests (19 service guards + 16 recovery integrity guards) and exact-source rehearsal preparation passed."
+            echo "Full cold /data archive restored into separate candidate and rollback volumes; bytes, paths, links, numeric owners and basic modes matched before boot."
+            echo "Actual nonroot backend and both analyzers passed process/secret/socket audits after upgrade and after container recreation; CLAP was enabled on the candidate."
+            echo "Original accounts/playlists/tracks/secrets persisted; original WAV/seek, real MP3 and waveform worked from read-only music. Private cache ownership/write isolation and GPU executable fixture retention passed."
+            echo "Original and independent rollback copies remained unchanged after candidate migration/recreation; original image then booted and played original audio with original cache owners/modes and no candidate-only writes."
+            echo "No backup, manifest, secret, model or image uploaded. No publish, merge, stable tag or independently operated installation changed."
+            echo "This verifies synthetic, exclusively mounted CI data, NOT arbitrary host ACL/xattrs, active external writers, library import/download writes, actual CUDA or a production integration. Licensing and human release decisions remain open."
+          } >> "$GITHUB_STEP_SUMMARY"
