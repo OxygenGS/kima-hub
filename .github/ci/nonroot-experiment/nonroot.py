@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Disposable rc3 least-privilege experiment; NOT a production entrypoint."""
+import configparser
+import ctypes
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+import sys
+
+CONF = Path('/etc/supervisor/conf.d/kima.conf')
+USERS = {'backend': 'kimabackend', 'audio-analyzer': 'kimaaudio', 'audio-analyzer-clap': 'kimaaudio'}
+CACHES = ('/data/cache', '/app/backend/cache', '/app/backend/logs', '/data/gpu-onnx')
+HOOK = 'python3 /app/nonroot-experiment.py configure\n'
+
+def check_path(path):
+    """Reject links/special files before privileged ownership changes."""
+    path = Path(path)
+    for parent in (*reversed(path.parents), path):
+        if parent.is_symlink():
+            raise RuntimeError(f'Refusing symlink: {parent}')
+    if path.exists():
+        mode = path.stat()
+        if not (stat.S_ISDIR(mode.st_mode) or stat.S_ISREG(mode.st_mode)):
+            raise RuntimeError(f'Refusing special file: {path}')
+        if stat.S_ISREG(mode.st_mode) and mode.st_nlink != 1:
+            raise RuntimeError(f'Refusing multiply-linked file: {path}')
+
+def tree_paths(root):
+    check_path(root)
+    paths = [Path(root)]
+    if Path(root).exists():
+        if not Path(root).is_dir():
+            raise RuntimeError(f'Expected cache directory: {root}')
+        for base, dirs, files in os.walk(root, followlinks=False):
+            for name in dirs + files:
+                p = Path(base) / name
+                check_path(p)
+                paths.append(p)
+    return paths
+
+def patch_start():
+    path = Path('/app/start.sh')
+    text = path.read_text()
+    marker = 'echo "Starting Kima..."\n'
+    if text.count(marker) != 1 or HOOK in text:
+        raise RuntimeError('Unexpected rc3 startup hook')
+    path.write_text(text.replace(marker, HOOK + marker))
+
+def configure():
+    # This prototype only supports disposable, non-shared volumes. It does not
+    # change /music, /data/secrets, database files, model weights or source code.
+    for user in sorted(set(USERS.values())):
+        for path in ('/music', '/app/models', '/app/audio-analyzer', '/app/audio-analyzer-clap'):
+            for flag in ('-r', '-x'):
+                subprocess.run(['gosu', user, 'test', flag, path], check=True)
+    inventory = {root: tree_paths(root) for root in CACHES}
+    parser = configparser.RawConfigParser()
+    parser.read(CONF)
+    for service in USERS:
+        section = 'program:' + service
+        if not parser.has_section(section):
+            raise RuntimeError('Missing supervised service: ' + service)
+        parser.set(section, 'command', '/usr/bin/python3 /app/nonroot-experiment.py launch ' + service)
+    backend = pwd.getpwnam('kimabackend')
+    audio = pwd.getpwnam('kimaaudio')
+    for root, paths in inventory.items():
+        Path(root).mkdir(parents=True, exist_ok=True)
+        owner = audio if root == '/data/gpu-onnx' else backend
+        for path in paths:
+            check_path(path)
+            os.chown(path, owner.pw_uid, owner.pw_gid, follow_symlinks=False)
+            os.chmod(path, 0o750 if path.is_dir() else 0o640)
+    with CONF.open('w') as handle:
+        parser.write(handle)
+    print('Disposable experiment: backend and analyzers will drop privileges; music/secrets untouched')
+
+def launch(service):
+    if service not in USERS:
+        raise RuntimeError('Unknown service')
+    subprocess.run(['/app/wait-for-db.sh', '120'], check=True)
+    env = dict(os.environ)
+    if service == 'backend':
+        # Parse values as data, never shell-source them. dotenv may later fail
+        # to read root-owned .env, but the same settings are already inherited.
+        for line in Path('/app/backend/.env').read_text().splitlines():
+            if not line or line.startswith('#'):
+                continue
+            key, value = line.split('=', 1)
+            if not key.replace('_', '').isalnum():
+                raise RuntimeError('Unexpected environment key')
+            env[key] = value
+        directory = '/app/backend'
+        command = ['/usr/local/bin/node', 'dist/index.js']
+    else:
+        for key in ('SESSION_SECRET', 'SETTINGS_ENCRYPTION_KEY', 'ADMIN_RESET_PASSWORD', 'DB_PASSWORD'):
+            env.pop(key, None)
+        directory = '/app/' + service
+        env['KIMA_GPU_FOR'] = 'analysis' if service == 'audio-analyzer' else 'soundVectors'
+        command = ['/app/audio-analyzer-clap/gpu_env.sh', 'python3', 'analyzer.py']
+    env.pop('DB_PASSWORD', None)
+    account = pwd.getpwnam(USERS[service])
+    if account.pw_uid == 0 or account.pw_gid == 0:
+        raise RuntimeError('Refusing privileged service account')
+    env.update(HOME=account.pw_dir, USER=account.pw_name, LOGNAME=account.pw_name,
+               PYTHONDONTWRITEBYTECODE='1')
+    os.chdir(directory)
+    os.setgroups([])
+    os.setgid(account.pw_gid)
+    os.setuid(account.pw_uid)
+    # Inherited by node/python, FFmpeg and any other child; cannot regain root
+    # through a setuid binary. No extra Linux capability is requested.
+    if ctypes.CDLL(None, use_errno=True).prctl(38, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), 'PR_SET_NO_NEW_PRIVS failed')
+    os.umask(0o027)
+    os.execvpe(command[0], command, env)
+
+def audit():
+    for service, user in USERS.items():
+        pid = subprocess.check_output(['supervisorctl', '-c', '/etc/supervisor/supervisord.conf', 'pid', service], text=True).strip()
+        if not pid.isdecimal() or int(pid) <= 1:
+            raise RuntimeError('Service absent: ' + service)
+        status = dict(line.split(':', 1) for line in Path('/proc/' + pid + '/status').read_text().splitlines())
+        expected = pwd.getpwnam(user).pw_uid
+        assert expected != 0 and set(map(int, status['Uid'].split())) == {expected}, service
+        assert int(status['CapEff'].strip(), 16) == 0, service
+        assert int(status['CapPrm'].strip(), 16) == 0, service
+        assert status['NoNewPrivs'].strip() == '1', service
+        for secret in ('/data/secrets/database_password', '/data/secrets/session_secret', '/data/secrets/encryption_key', '/app/backend/.env'):
+            result = subprocess.run(['gosu', user, 'test', '-r', secret])
+            assert result.returncode == 1, service + ' can read ' + secret
+        result = subprocess.run(['gosu', user, 'supervisorctl', '-c', '/etc/supervisor/supervisord.conf', 'status'], capture_output=True)
+        assert result.returncode != 0, service + ' can control Supervisor'
+        print(f'{service}: UID {expected}, zero capabilities, no-new-privileges, secrets/socket denied: PASS')
+
+def main():
+    if os.environ.get('KIMA_NONROOT_EXPERIMENT') != '1' or os.geteuid() != 0:
+        raise RuntimeError('Only the explicitly marked disposable experiment is supported')
+    if sys.argv[1:] == ['patch-start']:
+        patch_start()
+    elif sys.argv[1:] == ['configure']:
+        configure()
+    elif sys.argv[1:] == ['audit']:
+        audit()
+    elif len(sys.argv) == 3 and sys.argv[1] == 'launch':
+        launch(sys.argv[2])
+    else:
+        raise RuntimeError('Expected patch-start, configure, launch SERVICE or audit')
+
+if __name__ == '__main__':
+    main()
