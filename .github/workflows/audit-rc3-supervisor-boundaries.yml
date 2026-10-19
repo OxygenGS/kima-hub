@@ -1,0 +1,118 @@
+name: Audit rc3 Supervisor and secret-file boundaries (NO PUBLISH)
+
+on:
+  push:
+    branches: [feature/prerelease-f31e589-verification]
+    paths: [.github/workflows/audit-rc3-supervisor-boundaries.yml]
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE: ghcr.io/oxygengs/kima-hub@sha256:7ff9b5a0f5d53466ddea71c028e8283ae9753c560ba6cde233445918085a8843
+  SOURCE_SHA: 41a2d0db6488ce2ebb67978c3ec7512f8918673e
+
+jobs:
+  process-boundaries:
+    name: Check actual ${{ matrix.arch }} supervisor socket and secret access
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - name: Free disk for immutable rc3 image
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate exact published candidate identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "$IMAGE"
+          docker tag "$IMAGE" kima-security-socket:local
+          test "$(docker image inspect kima-security-socket:local --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima-security-socket:local --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE_SHA"
+      - name: Boot disposable AIO and assert unprivileged users cannot control root services
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="ci-rc3-supervisor"
+          data="ci-rc3-socket-data"
+          music="ci-rc3-socket-music"
+          cleanup() {
+            docker logs --tail 70 "$name" 2>/dev/null || true
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            docker volume rm -f "$data" "$music" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for n in "$name" "$data" "$music"; do
+            if docker container inspect "$n" >/dev/null 2>&1 || docker volume inspect "$n" >/dev/null 2>&1; then
+              echo "Refusing to reuse existing disposable Docker resources" >&2
+              exit 1
+            fi
+          done
+          docker volume create "$data" >/dev/null
+          docker volume create "$music" >/dev/null
+          docker run -d --name "$name" --memory=6g -e DISABLE_CLAP=true -v "$data":/data -v "$music":/music kima-security-socket:local >/dev/null
+          ok=false
+          for i in $(seq 1 120); do
+            state="$(docker inspect "$name" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')"
+            if [ "$state" = healthy ]; then ok=true; break; fi
+            if [ "$(docker inspect "$name" --format '{{.State.Status}}')" != running ]; then break; fi
+            sleep 5
+          done
+          test "$ok" = true || { echo "Disposable container failed healthcheck" >&2; exit 1; }
+          echo "AIO healthy with isolated named test volumes"
+          docker exec -i "$name" python3 - <<'PY'
+          import os, pwd, stat, subprocess
+          from pathlib import Path
+
+          secret_dir = Path("/data/secrets")
+          assert secret_dir.is_dir(), "Persistent secrets directory absent"
+          for item in (secret_dir, secret_dir / "database_password", secret_dir / "session_secret", secret_dir / "encryption_key"):
+              st = item.stat()
+              assert st.st_uid == 0, f"{item.name}: unexpectedly not root-owned"
+              assert not (st.st_mode & 0o077), f"{item.name}: group/other access detected"
+              print(f"root-only {item.name} file/directory access: PASS")
+          cfg = Path("/etc/supervisor/supervisord.conf").read_text()
+          candidates = ["/var/run/supervisor.sock", "/run/supervisor.sock", "/tmp/supervisor.sock"]
+          found = [Path(path) for path in candidates if Path(path).exists()]
+          assert found, f"No expected Supervisor control socket (review config without printing secrets)"
+          for sock in found:
+              st = sock.stat()
+              assert stat.S_ISSOCK(st.st_mode), f"{sock} not a socket"
+              assert st.st_uid == 0, f"{sock} not root-owned"
+              assert not (st.st_mode & 0o007), f"{sock} exposes access to other users"
+              print(f"supervisor socket {sock}: root owned with no other access: PASS")
+          for name in ("kimaweb", "postgres", "redis"):
+              uid = pwd.getpwnam(name).pw_uid
+              assert uid != 0
+              for item in (secret_dir / "database_password", secret_dir / "session_secret", secret_dir / "encryption_key"):
+                  p = subprocess.run(["gosu", name, "test", "-r", str(item)], check=False)
+                  assert p.returncode != 0, f"{name} can read {item.name}"
+              r = subprocess.run(
+                  ["gosu", name, "supervisorctl", "-c", "/etc/supervisor/supervisord.conf", "status"],
+                  capture_output=True, text=True, timeout=8, check=False,
+              )
+              assert r.returncode != 0, f"{name} has supervisorctl control access"
+              print(f"{name} cannot read secrets or command root supervisor: PASS")
+          PY
+          echo "Published rc3 service-control boundary PASS on $ARCH"
+      - name: Report no-publish evidence
+        if: always()
+        shell: bash
+        run: |
+          echo "Pinned rc3 digest; disposable volumes; Supervisor socket and secrets boundary; no image push." >> "$GITHUB_STEP_SUMMARY"
