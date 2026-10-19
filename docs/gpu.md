@@ -2,6 +2,8 @@
 
 This page describes optional NVIDIA GPU acceleration for the OxygenGS Kima Hub v1.11.0 fork. GPU support depends on host drivers, container privileges and NVIDIA hardware; automated CPU-based tests are not a substitute for a real GPU test.
 
+The previous versioned image, `ghcr.io/oxygengs/kima-hub:v1.10.0`, remains available for **unchanged v1.10 data**. Never start it against a volume already migrated by v1.11; use an independent pre-upgrade backup if rolling back.
+
 Kima runs on the processor by default and nothing about the graphics card is touched until an administrator turns it on. If the container can see an NVIDIA card, two jobs can run on it:
 
 - **Vibe embeddings:** the sound vector of each song (the CLAP model). In one test on an RTX 4060 Ti the model took 11.7 milliseconds for a 10-second clip, against 114 on the processor, and the processor stays free for everything else. How much faster a whole library finishes depends on the other steps too.
