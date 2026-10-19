@@ -14,6 +14,12 @@
 - LAION [`laion/clap-htsat-unfused` model page](https://huggingface.co/laion/clap-htsat-unfused) advertises Apache-2.0; the Dockerfile downloads pinned original weights and a separate [Xenova ONNX-derived text model](https://huggingface.co/Xenova/clap-htsat-unfused). The full model-file lineage, all transformed CLAP weights, and retained notices still need a human attribution/provenance review. The presence of an Apache-2.0 vendored-code license does not itself settle *all* model/data rights.
 - The image includes Python/Node/FFmpeg/native runtime components. Their full license and source-offer obligations (GPL/AGPL vs relevant library exceptions and redistributed objects) remain review items.
 
+## Audited exact-source evidence and prepared next action
+
+- **Audit run [#39207081678](https://github.com/OxygenGS/kima-hub/actions/runs/39207081678): PASS (1/1)** on the pinned release commit, with a retained JSON artifact listing the **11 matching original/converted model names** and the two conflicting notice identifiers. The source Dockerfile fails the `UPF model notice copied with model files` observation; this is a provenance gap, not itself proof of how a court or licensor would interpret the distribution.
+- The [rights-holder inquiry](v111-upf-model-license-inquiry.md) includes an exact **11-file** model table, official contact `mtg-info@upf.edu`, and questions for the licensor about ONNX conversion, public distribution, derivative permissions, commercial use and required license attribution. **Prepared only; not transmitted.**
+- Current pending decision: no stable publish or tag. If approval/permission requires code or image changes, treat it as new candidate work and independently retest both native architectures rather than assuming rc3 includes a fix.
+
 ## Required release-owner decisions
 
 - [ ] Determine the **controlling written license**, applicable version and official rights owner for every redistributed original UPF PB and converted ONNX model; resolve the repository notice's ND-vs-SA URL contradiction and MTG's conflicting website descriptions.

@@ -37,6 +37,11 @@ Do not substitute the earlier `rc2` digest or a mutable `:prerelease` alias for 
 
 ### Distribution and model-rights license hold
 
+- [x] [Exact-release-source model inventory #39207081678 **1/1 passed**](https://github.com/OxygenGS/kima-hub/actions/runs/39207081678) validates **11 original PB files = 11 converted ONNX files** (10 heads + one shared main model), detects the ND-vs-SA mismatch in the existing upstream model notice and records that `Dockerfile` does not explicitly copy `LICENSE-upf-models` alongside `/app/models`. The workflow produced an independent JSON evidence artifact. **Green evidence is NOT license permission or stable sign-off.**
+- [ ] **Rights-holder communication not yet sent:** [complete inventory and prepared inquiry to official UPF/MTG contact](v111-upf-model-license-inquiry.md). Obtain a written decision on conversion, public ONNX redistribution, attribution and allowed commercial/noncommercial scope before marking distribution rights accepted.
+
+
+
 - [ ] **Rights-owner license clearance required**: see [third-party model rights review](v111-third-party-model-rights-review.md). The repo embeds 11 converted MusiCNN ONNX graphs derived from PB models carrying a UPF/MTG notice naming CC BY-NC-ND 4.0, whose accompanying URL unexpectedly refers to BY-NC-SA. MTG's model/licensing websites also provide differing ND/SA descriptions. Confirm legal permission to distribute converted weights and applicable commercial scope. The rc3 Dockerfile copies `models/*.onnx` but **does not copy** `pb/LICENSE-upf-models` into `/app/models`. Adding a notice file alone does **not** prove rights to distribute derivatives. Do not tag stable until this review is formally signed off.
 
 ## Blocking decisions before public stable publication
