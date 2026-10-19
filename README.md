@@ -1,17 +1,31 @@
 <div align="center">
 
-# OxygenGS Kima Hub
+<img src="frontend/public/assets/icons/icon-192.webp" width="82" height="82" alt="Kima Hub application icon used by Oxygen's Fork" />
 
-**Your library. Your rules. Your vibe.**
+<h1>Kima Hub · Oxygen's Fork</h1>
 
-A beautiful, self-hosted music experience — powered by Kima Hub v1.11.0, refined with OxygenGS branding, better control over user permissions, security hardening and English/Dutch interface options.
+<img src="assets/readme-hero.svg" width="100%" alt="Kima Hub — Oxygen's Fork: Your library. Your rules. Your vibe. A gradient audio-wave banner." />
 
-[![Release](https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=Stable%20release&style=flat-square)](https://github.com/OxygenGS/kima-hub/releases)
-[![GHCR](https://img.shields.io/badge/Docker-GHCR-277da1?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
-[![GPLv3](https://img.shields.io/badge/License-GPLv3-38a169?style=flat-square)](LICENSE)
-[![EN%20%2B%20NL](https://img.shields.io/badge/Interface-English%20%2B%20Dutch-7c5cff?style=flat-square)](docs/internationalization.md)
+<p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
 
-[**Get started**](#quick-start) · [**Explore features**](#what-you-get) · [**See the app**](#a-look-inside) · [**Documentation**](#documentation) · [**Releases**](https://github.com/OxygenGS/kima-hub/releases)
+<p>
+  The Kima Hub v1.11 experience, refined with OxygenGS branding, English/Dutch language settings,
+  stronger user permissions and thoughtful security improvements.
+</p>
+
+<p>
+  <a href="https://github.com/OxygenGS/kima-hub/releases"><img src="https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=Release&style=flat-square&color=9167db" alt="Latest GitHub release" /></a>
+  <a href="https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub"><img src="https://img.shields.io/badge/Docker-GHCR-3778ce?style=flat-square&logo=docker&logoColor=white" alt="Docker on GHCR" /></a>
+  <a href="docs/internationalization.md"><img src="https://img.shields.io/badge/Interface-EN%20%2B%20NL-c770d8?style=flat-square" alt="English and Dutch interface" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-55526b?style=flat-square" alt="GPLv3" /></a>
+</p>
+
+<p>
+  <a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp;
+  <a href="#what-you-get"><b>Features</b></a> &nbsp;·&nbsp;
+  <a href="#a-look-inside"><b>Screenshots</b></a> &nbsp;·&nbsp;
+  <a href="#documentation"><b>Documentation</b></a>
+</p>
 
 </div>
 
@@ -19,7 +33,7 @@ A beautiful, self-hosted music experience — powered by Kima Hub v1.11.0, refin
 
 ## Music, on your terms
 
-Host your own music library, find what you love again and discover what to play next. Kima Hub brings together streaming, smart playlists, audio analysis, podcasts and audiobooks in one interface — without handing ownership of your collection to a streaming service.
+Host your music library, rediscover favorite tracks and find what to play next. Streaming, discovery, smart playlists, audio analysis, podcasts and audiobooks — all in one interface.
 
 <p align="center">
   <img src="assets/screenshots/desktop-home.png" width="920" alt="Kima Hub desktop home with music discovery, listening and library sections" />
@@ -41,28 +55,28 @@ Host your own music library, find what you love again and discover what to play 
 
 ## A look inside
 
+<p align="center">
+  <img src="assets/screenshots/vibe-map.png" width="820" alt="Kima Hub Vibe Map showing your library organized by musical similarity" />
+  <br /><sub><b>Vibe Map</b> · Explore songs by how they sound and feel</sub>
+</p>
+
 <table>
-<tr>
-<td align="center" width="50%">
-  <img src="assets/screenshots/vibe-map.png" alt="Vibe Map exploring songs by similarity" width="440" />
-  <br /><b>Explore your Vibe Map</b>
-</td>
-<td align="center" width="50%">
-  <img src="assets/screenshots/desktop-stats.png" alt="Music listening statistics" width="440" />
-  <br /><b>Discover your listening patterns</b>
-</td>
-</tr>
-<tr>
-<td align="center">
-  <img src="assets/screenshots/mood-mixer.png" alt="Mood Mixer interface" width="440" />
-  <br /><b>Mix music by mood</b>
-</td>
-<td align="center">
-  <img src="assets/screenshots/mobile-home.png" alt="Kima Hub mobile interface" width="215" />
-  <br /><b>Take your library with you</b>
-</td>
-</tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/desktop-stats.png" width="430" alt="Kima Hub listening statistics" />
+      <br /><sub><b>Listening Stats</b> · Discover your favorites</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/screenshots/mood-mixer.png" width="430" alt="Kima Hub Mood Mixer" />
+      <br /><sub><b>Mood Mixer</b> · Find the right sound</sub>
+    </td>
+  </tr>
 </table>
+
+<p align="center">
+  <img src="assets/screenshots/mobile-vibe.png" width="220" alt="Vibe browsing on mobile in Kima Hub" />
+  <br /><sub><b>On the go</b> · Your library, wherever you listen</sub>
+</p>
 
 ## Quick start
 

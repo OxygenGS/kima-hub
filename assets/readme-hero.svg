@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 510" width="1440" height="510" role="img" aria-labelledby="hero-title hero-description">
+  <title id="hero-title">Kima Hub — Oxygen's Fork</title>
+  <desc id="hero-description">A premium music-inspired banner with the words Your library, Your rules, Your vibe and abstract sound waves.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#120e1d"/>
+      <stop offset=".56" stop-color="#171126"/>
+      <stop offset="1" stop-color="#090e1b"/>
+    </linearGradient>
+    <radialGradient id="purple-aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#9357ff" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#9357ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blue-aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#3a7aff" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#3a7aff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fbbf65"/>
+      <stop offset=".3" stop-color="#fc8a80"/>
+      <stop offset=".64" stop-color="#a267f4"/>
+      <stop offset="1" stop-color="#5c9dff"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf65"/>
+      <stop offset=".28" stop-color="#eb70a6"/>
+      <stop offset=".7" stop-color="#a16df9"/>
+      <stop offset="1" stop-color="#468dff"/>
+    </linearGradient>
+    <clipPath id="frame"><rect width="1440" height="510" rx="29"/></clipPath>
+    <filter id="bar-glow"><feGaussianBlur stdDeviation="15"/></filter>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="1440" height="510" fill="url(#background)"/>
+    <ellipse cx="1084" cy="224" rx="590" ry="390" fill="url(#purple-aura)"/>
+    <ellipse cx="1300" cy="460" rx="450" ry="300" fill="url(#blue-aura)"/>
+    <path d="M0 0H1440" stroke="url(#line)" stroke-width="6"/>
+    <path d="M0 508H1440" stroke="#9f80d7" stroke-opacity=".17" stroke-width="3"/>
+    <g stroke="#fff" stroke-opacity=".045" stroke-width="1">
+      <path d="M680 82H1390 M680 156H1390 M680 230H1390 M680 304H1390 M680 378H1390 M680 452H1390"/>
+      <path d="M760 40V470 M852 40V470 M944 40V470 M1036 40V470 M1128 40V470 M1220 40V470 M1312 40V470"/>
+    </g>
+    <circle cx="1112" cy="257" r="235" stroke="#aa7be1" stroke-opacity=".15" fill="none"/>
+    <circle cx="1112" cy="257" r="194" stroke="#aa7be1" stroke-opacity=".22" fill="none"/>
+    <circle cx="1112" cy="257" r="149" stroke="#aa7be1" stroke-opacity=".24" fill="none"/>
+    <circle cx="1112" cy="257" r="105" stroke="#bb8cfa" stroke-opacity=".13" fill="none"/>
+    <path d="M844 257Q914 200 978 260T1112 255T1244 253T1420 256" stroke="url(#line)" stroke-opacity=".28" stroke-width="3" fill="none"/>
+    <g transform="translate(1112 257)" fill="url(#wave)">
+      <g opacity=".2" filter="url(#bar-glow)">
+      <rect x="-135" y="-50" width="13" height="100" rx="6.5"/>
+      <rect x="-111" y="-91" width="13" height="182" rx="6.5"/>
+      <rect x="-87" y="-126" width="13" height="252" rx="6.5"/>
+      <rect x="-63" y="-76" width="13" height="152" rx="6.5"/>
+      <rect x="-39" y="-148" width="13" height="296" rx="6.5"/>
+      <rect x="-15" y="-101" width="13" height="202" rx="6.5"/>
+      <rect x="9" y="-134" width="13" height="268" rx="6.5"/>
+      <rect x="33" y="-67" width="13" height="134" rx="6.5"/>
+      <rect x="57" y="-112" width="13" height="224" rx="6.5"/>
+      <rect x="81" y="-82" width="13" height="164" rx="6.5"/>
+      <rect x="105" y="-42" width="13" height="84" rx="6.5"/>
+      </g>
+      <rect x="-135" y="-50" width="13" height="100" rx="6.5"/>
+      <rect x="-111" y="-91" width="13" height="182" rx="6.5"/>
+      <rect x="-87" y="-126" width="13" height="252" rx="6.5"/>
+      <rect x="-63" y="-76" width="13" height="152" rx="6.5"/>
+      <rect x="-39" y="-148" width="13" height="296" rx="6.5"/>
+      <rect x="-15" y="-101" width="13" height="202" rx="6.5"/>
+      <rect x="9" y="-134" width="13" height="268" rx="6.5"/>
+      <rect x="33" y="-67" width="13" height="134" rx="6.5"/>
+      <rect x="57" y="-112" width="13" height="224" rx="6.5"/>
+      <rect x="81" y="-82" width="13" height="164" rx="6.5"/>
+      <rect x="105" y="-42" width="13" height="84" rx="6.5"/>
+    </g>
+    <rect x="86" y="79" width="224" height="38" rx="19" fill="#bd8afb" fill-opacity=".10" stroke="#bd8afb" stroke-opacity=".42"/>
+    <circle cx="108" cy="98" r="4.6" fill="#efa2f2"/>
+    <text x="124" y="103" font-family="Arial, Helvetica, sans-serif" fill="#dbc8fd" font-weight="700" font-size="16" letter-spacing="3.5">OXYGEN'S FORK</text>
+    <text x="78" y="233" font-family="Arial, Helvetica, sans-serif" fill="#f8f4ff" font-size="105" font-weight="700" letter-spacing="-4">Kima Hub</text>
+    <rect x="86" y="260" width="220" height="5" rx="2.5" fill="url(#line)"/>
+    <text x="86" y="340" font-family="Arial, Helvetica, sans-serif" fill="#f2eafc" font-size="33" font-weight="500" letter-spacing="-.2">Your library. Your rules. Your vibe.</text>
+    <text x="87" y="396" font-family="Arial, Helvetica, sans-serif" fill="#aaa0bf" font-size="22" letter-spacing=".4">Self-hosted music  ·  English + Dutch  ·  v1.11</text>
+  </g>
+</svg>
