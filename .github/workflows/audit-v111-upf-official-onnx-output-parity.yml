@@ -73,7 +73,15 @@ jobs:
           patches=np.random.default_rng(2026).uniform(0,1,size=(2,187,96)).astype(np.float32)
           records=[]
           local_body=local.body.run(patches)
-          official_body=official.body.run(patches)
+          # UPF first-party MusiCNN exposes BOTH outputs: default
+          # activations is 50 tags; the fork consumes 200-d 'embeddings'.
+          # Choose the correct published output explicitly.
+          official_output_names=[o.name for o in official.body.session.get_outputs()]
+          assert 'embeddings' in official_output_names, 'UPF 200d embeddings output missing'
+          official_body=np.concatenate([
+              official.body.session.run(['embeddings'],{official.body._input:patches[i:i+1]})[0]
+              for i in range(len(patches))
+          ],axis=0)
           print('Local embedding tensor shape:',local_body.shape)
           print('Official embedding tensor shape:',official_body.shape)
           print('Official network ONNX inputs:',[(p.name,p.shape) for p in official.body.session.get_inputs()])
