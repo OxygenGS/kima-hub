@@ -53,3 +53,7 @@ Kima trusts the proxy's forwarded address, so the login limit counts the real cl
 ## Network use
 
 Kima has no telemetry and sends nothing to its author. It contacts outside services only for features you use. The full list, and what is sent to each, is in [PRIVACY.md](../PRIVACY.md).
+
+## Image vulnerability reports
+
+The assembled v1.11.0 build still has reported Debian package vulnerabilities with no scanner-listed fixed versions; these are not the same as known exploitable application flaws. See [image security and residual risks](image-security.md) before exposing a server to untrusted networks.

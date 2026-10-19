@@ -4,7 +4,7 @@ A tour of the web app once it is running. Setup is in [install.md](install.md).
 
 ## First start
 
-The first account you create becomes the administrator. When setup finishes, Kima scans your music folder and starts enrichment in the background: five steps that work out each song's sound, feel and genres and then build the map. The vibe map and the match data appear when enrichment has finished, which takes roughly 1 minute per 100 songs on a 16-core machine (see [How it is worked out](../README.md#how-it-is-worked-out)). Progress is shown in **Settings > Library Enrichment**; see [administration.md](administration.md).
+The first account you create becomes the administrator. When setup finishes, Kima scans your music folder and starts enrichment in the background: five steps that work out each song's sound, feel and genres and then build the map. The vibe map and the match data appear when enrichment has finished, which takes roughly 1 minute per 100 songs on a 16-core machine (see [library enrichment](administration.md#library-enrichment)). Progress is shown in **Settings > Library Enrichment**; see [administration.md](administration.md).
 
 ## Home
 
@@ -19,7 +19,7 @@ The home page shows the sections that have something to show:
 
 ## The vibe map
 
-Open **Vibe** in the sidebar. Your library appears as a 3D space where songs that match sit close together. How matching works is described in the [README](../README.md#the-vibe-engine).
+Open **Vibe** in the sidebar. Your library appears as a 3D space where songs that match sit close together. How matching works is described in the [Vibe and music analysis](administration.md#library-enrichment).
 
 - Click a star to select it. A panel shows the song with four actions. Double-click a star to play it.
 - Right-click a star for a menu with the same actions.
