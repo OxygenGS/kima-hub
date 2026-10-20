@@ -5,6 +5,7 @@ import { Episode } from "../types";
 import { formatDuration } from "@/lib/format";
 import { formatDate } from "../utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface ContinueListeningProps {
     inProgressEpisodes: Episode[];
@@ -23,6 +24,7 @@ export function ContinueListening({
     onPlayEpisode,
     onPlayPause,
 }: ContinueListeningProps) {
+    const { t, locale } = useLanguage();
     if (inProgressEpisodes.length === 0) {
         return null;
     }
@@ -47,7 +49,7 @@ export function ContinueListening({
 
     return (
         <section>
-            <SectionHeader title="Continue Listening" type="podcast" />
+            <SectionHeader title={t("Continue Listening")} type="podcast" />
 
             <div className="space-y-0.5">
                 {previousEpisode && (
@@ -69,7 +71,7 @@ export function ContinueListening({
                             e.stopPropagation();
                             onPlayPause(recentEpisode);
                         }}
-                        aria-label={isCurrentPlaying && isPlaying ? "pause" : "play"}
+                        aria-label={t(isCurrentPlaying && isPlaying ? "Pause" : "Play")}
                         className="w-10 h-10 rounded-lg bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] flex items-center justify-center shrink-0"
                     >
                         {isCurrentPlaying && isPlaying ? (
@@ -85,7 +87,7 @@ export function ContinueListening({
                         <div className="flex items-center gap-3 mt-0.5 text-xs tabular-nums text-[var(--text-muted)]">
                             <span>{formatDuration(recentEpisode.duration)}</span>
                             <span className="text-[var(--text-muted)]">|</span>
-                            <span>{formatDate(recentEpisode.publishedAt)}</span>
+                            <span>{formatDate(recentEpisode.publishedAt, locale)}</span>
                         </div>
                         {recentEpisode.progress && (
                             <div className="mt-2">
@@ -122,11 +124,12 @@ function AdjacentEpisode({ episode, which, delayMs, onPlay }: {
     delayMs: number;
     onPlay: (episode: Episode) => void;
 }) {
+    const { t } = useLanguage();
     return (
         <button
             type="button"
             onClick={() => onPlay(episode)}
-            aria-label={`play the ${which} episode, ${episode.title}`}
+            aria-label={`${t(which === "previous" ? "Play previous episode" : "Play next episode")}: ${episode.title}`}
             className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg border border-transparent hover:bg-white/[0.02] hover:border-white/5 transition-all opacity-40 hover:opacity-60 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 animate-rise"
             style={{ animationDelay: `${delayMs}ms` }}
         >
@@ -137,7 +140,7 @@ function AdjacentEpisode({ episode, which, delayMs, onPlay }: {
                 <span className="block font-bold text-[var(--text-primary)] truncate text-sm tracking-tight">
                     {episode.title}
                 </span>
-                <span className="block text-xs text-[var(--text-muted)]">{which} episode</span>
+                <span className="block text-xs text-[var(--text-muted)]">{t(which === "previous" ? "previous episode" : "next episode")}</span>
             </span>
         </button>
     );

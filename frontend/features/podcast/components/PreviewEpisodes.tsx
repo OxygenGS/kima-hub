@@ -7,6 +7,7 @@ import { formatDuration } from "@/lib/format";
 import { formatDate } from "../utils";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface PreviewEpisodesProps {
     previewData: PodcastPreview;
@@ -19,13 +20,14 @@ export function PreviewEpisodes({
     isSubscribing,
     onSubscribe,
 }: PreviewEpisodesProps) {
+    const { t, locale } = useLanguage();
     const hasEpisodes =
         previewData.previewEpisodes &&
         previewData.previewEpisodes.length > 0;
 
     return (
         <section>
-            <SectionHeader title="Latest Episodes" type="podcast" />
+            <SectionHeader title={t("Latest Episodes")} type="podcast" />
 
             {hasEpisodes ? (
                 // The subscribe fade below covers the episode list only, so the list holds it.
@@ -46,7 +48,7 @@ export function PreviewEpisodes({
                                         {episode.title}
                                     </h3>
                                     <div className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)]">
-                                        <span>{formatDate(episode.publishedAt)}</span>
+                                        <span>{formatDate(episode.publishedAt, locale)}</span>
                                         {episode.duration > 0 && (
                                             <>
                                                 <span className="text-[var(--text-muted)]">|</span>
@@ -66,10 +68,10 @@ export function PreviewEpisodes({
                             isLoading={isSubscribing}
                             className="pointer-events-auto"
                         >
-                            {isSubscribing ? "Subscribing" : (
+                            {isSubscribing ? t("Subscribing") : (
                                 <>
                                     <Plus className="w-4 h-4" />
-                                    Subscribe to Unlock All Episodes
+                                    {t("Subscribe to Unlock All Episodes")}
                                 </>
                             )}
                         </Button>
@@ -78,7 +80,7 @@ export function PreviewEpisodes({
             ) : (
                 <div className="relative overflow-hidden rounded-lg border border-white/10 bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a] p-8 text-center">
                     <p className="text-xs text-[var(--text-muted)] mb-4">
-                        No episodes available for preview
+                        {t("No episodes available for preview")}
                     </p>
                     <Button
                         variant="primary"
@@ -86,10 +88,10 @@ export function PreviewEpisodes({
                         isLoading={isSubscribing}
                         className="mx-auto"
                     >
-                        {isSubscribing ? "Subscribing" : (
+                        {isSubscribing ? t("Subscribing") : (
                             <>
                                 <Plus className="w-4 h-4" />
-                                Subscribe
+                                {t("Subscribe")}
                             </>
                         )}
                     </Button>
@@ -98,7 +100,7 @@ export function PreviewEpisodes({
 
             {previewData.description && (
                 <div className="mt-8">
-                    <SectionHeader title="About" type="podcast" />
+                    <SectionHeader title={t("About")} type="podcast" />
                     <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-4">
                         <div
                             className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] max-w-3xl text-xs leading-relaxed"
