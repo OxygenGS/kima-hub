@@ -5,6 +5,7 @@ import { Calendar, Clock, Download, Disc, ArrowRight, CheckCircle2 } from "lucid
 import { cn } from "@/lib/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { notify } from "@/lib/notify";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -36,6 +37,7 @@ interface ReleaseRadarData {
 }
 
 export default function ReleasesPage() {
+    const { canRequestAlbums } = useMusicPermissions();
     const [data, setData] = useState<ReleaseRadarData | null>(null);
     const [loading, setLoading] = useState(true);
     const [downloadingId, setDownloadingId] = useState<string | number | null>(null);
@@ -58,6 +60,7 @@ export default function ReleasesPage() {
     }, []);
 
     const handleDownload = async (albumMbid: string, releaseId: string | number) => {
+        if (!canRequestAlbums) return;
         try {
             setDownloadingId(releaseId);
             await api.post(`/releases/download/${albumMbid}`);
@@ -209,6 +212,7 @@ function ReleaseCard({
     onDownload: (albumMbid: string, releaseId: string | number) => void;
     isDownloading: boolean;
 }) {
+    const { canRequestAlbums } = useMusicPermissions();
     const isUpcoming = release.status === "upcoming";
     const hasIt = release.inLibrary;
 
@@ -231,7 +235,7 @@ function ReleaseCard({
             }
             corner={hasIt && <CheckCircle2 className="w-5 h-5 text-success" aria-label="In library" />}
             action={
-                release.canDownload && !hasIt
+                canRequestAlbums && release.canDownload && !hasIt
                     ? {
                           icon: Download,
                           label: "Download",
