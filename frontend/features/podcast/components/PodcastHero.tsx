@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { SpokenHero, type SpokenHeroDetail } from "@/features/spoken/SpokenHero";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface PodcastHeroProps {
     title: string;
@@ -27,10 +29,11 @@ export function PodcastHero({
     inProgressCount,
     children,
 }: PodcastHeroProps) {
+    const { locale, t } = useLanguage();
     const details: SpokenHeroDetail[] = [
-        { text: `${episodeCount} ${episodeCount === 1 ? "episode" : "episodes"}` },
+        { text: `${episodeCount} ${t(episodeCount === 1 ? "episode" : "episodes")}` },
         ...(inProgressCount > 0
-            ? [{ text: `${inProgressCount} in progress`, className: "text-[var(--color-brand)]" }]
+            ? [{ text: `${inProgressCount} ${t("in progress")}`, className: "text-[var(--color-brand)]" }]
             : []),
     ];
 
@@ -41,7 +44,7 @@ export function PodcastHero({
             author={author}
             description={description}
             details={details}
-            tags={(genres ?? []).slice(0, 4).map((label) => ({ label }))}
+            tags={(genres ?? []).slice(0, 4).map((label) => ({ label: translate(locale, label) }))}
             heroImage={heroImage}
             colors={colors}
         >
