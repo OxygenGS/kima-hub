@@ -1,3 +1,4 @@
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Check, Disc3 } from "lucide-react";
 import { api } from "@/lib/api";
 import { SimilarAlbum } from "../types";
@@ -9,9 +10,10 @@ interface SimilarAlbumsProps {
 }
 
 export function SimilarAlbums({ similarAlbums }: SimilarAlbumsProps) {
+    const { t } = useLanguage();
     return (
         <section>
-            <SectionHeader type="album" title="More Like This" />
+            <SectionHeader type="album" title={t("More Like This")} />
             <div data-tv-section="similar-albums" className="grid-media">
                 {similarAlbums.map((album, index) => (
                     <MediaCard
@@ -27,7 +29,7 @@ export function SimilarAlbums({ similarAlbums }: SimilarAlbumsProps) {
                             album.owned && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success/20 border border-success/30 rounded-full text-xs font-medium text-success">
                                     <Check className="w-3 h-3" />
-                                    Owned
+                                    {t("Owned")}
                                 </span>
                             )
                         }
