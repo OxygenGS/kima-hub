@@ -4,6 +4,8 @@
  */
 export const english = {
     "Account": "Account",
+    "episode in progress": "episode in progress",
+    "episodes in progress": "episodes in progress",
     "RSS feed": "RSS feed",
     "Open the RSS feed": "Open the RSS feed",
     "Remove podcast": "Remove podcast",
@@ -1546,6 +1548,8 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "episode in progress": "aflevering nog niet afgeluisterd",
+    "episodes in progress": "afleveringen nog niet afgeluisterd",
     "RSS feed": "RSS-feed",
     "Open the RSS feed": "Open de RSS-feed",
     "Remove podcast": "Podcast verwijderen",
