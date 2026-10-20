@@ -4,6 +4,7 @@
  */
 export const english = {
     "Account": "Account",
+    "Book": "Book",
     "is forgotten and the book starts from the beginning.": "is forgotten and the book starts from the beginning.",
     "Your place in": "Your place in",
     "Reset progress?": "Reset progress?",
@@ -1552,6 +1553,7 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "Book": "Boek",
     "is forgotten and the book starts from the beginning.": "wordt gewist en het boek begint opnieuw.",
     "Your place in": "Je luisterpositie in",
     "Reset progress?": "Voortgang herstellen?",
