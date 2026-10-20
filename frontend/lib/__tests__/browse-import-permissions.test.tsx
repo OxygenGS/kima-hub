@@ -6,6 +6,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BrowsePlaylistsPage from "@/app/browse/playlists/page";
+import { LanguageProvider } from "@/lib/i18n/language-context";
 
 const state = vi.hoisted(() => ({
     rights: { canRequestAlbums: false, canDownloadTracks: false },
@@ -59,12 +60,13 @@ let root: Root;
 
 async function render() {
     await act(async () => {
-        root.render(<BrowsePlaylistsPage />);
+        root.render(<LanguageProvider><BrowsePlaylistsPage /></LanguageProvider>);
     });
 }
 
 beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem("kima-hub-language");
     state.rights = { canRequestAlbums: false, canDownloadTracks: false };
     state.get.mockResolvedValue({ playlists: [], genres: [] });
     state.post.mockResolvedValue({ url: "https://example.invalid/playlist" });
@@ -76,6 +78,7 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    localStorage.removeItem("kima-hub-language");
 });
 
 describe("Browse playlist import authorization affordances", () => {
@@ -99,4 +102,28 @@ describe("Browse playlist import authorization affordances", () => {
         }
         expect(state.post).not.toHaveBeenCalled();
     });
+    it("switches the Browse interface between English and Dutch without changing provider data", async () => {
+        state.rights = { canRequestAlbums: true, canDownloadTracks: true };
+        await render();
+        expect(host.textContent).toContain("Browse playlists");
+        expect(host.textContent).toContain("Import URL");
+
+        await act(async () => {
+            localStorage.setItem("kima-hub-language", "nl");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        expect(host.textContent).toContain("Afspeellijsten bekijken");
+        expect(host.textContent).toContain("URL importeren");
+        expect(host.textContent).toContain("Van Deezer");
+        expect(host.textContent).not.toContain("Browse playlists");
+        expect(state.post).not.toHaveBeenCalled();
+
+        await act(async () => {
+            localStorage.setItem("kima-hub-language", "en");
+            window.dispatchEvent(new Event("kima-hub-language-change"));
+        });
+        expect(host.textContent).toContain("Browse playlists");
+        expect(host.textContent).not.toContain("Afspeellijsten bekijken");
+    });
+
 });
