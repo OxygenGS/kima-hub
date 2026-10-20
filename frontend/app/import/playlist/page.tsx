@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
@@ -123,6 +124,7 @@ const pendingImportJob = (id: string, totals: Partial<ImportJob> = {}): ImportJo
 function ImportPlaylistPageContent() {
     const router = useRouter();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const { t } = useLanguage();
     const mayImport = canRequestAlbums && canDownloadTracks;
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
@@ -423,12 +425,12 @@ function ImportPlaylistPageContent() {
     if (!mayImport) {
         return (
             <div className="mx-auto max-w-2xl px-6 py-16 text-center">
-                <h1 className="text-xl font-semibold text-white">Playlist import unavailable</h1>
+                <h1 className="text-xl font-semibold text-white">{t("Playlist import unavailable")}</h1>
                 <p className="mt-3 text-sm text-[var(--text-secondary)]">
-                    Your administrator must allow both album requests and track downloads before you can import playlists.
+                    {t("Your administrator must allow both album requests and track downloads before you can import playlists.")}
                 </p>
                 <Link href="/collection" className="mt-6 inline-block text-brand hover:underline">
-                    Back to collection
+                    {t("Back to collection")}
                 </Link>
             </div>
         );
