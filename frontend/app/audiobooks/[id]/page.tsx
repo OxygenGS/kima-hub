@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import DOMPurify from "dompurify";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -16,6 +17,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function AudiobookDetailPage() {
+    const { t } = useLanguage();
     const { audiobookId, audiobook, isLoading, refetch, heroImage, colorExtractionImage } =
         useAudiobookData();
 
@@ -38,9 +40,9 @@ export default function AudiobookDetailPage() {
     if (!audiobook) {
         return (
             <PageMessage
-                title="Audiobook not found"
-                description="It may have been removed from Audiobookshelf."
-                action={{ label: "Audiobooks", href: "/audiobooks" }}
+                title={t("Audiobook not found")}
+                description={t("It may have been removed from Audiobookshelf.")}
+                action={{ label: t("Audiobooks"), href: "/audiobooks" }}
             />
         );
     }
@@ -87,7 +89,7 @@ export default function AudiobookDetailPage() {
                     {showDescription && (
                         <div>
                             <section>
-                                <SectionHeader type="audiobook" title="About" size="sm" />
+                                <SectionHeader type="audiobook" title={t("About")} size="sm" />
                                 <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
                                     <div
                                         className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline text-sm leading-relaxed"
@@ -103,14 +105,14 @@ export default function AudiobookDetailPage() {
                     {audiobook.series && (
                         <div>
                             <section>
-                                <SectionHeader type="audiobook" title="Series" size="sm" />
+                                <SectionHeader type="audiobook" title={t("Series")} size="sm" />
                                 <div className="flex items-center gap-3 text-sm">
                                     <span className="text-brand font-bold tracking-tight">
                                         {audiobook.series.name}
                                     </span>
                                     <span className="text-[var(--text-muted)]">|</span>
                                     <span className="text-xs tabular-nums text-[var(--text-secondary)]">
-                                        Book {audiobook.series.sequence}
+                                        {t("Book")} {audiobook.series.sequence}
                                     </span>
                                 </div>
                             </section>
@@ -119,7 +121,7 @@ export default function AudiobookDetailPage() {
 
                     <div>
                         <p className="text-xs text-[var(--text-muted)] pt-4">
-                            Use the player controls in the bottom bar for playback speed, seeking, and volume.
+                            {t("Use the player controls in the bottom bar for playback speed, seeking, and volume.")}
                         </p>
                     </div>
                 </div>

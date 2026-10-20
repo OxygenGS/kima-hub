@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import type { ReactNode } from "react";
 import type { Audiobook } from "../types";
@@ -20,6 +21,7 @@ export function AudiobookHero({
     formatTime,
     children,
 }: AudiobookHeroProps) {
+    const { t } = useLanguage();
     const progressPercent = audiobook.progress?.progress || 0;
     const isFinished = audiobook.progress?.isFinished;
 
@@ -27,7 +29,7 @@ export function AudiobookHero({
         ...(audiobook.narrator ? [{ text: audiobook.narrator }] : []),
         { text: formatTime(audiobook.duration) },
         {
-            text: isFinished ? "Finished" : `${Math.round(progressPercent)}% complete`,
+            text: isFinished ? t("Finished") : `${Math.round(progressPercent)}% ${t("complete")}`,
             className: isFinished ? "text-success" : "text-brand",
         },
     ];

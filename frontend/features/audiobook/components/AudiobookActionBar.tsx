@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState } from "react";
 import { Play, Pause, RotateCcw, CheckCircle } from "lucide-react";
@@ -27,6 +28,7 @@ export function AudiobookActionBar({
     onMarkAsCompleted,
     formatTime,
 }: AudiobookActionBarProps) {
+    const { t } = useLanguage();
     const hasProgress = audiobook.progress && audiobook.progress.progress > 0;
     const isFinished = audiobook.progress?.isFinished;
     const showingPause = isThisBookPlaying && isPlaying;
@@ -37,7 +39,7 @@ export function AudiobookActionBar({
             <button
                 onClick={onPlayPause}
                 className="w-10 h-10 rounded-lg bg-brand hover:bg-brand-hover transition-all flex items-center justify-center hover:scale-105 active:scale-95"
-                title={showingPause ? "pause" : (hasProgress && !isFinished ? "resume" : "play")}
+                title={showingPause ? t("Pause") : (hasProgress && !isFinished ? t("Resume") : t("Play"))}
             >
                 {showingPause ? (
                     <Pause className="w-4 h-4 text-black" />
@@ -74,15 +76,15 @@ export function AudiobookActionBar({
                         <button
                             onClick={() => setConfirmingReset(true)}
                             className="p-2 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
-                            title="reset progress"
-                            aria-label="reset progress"
+                            title={t("Reset progress")}
+                            aria-label={t("Reset progress")}
                         >
                             <RotateCcw className="w-4 h-4" />
                         </button>
                         <button
                             onClick={onMarkAsCompleted}
                             className="p-2 rounded-lg text-success/60 hover:text-success hover:bg-success/10 border border-transparent hover:border-success/20 transition-all"
-                            title="mark as completed"
+                            title={t("Mark as completed")}
                         >
                             <CheckCircle className="w-4 h-4" />
                         </button>
@@ -94,10 +96,10 @@ export function AudiobookActionBar({
                         variant="secondary"
                         size="sm"
                         onClick={onResetProgress}
-                        title="listen again"
+                        title={t("Listen Again")}
                     >
                         <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Listen Again</span>
+                        <span>{t("Listen Again")}</span>
                     </Button>
                 )}
             </div>
@@ -105,9 +107,9 @@ export function AudiobookActionBar({
                 isOpen={confirmingReset}
                 onClose={() => setConfirmingReset(false)}
                 onConfirm={() => { setConfirmingReset(false); onResetProgress(); }}
-                title="Reset progress?"
-                message={`Your place in ${audiobook.title}${currentTime > 0 ? ` (${formatTime(Math.floor(currentTime))})` : ""} is forgotten and the book starts from the beginning.`}
-                confirmText="Reset"
+                title={t("Reset progress?")}
+                message={`${t("Your place in")} ${audiobook.title}${currentTime > 0 ? ` (${formatTime(Math.floor(currentTime))})` : ""} ${t("is forgotten and the book starts from the beginning.")}`}
+                confirmText={t("Reset")}
                 variant="warning"
             />
         </div>
