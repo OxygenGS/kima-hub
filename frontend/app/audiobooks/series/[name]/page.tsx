@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -22,6 +23,7 @@ import type { Audiobook } from "@/features/audiobook/types";
 import { coverArtUrl } from "@/lib/cover-art";
 
 export default function SeriesDetailPage() {
+    const { t } = useLanguage();
     const params = useParams();
     const { isAuthenticated } = useAuth();
     const { currentAudiobook, playbackType } = useAudioState();
@@ -45,7 +47,7 @@ export default function SeriesDetailPage() {
             } catch (error: unknown) {
                 if (!cancelled) {
                     console.error("Failed to load series:", error);
-                    notify.error("Failed to load series");
+                    notify.error(t("Failed to load series"));
                 }
             } finally {
                 if (!cancelled) setIsLoading(false);
@@ -64,7 +66,7 @@ export default function SeriesDetailPage() {
         return (
             <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
                 <p className="text-xs text-[var(--text-muted)]">
-                    No books found in this series
+                    {t("No books found in this series")}
                 </p>
             </div>
         );
@@ -83,7 +85,7 @@ export default function SeriesDetailPage() {
                 title={seriesName}
                 author={author}
                 details={[
-                    { text: plural(books.length, "book") },
+                    { text: `${books.length} ${books.length === 1 ? t("book") : t("books")}` },
                     { text: formatDuration(totalDuration) },
                 ]}
                 tags={genres.slice(0, 5).map((label) => ({ label }))}
@@ -94,7 +96,7 @@ export default function SeriesDetailPage() {
             <div className="relative page-shell pb-24 animate-rise">
                 <div>
                     <div>
-                        <SectionHeader type="audiobook" title="Books in Series" count={books.length} />
+                        <SectionHeader type="audiobook" title={t("Books in Series")} count={books.length} />
 
                         <div className="space-y-0.5">
                             {books.map((book, index) => {
@@ -125,11 +127,11 @@ export default function SeriesDetailPage() {
                                         <div className="flex items-center gap-4 px-3 py-3">
                                             <div className="w-8 flex items-center justify-center shrink-0">
                                                 {book.progress?.isFinished ? (
-                                                    <CheckCircle className="w-4 h-4 text-success" aria-label="finished" />
+                                                    <CheckCircle className="w-4 h-4 text-success" aria-label={t("Finished")} />
                                                 ) : (
                                                     <button
                                                         type="button"
-                                                        aria-label={isBookPlaying ? `pause ${book.title}` : `play ${book.title}`}
+                                                        aria-label={isBookPlaying ? `${t("Pause")} ${book.title}` : `${t("Play")} ${book.title}`}
                                                         onClick={() => {
                                                             if (isBookPlaying) pause();
                                                             else if (isCurrentBook) resumeWithGesture();
@@ -192,7 +194,7 @@ export default function SeriesDetailPage() {
 
                                             {book.progress?.isFinished ? (
                                                 <span className="text-xs text-success shrink-0">
-                                                    Finished
+                                                    {t("Finished")}
                                                 </span>
                                             ) : book.progress && book.progress.progress > 0 ? (
                                                 <span className="text-xs tabular-nums text-brand shrink-0">
