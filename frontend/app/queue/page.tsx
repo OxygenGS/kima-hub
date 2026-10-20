@@ -12,6 +12,7 @@ import type { Track } from "@/lib/audio-state-context";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
 
 import {
@@ -57,6 +58,7 @@ function QueueCover({
 
 export default function QueuePage() {
     const router = useRouter();
+    const { t } = useLanguage();
     const { isAuthenticated } = useAuth();
     const { queue, currentTrack, currentIndex, setQueue } = useAudioState();
     const { playTracks, removeFromQueue, clearQueue } = useAudioControls();
@@ -106,14 +108,14 @@ export default function QueuePage() {
     return (
         <div className="min-h-screen">
             <PageHeader
-                eyebrow="Playing next"
-                title="Queue"
-                description={`${queue.length} ${queue.length === 1 ? "track" : "tracks"}`}
+                eyebrow={t("Playing next")}
+                title={t("Queue")}
+                description={`${queue.length} ${t(queue.length === 1 ? "track" : "tracks")}`}
                 actions={
                     queue.length > 0 && (
                         <Button variant="secondary" onClick={() => setConfirmClear(true)}>
                             <Trash2 className="w-4 h-4" />
-                            Clear queue
+                            {t("Clear queue")}
                         </Button>
                     )
                 }
@@ -124,10 +126,10 @@ export default function QueuePage() {
                     {queue.length === 0 && (
                         <EmptyState
                             icon={<ListMusic />}
-                            title="No tracks in queue"
-                            description="Start playing music to see your queue here"
+                            title={t("No tracks in queue")}
+                            description={t("Start playing music to see your queue here")}
                             action={{
-                                label: "Browse Library",
+                                label: t("Browse Library"),
                                 onClick: () => router.push("/collection"),
                             }}
                         />
@@ -136,7 +138,7 @@ export default function QueuePage() {
                     {currentTrack && (
                         <section className="rounded-lg border border-white/10 bg-white/[0.02] p-4 md:p-6">
                             <h2 className="text-xl font-semibold text-white mb-4">
-                                Now Playing
+                                {t("Now Playing")}
                             </h2>
                             <Card>
                                 <div className="flex items-center gap-4 p-4 bg-[var(--bg-hover)] border-l-2 border-brand">
@@ -168,7 +170,7 @@ export default function QueuePage() {
                     {nextTracks.length > 0 && (
                         <section className="rounded-lg border border-white/10 bg-white/[0.02] p-4 md:p-6">
                             <h2 className="text-xl font-semibold text-white mb-4">
-                                Next Up ({nextTracks.length})
+                                {t("Next Up")} ({nextTracks.length})
                             </h2>
                             <Card>
                                 <div className="divide-y divide-[#1c1c1c]">
@@ -205,7 +207,7 @@ export default function QueuePage() {
                                                             currentIndex + 1
                                                         }
                                                         className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                                                        aria-label={`Move ${track.displayTitle ?? track.title} up`}
+                                                        aria-label={`${t("Move up")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <ChevronUp className="w-4 h-4" />
                                                     </button>
@@ -220,7 +222,7 @@ export default function QueuePage() {
                                                             queue.length - 1
                                                         }
                                                         className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                                                        aria-label={`Move ${track.displayTitle ?? track.title} down`}
+                                                        aria-label={`${t("Move down")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <ChevronDown className="w-4 h-4" />
                                                     </button>
@@ -231,7 +233,7 @@ export default function QueuePage() {
                                                             )
                                                         }
                                                         className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors flex items-center justify-center"
-                                                        aria-label={`Play ${track.displayTitle ?? track.title}`}
+                                                        aria-label={`${t("Play")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <Play className="w-4 h-4" />
                                                     </button>
@@ -242,7 +244,7 @@ export default function QueuePage() {
                                                             )
                                                         }
                                                         className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-danger/10 rounded-md transition-colors text-danger-light flex items-center justify-center"
-                                                        aria-label={`Remove ${track.displayTitle ?? track.title} from queue`}
+                                                        aria-label={`${t("Remove from queue")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <X className="w-4 h-4" />
                                                     </button>
@@ -258,7 +260,7 @@ export default function QueuePage() {
                     {previousTracks.length > 0 && (
                         <section className="rounded-lg border border-white/10 bg-white/[0.02] p-4 md:p-6">
                             <h2 className="text-xl font-semibold text-white mb-4">
-                                Previously Played ({previousTracks.length})
+                                {t("Previously Played")} ({previousTracks.length})
                             </h2>
                             <Card>
                                 <div className="divide-y divide-[#1c1c1c]">
@@ -294,9 +296,9 @@ export default function QueuePage() {
                 isOpen={confirmClear}
                 onClose={() => setConfirmClear(false)}
                 onConfirm={clearQueue}
-                title="Clear the queue?"
-                message={`This removes ${queue.length === 1 ? "the only track" : `all ${queue.length} tracks`} from the queue.`}
-                confirmText="Clear queue"
+                title={t("Clear the queue?")}
+                message={queue.length === 1 ? t("This removes the only track from the queue.") : `${t("This removes")} ${queue.length} ${t("tracks")} ${t("from the queue.")}`}
+                confirmText={t("Clear queue")}
                 variant="danger"
             />
         </div>
