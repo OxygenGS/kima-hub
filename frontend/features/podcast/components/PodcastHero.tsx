@@ -33,7 +33,7 @@ export function PodcastHero({
     const details: SpokenHeroDetail[] = [
         { text: `${episodeCount} ${t(episodeCount === 1 ? "episode" : "episodes")}` },
         ...(inProgressCount > 0
-            ? [{ text: `${inProgressCount} ${t("in progress")}`, className: "text-[var(--color-brand)]" }]
+            ? [{ text: `${inProgressCount} ${t(inProgressCount === 1 ? "episode in progress" : "episodes in progress")}`, className: "text-[var(--color-brand)]" }]
             : []),
     ];
 
