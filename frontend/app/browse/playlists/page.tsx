@@ -298,7 +298,7 @@ export default function BrowsePlaylistsPage() {
                         <EmptyState
                             icon={<Music2 className="w-12 h-12" />}
                             title={t("Couldn't load content")}
-                            description={loadError ? t("Couldn't load playlists. Check your connection and try again.") : undefined}
+                            description={t("Couldn't load playlists. Check your connection and try again.")}
                             action={{ label: t("Try again"), onClick: fetchAllContent }}
                         />
                     )}
