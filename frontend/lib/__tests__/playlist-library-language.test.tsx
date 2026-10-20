@@ -82,18 +82,18 @@ describe("playlist library presentation translations", () => {
         expect(host.textContent).toContain("Jouw bibliotheek");
         expect(host.textContent).toContain("Afspeellijsten");
         expect(host.textContent).not.toContain("Getting Started");
+        expect(host.textContent).toContain("Importeren vanuit M3U-bestand");
         const createCard = [...host.querySelectorAll("button")].find(x =>
-            x.textContent?.includes("Je eerste afspeellijst") ||
-            x.textContent?.includes("Eerste afspeellijst") ||
-            x.textContent?.includes("afspeellijst maken")
+            x.textContent?.includes("Maak je eerste afspeellijst")
         );
+        expect(createCard).toBeDefined();
+        await act(async () => createCard?.click());
         // Inline creation must use translated placeholder while keeping user-entered names unchanged.
-        expect(host.textContent).toContain("URL importeren");
+        expect(host.querySelector('input[placeholder="Naam van afspeellijst..."]')).not.toBeNull();
         await switchLocale("en");
         expect(host.textContent).toContain("Getting Started");
         expect(state.create).not.toHaveBeenCalled();
         expect(state.post).not.toHaveBeenCalled();
-        void createCard;
     });
 
     it("does not translate stored playlist names when the locale changes", async () => {
