@@ -3,6 +3,7 @@
 import { Download, Radio } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
 import type { Album, ArtistSource } from "../types";
 
@@ -32,6 +33,7 @@ export function ArtistActionBar({
     onPause,
 }: ArtistActionBarProps) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const availableAlbums = albums.filter(
         (album) => album.availability !== "unavailable"
     );
@@ -76,7 +78,7 @@ export function ArtistActionBar({
                 >
                     <Download className="w-4 h-4" />
                     <span className="hidden sm:inline">
-                        {isPendingDownload ? "Downloading..." : "Download All"}
+                        {isPendingDownload ? t("Requesting...") : t("Request albums")}
                     </span>
                 </button>
             )}
