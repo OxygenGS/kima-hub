@@ -4,6 +4,8 @@
  */
 export const english = {
     "Account": "Account",
+    "in your library": "in your library",
+    "Artist not found": "Artist not found",
     "start artist radio": "start artist radio",
     "Couldn't load this artist": "Couldn't load this artist",
     "series": "series",
@@ -1571,6 +1573,8 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "in your library": "in je bibliotheek",
+    "Artist not found": "Artiest niet gevonden",
     "start artist radio": "artiestenradio starten",
     "Couldn't load this artist": "Deze artiest kon niet worden geladen",
     "series": "serie",
