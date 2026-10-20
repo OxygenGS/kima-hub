@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Mic2, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { PageMessage } from "@/components/ui/PageMessage";
@@ -19,6 +21,7 @@ interface Podcast {
 }
 
 export default function GenrePage() {
+    const { t, locale } = useLanguage();
     const params = useParams();
     const router = useRouter();
     const genreId = params.genreId as string;
@@ -91,7 +94,7 @@ export default function GenrePage() {
 
     if (!genre) {
         return (
-            <PageMessage title="Genre not found" action={{ label: "Podcasts", href: "/podcasts" }} />
+            <PageMessage title={t("Genre not found")} action={{ label: t("Podcasts"), href: "/podcasts" }} />
         );
     }
 
@@ -109,21 +112,21 @@ export default function GenrePage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            Back to Podcasts
+                            {t("Back to Podcasts")}
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-1.5 h-1.5 bg-type-podcast rounded-full" />
                             <span className="t-eyebrow">
-                                Genre
+                                {t("Genre")}
                             </span>
                         </div>
 
                         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-none mb-3">
-                            {genre.name}
+                            {translate(locale, genre.name)}
                         </h1>
                         <p className="text-sm tabular-nums text-[var(--text-muted)]">
-                            {podcasts.length} podcast{podcasts.length !== 1 ? "s" : ""} found
+                            {podcasts.length} {t(podcasts.length === 1 ? "podcast" : "podcasts")} {t("found")}
                         </p>
                     </div>
                 </div>
@@ -156,7 +159,7 @@ export default function GenrePage() {
                     {!hasMore && podcasts.length > 0 && (
                         <div className="text-center py-8">
                             <span className="text-xs text-[var(--text-muted)]">
-                                End of results
+                                {t("End of results")}
                             </span>
                         </div>
                     )}
@@ -165,7 +168,7 @@ export default function GenrePage() {
                         <div className="text-center py-20">
                             <Mic2 className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
                             <p className="text-xs text-[var(--text-muted)]">
-                                No podcasts found
+                                {t("No podcasts found")}
                             </p>
                         </div>
                     )}
