@@ -2,7 +2,16 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
-## OxygenGS fork v1.11.1 — release preparation (unpublished)
+## OxygenGS fork v1.11.2 — release preparation (unpublished)
+
+Patch release for v1.11.1:
+- Enforced album-request and track-download permissions consistently across playlist import flows, including the M3U API path.
+- Hid or gated unauthorized acquisition actions in album and artist views, Release Radar, Soulseek single-track and bulk results, and external playlist imports.
+- Removed the language selector from the login screen, retaining language changes in authenticated Settings.
+- Added EN/NL permission feedback and regression tests for denied playlist import requests.
+- No new database migrations or persistent-volume changes; administrators and existing listener data remain unchanged.
+
+## OxygenGS fork v1.11.1 — released 2026-10-19
 
 Patch release for v1.11.0:
 - Restored administrator controls to grant and revoke album requests and individual track downloads for standard users.
