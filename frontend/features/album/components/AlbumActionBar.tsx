@@ -3,6 +3,7 @@
 import { Download, ListPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
 import type { Album, AlbumSource } from "../types";
 
@@ -32,6 +33,7 @@ export function AlbumActionBar({
     onPause,
 }: AlbumActionBarProps) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
     const showDownload = canRequestAlbums && !isOwned && (album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
@@ -74,7 +76,7 @@ export function AlbumActionBar({
                 >
                     <Download className="w-4 h-4" />
                     <span>
-                        {isPendingDownload ? "Downloading..." : "Download"}
+                        {isPendingDownload ? t("Requesting...") : t("Request album")}
                     </span>
                 </button>
             )}
