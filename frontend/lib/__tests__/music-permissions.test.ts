@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getMusicPermissions } from "../music-permissions";
+import { canImportExternalPlaylist, getMusicPermissions } from "../music-permissions";
 
 describe("getMusicPermissions", () => {
     it("hides acquisition controls when not signed in", () => {
@@ -37,4 +37,13 @@ describe("getMusicPermissions", () => {
             canDownloadTracks: false,
         });
     });
+    it("requires both independent rights to import external playlists", () => {
+        for (const canRequestAlbums of [false, true]) {
+            for (const canDownloadTracks of [false, true]) {
+                expect(canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks }))
+                    .toBe(canRequestAlbums && canDownloadTracks);
+            }
+        }
+    });
+
 });

@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { isMbid } from "@/lib/mbid";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface AvailableAlbumsProps {
     albums: Album[];
@@ -31,6 +32,7 @@ function LazyAlbumCard({
     index: number;
 }) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const [coverArt, setCoverArt] = useState<string | null>(() => {
         if (source === "library" && album.coverArt) {
             return api.getCoverArtUrl(album.coverArt, 300);
@@ -87,7 +89,7 @@ function LazyAlbumCard({
             index={index}
             action={canRequestAlbums ? {
                 icon: Download,
-                label: "Download",
+                label: t("Request album"),
                 onClick: () => onDownloadAlbum(album),
                 busy: isPendingDownload(albumMbid),
             } : undefined}

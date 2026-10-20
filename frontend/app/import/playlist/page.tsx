@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { canImportExternalPlaylist } from "@/lib/music-permissions";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { notify } from "@/lib/notify";
@@ -125,7 +126,7 @@ function ImportPlaylistPageContent() {
     const router = useRouter();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
     const { t } = useLanguage();
-    const mayImport = canRequestAlbums && canDownloadTracks;
+    const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const hasAutoFetched = useRef(false);

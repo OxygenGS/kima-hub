@@ -11,6 +11,8 @@ import {
     ArrowLeft,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
+import { canImportExternalPlaylist } from "@/lib/music-permissions";
 import { notify } from "@/lib/notify";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
@@ -34,6 +36,8 @@ interface Genre {
 type BrowseTab = "playlists" | "genres";
 
 export default function BrowsePlaylistsPage() {
+    const rights = useMusicPermissions();
+    const mayImport = canImportExternalPlaylist(rights);
 
     const [activeTab, setActiveTab] = useState<BrowseTab>("playlists");
     const [searchQuery, setSearchQuery] = useState("");
@@ -106,7 +110,7 @@ export default function BrowsePlaylistsPage() {
     };
 
     const handleUrlSubmit = async () => {
-        if (!urlInput.trim()) return;
+        if (!mayImport || !urlInput.trim()) return;
         setIsParsing(true);
 
         try {
@@ -238,14 +242,16 @@ export default function BrowsePlaylistsPage() {
                             )}
                         </form>
 
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setShowUrlModal(true)}
-                        >
-                            <Link2 className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Import URL</span>
-                        </Button>
+                        {mayImport && (
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setShowUrlModal(true)}
+                            >
+                                <Link2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Import URL</span>
+                            </Button>
+                        )}
                     </div>
 
                     {!selectedGenre && !hasSearched && (
@@ -308,8 +314,8 @@ export default function BrowsePlaylistsPage() {
                                 <EmptyState
                                     icon={<Search className="w-12 h-12" />}
                                     title="No playlists found"
-                                    description="Try a different search or import a URL directly"
-                                    action={{ label: "Import by URL", onClick: () => setShowUrlModal(true) }}
+                                    description={mayImport ? "Try a different search or import a URL directly" : "Try a different search"}
+                                    action={mayImport ? { label: "Import by URL", onClick: () => setShowUrlModal(true) } : undefined}
                                 />
                             :   <div className="grid-media">
                                     {playlists.map((item, idx) =>
@@ -367,8 +373,7 @@ export default function BrowsePlaylistsPage() {
                                         {playlists.length >= 20 && (
                                             <p className="text-center text-xs tabular-nums text-[var(--text-muted)] mt-8">
                                                 Showing {playlists.length}{" "}
-                                                playlists -- Search for more or
-                                                import by URL
+                                                playlists -- Search for more{mayImport ? " or import by URL" : ""}
                                             </p>
                                         )}
                                     </div>
@@ -396,7 +401,7 @@ export default function BrowsePlaylistsPage() {
             </div>
 
             <Modal
-                isOpen={showUrlModal}
+                isOpen={mayImport && showUrlModal}
                 onClose={() => setShowUrlModal(false)}
                 title="Import Playlist"
                 footer={
@@ -408,7 +413,7 @@ export default function BrowsePlaylistsPage() {
                             variant="primary"
                             size="sm"
                             onClick={handleUrlSubmit}
-                            disabled={!urlInput.trim()}
+                            disabled={!mayImport || !urlInput.trim()}
                             isLoading={isParsing}
                         >
                             {isParsing ? "Importing..." : (

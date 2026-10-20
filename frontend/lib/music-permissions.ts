@@ -14,3 +14,8 @@ export function getMusicPermissions(user: MusicPermissionUser | null) {
         canDownloadTracks: user?.role === "admin" || user?.canDownloadTracks === true,
     };
 }
+
+/** External playlist import may enqueue both albums and individual tracks. */
+export function canImportExternalPlaylist(rights: Pick<ReturnType<typeof getMusicPermissions>, "canRequestAlbums" | "canDownloadTracks">): boolean {
+    return rights.canRequestAlbums && rights.canDownloadTracks;
+}
