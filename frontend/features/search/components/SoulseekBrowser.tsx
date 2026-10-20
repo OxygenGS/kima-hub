@@ -448,6 +448,7 @@ function ResultRow({
             <div className="flex items-center justify-center">
                 {canDownloadTracks && (
                 <button
+                    aria-label="Download track"
                     onClick={() => onDownload(result)}
                     disabled={isDownloading}
                     className={cn(
