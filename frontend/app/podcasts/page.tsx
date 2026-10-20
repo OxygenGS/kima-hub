@@ -233,7 +233,7 @@ export default function PodcastsPage() {
     return (
         <div className="min-h-screen">
             <PageHeader
-                eyebrow={t("Your library")}
+                eyebrow={t("Your Library")}
                 title={t("Podcasts")}
                 description={podcasts.length > 0 ? `${podcasts.length} ${t("subscribed")}` : t("Subscribe to shows and listen to them here")}
                 actions={
