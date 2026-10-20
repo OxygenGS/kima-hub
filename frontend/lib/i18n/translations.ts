@@ -4,6 +4,8 @@
  */
 export const english = {
     "Account": "Account",
+    "start artist radio": "start artist radio",
+    "Couldn't load this artist": "Couldn't load this artist",
     "series": "series",
     "author": "author",
     "title": "title",
@@ -1569,6 +1571,8 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "start artist radio": "artiestenradio starten",
+    "Couldn't load this artist": "Deze artiest kon niet worden geladen",
     "series": "serie",
     "author": "auteur",
     "title": "titel",

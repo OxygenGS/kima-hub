@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import {
     useAudioState,
@@ -27,6 +28,7 @@ import { SimilarArtists } from "@/features/artist/components/SimilarArtists";
 import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function ArtistPage() {
+    const { t } = useLanguage();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
@@ -84,7 +86,7 @@ export default function ArtistPage() {
                 playTracks(tracksWithAlbum, 0);
             }
         } catch {
-            notify.error("Failed to play album");
+            notify.error(t("Failed to play album"));
         }
     }
 
@@ -125,23 +127,23 @@ export default function ArtistPage() {
                 playTracks(response.tracks, 0);
             } else {
                 notify.error(
-                    "Not enough similar music in your library for artist radio",
+                    t("Not enough similar music in your library for artist radio"),
                 );
             }
         } catch {
-            notify.error("Failed to start artist radio");
+            notify.error(t("Failed to start artist radio"));
         }
     }
 
     if (loading) {
-        return <LoadingScreen message="Loading artist..." />;
+        return <LoadingScreen message={t("Loading artist...")} />;
     }
 
     if (error) {
         return (
             <PageMessage
-                title="Couldn't load this artist"
-                action={{ label: "Try again", onClick: () => reloadArtist() }}
+                title={t("Couldn't load this artist")}
+                action={{ label: t("Try again"), onClick: () => reloadArtist() }}
             />
         );
     }
@@ -149,7 +151,7 @@ export default function ArtistPage() {
     if (!artist) {
         return (
             <PageMessage
-                title="Artist not found"
+                title={t("Artist not found")}
                 description="This artist isn't in your library or on MusicBrainz."
                 action={{ label: "Artists", href: "/collection?tab=artists" }}
             />

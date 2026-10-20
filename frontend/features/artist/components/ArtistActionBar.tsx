@@ -60,7 +60,7 @@ export function ArtistActionBar({
                 <MediaActionButton
                     shape="square"
                     icon={<Radio className="w-5 h-5" />}
-                    label="start artist radio"
+                    label={t("start artist radio")}
                     onClick={onStartRadio}
                 />
             )}
