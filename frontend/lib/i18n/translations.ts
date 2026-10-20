@@ -4,6 +4,7 @@
  */
 export const english = {
     "Account": "Account",
+    "Preview": "Preview",
     "date added (recent)": "date added (recent)",
     "year (newest)": "year (newest)",
     "Play preview of": "Play preview of",
@@ -1579,6 +1580,7 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "Preview": "Voorbeeld",
     "date added (recent)": "toegevoegd (recentste eerst)",
     "year (newest)": "jaar (nieuwste eerst)",
     "Play preview of": "Voorbeeld afspelen van",
