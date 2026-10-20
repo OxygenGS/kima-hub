@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Download, CheckCircle, Music } from "lucide-react";
 import { LibraryTracksList } from "./LibraryTracksList";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { getQualityBadge, parseFilename } from "./soulseekHelpers";
 import type { LibraryTrack, SoulseekResult } from "../types";
 
@@ -29,6 +30,7 @@ export function UnifiedSongsList({
     maxTotal = 6,
     maxLibrary = 4,
 }: UnifiedSongsListProps) {
+    const { canDownloadTracks } = useMusicPermissions();
     const librarySlice = tracks.slice(0, maxLibrary);
     const soulseekSlots = maxTotal - librarySlice.length;
     const soulseekSlice = useMemo(
@@ -65,17 +67,20 @@ export function UnifiedSongsList({
                         key={`slsk-${result.username}-${result.filename}-${index}`}
                         className="flex items-center gap-3 p-2 rounded-md hover:bg-white/5 transition-colors"
                     >
-                        <button
-                            onClick={() => !isDownloading && onDownload(result)}
-                            disabled={isDownloading}
-                            className="w-10 h-10 flex items-center justify-center flex-shrink-0"
-                        >
-                            {isDownloading ? (
-                                <CheckCircle className="w-4 h-4 text-success" />
-                            ) : (
-                                <Download className="w-4 h-4 text-brand" />
-                            )}
-                        </button>
+                        {canDownloadTracks && (
+                            <button
+                                onClick={() => !isDownloading && onDownload(result)}
+                                disabled={isDownloading}
+                                className="w-10 h-10 flex items-center justify-center flex-shrink-0"
+                                aria-label="Download track"
+                            >
+                                {isDownloading ? (
+                                    <CheckCircle className="w-4 h-4 text-success" />
+                                ) : (
+                                    <Download className="w-4 h-4 text-brand" />
+                                )}
+                            </button>
+                        )
 
                         <div className="w-10 h-10 bg-[#181818] rounded flex items-center justify-center flex-shrink-0">
                             <Music className="w-5 h-5 text-[var(--text-secondary)]" />
