@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/Button";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { cascadeStyle } from "@/lib/motion";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 /** Feeds advertise durations that drift; a listened-past-the-end row shows 100, not 107. */
 const clampPercent = (p: number) => Math.min(100, Math.max(0, Math.round(p)));
@@ -47,6 +49,7 @@ function EpisodeRow({
     onPlayPause: (episode: Episode) => void;
     onMarkComplete?: (episodeId: string, duration: number) => void;
 }) {
+    const { t, locale } = useLanguage();
     const [expanded, setExpanded] = useState(false);
     const percent = episode.progress ? clampPercent(episode.progress.progress) : 0;
     const finished = Boolean(episode.progress?.isFinished);
@@ -54,7 +57,7 @@ function EpisodeRow({
     const cover = episode.imageUrl || fallbackCoverUrl;
 
     const metaBits = [
-        formatDate(episode.publishedAt),
+        formatDate(episode.publishedAt, locale),
         formatDuration(episode.duration),
         episode.season != null ? `S${episode.season} E${episode.episodeNumber ?? ""}`.trimEnd() : undefined,
     ].filter(Boolean) as string[];
@@ -72,7 +75,7 @@ function EpisodeRow({
                 <button
                     type="button"
                     onClick={() => onPlayPause(episode)}
-                    aria-label={`${isCurrentEpisode && isPlaying ? "Pause" : "Play"} ${episode.title}`}
+                    aria-label={`${t(isCurrentEpisode && isPlaying ? "Pause" : "Play")}: ${episode.title}`}
                     className="relative w-14 h-14 shrink-0 rounded-lg overflow-hidden bg-[var(--color-type-podcast)]/20 border border-white/10 focus-visible:outline-2 focus-visible:outline-brand"
                 >
                     {cover ? (
@@ -118,7 +121,7 @@ function EpisodeRow({
                         {finished && (
                             <span className="ml-2 inline-flex items-center gap-1 align-middle text-[var(--color-success)]">
                                 <Check className="w-3 h-3" />
-                                Finished
+                                {t("Finished")}
                             </span>
                         )}
                         {!finished && percent > 0 && (
@@ -133,8 +136,8 @@ function EpisodeRow({
                             type="button"
                             onClick={() => onMarkComplete(episode.id, episode.duration)}
                             className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-2 rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all touch-reveal"
-                            title="mark as complete"
-                            aria-label={`Mark ${episode.title} as complete`}
+                            title={t("Mark as complete")}
+                            aria-label={`${t("Mark as complete")}: ${episode.title}`}
                         >
                             <CheckCircle className="w-4 h-4" />
                         </button>
@@ -143,7 +146,7 @@ function EpisodeRow({
                         <button
                             type="button"
                             onClick={() => setExpanded((e) => !e)}
-                            aria-label={expanded ? "Hide description" : "Show description"}
+                            aria-label={t(expanded ? "Hide description" : "Show description")}
                             className="p-2 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-colors"
                         >
                             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -197,6 +200,7 @@ export function EpisodeList({
     onLoadMore,
     loadingMore,
 }: EpisodeListProps) {
+    const { t, locale } = useLanguage();
     const [filter, setFilter] = useState<Filter>("all");
 
     // Listen-state counts cover every episode only once all are loaded.
@@ -213,19 +217,19 @@ export function EpisodeList({
         for (const ep of visible) {
             const key =
                 ep.season != null
-                    ? `Season ${ep.season}`
-                    : new Date(ep.publishedAt).toLocaleDateString("en", { month: "long", year: "numeric" });
+                    ? `${t("Season")} ${ep.season}`
+                    : new Date(ep.publishedAt).toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US", { month: "long", year: "numeric" });
             (map.get(key) ?? map.set(key, []).get(key)!).push(ep);
         }
         return [...map.entries()];
-    }, [episodes, filter]);
+    }, [episodes, filter, locale, t]);
 
     let runningIndex = 0; // cascade position across groups, so the animation window spans the page
 
     return (
         <section>
             <SectionHeader
-                title="Episodes"
+                title={t("Episodes")}
                 type="podcast"
                 action={
                     <Button
@@ -233,12 +237,12 @@ export function EpisodeList({
                         onClick={() => onSortOrderChange(sortOrder === "newest" ? "oldest" : "newest")}
                     >
                         <ArrowUpDown className="w-3.5 h-3.5" />
-                        {sortOrder === "newest" ? "Newest" : "Oldest"}
+                        {t(sortOrder === "newest" ? "Newest" : "Oldest")}
                     </Button>
                 }
             />
 
-            <div className="flex flex-wrap gap-1.5 px-3 pb-3" role="tablist" aria-label="Filter episodes">
+            <div className="flex flex-wrap gap-1.5 px-3 pb-3" role="tablist" aria-label={t("Filter episodes")}>
                 {(
                     [
                         ["all", "All"],
@@ -259,7 +263,7 @@ export function EpisodeList({
                                 : "bg-white/[0.03] border-white/10 text-[var(--text-secondary)] hover:text-white hover:border-white/20",
                         )}
                     >
-                        {label}
+                        {translate(locale, label)}
                         {(key === "all" || allLoaded) && <span className="ml-1.5 opacity-60">{counts[key]}</span>}
                     </button>
                 ))}
@@ -271,7 +275,7 @@ export function EpisodeList({
                 </div>
             ) : groups.length === 0 ? (
                 <p className="px-3 py-8 text-sm text-[var(--text-muted)]">
-                    {allLoaded ? "Nothing in this filter." : "Nothing in this filter among the episodes loaded so far."}
+                    {t(allLoaded ? "Nothing in this filter." : "Nothing in this filter among the episodes loaded so far.")}
                 </p>
             ) : (
                 <div style={cascadeStyle(Math.min(groups.reduce((n, [, g]) => n + g.length, 0), 40))}>
@@ -279,7 +283,7 @@ export function EpisodeList({
                         <div key={label} className="pb-2">
                             <div className="sticky top-0 z-[5] flex items-baseline gap-2 px-3 py-2 bg-[var(--bg-secondary)]/95 backdrop-blur-sm">
                                 <h4 className="text-[0.6875rem] tracking-[0.12em] text-[var(--text-muted)]">
-                                    {label}
+                                    {translate(locale, label)}
                                 </h4>
                                 <span className="text-[0.6875rem] tabular-nums text-[var(--text-muted)] opacity-60">
                                     {group.length}
@@ -307,7 +311,7 @@ export function EpisodeList({
             {onLoadMore && !updating && (
                 <div className="flex justify-center px-3 pt-2 pb-4">
                     <Button size="sm" onClick={onLoadMore} disabled={loadingMore}>
-                        {loadingMore ? "Loading…" : `Show more (${total - episodes.length} left)`}
+                        {loadingMore ? t("Loading…") : `${t("Show more")} (${total - episodes.length} ${t("left")})`}
                     </Button>
                 </div>
             )}
