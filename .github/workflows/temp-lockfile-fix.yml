@@ -1,0 +1,31 @@
+name: Temporary lockfile security update
+on:
+  push:
+    branches: [fix/security-follow-redirects-1161]
+    paths:
+      - .github/workflows/temp-lockfile-fix.yml
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Regenerate backend lockfile with official npm integrity
+        working-directory: backend
+        run: |
+          npm update follow-redirects@1.16.1 --package-lock-only --ignore-scripts --no-audit --no-fund
+          node -e 'let lock=require("./package-lock.json");if(lock.packages["node_modules/follow-redirects"].version!=="1.16.1") process.exit(1)'
+      - name: Commit generated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/package-lock.json
+          git diff --cached --quiet && exit 1
+          git commit -m "fix(deps): patch follow-redirects to 1.16.1"
+          git push
