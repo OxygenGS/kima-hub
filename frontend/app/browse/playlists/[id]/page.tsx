@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { formatTime, plural } from "@/lib/format";
+import { formatTime } from "@/lib/format";
 import { useParams, useRouter } from "next/navigation";
 import {
     ArrowLeft,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { canImportExternalPlaylist } from "@/lib/music-permissions";
 import { usePreview } from "@/hooks/usePreview";
 import { notify } from "@/lib/notify";
@@ -56,6 +57,7 @@ interface DeezerPlaylistFull {
 
 export default function DeezerPlaylistDetailPage() {
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const { t } = useLanguage();
     const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const params = useParams();
     const router = useRouter();
@@ -91,7 +93,7 @@ export default function DeezerPlaylistDetailPage() {
 
     const handlePlayPreview = (track: DeezerTrack) => {
         if (!track.previewUrl) {
-            notify.error("No preview available for this track");
+            notify.error(t("No preview available for this track"));
             return;
         }
         preview.toggle(track.deezerId, api.getTrackPreviewStreamUrl(track.artist, track.title));
@@ -107,7 +109,7 @@ export default function DeezerPlaylistDetailPage() {
     const formatTotalDuration = (ms: number) => {
         const hours = Math.floor(ms / 3600000);
         const mins = Math.floor((ms % 3600000) / 60000);
-        if (hours > 0) return `${hours} hr ${mins} min`;
+        if (hours > 0) return `${hours} ${t("hr")} ${mins} ${t("min")}`;
         return `${mins} min`;
     };
 
@@ -119,9 +121,9 @@ export default function DeezerPlaylistDetailPage() {
         return (
             <PageMessage
                 icon={<Music2 />}
-                title="Playlist not found"
-                description="This playlist may be private or no longer available."
-                action={{ label: "Browse playlists", href: "/browse/playlists" }}
+                title={t("Playlist not found")}
+                description={t("This playlist may be private or no longer available.")}
+                action={{ label: t("Browse playlists"), href: "/browse/playlists" }}
             />
         );
     }
@@ -151,13 +153,13 @@ export default function DeezerPlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Browse
+                            {t("Browse")}
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
                             <DeezerIcon className="w-3.5 h-3.5 text-brand" />
                             <span className="text-xs text-[var(--text-secondary)]">
-                                Deezer Playlist
+                                {t("Deezer Playlist")}
                             </span>
                         </div>
 
@@ -192,7 +194,7 @@ export default function DeezerPlaylistDetailPage() {
                                         {playlist.creator}
                                     </span>
                                     <span className="text-[var(--text-muted)]">|</span>
-                                    <span>{plural(playlist.trackCount, "song")}</span>
+                                    <span>{playlist.trackCount} {t(playlist.trackCount === 1 ? "song" : "songs")}</span>
                                     {totalDuration > 0 && (
                                         <>
                                             <span className="text-[var(--text-muted)]">|</span>
@@ -212,7 +214,7 @@ export default function DeezerPlaylistDetailPage() {
                         {mayImport && (
                             <Button variant="primary" onClick={handleImport}>
                                 <Download className="w-4 h-4" />
-                                <span>Import Playlist</span>
+                                <span>{t("Import Playlist")}</span>
                             </Button>
                         )}
 
@@ -229,7 +231,7 @@ export default function DeezerPlaylistDetailPage() {
                                     size="sm"
                                     onClick={preview.stop}
                                 >
-                                    Stop Preview
+                                    {t("Stop Preview")}
                                 </Button>
                             </div>
                         )}
@@ -241,7 +243,7 @@ export default function DeezerPlaylistDetailPage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition-all"
-                            title="open in deezer"
+                            title={t("Open in Deezer")}
                         >
                             <ExternalLink className="w-4 h-4" />
                         </a>
@@ -253,13 +255,13 @@ export default function DeezerPlaylistDetailPage() {
                 <div>
                     {playlist.tracks.length > 0 ? (
                         <div>
-                            <SectionHeader type="track" title="Tracks" count={playlist.trackCount} />
+                            <SectionHeader type="track" title={t("Tracks")} count={playlist.trackCount} />
 
                             <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-3 py-2 text-xs text-[var(--text-muted)] border-b border-white/10 mb-1">
                                 <span className="text-center">#</span>
-                                <span>Title</span>
-                                <span>Album</span>
-                                <span className="text-right">Duration</span>
+                                <span>{t("Title")}</span>
+                                <span>{t("Album")}</span>
+                                <span className="text-right">{t("Duration")}</span>
                             </div>
 
                             <div className="space-y-0.5">
@@ -273,7 +275,7 @@ export default function DeezerPlaylistDetailPage() {
                                             onClick={() => hasPreview && handlePlayPreview(track)}
                                             role={hasPreview ? "button" : undefined}
                                             tabIndex={hasPreview ? 0 : undefined}
-                                            aria-label={hasPreview ? `play a preview of ${track.title}` : undefined}
+                                            aria-label={hasPreview ? `${t("Play a preview of")} ${track.title}` : undefined}
                                             onKeyDown={(e) => {
                                                 if (hasPreview && (e.key === "Enter" || e.key === " ")) {
                                                     e.preventDefault();
@@ -360,8 +362,8 @@ export default function DeezerPlaylistDetailPage() {
                     ) : (
                         <EmptyState
                             icon={<Music2 className="w-12 h-12" />}
-                            title="No tracks found"
-                            description="This playlist appears to be empty"
+                            title={t("No tracks found")}
+                            description={t("This playlist appears to be empty")}
                         />
                     )}
                 </div>
