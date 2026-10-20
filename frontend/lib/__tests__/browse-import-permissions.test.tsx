@@ -40,7 +40,7 @@ vi.mock("@/components/ui/EmptyState", () => ({
     }) => <section>{title}{action && <button onClick={action.onClick}>{action.label}</button>}</section>,
 }));
 vi.mock("@/components/layout/PageHeader", () => ({
-    PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+    PageHeader: ({ title, eyebrow }: { title: string; eyebrow?: string }) => <header>{eyebrow && <span>{eyebrow}</span>}<h1>{title}</h1></header>,
 }));
 vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({ title }: { title: string }) => <h2>{title}</h2>,
