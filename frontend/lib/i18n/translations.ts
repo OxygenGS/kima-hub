@@ -4,6 +4,9 @@
  */
 export const english = {
     "Account": "Account",
+    "series": "series",
+    "author": "author",
+    "title": "title",
     "recently played": "recently played",
     "sync audiobooks from audiobookshelf": "sync audiobooks from audiobookshelf",
     "Enter your Audiobookshelf URL and API key in Kima settings": "Enter your Audiobookshelf URL and API key in Kima settings",
@@ -1566,6 +1569,9 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "series": "serie",
+    "author": "auteur",
+    "title": "titel",
     "recently played": "onlangs afgespeeld",
     "sync audiobooks from audiobookshelf": "luisterboeken synchroniseren vanuit Audiobookshelf",
     "Enter your Audiobookshelf URL and API key in Kima settings": "Voer je Audiobookshelf-URL en API-sleutel in bij de instellingen",
