@@ -13,6 +13,7 @@ import type {
     SoulseekFormatFilter,
 } from "../types";
 import { Button } from "@/components/ui/Button";
+import { useMusicPermissions } from "@/lib/auth-context";
 
 interface SoulseekBrowserProps {
     results: SoulseekResult[];
@@ -60,6 +61,7 @@ export function SoulseekBrowser({
     onDownload,
     onBulkDownload,
 }: SoulseekBrowserProps) {
+    const { canDownloadTracks } = useMusicPermissions();
     const [formatFilters, setFormatFilters] = useState<Set<SoulseekFormatFilter>>(new Set(["all"]));
     const [sortField, setSortField] = useState<SoulseekSortField>("quality");
     const [viewMode, setViewMode] = useState<SoulseekViewMode>("flat");
@@ -193,10 +195,10 @@ export function SoulseekBrowser({
     );
 
     const handleBulkDownloadClick = useCallback(() => {
-        if (selectedResults.length > 0) {
+        if (canDownloadTracks && selectedResults.length > 0) {
             onBulkDownload(selectedResults);
         }
-    }, [selectedResults, onBulkDownload]);
+    }, [selectedResults, onBulkDownload, canDownloadTracks]);
 
     if (results.length === 0 && !isActive) {
         return (
@@ -277,7 +279,7 @@ export function SoulseekBrowser({
                     </button>
                 </div>
 
-                {selectedKeys.size > 0 && (
+                {canDownloadTracks && selectedKeys.size > 0 && (
                     <Button
                         variant="primary"
                         onClick={handleBulkDownloadClick}
@@ -340,18 +342,21 @@ function FlatView({
     onToggleSelectAll,
     onDownload,
 }: FlatViewProps) {
+    const { canDownloadTracks } = useMusicPermissions();
     const allSelected = results.length > 0 && results.every((r) => selectedKeys.has(getResultKey(r)));
 
     return (
         <div>
             <div className={cn(RESULT_GRID, "text-xs text-[var(--text-muted)] border-b border-white/5")}>
                 <div className="flex items-center justify-center">
-                    <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={onToggleSelectAll}
-                        className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
-                    />
+                    {canDownloadTracks && (
+                        <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={onToggleSelectAll}
+                            className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
+                        />
+                    )}
                 </div>
                 <div>Title</div>
                 <div>User</div>
@@ -395,6 +400,7 @@ function ResultRow({
     onDownload,
     animationDelay,
 }: ResultRowProps) {
+    const { canDownloadTracks } = useMusicPermissions();
     const key = getResultKey(result);
     const parsed = result.parsedTitle
         ? { artist: result.parsedArtist || "Unknown", title: result.parsedTitle }
@@ -412,12 +418,14 @@ function ResultRow({
             }
         >
             <div className="flex items-center justify-center">
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(key)}
-                    className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
-                />
+                {canDownloadTracks && (
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onToggleSelect(key)}
+                        className="w-3.5 h-3.5 accent-[var(--color-brand)] cursor-pointer"
+                    />
+                )}
             </div>
 
             <div className="min-w-0">
@@ -438,6 +446,7 @@ function ResultRow({
             </div>
 
             <div className="flex items-center justify-center">
+                {canDownloadTracks && (
                 <button
                     onClick={() => onDownload(result)}
                     disabled={isDownloading}
@@ -454,6 +463,7 @@ function ResultRow({
                         <Download className="w-4 h-4" />
                     )}
                 </button>
+                )}
             </div>
         </div>
     );
