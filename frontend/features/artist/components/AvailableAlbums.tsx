@@ -125,6 +125,7 @@ export function AvailableAlbums({
     onDownloadAlbum,
     isPendingDownload,
 }: AvailableAlbumsProps) {
+    const { t } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -140,7 +141,7 @@ export function AvailableAlbums({
         <>
             {studioAlbums.length > 0 && (
                 <section>
-                    <SectionHeader type="album" title="Albums Available" />
+                    <SectionHeader type="album" title={t("Albums Available")} />
                     <div data-tv-section="available-albums">
                         <AlbumGrid
                             albums={studioAlbums}
@@ -154,7 +155,7 @@ export function AvailableAlbums({
 
             {epsAndSingles.length > 0 && (
                 <section>
-                    <SectionHeader type="album" title="Singles and EPs" />
+                    <SectionHeader type="album" title={t("Singles and EPs")} />
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
                             albums={epsAndSingles}
