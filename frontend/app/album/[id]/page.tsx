@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { use, useMemo, useState } from "react";
 import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
@@ -28,6 +29,7 @@ interface AlbumPageProps {
 
 export default function AlbumPage({ params }: AlbumPageProps) {
     const { id } = use(params);
+    const { t } = useLanguage();
     const addToPlaylist = useAddToPlaylistMutation();
     // Split hooks avoid re-renders from currentTime updates.
     const { currentTrack } = useAudioState();
@@ -126,8 +128,8 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     if (failed && !notFound) {
         return (
             <PageMessage
-                title="Couldn't load this album"
-                action={{ label: "Try again", onClick: () => reloadAlbum() }}
+                title={t("Couldn't load this album")}
+                action={{ label: t("Try again"), onClick: () => reloadAlbum() }}
             />
         );
     }
@@ -135,8 +137,8 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     if (!album) {
         return (
             <PageMessage
-                title="Album not found"
-                action={{ label: "Albums", href: "/collection?tab=albums" }}
+                title={t("Album not found")}
+                action={{ label: t("Albums"), href: "/collection?tab=albums" }}
             />
         );
     }

@@ -4,6 +4,8 @@
  */
 export const english = {
     "Account": "Account",
+    "add to playlist": "add to playlist",
+    "Couldn't load this album": "Couldn't load this album",
     "Book": "Book",
     "is forgotten and the book starts from the beginning.": "is forgotten and the book starts from the beginning.",
     "Your place in": "Your place in",
@@ -1553,6 +1555,8 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "add to playlist": "toevoegen aan afspeellijst",
+    "Couldn't load this album": "Dit album kon niet worden geladen",
     "Book": "Boek",
     "is forgotten and the book starts from the beginning.": "wordt gewist en het boek begint opnieuw.",
     "Your place in": "Je luisterpositie in",

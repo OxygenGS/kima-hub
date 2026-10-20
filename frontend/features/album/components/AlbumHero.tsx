@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { Disc3 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,7 @@ export function AlbumHero({
     onReload,
     children,
 }: AlbumHeroProps) {
+    const { t } = useLanguage();
     const displayData = getAlbumDisplayData(album);
 
     const totalDuration = album.duration ? formatDuration(album.duration) : "";
@@ -41,7 +43,7 @@ export function AlbumHero({
             shape="square"
             fallbackIcon={<Disc3 className="w-16 h-16 text-[var(--text-muted)]" />}
             eyebrowDotClass="bg-type-album"
-            eyebrowLabel="Album"
+            eyebrowLabel={t("Album")}
             title={displayData.title}
             titleExtra={
                 <MetadataEditControls
@@ -85,7 +87,7 @@ export function AlbumHero({
                     {album.trackCount && album.trackCount > 0 && (
                         <>
                             <span className="mx-1">•</span>
-                            <span>{plural(album.trackCount, "song")}</span>
+                            <span>{`${album.trackCount} ${album.trackCount === 1 ? t("song") : t("songs")}`}</span>
                         </>
                     )}
                     {totalDuration && <span>, {totalDuration}</span>}
