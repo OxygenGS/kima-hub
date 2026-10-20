@@ -1,8 +1,9 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { SimilarArtist } from "../types";
 import { Music, Library } from "lucide-react";
-import { plural } from "@/lib/format";
+
 import { api } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MediaCard } from "@/components/cards/MediaCard";
@@ -12,13 +13,14 @@ interface SimilarArtistsProps {
 }
 
 export function SimilarArtists({ similarArtists }: SimilarArtistsProps) {
+    const { t } = useLanguage();
     if (!similarArtists || similarArtists.length === 0) {
         return null;
     }
 
     return (
         <section>
-            <SectionHeader type="artist" title="Fans Also Like" />
+            <SectionHeader type="artist" title={t("Fans Also Like")} />
             <div
                 data-tv-section="similar-artists"
                 className="grid-media"
@@ -38,22 +40,22 @@ export function SimilarArtists({ similarArtists }: SimilarArtistsProps) {
 
                     const libraryLine =
                         artist.ownedAlbumCount && artist.ownedAlbumCount > 0
-                            ? `${plural(artist.ownedAlbumCount, "album")} in library`
-                            : "Artist";
+                            ? `${artist.ownedAlbumCount} ${artist.ownedAlbumCount === 1 ? t("album") : t("albums")} ${t("in library")}`
+                            : t("Artist");
 
                     return (
                         <MediaCard
                             key={artist.id || artist.name}
                             href={`/artist/${navigationId}`}
                             title={artist.name}
-                            subtitle={matchPercentage !== null ? `${libraryLine} · ${matchPercentage}% match` : libraryLine}
+                            subtitle={matchPercentage !== null ? `${libraryLine} · ${matchPercentage}% ${t("match")}` : libraryLine}
                             imageUrl={imageUrl}
                             fallbackIcon={Music}
                             type="artist"
                             index={index}
                             corner={
                                 artist.inLibrary && (
-                                    <span className="block bg-brand rounded-full p-1" title="in your library">
+                                    <span className="block bg-brand rounded-full p-1" title={t("in your library")}>
                                         <Library className="w-3 h-3 text-black" />
                                     </span>
                                 )
