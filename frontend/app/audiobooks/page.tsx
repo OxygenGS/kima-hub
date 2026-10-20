@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useEffect, useState, useMemo } from "react";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
@@ -32,6 +33,7 @@ type FilterType = "all" | "listening" | "finished";
 type SortType = "title" | "author" | "recent" | "series";
 
 function BookCard({ book, index }: { book: Audiobook; index: number }) {
+    const { t } = useLanguage();
     return (
         <MediaCard
             href={`/audiobooks/${book.id}`}
@@ -43,7 +45,7 @@ function BookCard({ book, index }: { book: Audiobook; index: number }) {
             aspect="portrait"
             index={index}
             progress={book.progress?.isFinished ? undefined : book.progress?.progress}
-            corner={book.progress?.isFinished && <CheckCircle className="w-5 h-5 text-success" aria-label="Finished" />}
+            corner={book.progress?.isFinished && <CheckCircle className="w-5 h-5 text-success" aria-label={t("Finished")} />}
         />
     );
 }
@@ -72,6 +74,7 @@ function BookSection({
 }
 
 export default function AudiobooksPage() {
+    const { t } = useLanguage();
     const router = useRouter();
     const { currentAudiobook } = useAudioState();
     const { pause } = useAudioControls();
@@ -246,7 +249,7 @@ export default function AudiobooksPage() {
 
     const handleShuffleAudiobooks = () => {
         if (audiobooks.length === 0) {
-            notify.error("No audiobooks to shuffle");
+            notify.error(t("No audiobooks to shuffle"));
             return;
         }
         const shuffled = shuffleArray(audiobooks);
@@ -265,12 +268,12 @@ export default function AudiobooksPage() {
                 error?: string;
             }>("/audiobooks/sync", {});
             if (!res?.success) {
-                notify.error("Audiobook sync failed", { message: res?.error });
+                notify.error(t("Audiobook sync failed"), { message: res?.error });
                 return;
             }
             const r = res.result;
             if (r && r.failed > 0) {
-                notify.error("Some audiobooks failed to sync", {
+                notify.error(t("Some audiobooks failed to sync"), {
                     message: `Synced ${r.synced}, failed ${r.failed}${r.errors[0] ? `: ${r.errors[0]}` : ""}`,
                 });
             }
@@ -291,11 +294,11 @@ export default function AudiobooksPage() {
             <div className="page-shell pt-8">
                 <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6 max-w-xl">
                     <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-                        Couldn&apos;t load audiobooks
+                        {t("Couldn\'t load audiobooks")}
                     </h1>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">{(error as Error).message}</p>
                     <Button variant="primary" onClick={() => refetch()} className="mt-4">
-                        Try again
+                        {t("Try again")}
                     </Button>
                 </div>
             </div>
@@ -306,19 +309,19 @@ export default function AudiobooksPage() {
         return (
             <div className="min-h-screen">
                 <PageHeader
-                    eyebrow="Not set up"
-                    title="Audiobooks"
-                    description="Connect Audiobookshelf to listen to your audiobooks here"
+                    eyebrow={t("Not set up")}
+                    title={t("Audiobooks")}
+                    description={t("Connect Audiobookshelf to listen to your audiobooks here")}
                 />
 
                 <div className="relative page-shell pb-24">
 
                     <div className="grid md:grid-cols-3 gap-4 mb-12">
-                        {[
+                        {([
                             { num: "01", title: "Install Audiobookshelf", desc: "Set up your own Audiobookshelf instance via Docker or use an existing installation" },
                             { num: "02", title: "Get API Key", desc: "Settings > Users > Click your user > API Tokens > Generate" },
                             { num: "03", title: "Configure", desc: "Enter your Audiobookshelf URL and API key in Kima settings" },
-                        ].map((step) => (
+                        ] as const).map((step) => (
                             <div
                                 key={step.num}
                                 className="rounded-lg border border-white/10 bg-[var(--bg-primary)] p-6 hover:border-type-audiobook/30 transition-all"
@@ -331,10 +334,10 @@ export default function AudiobooksPage() {
                                     {step.num}
                                 </div>
                                 <h3 className="text-sm font-bold text-white tracking-tight mb-2">
-                                    {step.title}
+                                    {t(step.title)}
                                 </h3>
                                 <p className="text-xs tabular-nums text-[var(--text-muted)] leading-relaxed">
-                                    {step.desc}
+                                    {t(step.desc)}
                                 </p>
                             </div>
                         ))}
@@ -347,14 +350,14 @@ export default function AudiobooksPage() {
                             onClick={() => router.push("/settings#audiobookshelf")}
                             className="flex-1"
                         >
-                            Configure Audiobookshelf
+                            {t("Configure Audiobookshelf")}
                         </Button>
                         <Button
                             size="lg"
                             onClick={() => window.open("https://hub.docker.com/r/advplyr/audiobookshelf", "_blank")}
                             className="flex-1"
                         >
-                            Install via Docker
+                            {t("Install via Docker")}
                         </Button>
                     </div>
 
@@ -365,7 +368,7 @@ export default function AudiobooksPage() {
                             rel="noopener noreferrer"
                             className="text-xs text-[var(--text-muted)] hover:text-white/60 transition-colors"
                         >
-                            View Documentation
+                            {t("View Documentation")}
                         </a>
                     </div>
                 </div>
@@ -376,9 +379,9 @@ export default function AudiobooksPage() {
     return (
         <div className="min-h-screen">
             <PageHeader
-                eyebrow="Your library"
+                eyebrow={t("Your library")}
                 title="Audiobooks"
-                description={`${audiobooks.length} ${audiobooks.length === 1 ? "book" : "books"}`}
+                description={`${audiobooks.length} ${audiobooks.length === 1 ? t("book") : t("books")}`}
                 className="pb-2"
             />
 
@@ -393,7 +396,7 @@ export default function AudiobooksPage() {
                                 size="sm"
                                 onClick={() => setFilter(f)}
                             >
-                                {f === "all" ? "All Books" : f === "listening" ? "In Progress" : "Finished"}
+                                {f === "all" ? t("All Books") : f === "listening" ? t("In Progress") : t("Finished")}
                             </Button>
                         ))}
 
@@ -403,7 +406,7 @@ export default function AudiobooksPage() {
                             onClick={handleShuffleAudiobooks}
                         >
                             <Shuffle className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Random</span>
+                            <span className="hidden sm:inline">{t("Random")}</span>
                         </Button>
 
                         <Button
@@ -411,14 +414,14 @@ export default function AudiobooksPage() {
                             size="sm"
                             onClick={handleSync}
                             disabled={isSyncing}
-                            title="sync audiobooks from audiobookshelf"
+                            title={t("sync audiobooks from audiobookshelf")}
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                            <span className="hidden sm:inline">{isSyncing ? "Syncing..." : "Sync"}</span>
+                            <span className="hidden sm:inline">{isSyncing ? t("Syncing...") : t("Sync")}</span>
                         </Button>
 
                         <span className="hidden md:inline text-xs tabular-nums text-[var(--text-muted)] ml-auto">
-                            {filteredBooks.length} {filteredBooks.length === 1 ? "book" : "books"}
+                            {filteredBooks.length} {filteredBooks.length === 1 ? t("book") : t("books")}
                         </span>
                     </div>
 
@@ -431,10 +434,10 @@ export default function AudiobooksPage() {
                                 onChange={(e) => setSortBy(e.target.value as SortType)}
                                 className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
                             >
-                                <option value="title">title</option>
-                                <option value="author">author</option>
-                                <option value="recent">recently played</option>
-                                <option value="series">series</option>
+                                <option value="title">{t("title")}</option>
+                                <option value="author">{t("author")}</option>
+                                <option value="recent">{t("recently played")}</option>
+                                <option value="series">{t("series")}</option>
                             </select>
                         </div>
 
@@ -442,10 +445,10 @@ export default function AudiobooksPage() {
                             variant={groupBySeries ? "primary" : "secondary"}
                             size="sm"
                             onClick={() => setGroupBySeries(!groupBySeries)}
-                            title="show series as single cards"
+                            title={t("show series as single cards")}
                         >
                             <ListTree className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Series View</span>
+                            <span className="hidden sm:inline">{t("Series View")}</span>
                         </Button>
 
                         {allGenres.length > 0 && (
@@ -455,7 +458,7 @@ export default function AudiobooksPage() {
                                     onChange={(e) => setSelectedGenre(e.target.value || null)}
                                     className="bg-transparent text-xs text-[var(--text-secondary)] focus:outline-none cursor-pointer min-w-0 max-w-[140px] truncate [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
                                 >
-                                    <option value="">all genres</option>
+                                    <option value="">{t("all genres")}</option>
                                     {allGenres.map((genre) => (
                                         <option key={genre} value={genre}>
                                             {genre.toLowerCase()}
@@ -474,10 +477,10 @@ export default function AudiobooksPage() {
                                 }}
                                 className="bg-transparent text-xs tabular-nums text-[var(--text-secondary)] focus:outline-none cursor-pointer [&>option]:bg-[var(--bg-primary)] [&>option]:text-white"
                             >
-                                <option value={25}>25 per page</option>
-                                <option value={50}>50 per page</option>
-                                <option value={100}>100 per page</option>
-                                <option value={250}>250 per page</option>
+                                <option value={25}>{t("25 per page")}</option>
+                                <option value={50}>{t("50 per page")}</option>
+                                <option value={100}>{t("100 per page")}</option>
+                                <option value={250}>{t("250 per page")}</option>
                             </select>
                         </div>
                     </div>
@@ -489,7 +492,7 @@ export default function AudiobooksPage() {
 
                 <div className="section-stack">
                     {continueListening.length > 0 && filter === "all" && !groupBySeries && (
-                        <BookSection title="Continue Listening" books={continueListening} section="continue-listening" />
+                        <BookSection title={t("Continue Listening")} books={continueListening} section="continue-listening" />
                     )}
 
                     {filteredBooks.length > 0 ? (
@@ -497,14 +500,14 @@ export default function AudiobooksPage() {
                             <>
                                 {pageSeries.length > 0 && (
                                     <div>
-                                        <SectionHeader type="audiobook" title="Series" count={series.length} />
+                                        <SectionHeader type="audiobook" title={t("Series")} count={series.length} />
                                         <div
                                             className="grid-media"
                                             data-tv-section="series"
                                         >
                                             {pageSeries.map(([seriesName, books], index) => {
                                                 const firstBook = books[0];
-                                                const bookCount = `${books.length} ${books.length === 1 ? "book" : "books"}`;
+                                                const bookCount = `${books.length} ${books.length === 1 ? t("book") : t("books")}`;
                                                 return (
                                                     <MediaCard
                                                         key={seriesName}
@@ -526,7 +529,7 @@ export default function AudiobooksPage() {
 
                                 {pageStandalone.length > 0 && (
                                     <BookSection
-                                        title="Standalone"
+                                        title={t("Standalone")}
                                         books={pageStandalone}
                                         count={standalone.length}
                                         section="standalone"
@@ -535,7 +538,7 @@ export default function AudiobooksPage() {
                             </>
                         ) : (
                             <BookSection
-                                title="All Books"
+                                title={t("All Books")}
                                 books={paginatedBooks}
                                 count={filteredBooks.length}
                                 section="audiobooks"
@@ -546,15 +549,15 @@ export default function AudiobooksPage() {
                             icon={<Book className="w-12 h-12" />}
                             title={
                                 filter === "listening"
-                                    ? "No audiobooks in progress"
+                                    ? t("No audiobooks in progress")
                                     : filter === "finished"
-                                    ? "No finished audiobooks"
-                                    : "No audiobooks found"
+                                    ? t("No finished audiobooks")
+                                    : t("No audiobooks found")
                             }
                             description={
                                 filter === "all"
-                                    ? "Add audiobooks to your Audiobookshelf library to get started"
-                                    : "Start listening to some audiobooks"
+                                    ? t("Add audiobooks to your Audiobookshelf library to get started")
+                                    : t("Start listening to some audiobooks")
                             }
                         />
                     )}
@@ -563,7 +566,7 @@ export default function AudiobooksPage() {
                         currentPage={currentPage}
                         totalPages={totalPages}
                         onPageChange={showPage}
-                        label="Audiobooks"
+                        label={t("Audiobooks")}
                         className="mt-0"
                     />
                 </div>
