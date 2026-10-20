@@ -317,11 +317,11 @@ export default function AudiobooksPage() {
                 <div className="relative page-shell pb-24">
 
                     <div className="grid md:grid-cols-3 gap-4 mb-12">
-                        {[
+                        {([
                             { num: "01", title: "Install Audiobookshelf", desc: "Set up your own Audiobookshelf instance via Docker or use an existing installation" },
                             { num: "02", title: "Get API Key", desc: "Settings > Users > Click your user > API Tokens > Generate" },
                             { num: "03", title: "Configure", desc: "Enter your Audiobookshelf URL and API key in Kima settings" },
-                        ].map((step) => (
+                        ] as const).map((step) => (
                             <div
                                 key={step.num}
                                 className="rounded-lg border border-white/10 bg-[var(--bg-primary)] p-6 hover:border-type-audiobook/30 transition-all"
