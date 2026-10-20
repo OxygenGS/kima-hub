@@ -10,16 +10,16 @@ permissions:
   actions: write
 jobs:
   safe-prune:
-    name: Review old PR runs without deleting
+    name: Delete superseded old PR runs (250 max)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Inventory safe candidates (DRY RUN)
+      - name: Remove old PR history after verified dry-run
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPOSITORY: ${{ github.repository }}
-          DRY_RUN: 'true'
+          DRY_RUN: 'false'
           MIN_AGE_HOURS: '48'
           MAX_DELETE: '250'
         run: python3 .github/ci/prune-actions-history.py
