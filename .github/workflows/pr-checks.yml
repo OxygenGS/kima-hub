@@ -11,6 +11,31 @@ on:
         types: [opened, synchronize, reopened]
 
 jobs:
+    change-scope:
+      name: Classify frontend-only UI change
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+        pull-requests: read
+      outputs:
+        fast_ui: ${{ steps.scope.outputs.fast_ui }}
+      steps:
+        - id: scope
+          uses: actions/github-script@v7
+          with:
+            script: |
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100,
+              });
+              const allowed = /^(frontend\/(app|features)\/.+\.(tsx|ts)|frontend\/lib\/i18n\/.+\.ts|frontend\/lib\/__tests__\/.+\.(tsx|ts)|docs\/internationalization\.md)$/;
+              const fast = files.length > 0 && files.every(file =>
+                ['modified', 'added'].includes(file.status) && allowed.test(file.filename)
+              );
+              core.setOutput('fast_ui', String(fast));
+              core.info(fast ? 'Frontend-only UI: skip costly image jobs.' : 'Run full image validation.');
     naming-audit:
         name: No Legacy Project Naming
         runs-on: ubuntu-latest
@@ -156,7 +181,8 @@ jobs:
     build-docker:
         name: Docker Build Check
         runs-on: ubuntu-latest
-        needs: [lint-frontend, typecheck, unit-tests]
+        needs: [change-scope, lint-frontend, typecheck, unit-tests]
+        if: needs.change-scope.outputs.fast_ui != 'true'
         steps:
             - uses: actions/checkout@v4
 

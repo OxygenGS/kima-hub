@@ -17,6 +17,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  change-scope:
+    name: Classify frontend-only UI change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      fast_ui: ${{ steps.scope.outputs.fast_ui }}
+    steps:
+      - id: scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const allowed = /^(frontend\/(app|features)\/.+\.(tsx|ts)|frontend\/lib\/i18n\/.+\.ts|frontend\/lib\/__tests__\/.+\.(tsx|ts)|docs\/internationalization\.md)$/;
+            const fast = files.length > 0 && files.every(file =>
+              ['modified', 'added'].includes(file.status) && allowed.test(file.filename)
+            );
+            core.setOutput('fast_ui', String(fast));
+            core.info(fast ? 'Frontend-only UI: skip costly image jobs.' : 'Run full image validation.');
   dependency-security:
     name: Fixable dependency vulnerabilities and committed secrets
     runs-on: ubuntu-latest
@@ -229,7 +254,8 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety]
+    needs: [change-scope, frontend, backend, fork-safety]
+    if: needs.change-scope.outputs.fast_ui != 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples (do not deploy)
@@ -324,7 +350,8 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
-    needs: [frontend, backend, fork-safety]
+    needs: [change-scope, frontend, backend, fork-safety]
+    if: needs.change-scope.outputs.fast_ui != 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Validate fork Compose examples
