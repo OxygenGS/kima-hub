@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { notify } from "@/lib/notify";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -213,6 +214,7 @@ function ReleaseCard({
     isDownloading: boolean;
 }) {
     const { canRequestAlbums } = useMusicPermissions();
+    const { t } = useLanguage();
     const isUpcoming = release.status === "upcoming";
     const hasIt = release.inLibrary;
 
@@ -238,7 +240,7 @@ function ReleaseCard({
                 canRequestAlbums && release.canDownload && !hasIt
                     ? {
                           icon: Download,
-                          label: "Download",
+                          label: t("Request album"),
                           onClick: () => onDownload(release.albumMbid, release.id),
                           busy: isDownloading,
                       }
