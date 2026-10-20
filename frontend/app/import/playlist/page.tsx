@@ -16,6 +16,8 @@ import {
     Zap,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { notify } from "@/lib/notify";
 import { Button } from "@/components/ui/Button";
@@ -121,6 +123,9 @@ const pendingImportJob = (id: string, totals: Partial<ImportJob> = {}): ImportJo
 
 function ImportPlaylistPageContent() {
     const router = useRouter();
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const { t } = useLanguage();
+    const mayImport = canRequestAlbums && canDownloadTracks;
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const hasAutoFetched = useRef(false);
@@ -142,6 +147,7 @@ function ImportPlaylistPageContent() {
         "matched" | "download" | null
     >("matched");
 
+    // The backend also checks both permissions. This is UI feedback only.
     // Pre-fill URL from query params and reconnect to active import if one exists
     useEffect(() => {
         const urlParam = searchParams.get("url");
@@ -274,7 +280,7 @@ function ImportPlaylistPageContent() {
 
     // Fetch preview (async — returns job ID, completion arrives via SSE)
     const handleFetchPreview = async () => {
-        if (!url.trim()) return;
+        if (!url.trim() || !mayImport) return;
 
         setIsLoading(true);
         try {
@@ -316,7 +322,7 @@ function ImportPlaylistPageContent() {
     };
 
     const handleStartImport = async () => {
-        if (!preview) return;
+        if (!preview || !mayImport) return;
 
         setIsLoading(true);
         setRefreshStatusMessage(null);
@@ -415,6 +421,20 @@ function ImportPlaylistPageContent() {
             setIsCancelling(false);
         }
     };
+
+    if (!mayImport) {
+        return (
+            <div className="mx-auto max-w-2xl px-6 py-16 text-center">
+                <h1 className="text-xl font-semibold text-white">{t("Playlist import unavailable")}</h1>
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                    {t("Your administrator must allow both album requests and track downloads before you can import playlists.")}
+                </p>
+                <Link href="/collection" className="mt-6 inline-block text-brand hover:underline">
+                    {t("Back to collection")}
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen">

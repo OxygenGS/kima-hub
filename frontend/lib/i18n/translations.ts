@@ -4,6 +4,9 @@
  */
 export const english = {
     "Account": "Account",
+    "Playlist import unavailable": "Playlist import unavailable",
+    "Your administrator must allow both album requests and track downloads before you can import playlists.": "Your administrator must allow both album requests and track downloads before you can import playlists.",
+    "Back to collection": "Back to collection",
     "Actions": "Actions",
     "Admin": "Admin",
     "AI & Artwork": "AI & Artwork",
@@ -1476,6 +1479,9 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "Playlist import unavailable": "Afspeellijsten importeren niet toegestaan",
+    "Your administrator must allow both album requests and track downloads before you can import playlists.": "Je beheerder moet zowel albumaanvragen als trackdownloads toestaan voordat je afspeellijsten kunt importeren.",
+    "Back to collection": "Terug naar collectie",
     "Actions": "Acties",
     "Admin": "Beheer",
     "AI & Artwork": "AI en afbeeldingen",

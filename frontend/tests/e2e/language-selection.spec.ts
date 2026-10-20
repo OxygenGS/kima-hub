@@ -1,172 +1,22 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Interface language", () => {
-    test("switches the public login UI to Dutch and remembers the choice", async ({ page }) => {
+    test("keeps public login free of language controls and respects saved locale", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "nl"));
         await page.goto("/login");
-
-        const languageSelect = page.locator("#login-language");
-        await expect(languageSelect).toBeVisible();
-        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-
-        await languageSelect.selectOption("nl");
+        await expect(page.locator("#login-language")).toHaveCount(0);
         await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-        await expect(page.getByRole("button", { name: "Inloggen" })).toBeVisible();
-
         await page.reload();
-        await expect(languageSelect).toHaveValue("nl");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("lang", "nl");
+    });
 
-        await languageSelect.selectOption("en");
+    test("defaults public login to English when stored language is invalid", async ({ page }) => {
+        await page.addInitScript(() => localStorage.setItem("kima-hub-language", "de"));
+        await page.goto("/login");
+        await expect(page.locator("#login-language")).toHaveCount(0);
         await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
         await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    });
-
-    test("changes the login language with only keyboard controls without submitting credentials", async ({ page }) => {
-        await page.goto("/login");
-
-        // The username field is auto-focused by the real login form.
-        const username = page.locator("#username");
-        const password = page.locator("#password");
-        const language = page.locator("#login-language");
-        await expect(username).toBeFocused();
-
-        await username.fill("synthetic-keyboard-user");
-        await password.fill("synthetic-keyboard-password");
-        await page.keyboard.press("Shift+Tab");
-        await expect(username).toBeFocused();
-        await page.keyboard.press("Shift+Tab");
-        await expect(language).toBeFocused();
-
-        // Changing the native select using keyboard events must change only UI labels.
-        await page.keyboard.press("ArrowDown");
-        await expect(language).toHaveValue("nl");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-        await expect(language).toHaveAttribute("aria-label", "Taal");
-        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-        await expect(username).toHaveValue("synthetic-keyboard-user");
-        await expect(password).toHaveValue("synthetic-keyboard-password");
-
-        await page.keyboard.press("ArrowUp");
-        await expect(language).toHaveValue("en");
-        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-        await expect(language).toHaveAttribute("aria-label", "Language");
-        await expect(username).toHaveValue("synthetic-keyboard-user");
-        await expect(password).toHaveValue("synthetic-keyboard-password");
-        await expect(page).toHaveURL(/\/login$/);
-    });
-
-    test("can switch Dutch in a storage-blocked browser for the current tab", async ({ page }) => {
-        await page.addInitScript(() => {
-            Object.defineProperty(window, "localStorage", {
-                configurable: true,
-                get() {
-                    throw new DOMException("Storage disabled", "SecurityError");
-                },
-            });
-        });
-        await page.goto("/login");
-
-        const select = page.locator("#login-language");
-        await expect(select).toHaveValue("en");
-        await select.selectOption("nl");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-
-        await select.selectOption("en");
-        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-        await select.selectOption("nl");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-
-        // Storage is blocked, so the preference should not survive a full reload.
-        await page.reload();
-        await expect(select).toHaveValue("en");
-        await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    });
-
-    test("keeps language selection separate from server-side credentials", async ({ page }) => {
-        await page.goto("/login");
-        await page.locator("#login-language").selectOption("nl");
-        await page.locator("#username").fill("example-user");
-        await page.locator("#password").fill("example-password");
-        await page.locator("#login-language").selectOption("en");
-        await expect(page.locator("#username")).toHaveValue("example-user");
-        await expect(page.locator("#password")).toHaveValue("example-password");
-    });
-    test("allows choosing Dutch during first-run setup without an account", async ({ page }) => {
-        await page.goto("/onboarding");
-        const languageSelect = page.locator("#onboarding-language");
-        await expect(languageSelect).toBeVisible();
-        await expect(page.getByRole("heading", { name: "Create Your Admin Account" })).toBeVisible();
-
-        await page.locator("#username").fill("sample-admin");
-        await languageSelect.selectOption("nl");
-        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
-        await expect(page.locator("html")).toHaveAttribute("lang", "nl");
-        await expect(page.locator("#username")).toHaveValue("sample-admin");
-
-        await page.reload();
-        await expect(languageSelect).toHaveValue("nl");
-        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
-
-        await page.goto("/login");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-    });
-    test("synchronizes the browser language across existing tabs", async ({ page, context }) => {
-        await page.goto("/login");
-        const secondTab = await context.newPage();
-        await secondTab.goto("/login");
-
-        const firstSelect = page.locator("#login-language");
-        const secondSelect = secondTab.locator("#login-language");
-        await expect(firstSelect).toHaveValue("en");
-        await expect(secondSelect).toHaveValue("en");
-
-        await firstSelect.selectOption("nl");
-        await expect(secondSelect).toHaveValue("nl");
-        await expect(secondTab.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-        await expect(secondTab.locator("html")).toHaveAttribute("lang", "nl");
-
-        await secondSelect.selectOption("en");
-        await expect(firstSelect).toHaveValue("en");
-        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-        await expect(page.locator("html")).toHaveAttribute("lang", "en");
-        await secondTab.close();
-    });
-
-    test("defaults to English for an unrecognized stored language", async ({ page }) => {
-        await page.addInitScript(() => {
-            localStorage.setItem("kima-hub-language", "de");
-        });
-        await page.goto("/login");
-
-        await expect(page.locator("#login-language")).toHaveValue("en");
-        await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-        await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    });
-
-    test("keeps language controls usable in narrow mobile viewports", async ({ page }) => {
-        await page.setViewportSize({ width: 375, height: 812 });
-        await page.goto("/login");
-
-        const loginLanguage = page.locator("#login-language");
-        await expect(loginLanguage).toBeVisible();
-        await loginLanguage.selectOption("nl");
-        await expect(page.getByRole("heading", { name: "Welkom terug" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Inloggen" })).toBeVisible();
-
-        await page.goto("/onboarding");
-        const onboardingLanguage = page.locator("#onboarding-language");
-        await expect(onboardingLanguage).toBeVisible();
-        await expect(onboardingLanguage).toHaveValue("nl");
-        await expect(page.getByRole("heading", { name: "Maak je beheerdersaccount aan" })).toBeVisible();
-
-        // Language selection must remain horizontally reachable on mobile.
-        const selectBounds = await onboardingLanguage.boundingBox();
-        expect(selectBounds).not.toBeNull();
-        expect(selectBounds!.x).toBeGreaterThanOrEqual(0);
-        expect(selectBounds!.x + selectBounds!.width).toBeLessThanOrEqual(375);
     });
 
     test("changes language on authenticated settings without modifying server preferences", async ({ page }) => {

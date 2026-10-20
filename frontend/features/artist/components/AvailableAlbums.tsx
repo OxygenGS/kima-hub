@@ -7,6 +7,7 @@ import { Disc3, Download } from "lucide-react";
 import { api } from "@/lib/api";
 import { isMbid } from "@/lib/mbid";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { useMusicPermissions } from "@/lib/auth-context";
 
 interface AvailableAlbumsProps {
     albums: Album[];
@@ -29,6 +30,7 @@ function LazyAlbumCard({
     isPendingDownload: (mbid: string) => boolean;
     index: number;
 }) {
+    const { canRequestAlbums } = useMusicPermissions();
     const [coverArt, setCoverArt] = useState<string | null>(() => {
         if (source === "library" && album.coverArt) {
             return api.getCoverArtUrl(album.coverArt, 300);
@@ -83,12 +85,12 @@ function LazyAlbumCard({
             fallbackIcon={Disc3}
             type="album"
             index={index}
-            action={{
+            action={canRequestAlbums ? {
                 icon: Download,
                 label: "Download",
                 onClick: () => onDownloadAlbum(album),
                 busy: isPendingDownload(albumMbid),
-            }}
+            } : undefined}
         />
     );
 }

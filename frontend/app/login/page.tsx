@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
 import { useLanguage } from "@/lib/i18n/language-context";
-import type { Locale } from "@/lib/i18n/translations";
 import { api } from "@/lib/api";
 import { GalaxyBackground } from "@/components/ui/GalaxyBackground";
 import { Button } from "@/components/ui/Button";
@@ -41,7 +40,7 @@ function LoginErrorHandler({
 export default function LoginPage() {
     const { login } = useAuth();
     const { branding } = useBranding();
-    const { locale, setLocale, t } = useLanguage();
+    const { t } = useLanguage();
     const router = useRouter();
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -152,19 +151,6 @@ export default function LoginPage() {
                     </div>
 
                     <div className="bg-[#111]/90 rounded-lg p-6 md:p-8 border border-white/10 animate-rise transition-shadow duration-200">
-                        <div className="mb-5 flex items-center justify-end gap-2">
-                            <label className="text-xs text-[var(--text-secondary)]" htmlFor="login-language">{t("Language")}</label>
-                            <select
-                                id="login-language"
-                                aria-label={t("Language")}
-                                value={locale}
-                                onChange={(event) => setLocale(event.target.value as Locale)}
-                                className="rounded-lg border border-white/20 bg-[#171717] px-3 py-2 text-sm text-white"
-                            >
-                                <option value="en">{t("English")}</option>
-                                <option value="nl">{t("Nederlands")}</option>
-                            </select>
-                        </div>
                         <h1 className="text-2xl font-bold text-white mb-1 text-center">
                             {t("Welcome back")}
                         </h1>

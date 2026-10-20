@@ -1,5 +1,8 @@
+"use client";
+
 import { Download, ListPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
 import type { Album, AlbumSource } from "../types";
 
@@ -28,8 +31,9 @@ export function AlbumActionBar({
     isPlayingThisAlbum,
     onPause,
 }: AlbumActionBarProps) {
+    const { canRequestAlbums } = useMusicPermissions();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
-    const showDownload = !isOwned && (album.mbid || album.rgMbid);
+    const showDownload = canRequestAlbums && !isOwned && (album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
 
     const handlePlayPauseClick = () => {

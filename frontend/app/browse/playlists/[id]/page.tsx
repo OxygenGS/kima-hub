@@ -14,6 +14,7 @@ import {
     VolumeX,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useMusicPermissions } from "@/lib/auth-context";
 import { usePreview } from "@/hooks/usePreview";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/cn";
@@ -53,6 +54,8 @@ interface DeezerPlaylistFull {
 }
 
 export default function DeezerPlaylistDetailPage() {
+    const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
+    const mayImport = canRequestAlbums && canDownloadTracks;
     const params = useParams();
     const router = useRouter();
     const playlistId = params.id as string;
@@ -94,7 +97,7 @@ export default function DeezerPlaylistDetailPage() {
     };
 
     const handleImport = () => {
-        if (!playlist) return;
+        if (!playlist || !mayImport) return;
         router.push(`/import/playlist?url=${encodeURIComponent(playlist.url)}`);
     };
 
@@ -205,10 +208,12 @@ export default function DeezerPlaylistDetailPage() {
             <div className="relative page-shell pb-4">
                 <div>
                     <div className="flex items-center gap-3">
-                        <Button variant="primary" onClick={handleImport}>
-                            <Download className="w-4 h-4" />
-                            <span>Import Playlist</span>
-                        </Button>
+                        {mayImport && (
+                            <Button variant="primary" onClick={handleImport}>
+                                <Download className="w-4 h-4" />
+                                <span>Import Playlist</span>
+                            </Button>
+                        )}
 
                         {playingTrackId && (
                             <div className="flex items-center gap-2">
