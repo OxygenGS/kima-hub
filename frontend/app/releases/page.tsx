@@ -11,7 +11,6 @@ import { notify } from "@/lib/notify";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MediaCard } from "@/components/cards/MediaCard";
-import { plural } from "@/lib/format";
 import { PageMessage } from "@/components/ui/PageMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { buttonClass } from "@/components/ui/Button";
@@ -39,6 +38,7 @@ interface ReleaseRadarData {
 
 export default function ReleasesPage() {
     const { canRequestAlbums } = useMusicPermissions();
+    const { locale, t } = useLanguage();
     const [data, setData] = useState<ReleaseRadarData | null>(null);
     const [loading, setLoading] = useState(true);
     const [downloadingId, setDownloadingId] = useState<string | number | null>(null);
@@ -67,7 +67,7 @@ export default function ReleasesPage() {
             await api.post(`/releases/download/${albumMbid}`);
             await fetchReleases();
         } catch (err) {
-            notify.error("Couldn't start the download", { message: err instanceof Error ? err.message : undefined });
+            notify.error(t("Couldn't start the download"), { message: err instanceof Error ? err.message : undefined });
         } finally {
             setDownloadingId(null);
         }
@@ -78,12 +78,12 @@ export default function ReleasesPage() {
         const now = new Date();
         const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 0) return "Today";
-        if (diffDays === 1) return "Tomorrow";
-        if (diffDays > 0 && diffDays <= 7) return `In ${diffDays} days`;
-        if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)} days ago`;
+        if (diffDays === 0) return t("Today");
+        if (diffDays === 1) return t("Tomorrow");
+        if (diffDays > 0 && diffDays <= 7) return `${t("In")} ${diffDays} ${t("days")}`;
+        if (diffDays < 0 && diffDays >= -7) return `${Math.abs(diffDays)} ${t("days ago")}`;
 
-        return date.toLocaleDateString("en-US", {
+        return date.toLocaleDateString(locale === "nl" ? "nl-NL" : "en-US", {
             month: "short",
             day: "numeric",
             year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
@@ -101,9 +101,9 @@ export default function ReleasesPage() {
     if (error) {
         return (
             <PageMessage
-                title="Couldn't load releases"
+                title={t("Couldn't load releases")}
                 description={error}
-                action={{ label: "Try again", onClick: () => { setError(null); fetchReleases(); } }}
+                action={{ label: t("Try again"), onClick: () => { setError(null); fetchReleases(); } }}
             />
         );
     }
@@ -111,14 +111,14 @@ export default function ReleasesPage() {
     return (
         <div className="min-h-screen pb-32">
             <PageHeader
-                eyebrow="Release radar"
-                title="New and upcoming"
+                eyebrow={t("Release radar")}
+                title={t("New and upcoming")}
                 description={
                     data?.monitoredArtistCount
                         ? [
-                              plural(data.monitoredArtistCount, "monitored artist"),
-                              `${data.upcoming.length} upcoming`,
-                              `${data.recent.length} recent`,
+                              `${data.monitoredArtistCount} ${t(data.monitoredArtistCount === 1 ? "monitored artist" : "monitored artists")}`,
+                              `${data.upcoming.length} ${t("upcoming")}`,
+                              `${data.recent.length} ${t("recent")}`,
                           ].join(" · ")
                         : undefined
                 }
@@ -128,7 +128,7 @@ export default function ReleasesPage() {
                 {data?.upcoming && data.upcoming.length > 0 && (
                     <ReleaseSection
                         icon={<Clock className="w-5 h-5 text-brand" />}
-                        title="Coming Soon"
+                        title={t("Coming Soon")}
                         releases={data.upcoming}
                         formatDate={formatDate}
                         onDownload={handleDownload}
@@ -139,7 +139,7 @@ export default function ReleasesPage() {
                 {data?.recent && data.recent.length > 0 && (
                     <ReleaseSection
                         icon={<Disc className="w-5 h-5 text-success" />}
-                        title="Just Dropped"
+                        title={t("Just Dropped")}
                         releases={data.recent}
                         formatDate={formatDate}
                         onDownload={handleDownload}
@@ -150,11 +150,11 @@ export default function ReleasesPage() {
                 {(!data?.upcoming?.length && !data?.recent?.length) && (
                     <EmptyState
                         icon={<Calendar className="w-16 h-16" />}
-                        title="No releases found"
-                        description="Add artists to Lidarr and enable monitoring to see their upcoming and recent releases here."
+                        title={t("No releases found")}
+                        description={t("Add artists to Lidarr and enable monitoring to see their upcoming and recent releases here.")}
                     >
                         <Link href="/settings" className={buttonClass("primary")}>
-                            Configure Lidarr
+                            {t("Configure Lidarr")}
                             <ArrowRight className="w-4 h-4" />
                         </Link>
                     </EmptyState>
@@ -232,10 +232,10 @@ function ReleaseCard({
                         isUpcoming ? "bg-brand text-black" : hasIt ? "bg-success/90 text-black" : "bg-white/20 text-white",
                     )}
                 >
-                    {isUpcoming ? formatDate(release.releaseDate) : hasIt ? "In Library" : "Available"}
+                    {isUpcoming ? formatDate(release.releaseDate) : hasIt ? t("In Library") : t("Available")}
                 </span>
             }
-            corner={hasIt && <CheckCircle2 className="w-5 h-5 text-success" aria-label="In library" />}
+            corner={hasIt && <CheckCircle2 className="w-5 h-5 text-success" aria-label={t("In library")} />}
             action={
                 canRequestAlbums && release.canDownload && !hasIt
                     ? {

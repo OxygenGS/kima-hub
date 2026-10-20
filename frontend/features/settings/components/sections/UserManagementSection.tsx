@@ -5,6 +5,8 @@ import { Trash2 } from "lucide-react";
 import { SettingsSection, SettingsInput, SettingsSelect, SettingsToggle } from "../ui";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { api } from "@/lib/api";
 import { InlineStatus, StatusType } from "@/components/ui/InlineStatus";
 import { Button } from "@/components/ui/Button";
@@ -20,6 +22,7 @@ interface User {
 
 export function UserManagementSection() {
     const { user: currentUser } = useAuth();
+    const { t, locale } = useLanguage();
     const [users, setUsers] = useState<User[]>([]);
     const [newUsername, setNewUsername] = useState("");
     const [newPassword, setNewPassword] = useState("");
@@ -137,25 +140,25 @@ export function UserManagementSection() {
         <>
             <SettingsSection
                 id="users"
-                title="User Management"
-                description="Manage users who can access this instance"
+                title={t("User Management")}
+                description={t("Manage users who can access this instance")}
                 showSeparator={false}
             >
                 <div className="py-4 px-4 bg-white/5 rounded-lg border border-white/10 mb-4">
-                    <h3 className="text-xs text-[var(--text-secondary)] mb-3">Create New User</h3>
+                    <h3 className="text-xs text-[var(--text-secondary)] mb-3">{t("Create New User")}</h3>
                     <div className="space-y-3">
                         <div className="flex gap-3">
                             <SettingsInput
                                 value={newUsername}
                                 onChange={setNewUsername}
-                                placeholder="Username"
+                                placeholder={t("Username")}
                                 className="flex-1"
                             />
                             <SettingsInput
                                 type="password"
                                 value={newPassword}
                                 onChange={setNewPassword}
-                                placeholder="Password (6+ chars)"
+                                placeholder={t("Password (6+ chars)")}
                                 className="flex-1"
                             />
                         </div>
@@ -164,8 +167,8 @@ export function UserManagementSection() {
                                 value={newRole}
                                 onChange={(v) => setNewRole(v as "user" | "admin")}
                                 options={[
-                                    { value: "user", label: "User" },
-                                    { value: "admin", label: "Admin" },
+                                    { value: "user", label: t("User") },
+                                    { value: "admin", label: t("Admin") },
                                 ]}
                             />
                             <Button
@@ -174,11 +177,11 @@ export function UserManagementSection() {
                                 onClick={handleCreate}
                                 disabled={creating || !newUsername.trim() || newPassword.length < 6}
                             >
-                                {creating ? "Creating..." : "Create"}
+                                {creating ? t("Creating...") : t("Create")}
                             </Button>
                             <InlineStatus
                                 status={createStatus}
-                                message={createMessage}
+                                message={translate(locale, createMessage)}
                                 onClear={() => setCreateStatus("idle")}
                             />
                         </div>
@@ -187,9 +190,9 @@ export function UserManagementSection() {
 
                 <div className="space-y-1">
                     {loading ? (
-                        <div className="py-4 text-xs text-[var(--text-muted)]">Loading users...</div>
+                        <div className="py-4 text-xs text-[var(--text-muted)]">{t("Loading users...")}</div>
                     ) : users.length === 0 ? (
-                        <div className="py-4 text-xs text-[var(--text-muted)]">No users found</div>
+                        <div className="py-4 text-xs text-[var(--text-muted)]">{t("No users found")}</div>
                     ) : (
                         users.map((user) => (
                             <div
@@ -204,35 +207,35 @@ export function UserManagementSection() {
                                         <div className="text-sm font-medium text-white">
                                             {user.username}
                                             {currentUser?.id === user.id && (
-                                                <span className="text-xs text-[var(--text-muted)] ml-2">(you)</span>
+                                                <span className="text-xs text-[var(--text-muted)] ml-2">({t("you")})</span>
                                             )}
                                         </div>
                                         <div className="text-xs tabular-nums text-[var(--text-muted)]">
-                                            {user.role === "admin" ? "Admin" : "User"}
+                                            {t(user.role === "admin" ? "Admin" : "User")}
                                         </div>
                                         {user.role === "user" && (
                                             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3">
                                                 <div className="flex items-center gap-2">
                                                     <SettingsToggle
-                                                        label={`Allow ${user.username} to request albums`}
+                                                        label={`${t("Allow")} ${user.username} ${t("to request albums")}`}
                                                         checked={user.canRequestAlbums === true}
                                                         disabled={updatingUserId !== null}
                                                         onChange={(enabled) => void updatePermission(user, "canRequestAlbums", enabled)}
                                                     />
-                                                    <span className="text-xs text-[var(--text-secondary)]">Request albums</span>
+                                                    <span className="text-xs text-[var(--text-secondary)]">{t("Request albums")}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <SettingsToggle
-                                                        label={`Allow ${user.username} to download tracks`}
+                                                        label={`${t("Allow")} ${user.username} ${t("to download tracks")}`}
                                                         checked={user.canDownloadTracks === true}
                                                         disabled={updatingUserId !== null}
                                                         onChange={(enabled) => void updatePermission(user, "canDownloadTracks", enabled)}
                                                     />
-                                                    <span className="text-xs text-[var(--text-secondary)]">Download tracks</span>
+                                                    <span className="text-xs text-[var(--text-secondary)]">{t("Download tracks")}</span>
                                                 </div>
                                                 {permissionError[user.id] && (
                                                     <p role="alert" className="w-full text-xs text-danger-light">
-                                                        {permissionError[user.id]}
+                                                        {translate(locale, permissionError[user.id])}
                                                     </p>
                                                 )}
                                             </div>
@@ -244,7 +247,7 @@ export function UserManagementSection() {
                                     <button
                                         onClick={() => openDelete(user.id)}
                                         className="p-2 text-[var(--text-muted)] hover:text-danger-light transition-colors"
-                                        aria-label={`delete ${user.username}`}
+                                        aria-label={`${t("Delete user")}: ${user.username}`}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
@@ -258,20 +261,20 @@ export function UserManagementSection() {
             <Modal
                 isOpen={!!confirmDelete}
                 onClose={closeDelete}
-                title="Delete User"
+                title={t("Delete User")}
             >
                 <div className="space-y-4">
                     <p className="text-xs text-[var(--text-secondary)]">
-                        Delete {users.find((u) => u.id === confirmDelete)?.username ?? "this user"} and everything they made? This cannot be undone.
+                        {t("Delete user")} {users.find((u) => u.id === confirmDelete)?.username ?? t("this user")} {t("and everything they made? This cannot be undone.")}
                     </p>
                     <div className="flex gap-2 justify-end items-center">
                         <InlineStatus
                             status={deleteStatus}
-                            message={deleteMessage}
+                            message={translate(locale, deleteMessage)}
                             onClear={() => setDeleteStatus("idle")}
                         />
                         <Button variant="ghost" size="sm" onClick={closeDelete}>
-                            Cancel
+                            {t("Cancel")}
                         </Button>
                         <Button
                             variant="danger"
@@ -279,7 +282,7 @@ export function UserManagementSection() {
                             onClick={() => confirmDelete && handleDelete(confirmDelete)}
                             disabled={deleteStatus === "loading"}
                         >
-                            Delete
+                            {t("Delete")}
                         </Button>
                     </div>
                 </div>
