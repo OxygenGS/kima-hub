@@ -10,7 +10,7 @@ permissions:
   actions: write
 jobs:
   safe-prune:
-    name: Delete superseded old PR runs (250 max)
+    name: Delete superseded old PR runs (round 2; 250 max)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
