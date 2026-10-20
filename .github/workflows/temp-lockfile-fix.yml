@@ -19,7 +19,7 @@ jobs:
       - name: Regenerate backend lockfile with official npm integrity
         working-directory: backend
         run: |
-          npm update follow-redirects@1.16.1 --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm install follow-redirects@1.16.1 --package-lock-only --no-save --ignore-scripts --no-audit --no-fund
           node -e 'let lock=require("./package-lock.json");if(lock.packages["node_modules/follow-redirects"].version!=="1.16.1") process.exit(1)'
       - name: Commit generated lockfile
         run: |
