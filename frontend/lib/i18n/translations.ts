@@ -4,6 +4,9 @@
  */
 export const english = {
     "Account": "Account",
+    "Unhide with the eye button.": "Unhide with the eye button.",
+    "Your library": "Your library",
+    "tracks matched": "tracks matched",
     "Couldn't import playlist": "Couldn't import playlist",
     "From Deezer": "From Deezer",
     "Find playlists on Deezer and import them into your library": "Find playlists on Deezer and import them into your library",
@@ -1512,6 +1515,9 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "Unhide with the eye button.": "Maak afspeellijsten weer zichtbaar met de oogknop.",
+    "Your library": "Jouw bibliotheek",
+    "tracks matched": "nummers gevonden",
     "Couldn't import playlist": "Afspeellijst importeren mislukt",
     "From Deezer": "Van Deezer",
     "Find playlists on Deezer and import them into your library": "Ontdek afspeellijsten op Deezer en importeer ze in je bibliotheek",
