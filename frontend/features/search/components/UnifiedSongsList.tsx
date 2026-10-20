@@ -80,7 +80,7 @@ export function UnifiedSongsList({
                                     <Download className="w-4 h-4 text-brand" />
                                 )}
                             </button>
-                        )
+                        )}
 
                         <div className="w-10 h-10 bg-[#181818] rounded flex items-center justify-center flex-shrink-0">
                             <Music className="w-5 h-5 text-[var(--text-secondary)]" />
