@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useMusicPermissions } from "@/lib/auth-context";
+import { canImportExternalPlaylist } from "@/lib/music-permissions";
 import { usePreview } from "@/hooks/usePreview";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/cn";
@@ -55,7 +56,7 @@ interface DeezerPlaylistFull {
 
 export default function DeezerPlaylistDetailPage() {
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const mayImport = canRequestAlbums && canDownloadTracks;
+    const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const params = useParams();
     const router = useRouter();
     const playlistId = params.id as string;
