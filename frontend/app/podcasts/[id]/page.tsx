@@ -5,6 +5,7 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
 import { notify } from "@/lib/notify";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { Episode } from "@/features/podcast/types";
 
 import { usePodcastData } from "@/features/podcast/hooks/usePodcastData";
@@ -21,6 +22,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function PodcastDetailPage() {
+    const { t } = useLanguage();
     const {
         podcastId,
         podcast,
@@ -63,9 +65,9 @@ export default function PodcastDetailPage() {
     if (previewLoadState === "error") {
         return (
             <PageMessage
-                title="Couldn't load this podcast"
+                title={t("Couldn't load this podcast")}
                 description={previewError || undefined}
-                action={{ label: "Podcasts", href: "/podcasts" }}
+                action={{ label: t("Podcasts"), href: "/podcasts" }}
             />
         );
     }
@@ -76,7 +78,7 @@ export default function PodcastDetailPage() {
 
     if (!podcast && !previewData) {
         return (
-            <PageMessage title="Podcast not found" action={{ label: "Podcasts", href: "/podcasts" }} />
+            <PageMessage title={t("Podcast not found")} action={{ label: t("Podcasts"), href: "/podcasts" }} />
         );
     }
 
@@ -99,7 +101,7 @@ export default function PodcastDetailPage() {
             const pick = newest.find((ep) => !ep.progress?.isFinished) ?? newest[0];
             if (pick) handlePlayEpisode(pick, podcast, newest);
         } catch (error) {
-            notify.error("Couldn't load the latest episode", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Couldn't load the latest episode"), { message: error instanceof Error ? error.message : undefined });
         }
     };
 
@@ -186,7 +188,7 @@ export default function PodcastDetailPage() {
 
                     {podcast?.description && (
                         <div>
-                            <SectionHeader title="About" type="podcast" />
+                            <SectionHeader title={t("About")} type="podcast" />
                             <div className="relative overflow-hidden rounded-lg border border-white/10 bg-[var(--bg-primary)] p-5">
                                 <div
                                     className="prose prose-invert prose-sm max-w-none text-[var(--text-secondary)] max-w-3xl text-sm leading-relaxed"
