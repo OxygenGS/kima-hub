@@ -4,6 +4,10 @@
  */
 export const english = {
     "Account": "Account",
+    "is forgotten and the book starts from the beginning.": "is forgotten and the book starts from the beginning.",
+    "Your place in": "Your place in",
+    "Reset progress?": "Reset progress?",
+    "It may have been removed from Audiobookshelf.": "It may have been removed from Audiobookshelf.",
     "episode in progress": "episode in progress",
     "episodes in progress": "episodes in progress",
     "RSS feed": "RSS feed",
@@ -1548,6 +1552,10 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "is forgotten and the book starts from the beginning.": "wordt gewist en het boek begint opnieuw.",
+    "Your place in": "Je luisterpositie in",
+    "Reset progress?": "Voortgang herstellen?",
+    "It may have been removed from Audiobookshelf.": "Mogelijk is het verwijderd uit Audiobookshelf.",
     "episode in progress": "aflevering nog niet afgeluisterd",
     "episodes in progress": "afleveringen nog niet afgeluisterd",
     "RSS feed": "RSS-feed",

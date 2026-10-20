@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import type { AudiobookSection } from "../types";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -14,13 +15,14 @@ export function SectionList({
     onSeekToSection,
     formatTime,
 }: SectionListProps) {
+    const { t } = useLanguage();
     if (!sections || sections.length === 0 || sections.length > 50) {
         return null;
     }
 
     return (
         <section>
-            <SectionHeader type="audiobook" title="Chapters" count={sections.length} />
+            <SectionHeader type="audiobook" title={t("Chapters")} count={sections.length} />
 
             <div className="rounded-lg border border-white/10 bg-[var(--bg-primary)] overflow-hidden">
                 <div className="divide-y divide-white/5">
