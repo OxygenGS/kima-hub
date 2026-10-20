@@ -11,6 +11,7 @@ import {
     ArrowLeft,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useMusicPermissions } from "@/lib/auth-context";
 import { canImportExternalPlaylist } from "@/lib/music-permissions";
 import { notify } from "@/lib/notify";
@@ -36,6 +37,7 @@ interface Genre {
 type BrowseTab = "playlists" | "genres";
 
 export default function BrowsePlaylistsPage() {
+    const { t, locale } = useLanguage();
     const rights = useMusicPermissions();
     const mayImport = canImportExternalPlaylist(rights);
 
@@ -97,7 +99,7 @@ export default function BrowsePlaylistsPage() {
             setPlaylists(response.playlists);
         } catch (error) {
             console.error("Search failed:", error);
-            notify.error("Failed to search playlists");
+            notify.error(t("Failed to search playlists"));
         } finally {
             setIsSearching(false);
         }
@@ -125,7 +127,7 @@ export default function BrowsePlaylistsPage() {
             setShowUrlModal(false);
             setUrlInput("");
         } catch (error: unknown) {
-            notify.error("Couldn't import playlist", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Couldn't import playlist"), { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsParsing(false);
         }
@@ -142,7 +144,7 @@ export default function BrowsePlaylistsPage() {
             setGenrePlaylists(response.playlists);
         } catch (error) {
             console.error("Failed to fetch genre playlists:", error);
-            notify.error("Failed to load genre playlists");
+            notify.error(t("Failed to load genre playlists"));
         } finally {
             setIsLoading(false);
         }
@@ -194,9 +196,9 @@ export default function BrowsePlaylistsPage() {
         <div className="min-h-screen">
             <div className="section-stack">
                 <PageHeader
-                    eyebrow="From Deezer"
-                    title="Browse playlists"
-                    description="Find playlists on Deezer and import them into your library"
+                    eyebrow={t("From Deezer")}
+                    title={t("Browse playlists")}
+                    description={t("Find playlists on Deezer and import them into your library")}
                     className="pb-2"
                 />
 
@@ -208,10 +210,7 @@ export default function BrowsePlaylistsPage() {
                                 <span className="font-bold text-brand">
                                     Beta
                                 </span>{" "}
-                                · Importing from Spotify and Deezer relies on
-                                matching tracks through Soulseek and your
-                                configured indexers. Results may vary depending
-                                on track availability and metadata quality.
+                                · {t("Importing playlists relies on Soulseek and your configured indexers. Results depend on track availability and metadata quality.")}
                             </p>
                         </div>
                     </div>
@@ -226,15 +225,15 @@ export default function BrowsePlaylistsPage() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search playlists..."
-                                aria-label="Search playlists"
+                                placeholder={t("Search playlists...")}
+                                aria-label={t("Search playlists")}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg pl-11 pr-10 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/40 transition-all tabular-nums"
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={clearSearch}
-                                    aria-label="Clear search"
+                                    aria-label={t("Clear search")}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-white transition-colors"
                                 >
                                     <X className="w-4 h-4" />
@@ -249,7 +248,7 @@ export default function BrowsePlaylistsPage() {
                                 onClick={() => setShowUrlModal(true)}
                             >
                                 <Link2 className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Import URL</span>
+                                <span className="hidden sm:inline">{t("Import URL")}</span>
                             </Button>
                         )}
                     </div>
@@ -261,14 +260,14 @@ export default function BrowsePlaylistsPage() {
                                 size="sm"
                                 onClick={() => setActiveTab("playlists")}
                             >
-                                Playlists
+                                {t("Playlists")}
                             </Button>
                             <Button
                                 variant={activeTab === "genres" ? "primary" : "secondary"}
                                 size="sm"
                                 onClick={() => setActiveTab("genres")}
                             >
-                                Genres
+                                {t("Genres")}
                             </Button>
                         </div>
                     )}
@@ -280,7 +279,7 @@ export default function BrowsePlaylistsPage() {
                                 className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors"
                             >
                                 <ArrowLeft className="w-3.5 h-3.5" />
-                                Genres
+                                {t("Genres")}
                             </button>
                             <ChevronRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                             <span className="text-xs font-semibold text-white tracking-tight">
@@ -298,24 +297,24 @@ export default function BrowsePlaylistsPage() {
                     {loadError && !isLoading && (
                         <EmptyState
                             icon={<Music2 className="w-12 h-12" />}
-                            title="Couldn't load content"
-                            description={loadError}
-                            action={{ label: "Try again", onClick: fetchAllContent }}
+                            title={t("Couldn't load content")}
+                            description={loadError ? t("Couldn't load playlists. Check your connection and try again.") : undefined}
+                            action={{ label: t("Try again"), onClick: fetchAllContent }}
                         />
                     )}
 
                     {!isLoading && !isSearching && hasSearched && (
                         <div>
                             <SectionHeader type="track"
-                                title={`Results for "${searchQuery}"`}
+                                title={`${t("Results for")} "${searchQuery}"`}
                                 count={playlists.length}
                             />
                             {playlists.length === 0 ?
                                 <EmptyState
                                     icon={<Search className="w-12 h-12" />}
-                                    title="No playlists found"
-                                    description={mayImport ? "Try a different search or import a URL directly" : "Try a different search"}
-                                    action={mayImport ? { label: "Import by URL", onClick: () => setShowUrlModal(true) } : undefined}
+                                    title={t("No playlists found")}
+                                    description={mayImport ? t("Try a different search or import a URL directly") : t("Try a different search")}
+                                    action={mayImport ? { label: t("Import by URL"), onClick: () => setShowUrlModal(true) } : undefined}
                                 />
                             :   <div className="grid-media">
                                     {playlists.map((item, idx) =>
@@ -329,12 +328,12 @@ export default function BrowsePlaylistsPage() {
                     {!isLoading && selectedGenre && (
                         <div>
                             <SectionHeader type="track"
-                                title={`${selectedGenre.name} Playlists`}
+                                title={locale === "nl" ? `${t("Playlists")} – ${selectedGenre.name}` : `${selectedGenre.name} Playlists`}
                                 count={genrePlaylists.length}
                             />
                             {genrePlaylists.length === 0 ?
                                 <p className="text-xs text-[var(--text-muted)]">
-                                    No playlists found for this genre
+                                    {t("No playlists found for this genre")}
                                 </p>
                             :   <div className="grid-media">
                                     {genrePlaylists.map((item, idx) =>
@@ -358,7 +357,7 @@ export default function BrowsePlaylistsPage() {
                                         }}
                                     >
                                         <SectionHeader type="track"
-                                            title="Featured Playlists"
+                                            title={t("Featured Playlists")}
                                             count={playlists.length}
                                         />
                                         <div className="grid-media">
@@ -372,8 +371,7 @@ export default function BrowsePlaylistsPage() {
                                         </div>
                                         {playlists.length >= 20 && (
                                             <p className="text-center text-xs tabular-nums text-[var(--text-muted)] mt-8">
-                                                Showing {playlists.length}{" "}
-                                                playlists -- Search for more{mayImport ? " or import by URL" : ""}
+                                                {t("Showing")} {playlists.length} {t("playlists")} — {t("Search for more")}{mayImport ? ` ${t("or import by URL")}` : ""}
                                             </p>
                                         )}
                                     </div>
@@ -387,7 +385,7 @@ export default function BrowsePlaylistsPage() {
                                         }}
                                     >
                                         <SectionHeader type="track"
-                                            title="Browse by Genre"
+                                            title={t("Browse by Genre")}
                                             count={genres.length}
                                         />
                                         <div className="grid-media">
@@ -403,11 +401,11 @@ export default function BrowsePlaylistsPage() {
             <Modal
                 isOpen={mayImport && showUrlModal}
                 onClose={() => setShowUrlModal(false)}
-                title="Import Playlist"
+                title={t("Import Playlist")}
                 footer={
                     <>
                         <Button variant="secondary" size="sm" onClick={() => setShowUrlModal(false)}>
-                            Cancel
+                            {t("Cancel")}
                         </Button>
                         <Button
                             variant="primary"
@@ -416,10 +414,10 @@ export default function BrowsePlaylistsPage() {
                             disabled={!mayImport || !urlInput.trim()}
                             isLoading={isParsing}
                         >
-                            {isParsing ? "Importing..." : (
+                            {isParsing ? t("Importing...") : (
                                 <>
                                     <ChevronRight className="w-3.5 h-3.5" />
-                                    Continue
+                                    {t("Continue")}
                                 </>
                             )}
                         </Button>
@@ -460,7 +458,7 @@ export default function BrowsePlaylistsPage() {
                             </span>
                         </div>
                         <span className="text-xs text-[var(--text-muted)] ml-auto">
-                            +more
+                            {t("+more")}
                         </span>
                     </div>
                     <div>
@@ -471,7 +469,7 @@ export default function BrowsePlaylistsPage() {
                                 onChange={(e) =>
                                     setUrlInput(e.target.value)
                                 }
-                                placeholder="Paste a playlist URL (Spotify, YouTube, SoundCloud...)"
+                                placeholder={t("Paste a playlist URL (Spotify, YouTube, SoundCloud...)")}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/40 transition-all tabular-nums"
                                 onKeyDown={(e) =>
                                     e.key === "Enter" && handleUrlSubmit()
