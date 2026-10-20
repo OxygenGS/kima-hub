@@ -1,0 +1,25 @@
+name: One-time Actions history cleanup (temporary)
+on:
+  push:
+    branches: [maintenance/actions-history-cleanup]
+    paths:
+      - .github/workflows/one-time-actions-cleanup.yml
+      - .github/ci/prune-actions-history.py
+permissions:
+  contents: read
+  actions: write
+jobs:
+  safe-prune:
+    name: Review old PR runs without deleting
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory safe candidates (DRY RUN)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          DRY_RUN: 'true'
+          MIN_AGE_HOURS: '48'
+          MAX_DELETE: '250'
+        run: python3 .github/ci/prune-actions-history.py
