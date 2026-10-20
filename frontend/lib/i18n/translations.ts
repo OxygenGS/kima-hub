@@ -4,6 +4,16 @@
  */
 export const english = {
     "Account": "Account",
+    "Failed to refresh podcasts": "Failed to refresh podcasts",
+    "Subscribe to shows and listen to them here": "Subscribe to shows and listen to them here",
+    "Add RSS feed": "Add RSS feed",
+    "Search podcasts to add": "Search podcasts to add",
+    "RSS feed URL": "RSS feed URL",
+    "My podcasts": "My podcasts",
+    "Couldn't load this podcast": "Couldn't load this podcast",
+    "Couldn't load the latest episode": "Couldn't load the latest episode",
+    "podcast": "podcast",
+    "podcasts": "podcasts",
     "tracks matched": "tracks matched",
     "Your library": "Your library",
     "Unhide with the eye button.": "Unhide with the eye button.",
@@ -1515,6 +1525,16 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "Failed to refresh podcasts": "Podcasts vernieuwen mislukt",
+    "Subscribe to shows and listen to them here": "Abonneer je op programma's en luister er hier naar",
+    "Add RSS feed": "RSS-feed toevoegen",
+    "Search podcasts to add": "Zoek podcasts om toe te voegen",
+    "RSS feed URL": "URL van RSS-feed",
+    "My podcasts": "Mijn podcasts",
+    "Couldn't load this podcast": "Deze podcast kon niet worden geladen",
+    "Couldn't load the latest episode": "Nieuwste aflevering laden mislukt",
+    "podcast": "podcast",
+    "podcasts": "podcasts",
     "tracks matched": "nummers gevonden",
     "Your library": "Jouw bibliotheek",
     "Unhide with the eye button.": "Maak de afspeellijst weer zichtbaar met de oogknop.",
