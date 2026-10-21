@@ -16,6 +16,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context";
 import { useActivityPanelOpen } from "@/hooks/useActivityPanel";
@@ -91,7 +92,7 @@ export function ActivityPanel({
                     <button
                         onClick={onToggle}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                        title="close"
+                        title={t("Close")}
                     >
                         <X className="w-5 h-5 text-[var(--text-secondary)]" />
                     </button>
@@ -119,7 +120,7 @@ export function ActivityPanel({
                                 )}
                             >
                                 <Icon className="w-4 h-4" />
-                                <span>{tab.label}</span>
+                                <span>{t(tab.label as Parameters<typeof t>[0])}</span>
                                 {badge && (
                                     <span
                                         className={cn(
@@ -154,6 +155,7 @@ export function ActivityPanel({
 }
 
 export function ActivityPanelToggle() {
+    const { t } = useLanguage();
     const { unreadCount } = useNotifications();
     const { downloads: activeDownloads } = useActiveDownloads();
     const isMobile = useIsMobile();
@@ -177,8 +179,8 @@ export function ActivityPanelToggle() {
                 "relative p-2 rounded-full transition-all",
                 "text-[var(--text-secondary)] hover:text-white"
             )}
-            title="toggle activity panel"
-            aria-label="Toggle activity panel"
+            title={t("Toggle activity panel")}
+            aria-label={t("Toggle activity panel")}
         >
             <Bell className="w-5 h-5" />
             {hasActivity && (
