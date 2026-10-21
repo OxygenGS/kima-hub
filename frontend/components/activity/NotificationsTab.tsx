@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState";
 import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
@@ -20,7 +19,7 @@ import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { timeAgo } from "@/lib/relative-time";
 
 export function NotificationsTab() {
-    const { locale, t } = useLanguage();
+    const { t } = useLanguage();
     const {
         notifications,
         isLoading: loading,
