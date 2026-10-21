@@ -100,7 +100,7 @@ export function UserManagementSection() {
         } catch (error: unknown) {
             setPermissionError((previous) => ({
                 ...previous,
-                [target.id]: error instanceof Error ? error.message : "Unable to update permissions",
+                [target.id]: error instanceof Error ? error.message : t("Unable to update permissions"),
             }));
         } finally {
             setUpdatingUserId(null);
