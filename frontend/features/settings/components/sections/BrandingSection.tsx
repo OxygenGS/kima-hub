@@ -78,7 +78,7 @@ function BrandingEditor({
             else setFaviconChange(dataUrl);
             setFeedback(t("Image selected. Save branding to apply."));
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not read image");
+            setError(err instanceof Error ? err.message : t("Could not read image"));
         }
     };
 
@@ -86,7 +86,7 @@ function BrandingEditor({
         setError(null);
         setFeedback(null);
         if (!values.name.trim() || values.name.length > 60) {
-            setError("Please enter a name of up to 60 characters.");
+            setError(t("Please enter a name of up to 60 characters."));
             return;
         }
         setBusy(true);
