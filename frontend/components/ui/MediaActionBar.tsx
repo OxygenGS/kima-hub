@@ -3,6 +3,8 @@
 import { memo, type ReactNode } from "react";
 import { Play, Pause, Shuffle } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface MediaActionBarProps {
     /** The play disc hides when there is nothing to play (an unowned album). */
@@ -34,11 +36,12 @@ export const PlayDisc = memo(function PlayDisc({
     disabled?: boolean;
     label?: string;
 }) {
+    const { locale } = useLanguage();
     return (
         <button
             onClick={onClick}
             disabled={disabled}
-            aria-label={label ?? (showPause ? "pause" : "play all")}
+            aria-label={translate(locale, label ?? (showPause ? "pause" : "play all"))}
             className={cn(
                 "h-12 w-12 flex items-center justify-center transition-all hover:scale-105 active:scale-95 bg-brand disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
                 shape === "circle" ? "rounded-full" : "rounded-lg",
@@ -63,6 +66,7 @@ export const MediaActionBar = memo(function MediaActionBar({
     secondaryShape,
     children,
 }: MediaActionBarProps) {
+    const { t } = useLanguage();
     return (
         <div className="flex items-center gap-4">
             {showPlay && (
@@ -73,7 +77,7 @@ export const MediaActionBar = memo(function MediaActionBar({
                 <MediaActionButton
                     shape={secondaryShape}
                     icon={<Shuffle className="w-5 h-5" />}
-                    label="shuffle play"
+                    label={t("shuffle play")}
                     onClick={onShuffle}
                 />
             )}
@@ -99,10 +103,12 @@ export const MediaActionButton = memo(function MediaActionButton({
     disabled,
     shape,
 }: MediaActionButtonProps) {
+    const { locale } = useLanguage();
     return (
         <button
             onClick={onClick}
-            title={label}
+            title={translate(locale, label)}
+            aria-label={translate(locale, label)}
             disabled={disabled}
             className={cn(
                 "h-8 w-8 hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all disabled:opacity-50",
