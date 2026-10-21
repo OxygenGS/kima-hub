@@ -236,7 +236,7 @@ function EnrichmentFailuresList({ active = false }: { active?: boolean }) {
                 <div key={f.id} className="flex items-center justify-between py-1 px-2 bg-white/[0.02] rounded text-xs tabular-nums">
                     <div className="flex-1 min-w-0">
                         <span className="text-[var(--text-secondary)] truncate block">{f.entityName || f.entityId}</span>
-                        <span className="text-danger-light/50 text-micro">{f.errorMessage || "Unknown error"}</span>
+                        <span className="text-danger-light/50 text-micro">{f.errorMessage || t("Unknown error")}</span>
                     </div>
                     <span className="text-[var(--text-muted)] text-micro ml-2 shrink-0">{f.errorCode}</span>
                 </div>
@@ -537,7 +537,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             console.error("Sync error:", err);
-            setError("Failed to sync");
+            setError(t("Failed to sync"));
             setSyncing(false);
         }
     };
@@ -558,7 +558,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             void queryClient.invalidateQueries({ queryKey: ["enrichment-failures-inline"] });
         } catch (err) {
             console.error(failure, err);
-            setError(failure);
+            setError(t(failure as Parameters<typeof t>[0]));
         } finally {
             setBusy(false);
         }
@@ -581,7 +581,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             const result = await api.clearAllCaches();
             setClearCachesResult(result.message);
         } catch {
-            setError("Failed to clear caches");
+            setError(t("Failed to clear caches"));
         } finally {
             setClearingCaches(false);
         }
@@ -596,7 +596,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             setCleanupResult(result);
         } catch (err) {
             console.error("Stale job cleanup error:", err);
-            setError("Failed to cleanup stale jobs");
+            setError(t("Failed to cleanup stale jobs"));
         } finally {
             setCleaningStaleJobs(false);
         }
@@ -612,7 +612,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
             refetchProgress();
         } catch (err) {
             console.error("Retry failed analysis error:", err);
-            setError("Failed to retry analysis");
+            setError(t("Failed to retry analysis"));
         } finally {
             setRetryingFailed(false);
         }
@@ -912,12 +912,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             <span className="text-[var(--text-secondary)] tabular-nums">
                                                 {enrichmentState.status ===
                                                     "running" &&
-                                                    `Processing ${enrichmentState.currentPhase}...`}
+                                                    `${t("Processing")} ${enrichmentState.currentPhase}...`}
                                                 {enrichmentState.status ===
-                                                "paused" && "Enrichment paused"}
+                                                "paused" && t("Enrichment paused")}
                                                 {enrichmentState.status ===
                                                     "stopping" &&
-                                                    "Stopping..."}
+                                                    t("Stopping...")}
                                             </span>
                                         </div>
                                             </>
@@ -1033,14 +1033,14 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <>
                                         <span className="text-xs tabular-nums text-[var(--text-secondary)] w-24 text-right">
                                             {enrichmentSpeed === 1
-                                                ? "Conservative"
+                                                ? t("Conservative")
                                                 : enrichmentSpeed === 2
-                                                ? "Moderate"
+                                                ? t("Moderate")
                                                 : enrichmentSpeed === 3
-                                                ? "Balanced"
+                                                ? t("Balanced")
                                                 : enrichmentSpeed === 4
-                                                ? "Fast"
-                                                : "Maximum"}
+                                                ? t("Fast")
+                                                : t("Maximum")}
                                         </span>
                                         {concurrencyConfig && (
                                             <span className="text-xs tabular-nums text-[var(--text-muted)] w-24 text-right">
