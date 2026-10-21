@@ -192,6 +192,7 @@ function ImportJobCard({
     cancelling: boolean;
     onCancel: (id: string) => void;
 }) {
+    const { t } = useLanguage();
     const isActive = ACTIVE_STATUSES.includes(job.status);
     const borderColor = isActive
         ? "border-brand"
