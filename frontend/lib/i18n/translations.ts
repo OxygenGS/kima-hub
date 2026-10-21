@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "shuffle play": "shuffle play",
+    "play all": "play all",
     "Jump to section": "Jump to section",
     "Unable to update permissions": "Unable to update permissions",
     "Queue limit": "Queue limit",
@@ -1733,6 +1735,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "shuffle play": "willekeurig afspelen",
+    "play all": "alles afspelen",
     "Jump to section": "Ga naar onderdeel",
     "Unable to update permissions": "Machtigingen konden niet worden bijgewerkt",
     "Queue limit": "Wachtrijlimiet",
