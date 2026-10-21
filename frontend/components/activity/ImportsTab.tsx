@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "../ui/EmptyState";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
 import { timeAgo } from "@/lib/relative-time";
@@ -192,7 +193,7 @@ function ImportJobCard({
     cancelling: boolean;
     onCancel: (id: string) => void;
 }) {
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const isActive = ACTIVE_STATUSES.includes(job.status);
     const borderColor = isActive
         ? "border-brand"
@@ -242,7 +243,7 @@ function ImportJobCard({
                                 statusColor(job.status),
                             )}
                         >
-                            {statusLabel(job.status)}
+                            {translate(locale, statusLabel(job.status))}
                         </span>
 
                         {isActive && job.albumsTotal > 0 && (
@@ -301,7 +302,7 @@ function ImportJobCard({
                             className="inline-flex items-center gap-1 mt-1.5 text-micro tabular-nums font-semibold text-success hover:text-success/80 transition-colors"
                         >
                             <ExternalLink className="w-3 h-3" />
-                            View Playlist
+                            {t("View Playlist")}
                         </Link>
                     )}
                 </div>
