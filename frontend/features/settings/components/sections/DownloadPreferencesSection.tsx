@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { SettingsSection, SettingsRow, SettingsSelect } from "../ui";
 import { SystemSettings, soulseekConfigured } from "../../types";
@@ -12,6 +13,7 @@ export function DownloadPreferencesSection({
     settings,
     onUpdate,
 }: DownloadPreferencesSectionProps) {
+    const { t } = useLanguage();
     const isLidarrConfigured =
         settings.lidarrEnabled === true &&
         settings.lidarrUrl.trim() !== "" &&
@@ -25,13 +27,13 @@ export function DownloadPreferencesSection({
     const getFallbackOptions = () => {
         if (settings.downloadSource === "soulseek") {
             return [
-                { value: "none", label: "Skip track" },
-                { value: "lidarr", label: "Download full album via Lidarr" },
+                { value: "none", label: t("Skip track") },
+                { value: "lidarr", label: t("Download full album via Lidarr") },
             ];
         } else {
             return [
-                { value: "none", label: "Skip album" },
-                { value: "soulseek", label: "Try Soulseek for individual tracks" },
+                { value: "none", label: t("Skip album") },
+                { value: "soulseek", label: t("Try Soulseek for individual tracks") },
             ];
         }
     };
@@ -39,15 +41,15 @@ export function DownloadPreferencesSection({
     return (
         <SettingsSection
             id="download-preferences"
-            title="Download Preferences"
-            description="Configure how music is downloaded for playlists and discovery"
+            title={t("Download Preferences")}
+            description={t("Configure how music is downloaded for playlists and discovery")}
         >
             <SettingsRow
-                label="Primary Download Source"
+                label={t("Primary Download Source")}
                 description={
                     isDisabled
-                        ? "Requires both Soulseek and Lidarr to be configured"
-                        : "Choose how to download music for imported playlists"
+                        ? t("Requires both Soulseek and Lidarr to be configured")
+                        : t("Choose how to download music for imported playlists")
                 }
             >
                 <SettingsSelect
@@ -59,8 +61,8 @@ export function DownloadPreferencesSection({
                         })
                     }
                     options={[
-                        { value: "soulseek", label: "Soulseek (Per-track)" },
-                        { value: "lidarr", label: "Lidarr (Full albums)" },
+                        { value: "soulseek", label: t("Soulseek (Per-track)") },
+                        { value: "lidarr", label: t("Lidarr (Full albums)") },
                     ]}
                     disabled={isDisabled}
                 />
@@ -69,15 +71,15 @@ export function DownloadPreferencesSection({
             <SettingsRow
                 label={
                     settings.downloadSource === "soulseek"
-                        ? "When Soulseek Fails"
-                        : "When Lidarr Fails"
+                        ? t("When Soulseek Fails")
+                        : t("When Lidarr Fails")
                 }
                 description={
                     isDisabled
-                        ? "Requires both Soulseek and Lidarr to be configured"
+                        ? t("Requires both Soulseek and Lidarr to be configured")
                         : settings.downloadSource === "soulseek"
-                        ? "What to do if a track can't be found on Soulseek"
-                        : "What to do if an album can't be found on Lidarr"
+                        ? t("What to do if a track can't be found on Soulseek")
+                        : t("What to do if an album can't be found on Lidarr")
                 }
             >
                 <SettingsSelect
@@ -93,8 +95,8 @@ export function DownloadPreferencesSection({
             </SettingsRow>
 
             <SettingsRow
-                label="Soulseek Concurrent Downloads"
-                description="Number of simultaneous downloads when using Soulseek (1-10)"
+                label={t("Soulseek Concurrent Downloads")}
+                description={t("Number of simultaneous downloads when using Soulseek (1-10)")}
             >
                 <SettingsSelect
                     value={settings.soulseekConcurrentDownloads?.toString() || "4"}
@@ -107,7 +109,7 @@ export function DownloadPreferencesSection({
                         { value: "1", label: "1" },
                         { value: "2", label: "2" },
                         { value: "3", label: "3" },
-                        { value: "4", label: "4 (Default)" },
+                        { value: "4", label: t("4 (Default)") },
                         { value: "5", label: "5" },
                         { value: "6", label: "6" },
                         { value: "7", label: "7" },

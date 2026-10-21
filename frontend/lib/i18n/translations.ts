@@ -4,6 +4,10 @@
  */
 export const english = {
     "Account": "Account",
+    "AcoustID identifies tracks by their audio fingerprint. Add your own API key for higher rate limits.": "AcoustID identifies tracks by their audio fingerprint. Add your own API key for higher rate limits.",
+    "Optional: Your AcoustID API key": "Optional: Your AcoustID API key",
+    "AcoustID API Key (Optional)": "AcoustID API Key (Optional)",
+    "Artwork": "Artwork",
     "Preview": "Preview",
     "date added (recent)": "date added (recent)",
     "year (newest)": "year (newest)",
@@ -1580,6 +1584,10 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
+    "AcoustID identifies tracks by their audio fingerprint. Add your own API key for higher rate limits.": "AcoustID herkent nummers aan hun audiofingerprint. Voeg je eigen API-sleutel toe voor hogere limieten.",
+    "Optional: Your AcoustID API key": "Optioneel: jouw AcoustID-API-sleutel",
+    "AcoustID API Key (Optional)": "AcoustID-API-sleutel (optioneel)",
+    "Artwork": "Illustraties",
     "Preview": "Voorbeeld",
     "date added (recent)": "toegevoegd (recentste eerst)",
     "year (newest)": "jaar (nieuwste eerst)",
