@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState } from "react";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle } from "../ui";
@@ -21,6 +22,7 @@ export function ScrobblingSection({
     onSaved,
     liveSharing,
 }: ScrobblingSectionProps) {
+    const { t } = useLanguage();
     const [token, setToken] = useState("");
     const [clearRequested, setClearRequested] = useState(false);
     const [status, setStatus] = useState<StatusType>("idle");
@@ -32,7 +34,7 @@ export function ScrobblingSection({
 
     const handleSave = async () => {
         setStatus("loading");
-        setMessage("Saving...");
+        setMessage(t("Saving..."));
         try {
             await api.updateSettings(
                 clearRequested
@@ -40,26 +42,26 @@ export function ScrobblingSection({
                     : { listenbrainzToken: token.trim() }
             );
             setStatus("success");
-            setMessage(clearRequested ? "Token removed" : "Scrobbling on");
+            setMessage(clearRequested ? t("Token removed") : t("Scrobbling on"));
             setToken("");
             setClearRequested(false);
             onSaved(!clearRequested);
         } catch {
             setStatus("error");
-            setMessage("Failed to save");
+            setMessage(t("Failed to save"));
         }
     };
 
     return (
         <SettingsSection
             id="scrobbling"
-            title="ListenBrainz Scrobbling"
-            description="Mirror your plays to your own ListenBrainz account (optional)"
+            title={t("ListenBrainz Scrobbling")}
+            description={t("Mirror your plays to your own ListenBrainz account (optional)")}
         >
             {liveSharing && (
                 <SettingsRow
-                    label="Share what I'm playing"
-                    description="Show what you're playing on the shared vibe map."
+                    label={t("Share what I'm playing")}
+                    description={t("Show what you're playing on the shared vibe map.")}
                     htmlFor="share-live"
                 >
                     <SettingsToggle id="share-live" checked={liveSharing.checked} onChange={liveSharing.onChange} />
@@ -67,8 +69,8 @@ export function ScrobblingSection({
             )}
 
             <SettingsRow
-                label="User token"
-                description="Create one at listenbrainz.org → Settings → Reset token"
+                label={t("User token")}
+                description={t("Create one at listenbrainz.org → Settings → Reset token")}
                 htmlFor="lb-token"
             >
                 <SettingsInput
@@ -76,15 +78,15 @@ export function ScrobblingSection({
                     type="password"
                     value={token}
                     onChange={setToken}
-                    placeholder={configured ? "Token saved — type to replace" : "Paste your LB user token"}
+                    placeholder={configured ? t("Token saved — type to replace") : t("Paste your LB user token")}
                     className="w-64"
                 />
             </SettingsRow>
 
             {configured && (
                 <SettingsRow
-                    label="Remove token"
-                    description="Stop mirroring to ListenBrainz"
+                    label={t("Remove token")}
+                    description={t("Stop mirroring to ListenBrainz")}
                     htmlFor="lb-token-clear"
                 >
                     <input
@@ -106,10 +108,10 @@ export function ScrobblingSection({
                         disabled={!dirty || status === "loading"}
                     >
                         {status === "loading"
-                            ? "Saving..."
+                            ? t("Saving...")
                             : clearRequested
-                              ? "Remove token"
-                              : "Save token"}
+                              ? t("Remove token")
+                              : t("Save token")}
                     </Button>
                     <InlineStatus
                         status={status}

@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState } from "react";
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, SettingsSelect, ConnectionTestButton } from "../ui";
@@ -19,6 +20,7 @@ interface LidarrSectionProps {
 }
 
 export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrSectionProps) {
+    const { t } = useLanguage();
     const [qualityProfiles, setQualityProfiles] = useState<LidarrProfile[]>([]);
     const [metadataProfiles, setMetadataProfiles] = useState<LidarrProfile[]>([]);
     const [profilesLoaded, setProfilesLoaded] = useState(false);
@@ -45,12 +47,12 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
     return (
         <SettingsSection
             id="lidarr"
-            title="Download Services"
-            description="Automate music downloads and library management"
+            title={t("Download Services")}
+            description={t("Automate music downloads and library management")}
         >
             <SettingsRow
-                label="Enable Lidarr"
-                description="Connect to Lidarr for music automation"
+                label={t("Enable Lidarr")}
+                description={t("Connect to Lidarr for music automation")}
                 htmlFor="lidarr-enabled"
             >
                 <SettingsToggle
@@ -62,7 +64,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
 
             {settings.lidarrEnabled && (
                 <>
-                    <SettingsRow label="Lidarr URL">
+                    <SettingsRow label={t("Lidarr URL")}>
                         <SettingsInput
                             value={settings.lidarrUrl}
                             onChange={(v) => onUpdate({ lidarrUrl: v })}
@@ -71,12 +73,12 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.lidarrApiKey}
                             onChange={(v) => onUpdate({ lidarrApiKey: v })}
-                            placeholder="Enter API key"
+                            placeholder={t("Enter API key")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -89,8 +91,8 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                     </div>
 
                     <SettingsRow
-                        label="Remove junk downloads"
-                        description="When a download has no usable music or is the wrong album, remove it so Lidarr tries the next release. Turn off if your own Lidarr setup already handles this"
+                        label={t("Remove junk downloads")}
+                        description={t("When a download has no usable music or is the wrong album, remove it so Lidarr tries the next release. Turn off if your own Lidarr setup already handles this")}
                         htmlFor="lidarr-remove-junk"
                     >
                         <SettingsToggle
@@ -103,28 +105,28 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                     {hasProfiles && (
                         <>
                             <SettingsRow
-                                label="Quality Profile"
-                                description="Quality profile for new artists. Default: the music folder's profile"
+                                label={t("Quality Profile")}
+                                description={t("Quality profile for new artists. Default: the music folder's profile")}
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrQualityProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrQualityProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: "Lidarr's default" },
+                                        { value: "", label: t("Lidarr's default") },
                                         ...qualityProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />
                             </SettingsRow>
 
                             <SettingsRow
-                                label="Metadata Profile"
-                                description="Metadata profile for new artists. Default: the music folder's profile"
+                                label={t("Metadata Profile")}
+                                description={t("Metadata profile for new artists. Default: the music folder's profile")}
                             >
                                 <SettingsSelect
                                     value={String(settings.lidarrMetadataProfileId ?? "")}
                                     onChange={(v) => onUpdate({ lidarrMetadataProfileId: v ? Number(v) : null })}
                                     options={[
-                                        { value: "", label: "Lidarr's default" },
+                                        { value: "", label: t("Lidarr's default") },
                                         ...metadataProfiles.map((p) => ({ value: String(p.id), label: p.name })),
                                     ]}
                                 />
