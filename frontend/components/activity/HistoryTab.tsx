@@ -6,14 +6,13 @@ import { Trash2, RotateCcw, History } from "lucide-react";
 import { api } from "@/lib/api";
 import { EmptyState } from "../ui/EmptyState";
 import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { cn } from "@/lib/cn";
 import { useDownloadHistory, type DownloadHistoryItem } from "@/hooks/useNotifications";
 import { DownloadRow, RowAction } from "./DownloadRow";
 
 export function HistoryTab() {
-    const { locale, t } = useLanguage();
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     const { history, isLoading: loading } = useDownloadHistory();
     const [retrying, setRetrying] = useState<Set<string>>(new Set());
