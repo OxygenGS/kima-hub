@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useNotifications, useActiveDownloads } from "@/hooks/useNotifications";
 import { useActivityPanelSettings } from "@/lib/activity-panel-settings-context";
 import { ActivityIconBar, type ActivityType } from "@/features/vibe/ActivityIconBar";
@@ -20,6 +21,7 @@ interface UnifiedPanelProps {
 }
 
 export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
+    const { t } = useLanguage();
     const [activeTab, setActiveTab] = useState<VibeTab>("now-playing");
     const [expandedActivity, setExpandedActivity] = useState<ActivityType | null>(null);
     // Externally-registered settings content (discover settings gear, lyrics).
@@ -80,7 +82,7 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
                         "absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors duration-200 z-(--z-raised)",
                         isOpen && "pointer-events-none opacity-0",
                     )}
-                    title="open panel"
+                    title={t("Open panel")}
                 >
                     <ChevronLeft className="w-5 h-5 text-[var(--text-muted)]" />
                     {hasActivity && (
@@ -115,7 +117,7 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
                         <button
                             onClick={handleCollapse}
                             className="p-1 hover:bg-white/10 transition-colors duration-200"
-                            title="collapse panel"
+                            title={t("Collapse panel")}
                         >
                             <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
                         </button>

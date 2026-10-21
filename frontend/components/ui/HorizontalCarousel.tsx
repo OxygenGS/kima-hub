@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, type CSSProperties, ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 interface HorizontalCarouselProps {
@@ -20,6 +21,7 @@ export function HorizontalCarousel({
     gap = "md",
     style,
 }: HorizontalCarouselProps) {
+    const { t } = useLanguage();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
@@ -83,7 +85,7 @@ export function HorizontalCarousel({
                         "border border-white/10",
                         "-translate-x-1/2"
                     )}
-                    aria-label="Scroll left"
+                    aria-label={t("Scroll left")}
                 >
                     <ChevronLeft className="w-5 h-5 text-white" />
                 </button>
@@ -116,7 +118,7 @@ export function HorizontalCarousel({
                         "border border-white/10",
                         "translate-x-1/2"
                     )}
-                    aria-label="Scroll right"
+                    aria-label={t("Scroll right")}
                 >
                     <ChevronRight className="w-5 h-5 text-white" />
                 </button>
