@@ -157,7 +157,7 @@ export function SubsonicSection() {
             {newToken && (
                 <div className="py-4 space-y-3 border-t border-b border-white/5">
                     <p className="text-xs text-warning">
-                        {t("Save this key — it won\u0027t be shown again.")}
+                        {t("Save this key — it won't be shown again.")}
                     </p>
                     <div className="flex items-start gap-2 min-w-0 overflow-hidden">
                         <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg font-mono break-all flex-1 min-w-0 overflow-hidden">
