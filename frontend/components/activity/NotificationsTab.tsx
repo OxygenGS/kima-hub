@@ -11,6 +11,8 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { EmptyState } from "../ui/EmptyState";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { cn } from "@/lib/cn";
 import Link from "next/link";
@@ -18,6 +20,7 @@ import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { timeAgo } from "@/lib/relative-time";
 
 export function NotificationsTab() {
+    const { locale, t } = useLanguage();
     const {
         notifications,
         isLoading: loading,
@@ -72,8 +75,8 @@ export function NotificationsTab() {
         return (
             <EmptyState
                 icon={<Bell className="w-8 h-8" />}
-                title="No notifications"
-                description="You're all caught up!"
+                title={t("No notifications")}
+                description={t("You're all caught up!")}
             />
         );
     }
@@ -156,8 +159,8 @@ export function NotificationsTab() {
                                         <button
                                             onClick={() => handleMarkAsRead(notification.id)}
                                             className="p-1 hover:bg-white/10 transition-colors"
-                                            title="mark as read"
-                                            aria-label="Mark as read"
+                                            title={t("Mark as read")}
+                                            aria-label={t("Mark as read")}
                                         >
                                             <Check className="w-3 h-3 text-[var(--text-muted)] hover:text-white" />
                                         </button>
@@ -165,8 +168,8 @@ export function NotificationsTab() {
                                     <button
                                         onClick={() => handleClear(notification.id)}
                                         className="p-1 hover:bg-white/10 transition-colors"
-                                        title="dismiss"
-                                        aria-label="Dismiss"
+                                        title={t("Dismiss")}
+                                        aria-label={t("Dismiss")}
                                     >
                                         <Trash2 className="w-3 h-3 text-[var(--text-muted)] hover:text-danger-light" />
                                     </button>
