@@ -832,7 +832,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             hover:bg-warning/30 transition-colors"
                                         >
                                             <Pause className="w-3 h-3" />
-                                            Pause
+                                            {t("Pause")}
                                         </button>
                                     ) : (
                                         <button
@@ -841,7 +841,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                             hover:bg-success/30 transition-colors"
                                         >
                                             <Play className="w-3 h-3" />
-                                            Resume
+                                            {t("Resume")}
                                         </button>
                                     )}
                                     <button
@@ -850,7 +850,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                         hover:bg-danger/30 transition-colors"
                                     >
                                         <StopCircle className="w-3 h-3" />
-                                        Stop
+                                        {t("Stop")}
                                     </button>
                                 </>
                             )}
@@ -879,19 +879,11 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 <div className="flex items-center gap-2">
                                                     <AlertTriangle className="w-3 h-3 text-danger-light" />
                                                     <span className="text-danger-light font-medium">
-                                                        Enrichment appears
-                                                        stalled
+                                                        {t("Enrichment appears stalled")}
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-[var(--text-secondary)]">
-                                                    Status is &quot;running&quot;
-                                                    but nothing has completed
-                                                    for over 15 minutes. The
-                                                    audio analyzer may be down
-                                                    or the work queue wedged --
-                                                    check the analyzer container
-                                                    and the enrichment error
-                                                    list below.
+                                                    {t('Status is "running" but nothing has completed for over 15 minutes. The audio analyzer may be down or the work queue wedged -- check the analyzer container and the enrichment error list below.')}
                                                 </p>
                                             </>
                                         ) : (
@@ -1026,8 +1018,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             />
                             <div className="flex flex-col items-end gap-0.5">
                                 {isConcurrencyLoading ? (
-                                    <span className="text-xs text-[var(--text-muted)] w-24 text-right">
-                                        Loading...
+                                    <span className="text-xs text-[var(--text-muted)] w-24 text-right">{t("Loading...")}
                                     </span>
                                 ) : (
                                     <>
@@ -1048,7 +1039,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                                 {
                                                     concurrencyConfig.artistsPerMin
                                                 }{" "}
-                                                artists/min
+                                                {t("artists/min")}
                                             </span>
                                         )}
                                     </>
@@ -1111,11 +1102,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-left"
                     >
                         <div>
-                            <span className="text-xs text-[var(--text-secondary)]">
-                                Maintenance Operations
+                            <span className="text-xs text-[var(--text-secondary)]">{t("Maintenance Operations")}
                             </span>
                             <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                                Cache clearing, stale job cleanup, failed-analysis retry
+                                {t("Cache clearing, stale job cleanup, failed-analysis retry")}
                             </p>
                         </div>
                         <ChevronDown
@@ -1145,7 +1135,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                             {retryResult && (
                                 <p className="text-xs tabular-nums text-success">
-                                    Reset {retryResult.reset} failed tracks to pending
+                                    {t("Reset")} {retryResult.reset} {t("failed tracks to pending")}
                                 </p>
                             )}
                             {clearCachesResult && (
@@ -1155,19 +1145,19 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             )}
                             {cleanupResult && cleanupResult.totalCleaned > 0 && (
                                 <p className="text-xs tabular-nums text-success">
-                                    Cleaned:{" "}
+                                    {t("Cleaned:")}{" "}
                                     {cleanupResult.cleaned.discoveryBatches.cleaned}{" "}
-                                    batches,{" "}
+                                    {t("batches,")}{" "}
                                     {cleanupResult.cleaned.downloadJobs.cleaned}{" "}
-                                    downloads,{" "}
+                                    {t("downloads,")}{" "}
                                     {cleanupResult.cleaned.spotifyImportJobs.cleaned}{" "}
-                                    imports, {cleanupResult.cleaned.bullQueues.cleaned}{" "}
-                                    queue jobs
+                                    {t("imports,")} {cleanupResult.cleaned.bullQueues.cleaned}{" "}
+                                    {t("queue jobs")}
                                 </p>
                             )}
                             {cleanupResult && cleanupResult.totalCleaned === 0 && (
                                 <p className="text-xs text-[var(--text-muted)]">
-                                    No stale jobs found
+                                    {t("No stale jobs found")}
                                 </p>
                             )}
                         </div>
