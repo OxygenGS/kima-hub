@@ -6,12 +6,11 @@ import { api } from "@/lib/api";
 import { useActiveDownloads } from "@/hooks/useNotifications";
 import { EmptyState } from "../ui/EmptyState";
 import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { DownloadRow, RowAction } from "./DownloadRow";
 
 export function ActiveDownloadsTab() {
-    const { locale, t } = useLanguage();
+    const { t } = useLanguage();
     const { downloads, isLoading: loading, refetch } = useActiveDownloads();
     const [cancelling, setCancelling] = useState<Set<string>>(new Set());
 
