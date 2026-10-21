@@ -3,6 +3,10 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "What’s new in": "What’s new in",
+    "downloads in progress": "downloads in progress",
+    "downloads starting": "downloads starting",
+    "downloads starting...": "downloads starting...",
     "shuffle play": "shuffle play",
     "play all": "play all",
     "Jump to section": "Jump to section",
@@ -1735,6 +1739,10 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "What’s new in": "Nieuw in",
+    "downloads in progress": "downloads bezig",
+    "downloads starting": "downloads worden gestart",
+    "downloads starting...": "downloads worden gestart...",
     "shuffle play": "willekeurig afspelen",
     "play all": "alles afspelen",
     "Jump to section": "Ga naar onderdeel",
