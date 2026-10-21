@@ -15,7 +15,6 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "../ui/EmptyState";
 import { useLanguage } from "@/lib/i18n/language-context";
-import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
 import { timeAgo } from "@/lib/relative-time";
@@ -80,7 +79,7 @@ function statusColor(status: string): string {
 }
 
 export function ImportsTab() {
-    const { locale, t } = useLanguage();
+    const { t } = useLanguage();
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [cancelling, setCancelling] = useState<Set<string>>(new Set());
