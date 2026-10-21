@@ -3,6 +3,9 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Toggle activity panel": "Toggle activity panel",
+    "Open panel": "Open panel",
+    "Collapse panel": "Collapse panel",
     "Close menu": "Close menu",
     "Create playlist": "Create playlist",
     "What’s new in": "What’s new in",
@@ -1741,6 +1744,9 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Toggle activity panel": "Activiteitenpaneel tonen of verbergen",
+    "Open panel": "Paneel openen",
+    "Collapse panel": "Paneel inklappen",
     "Close menu": "Menu sluiten",
     "Create playlist": "Afspeellijst maken",
     "What’s new in": "Nieuw in",
