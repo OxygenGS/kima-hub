@@ -2,6 +2,8 @@
 
 import { ReactNode, memo, type CSSProperties } from "react";
 import { Button } from "./Button";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface EmptyStateProps {
     icon: ReactNode;
@@ -22,14 +24,15 @@ const EmptyState = memo(function EmptyState({
     children,
     action,
 }: EmptyStateProps) {
+    const { locale } = useLanguage();
     return (
         <div className="flex flex-col items-center justify-center py-12 md:py-16 text-center px-4">
             <div className="mb-4 text-[var(--text-muted)] animate-rise">{icon}</div>
             <h3 className="text-lg md:text-xl font-medium text-white mb-2 animate-rise [animation-delay:calc(var(--i)*45ms)]" style={{ "--i": 1 } as CSSProperties}>
-                {title}
+                {translate(locale, title)}
             </h3>
             <p className="text-sm md:text-base text-[var(--text-muted)] mb-6 max-w-md animate-rise [animation-delay:calc(var(--i)*45ms)]" style={{ "--i": 2 } as CSSProperties}>
-                {description}
+                {translate(locale, description)}
             </p>
             {children}
             {action && (
@@ -37,7 +40,7 @@ const EmptyState = memo(function EmptyState({
                     variant={action.variant || "primary"}
                     onClick={action.onClick}
                 >
-                    {action.label}
+                    {translate(locale, action.label)}
                 </Button>
             )}
         </div>
