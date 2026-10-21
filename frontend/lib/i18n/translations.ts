@@ -3,6 +3,10 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Enrichment Status": "Enrichment Status",
+    "Audio analysis running": "Audio analysis running",
+    "Vibe embeddings running": "Vibe embeddings running",
+    "Complete": "Complete",
     "Failed to sync": "Failed to sync",
     "Failed to clear caches": "Failed to clear caches",
     "Failed to cleanup stale jobs": "Failed to cleanup stale jobs",
@@ -1723,6 +1727,10 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Enrichment Status": "Verrijkingsstatus",
+    "Audio analysis running": "Audioanalyse wordt uitgevoerd",
+    "Vibe embeddings running": "Vibe-embeddings worden verwerkt",
+    "Complete": "Voltooid",
     "Failed to sync": "Synchroniseren mislukt",
     "Failed to clear caches": "Caches wissen mislukt",
     "Failed to cleanup stale jobs": "Vastgelopen taken opschonen mislukt",

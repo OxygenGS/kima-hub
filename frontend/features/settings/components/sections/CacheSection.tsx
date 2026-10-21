@@ -662,28 +662,28 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-danger/20 flex items-center justify-between">
                         <span className="text-xs text-danger-light">{t("Failed to load enrichment status")}</span>
                         <Button size="sm" onClick={() => refetchProgress()}>
-                            Retry
+                            {t("Retry")}
                         </Button>
                     </div>
                 ) : enrichmentProgress ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-medium text-white">
-                                Enrichment Status
+                                {t("Enrichment Status")}
                             </h3>
                             {enrichmentProgress.coreComplete &&
                                 !enrichmentProgress.isFullyComplete && (
                                     <span className="text-xs tabular-nums text-brand flex items-center gap-1">
                                         <GradientSpinner size="sm" />
                                         {(enrichmentProgress.audioAnalysis?.pending ?? 0) > 0 || (enrichmentProgress.audioAnalysis?.processing ?? 0) > 0
-                                            ? "Audio analysis running"
-                                            : "Vibe embeddings running"}
+                                            ? t("Audio analysis running")
+                                            : t("Vibe embeddings running")}
                                     </span>
                                 )}
                             {enrichmentProgress.isFullyComplete && (
                                 <span className="text-xs tabular-nums text-success flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
-                                    Complete
+                                    {t("Complete")}
                                 </span>
                             )}
                         </div>
@@ -736,7 +736,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <h4 className="text-sm font-medium text-[var(--text-secondary)]">{t("Audio Analysis")}</h4>
                                     <p className="text-xs text-[var(--text-muted)]">{t("Not available (lite mode)")}</p>
                                     <p className="text-xs text-[var(--text-muted)] mt-1">
-                                        Service not detected -- check setup documentation
+                                        {t("Service not detected -- check setup documentation")}
                                     </p>
                                 </div>
                             ) : null}
@@ -774,7 +774,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <h4 className="text-sm font-medium text-[var(--text-secondary)]">{t("Vibe Similarity")}</h4>
                                     <p className="text-xs text-[var(--text-muted)]">{t("Not available (lite mode)")}</p>
                                     <p className="text-xs text-[var(--text-muted)] mt-1">
-                                        Service not detected -- check setup documentation
+                                        {t("Service not detected -- check setup documentation")}
                                     </p>
                                 </div>
                             ) : null}
