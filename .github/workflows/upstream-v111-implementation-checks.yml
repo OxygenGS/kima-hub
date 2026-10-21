@@ -19,7 +19,7 @@ concurrency:
 jobs:
   change-scope:
     name: Classify frontend-only UI change
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
@@ -44,7 +44,7 @@ jobs:
             core.info(fast ? 'Frontend-only UI: skip costly image jobs.' : 'Run full image validation.');
   dependency-security:
     name: Fixable dependency vulnerabilities and committed secrets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
 
   fork-safety:
     name: Verify fork guards survived v1.11 source merge
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Assert fork-specific security, branding and locale wiring
@@ -87,7 +87,7 @@ jobs:
 
   frontend:
     name: Updated v1.11 frontend typecheck lint and unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -111,7 +111,7 @@ jobs:
 
   backend:
     name: Updated v1.11 backend Prisma and TypeScript
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       DATABASE_URL: postgresql://test:test@localhost:5435/isolated
@@ -136,7 +136,7 @@ jobs:
 
   language-browser:
     name: EN/NL browser switching on v1.11 implementation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -166,7 +166,7 @@ jobs:
 
   music-permissions-http:
     name: Real middleware and HTTP acquisition permission regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -208,7 +208,7 @@ jobs:
 
   all-backend-tests:
     name: Full v1.11 backend Jest suite on disposable Postgres and Redis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
@@ -250,7 +250,7 @@ jobs:
 
   aio-image-build:
     name: Build actual v1.11 AIO Docker image (strictly no push)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read

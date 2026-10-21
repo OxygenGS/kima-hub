@@ -13,7 +13,7 @@ on:
 jobs:
     change-scope:
       name: Classify frontend-only UI change
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-24.04
       permissions:
         contents: read
         pull-requests: read
@@ -38,7 +38,7 @@ jobs:
               core.info(fast ? 'Frontend-only UI: skip costly image jobs.' : 'Run full image validation.');
     naming-audit:
         name: No Legacy Project Naming
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v4
             - name: Check tracked files and filenames
@@ -57,7 +57,7 @@ jobs:
 
     lint-frontend:
         name: Frontend Lint & Unit Tests
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v4
 
@@ -83,7 +83,7 @@ jobs:
 
     typecheck:
         name: TypeScript Typecheck
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         steps:
             - uses: actions/checkout@v4
 
@@ -113,7 +113,7 @@ jobs:
 
     unit-tests:
         name: Backend Unit Tests
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         # The social integration suite (vibeProfile/social/socialProfile) needs a
         # real Postgres with pgvector -- not stock postgres, `vibe.fused_track`'s
         # v3 column is a vector type. DATABASE_URL below is the same
@@ -180,7 +180,7 @@ jobs:
 
     build-docker:
         name: Docker Build Check
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         needs: [change-scope, lint-frontend, typecheck, unit-tests]
         if: needs.change-scope.outputs.fast_ui != 'true'
         steps:
@@ -203,7 +203,7 @@ jobs:
 
     aio-smoke:
         name: All-in-One Fresh-Install Smoke Test
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 90
         needs: [build-docker]
         permissions:
@@ -362,7 +362,7 @@ jobs:
 
     db-upgrade:
         name: Existing Kima Database Upgrade & Restore
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 30
         permissions:
             contents: read
