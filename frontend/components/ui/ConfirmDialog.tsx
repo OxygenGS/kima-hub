@@ -5,6 +5,8 @@ import { AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { useDialog } from "@/hooks/useDialog";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface ConfirmDialogProps {
     isOpen: boolean;
@@ -27,6 +29,7 @@ export function ConfirmDialog({
     cancelText = "Cancel",
     variant = "danger",
 }: ConfirmDialogProps) {
+    const { t, locale } = useLanguage();
     const cancelRef = useRef<HTMLButtonElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -81,13 +84,13 @@ export function ConfirmDialog({
                     </div>
                     <div className="flex-1 min-w-0">
                         <h2 id="confirm-dialog-title" className="text-xl font-bold text-white mb-2">
-                            {title}
+                            {translate(locale, title)}
                         </h2>
-                        <p id="confirm-dialog-message" className="text-sm text-[var(--text-secondary)]">{message}</p>
+                        <p id="confirm-dialog-message" className="text-sm text-[var(--text-secondary)]">{translate(locale, message)}</p>
                     </div>
                     <button
                         onClick={onClose}
-                        aria-label="Close dialog"
+                        aria-label={t("Close dialog")}
                         className="p-1 hover:bg-white/10 rounded-full transition-colors text-[var(--text-secondary)] hover:text-white flex-shrink-0"
                     >
                         <X className="w-5 h-5" />
@@ -101,14 +104,14 @@ export function ConfirmDialog({
                         onClick={onClose}
                         className="flex-1"
                     >
-                        {cancelText}
+                        {translate(locale, cancelText)}
                     </Button>
                     <Button
                         variant="primary"
                         onClick={handleConfirm}
                         className={cn("flex-1", styles.confirmButton)}
                     >
-                        {confirmText}
+                        {translate(locale, confirmText)}
                     </Button>
                 </div>
             </div>
