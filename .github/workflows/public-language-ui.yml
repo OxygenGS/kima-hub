@@ -18,7 +18,7 @@ concurrency:
 jobs:
   public-language-browser:
     name: Browser Language Switching
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
