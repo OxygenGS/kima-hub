@@ -676,7 +676,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     <span className="text-xs tabular-nums text-brand flex items-center gap-1">
                                         <GradientSpinner size="sm" />
                                         {(enrichmentProgress.audioAnalysis?.pending ?? 0) > 0 || (enrichmentProgress.audioAnalysis?.processing ?? 0) > 0
-                                            ? "Audio analysis running"
+                                            ? t("Audio analysis running")
                                             : t("Vibe embeddings running")}
                                     </span>
                                 )}
