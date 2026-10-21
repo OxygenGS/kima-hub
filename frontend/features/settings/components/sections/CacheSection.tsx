@@ -298,6 +298,7 @@ function GpuSwitchRow({ id, label, description, gpu, on, effective, fellBack, pe
     pending: boolean;
     onChange: (checked: boolean) => void;
 }) {
+    const { t } = useLanguage();
     return (
         <SettingsRow label={label} description={description} htmlFor={id}>
             <div className="flex flex-col items-end gap-1">
