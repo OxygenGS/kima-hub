@@ -5,10 +5,13 @@ import { Download, Loader2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useActiveDownloads } from "@/hooks/useNotifications";
 import { EmptyState } from "../ui/EmptyState";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { DownloadRow, RowAction } from "./DownloadRow";
 
 export function ActiveDownloadsTab() {
+    const { locale, t } = useLanguage();
     const { downloads, isLoading: loading, refetch } = useActiveDownloads();
     const [cancelling, setCancelling] = useState<Set<string>>(new Set());
 
@@ -54,8 +57,8 @@ export function ActiveDownloadsTab() {
         return (
             <EmptyState
                 icon={<Download className="w-8 h-8" />}
-                title="No active downloads"
-                description="Downloads will appear here"
+                title={t("No active downloads")}
+                description={t("Downloads will appear here")}
             />
         );
     }
