@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Close menu": "Close menu",
+    "Create playlist": "Create playlist",
     "What’s new in": "What’s new in",
     "downloads in progress": "downloads in progress",
     "downloads starting": "downloads starting",
@@ -1739,6 +1741,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Close menu": "Menu sluiten",
+    "Create playlist": "Afspeellijst maken",
     "What’s new in": "Nieuw in",
     "downloads in progress": "downloads bezig",
     "downloads starting": "downloads worden gestart",
