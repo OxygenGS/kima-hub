@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState, useEffect, useRef } from "react";
 import { SettingsSection, SettingsRow, SettingsToggle } from "../ui";
@@ -215,6 +216,7 @@ function WorkerSliderRow({ label, description, config, isLoading, setWorkers }: 
 }
 
 function EnrichmentFailuresList({ active = false }: { active?: boolean }) {
+    const { t } = useLanguage();
     const { data, isLoading } = useQuery({
         queryKey: ["enrichment-failures-inline"],
         queryFn: () => api.getEnrichmentFailures({ limit: 50 }),
@@ -223,8 +225,8 @@ function EnrichmentFailuresList({ active = false }: { active?: boolean }) {
         refetchInterval: active ? 15000 : false,
     });
 
-    if (isLoading) return <div className="py-2 text-xs text-[var(--text-muted)]">Loading...</div>;
-    if (!data?.failures?.length) return <div className="py-2 text-xs text-[var(--text-muted)]">No active failures</div>;
+    if (isLoading) return <div className="py-2 text-xs text-[var(--text-muted)]">{t("Loading...")}</div>;
+    if (!data?.failures?.length) return <div className="py-2 text-xs text-[var(--text-muted)]">{t("No active failures")}</div>;
 
     return (
         <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
@@ -351,6 +353,7 @@ function gpuStatusText(g: GpuRuntimeStatus, on: boolean, effective: boolean, fel
 }
 
 export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
+    const { t } = useLanguage();
     const { musicCNN, vibeEmbeddings, loading: featuresLoading } = useFeatures();
     const { user: currentUser } = useAuth();
     const [syncing, setSyncing] = useState(false);
@@ -646,15 +649,15 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
     return (
         <>
-            <SettingsSection id="cache" title="Library Enrichment">
+            <SettingsSection id="cache" title={t("Library Enrichment")}>
                 {isProgressPending ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
                         <GradientSpinner size="sm" />
-                        <span className="text-xs text-[var(--text-muted)]">Loading enrichment status...</span>
+                        <span className="text-xs text-[var(--text-muted)]">{t("Loading enrichment status...")}</span>
                     </div>
                 ) : isProgressError && !enrichmentProgress ? (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-danger/20 flex items-center justify-between">
-                        <span className="text-xs text-danger-light">Failed to load enrichment status</span>
+                        <span className="text-xs text-danger-light">{t("Failed to load enrichment status")}</span>
                         <Button size="sm" onClick={() => refetchProgress()}>
                             Retry
                         </Button>
@@ -685,8 +688,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                         <div className="space-y-1">
                             <EnrichmentStage
                                 icon={User}
-                                label="Artist Metadata"
-                                description="Bios, images, and similar artists from ListenBrainz + MusicBrainz"
+                                label={t("Artist Metadata")}
+                                description={t("Bios, images, and similar artists from ListenBrainz + MusicBrainz")}
                                 completed={enrichmentProgress.artists.completed}
                                 total={enrichmentProgress.artists.total}
                                 progress={enrichmentProgress.artists.progress}
@@ -695,8 +698,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                             <EnrichmentStage
                                 icon={Heart}
-                                label="Mood Tags"
-                                description="Vibes and mood data from the enrichment pipeline"
+                                label={t("Mood Tags")}
+                                description={t("Vibes and mood data from the enrichment pipeline")}
                                 completed={
                                     enrichmentProgress.trackTags.enriched
                                 }
@@ -708,8 +711,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             {!featuresLoading && musicCNN && enrichmentProgress.audioAnalysis ? (
                                 <EnrichmentStage
                                     icon={Activity}
-                                    label="Audio Analysis"
-                                    description="BPM, key, energy, and danceability from audio files"
+                                    label={t("Audio Analysis")}
+                                    description={t("BPM, key, energy, and danceability from audio files")}
                                     completed={
                                         enrichmentProgress.audioAnalysis.completed
                                     }
@@ -727,8 +730,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 />
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-[var(--text-secondary)]">Audio Analysis</h4>
-                                    <p className="text-xs text-[var(--text-muted)]">Not available (lite mode)</p>
+                                    <h4 className="text-sm font-medium text-[var(--text-secondary)]">{t("Audio Analysis")}</h4>
+                                    <p className="text-xs text-[var(--text-muted)]">{t("Not available (lite mode)")}</p>
                                     <p className="text-xs text-[var(--text-muted)] mt-1">
                                         Service not detected -- check setup documentation
                                     </p>
@@ -741,8 +744,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     {enrichmentProgress.clapEmbeddings && (
                                         <EnrichmentStage
                                             icon={Waves}
-                                            label="Vibe Embeddings"
-                                            description="CLAP audio embeddings for similarity search"
+                                            label={t("Vibe Embeddings")}
+                                            description={t("CLAP audio embeddings for similarity search")}
                                             completed={enrichmentProgress.clapEmbeddings.completed}
                                             total={enrichmentProgress.clapEmbeddings.total}
                                             progress={enrichmentProgress.clapEmbeddings.progress}
@@ -754,8 +757,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     {enrichmentProgress.similarity && (
                                         <EnrichmentStage
                                             icon={Network}
-                                            label="Similarity"
-                                            description="Matching from sound, feel and artist genre"
+                                            label={t("Similarity")}
+                                            description={t("Matching from sound, feel and artist genre")}
                                             completed={enrichmentProgress.similarity.completed}
                                             total={enrichmentProgress.similarity.total}
                                             progress={enrichmentProgress.similarity.progress}
@@ -765,8 +768,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                 </>
                             ) : !featuresLoading ? (
                                 <div className="opacity-50 py-2">
-                                    <h4 className="text-sm font-medium text-[var(--text-secondary)]">Vibe Similarity</h4>
-                                    <p className="text-xs text-[var(--text-muted)]">Not available (lite mode)</p>
+                                    <h4 className="text-sm font-medium text-[var(--text-secondary)]">{t("Vibe Similarity")}</h4>
+                                    <p className="text-xs text-[var(--text-muted)]">{t("Not available (lite mode)")}</p>
                                     <p className="text-xs text-[var(--text-muted)] mt-1">
                                         Service not detected -- check setup documentation
                                     </p>
@@ -923,8 +926,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 ) : null}
 
                 <SettingsRow
-                    label="User cache size"
-                    description="Maximum storage for offline content"
+                    label={t("User cache size")}
+                    description={t("Maximum storage for offline content")}
                 >
                     <div className="flex items-center gap-3">
                         <input
@@ -932,7 +935,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                             min={512}
                             max={20480}
                             step={512}
-                            aria-label="User cache size"
+                            aria-label={t("User cache size")}
                             value={settings.maxCacheSizeMb}
                             onChange={(e) =>
                                 onUpdate({
@@ -948,15 +951,15 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Transcode cache size"
-                    description="Server restart required for changes"
+                    label={t("Transcode cache size")}
+                    description={t("Server restart required for changes")}
                 >
                     <div className="flex items-center gap-3">
                         <input
                             type="range"
                             min={1}
                             max={50}
-                            aria-label="Transcode cache size"
+                            aria-label={t("Transcode cache size")}
                             value={settings.transcodeCacheMaxGb}
                             onChange={(e) =>
                                 onUpdate({
@@ -974,8 +977,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Auto sync library"
-                    description="Automatically sync library changes"
+                    label={t("Auto sync library")}
+                    description={t("Automatically sync library changes")}
                     htmlFor="auto-sync"
                 >
                     <SettingsToggle
@@ -986,8 +989,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 </SettingsRow>
 
                 <SettingsRow
-                    label="Auto enrich metadata"
-                    description="Automatically enrich metadata for new content"
+                    label={t("Auto enrich metadata")}
+                    description={t("Automatically enrich metadata for new content")}
                     htmlFor="auto-enrich"
                 >
                     <SettingsToggle
@@ -1001,15 +1004,15 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                 {settings.autoEnrichMetadata && (
                     <SettingsRow
-                        label="Metadata Fetch Speed"
-                        description="Parallel MusicBrainz/enrichment requests for artist bios and mood tags"
+                        label={t("Metadata Fetch Speed")}
+                        description={t("Parallel MusicBrainz/enrichment requests for artist bios and mood tags")}
                     >
                         <div className="flex items-center gap-3">
                             <input
                                 type="range"
                                 min={1}
                                 max={5}
-                                aria-label="Metadata Fetch Speed"
+                                aria-label={t("Metadata Fetch Speed")}
                                 value={enrichmentSpeed}
                                 disabled={isConcurrencyLoading}
                                 onChange={(e) => {
@@ -1054,16 +1057,16 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
 
                 {settings.autoEnrichMetadata && !featuresLoading && musicCNN && (
                     <WorkerSliderRow
-                        label="Audio Analysis Workers"
-                        description="CPU workers for Essentia ML analysis"
+                        label={t("Audio Analysis Workers")}
+                        description={t("CPU workers for Essentia ML analysis")}
                         {...analysisWorkers}
                     />
                 )}
 
                 {settings.autoEnrichMetadata && !featuresLoading && vibeEmbeddings && (
                     <WorkerSliderRow
-                        label="Vibe Embedding Workers"
-                        description="CPU workers for CLAP embeddings (vibe similarity)"
+                        label={t("Vibe Embedding Workers")}
+                        description={t("CPU workers for CLAP embeddings (vibe similarity)")}
                         {...clapWorkers}
                     />
                 )}
@@ -1074,8 +1077,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 {settings.autoEnrichMetadata && !featuresLoading && vibeEmbeddings && gpuStatus?.supported && (
                     <GpuSwitchRow
                         id="gpu-onnx-toggle"
-                        label="NVIDIA GPU for vibe embeddings"
-                        description="Run vibe embeddings on an NVIDIA GPU. Downloads about 2 GB of pinned packages into the data directory (they take about 3.4 GB) the first time. Applies on its own within a minute: the analyzer finishes the songs it is on, then restarts."
+                        label={t("NVIDIA GPU for vibe embeddings")}
+                        description={t("Run vibe embeddings on an NVIDIA GPU. Downloads about 2 GB of pinned packages into the data directory (they take about 3.4 GB) the first time. Applies on its own within a minute: the analyzer finishes the songs it is on, then restarts.")}
                         gpu={gpuStatus ?? null}
                         on={gpuStatus?.enabled ?? false}
                         effective={gpuStatus?.effective ?? false}
@@ -1087,8 +1090,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                 {settings.autoEnrichMetadata && !featuresLoading && musicCNN && gpuStatus?.supported && (
                     <GpuSwitchRow
                         id="gpu-analysis-toggle"
-                        label="NVIDIA GPU for audio analysis"
-                        description="Run the mood, valence and arousal models on an NVIDIA GPU. Uses the same download as vibe embeddings. Applies on its own within a minute: the analyzer finishes the songs it is on, then restarts."
+                        label={t("NVIDIA GPU for audio analysis")}
+                        description={t("Run the mood, valence and arousal models on an NVIDIA GPU. Uses the same download as vibe embeddings. Applies on its own within a minute: the analyzer finishes the songs it is on, then restarts.")}
                         gpu={gpuStatus ?? null}
                         on={gpuStatus?.analysis ?? false}
                         effective={gpuStatus?.analysisEffective ?? false}
