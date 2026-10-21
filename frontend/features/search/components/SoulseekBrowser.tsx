@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { CASCADE_WINDOW_MS } from "@/lib/motion";
@@ -61,6 +62,7 @@ export function SoulseekBrowser({
     onDownload,
     onBulkDownload,
 }: SoulseekBrowserProps) {
+    const { t } = useLanguage();
     const { canDownloadTracks } = useMusicPermissions();
     const [formatFilters, setFormatFilters] = useState<Set<SoulseekFormatFilter>>(new Set(["all"]));
     const [sortField, setSortField] = useState<SoulseekSortField>("quality");
@@ -204,7 +206,7 @@ export function SoulseekBrowser({
         return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Music className="w-12 h-12 text-[var(--text-muted)] mb-3" />
-                <p className="text-[var(--text-secondary)]">No Soulseek results found</p>
+                <p className="text-[var(--text-secondary)]">{t("No Soulseek results found")}</p>
             </div>
         );
     }
@@ -216,12 +218,12 @@ export function SoulseekBrowser({
                     <>
                         <GradientSpinner size="sm" />
                         <span className="text-sm text-[var(--text-primary)]">
-                            Searching... {results.length} results from {uniqueUserCount} users
+                            {t("Searching...")} {results.length} {t("results from")} {uniqueUserCount} {t("users")}
                         </span>
                     </>
                 ) : (
                     <span className="text-sm text-[var(--text-secondary)]">
-                        Search complete &mdash; {results.length} results from {uniqueUserCount} users
+                        {t("Search complete")} &mdash; {results.length} {t("results from")} {uniqueUserCount} {t("users")}
                     </span>
                 )}
             </div>
@@ -239,7 +241,7 @@ export function SoulseekBrowser({
                                     : "bg-[#282828] text-[var(--text-secondary)] hover:text-white hover:bg-[#333]",
                             )}
                         >
-                            {pill.label}
+                            {pill.value === "all" ? t("All") : pill.label}
                         </button>
                     ))}
                 </div>
@@ -251,7 +253,7 @@ export function SoulseekBrowser({
                 >
                     {SORT_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
-                            {opt.label.toLowerCase()}
+                            {t(opt.label as "Quality" | "Bitrate" | "Size" | "Filename")}
                         </option>
                     ))}
                 </select>
@@ -263,7 +265,7 @@ export function SoulseekBrowser({
                             "p-1.5 rounded transition-colors",
                             viewMode === "flat" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
-                        title="flat list"
+                        title={t("flat list")}
                     >
                         <List className="w-4 h-4" />
                     </button>
@@ -273,7 +275,7 @@ export function SoulseekBrowser({
                             "p-1.5 rounded transition-colors",
                             viewMode === "grouped" ? "bg-white/10 text-white" : "text-[var(--text-muted)] hover:text-gray-300",
                         )}
-                        title="group by user"
+                        title={t("group by user")}
                     >
                         <Users className="w-4 h-4" />
                     </button>
@@ -286,7 +288,7 @@ export function SoulseekBrowser({
                         className="ml-auto"
                     >
                         <Download className="w-4 h-4" />
-                        Download {selectedKeys.size} selected
+                        {t("Download")} {selectedKeys.size} {t("selected")}
                     </Button>
                 )}
             </div>
@@ -315,7 +317,7 @@ export function SoulseekBrowser({
             {viewMode === "flat" && hasMore && (
                 <div ref={sentinelRef} className="flex items-center justify-center py-4">
                     <span className="text-xs text-[var(--text-muted)]">
-                        Showing {displayResults.length} of {sorted.length} results
+                        {t("Showing")} {displayResults.length} {t("of")} {sorted.length} {t("results")}
                     </span>
                 </div>
             )}
@@ -342,6 +344,7 @@ function FlatView({
     onToggleSelectAll,
     onDownload,
 }: FlatViewProps) {
+    const { t } = useLanguage();
     const { canDownloadTracks } = useMusicPermissions();
     const allSelected = results.length > 0 && results.every((r) => selectedKeys.has(getResultKey(r)));
 
@@ -358,11 +361,11 @@ function FlatView({
                         />
                     )}
                 </div>
-                <div>Title</div>
-                <div>User</div>
-                <div className="hidden md:block">Format</div>
-                <div className="hidden md:block text-right">Bitrate</div>
-                <div className="hidden md:block text-right">Size</div>
+                <div>{t("Title")}</div>
+                <div>{t("User")}</div>
+                <div className="hidden md:block">{t("Format")}</div>
+                <div className="hidden md:block text-right">{t("Bitrate")}</div>
+                <div className="hidden md:block text-right">{t("Size")}</div>
                 <div />
             </div>
 
@@ -400,6 +403,7 @@ function ResultRow({
     onDownload,
     animationDelay,
 }: ResultRowProps) {
+    const { t } = useLanguage();
     const { canDownloadTracks } = useMusicPermissions();
     const key = getResultKey(result);
     const parsed = result.parsedTitle
@@ -448,7 +452,7 @@ function ResultRow({
             <div className="flex items-center justify-center">
                 {canDownloadTracks && (
                 <button
-                    aria-label="Download track"
+                    aria-label={t("Download track")}
                     onClick={() => onDownload(result)}
                     disabled={isDownloading}
                     className={cn(
@@ -491,6 +495,7 @@ function GroupedView({
     onToggleSelect,
     onDownload,
 }: GroupedViewProps) {
+    const { t } = useLanguage();
     return (
         <div className="space-y-1">
             {Array.from(grouped.entries()).map(([username, userResults]) => {

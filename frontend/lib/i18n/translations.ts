@@ -4,11 +4,10 @@
  */
 export const english = {
     "Account": "Account",
-    "Preview": "Preview",
-    "date added (recent)": "date added (recent)",
-    "year (newest)": "year (newest)",
-    "Play preview of": "Play preview of",
-    "Stop preview of": "Stop preview of",
+    "Download track": "Download track",
+    "group by user": "group by user",
+    "flat list": "flat list",
+    "results from": "results from",
     "in your library": "in your library",
     "Artist not found": "Artist not found",
     "start artist radio": "start artist radio",
@@ -1580,11 +1579,10 @@ export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
     "Account": "Account",
-    "Preview": "Voorbeeld",
-    "date added (recent)": "toegevoegd (recentste eerst)",
-    "year (newest)": "jaar (nieuwste eerst)",
-    "Play preview of": "Voorbeeld afspelen van",
-    "Stop preview of": "Voorbeeld stoppen van",
+    "Download track": "Nummer downloaden",
+    "group by user": "groeperen op gebruiker",
+    "flat list": "platte lijst",
+    "results from": "resultaten van",
     "in your library": "in je bibliotheek",
     "Artist not found": "Artiest niet gevonden",
     "start artist radio": "artiestenradio starten",

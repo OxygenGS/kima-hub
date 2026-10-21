@@ -8,6 +8,9 @@ import type { SoulseekResult } from "@/features/search/types";
 const state = vi.hoisted(() => ({
     rights: { canRequestAlbums: false, canDownloadTracks: false },
 }));
+vi.mock("@/lib/i18n/language-context", () => ({
+    useLanguage: () => ({ t: (key: string) => key }),
+}));
 vi.mock("@/lib/auth-context", () => ({
     useMusicPermissions: () => state.rights,
 }));

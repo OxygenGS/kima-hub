@@ -5,7 +5,7 @@ import { Disc3, Play } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Album } from "../types";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { plural } from "@/lib/format";
 
 interface DiscographyProps {
     albums: Album[];
@@ -20,7 +20,6 @@ export function Discography({
     sortBy,
     onSortChange,
 }: DiscographyProps) {
-    const { t } = useLanguage();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -29,7 +28,7 @@ export function Discography({
         <section>
             <SectionHeader
                 type="album"
-                title={t("Discography")}
+                title="Discography"
                 action={
                     <select
                         value={sortBy}
@@ -38,8 +37,8 @@ export function Discography({
                         }
                         className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-[var(--bg-hover)] [&>option]:text-white"
                     >
-                        <option value="year">{t("year (newest)")}</option>
-                        <option value="dateAdded">{t("date added (recent)")}</option>
+                        <option value="year">year (newest)</option>
+                        <option value="dateAdded">date added (recent)</option>
                     </select>
                 }
             />
@@ -50,7 +49,7 @@ export function Discography({
                 {albums.map((album, index) => {
                     const subtitle = [
                         album.year,
-                        album.trackCount && `${album.trackCount} ${album.trackCount === 1 ? t("track") : t("tracks")}`,
+                        album.trackCount && plural(album.trackCount, "track"),
                     ]
                         .filter(Boolean)
                         .join(" • ");
@@ -65,7 +64,7 @@ export function Discography({
                             fallbackIcon={Disc3}
                             type="album"
                             index={index}
-                            action={{ icon: Play, label: t("Play"), onClick: () => onPlayAlbum(album.id) }}
+                            action={{ icon: Play, label: "Play", onClick: () => onPlayAlbum(album.id) }}
                         />
                     );
                 })}
