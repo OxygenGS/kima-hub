@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export type StatusType = "idle" | "loading" | "success" | "error";
 
@@ -29,6 +31,7 @@ export function InlineStatus({
     clearDelay = 3000,
     onClear,
 }: InlineStatusProps) {
+    const { locale } = useLanguage();
     const [visible, setVisible] = useState(status !== "idle");
 
     // Sync visibility with status changes during render
@@ -68,7 +71,7 @@ export function InlineStatus({
                     {status === "loading" && <Loader2 className="w-4 h-4 animate-spin" />}
                 </>
             )}
-            {message && <span>{message}</span>}
+            {message && <span>{translate(locale, message)}</span>}
         </span>
     );
 }
