@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Jump to section": "Jump to section",
     "Unable to update permissions": "Unable to update permissions",
     "Queue limit": "Queue limit",
     "Maximum tracks in the play queue.": "Maximum tracks in the play queue.",
@@ -1732,6 +1733,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Jump to section": "Ga naar onderdeel",
     "Unable to update permissions": "Machtigingen konden niet worden bijgewerkt",
     "Queue limit": "Wachtrijlimiet",
     "Maximum tracks in the play queue.": "Maximumaantal nummers in de afspeelwachtrij.",

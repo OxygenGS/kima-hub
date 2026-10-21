@@ -89,7 +89,7 @@ export function SettingsLayout({ children, sidebarItems, isAdmin }: SettingsLayo
         <div className="min-h-screen bg-[var(--bg-primary)]">
             <PageHeader eyebrow={t("System Configuration")} title={t("Settings")}>
                 <label className="mt-6 block md:hidden">
-                    <span className="sr-only">Jump to section</span>
+                    <span className="sr-only">{t("Jump to section")}</span>
                     <select
                         value={activeSection}
                         onChange={(e) => handleSectionClick(e.target.value)}
