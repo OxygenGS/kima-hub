@@ -786,14 +786,14 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     syncing || isEnrichmentActive
                                 }
                             >
-                                {syncing ? "Syncing..." : "Sync New"}
+                                {syncing ? t("Syncing...") : t("Sync New")}
                             </Button>
                             <Button
                                 size="sm"
                                 onClick={() => setConfirmTarget("retryFailedAndBlocked")}
                                 disabled={retryingAll || syncing || isEnrichmentActive}
                             >
-                                {retryingAll ? "Queuing..." : "Retry what didn't work"}
+                                {retryingAll ? t("Queuing...") : t("Retry what didn't work")}
                             </Button>
                             {currentUser?.role === "admin" && (
                                 <Button
@@ -801,7 +801,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     onClick={() => setConfirmTarget("redecideEverything")}
                                     disabled={redeciding || syncing || isEnrichmentActive}
                                 >
-                                    {redeciding ? "Queuing..." : "Start over on everything"}
+                                    {redeciding ? t("Queuing...") : t("Start over on everything")}
                                 </Button>
                             )}
                             {currentUser?.role === "admin" && (
@@ -811,12 +811,12 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     disabled={wiping}
                                     data-testid="enrichment-wipe"
                                 >
-                                    {wiping ? "Wiping..." : "Wipe and re-run"}
+                                    {wiping ? t("Wiping...") : t("Wipe and re-run")}
                                 </Button>
                             )}
                             {queueResult !== null && (
                                 <span className="self-center text-xs text-success" data-testid="enrichment-queue-result">
-                                    {queueResult === "wipe" ? "Wiped. Re-running." : "Queued"}
+                                    {queueResult === "wipe" ? t("Wiped. Re-running.") : t("Queued")}
                                 </span>
                             )}
 
@@ -860,7 +860,7 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     className="flex items-center gap-2 text-xs tabular-nums text-danger-light/70 hover:brightness-125 transition-colors"
                                 >
                                     <AlertTriangle className="w-3 h-3" />
-                                    {showInlineFailures ? "Hide" : "Show"} Failures ({totalFailures})
+                                    {showInlineFailures ? t("Hide") : t("Show")} {t("Failures")} ({totalFailures})
                                     <ChevronDown className={`w-3 h-3 transition-transform ${showInlineFailures ? "rotate-180" : ""}`} />
                                 </button>
                                 {showInlineFailures && <EnrichmentFailuresList active={enrichmentActive} />}
@@ -1123,10 +1123,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     {maintenanceOpen && (
                         <div className="px-4 pt-3 pb-4 space-y-3 border-t border-white/10">
                             <Button size="sm" onClick={handleClearCaches} disabled={clearingCaches}>
-                                {clearingCaches ? "Clearing..." : "Clear All Caches"}
+                                {clearingCaches ? t("Clearing...") : t("Clear All Caches")}
                             </Button>
                             <Button size="sm" onClick={handleCleanupStaleJobs} disabled={cleaningStaleJobs}>
-                                {cleaningStaleJobs ? "Cleaning..." : "Cleanup Stale Jobs"}
+                                {cleaningStaleJobs ? t("Cleaning...") : t("Cleanup Stale Jobs")}
                             </Button>
                             {((enrichmentProgress?.audioAnalysis?.failed ?? 0) > 0 || (enrichmentProgress?.audioAnalysis?.permanentlyFailed ?? 0) > 0) && (
                                 <Button
@@ -1135,8 +1135,8 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                                     disabled={retryingFailed || isEnrichmentActive}
                                 >
                                     {retryingFailed
-                                        ? "Retrying..."
-                                        : `Retry Failed Analysis (${(enrichmentProgress?.audioAnalysis?.failed || 0) + (enrichmentProgress?.audioAnalysis?.permanentlyFailed || 0)})`}
+                                        ? t("Retrying...")
+                                        : `${t("Retry Failed Analysis")} (${(enrichmentProgress?.audioAnalysis?.failed || 0) + (enrichmentProgress?.audioAnalysis?.permanentlyFailed || 0)})`}
                                 </Button>
                             )}
 
@@ -1179,10 +1179,10 @@ export function CacheSection({ settings, onUpdate }: CacheSectionProps) {
                     isOpen={true}
                     onClose={() => setConfirmTarget(null)}
                     onConfirm={handleConfirmAction}
-                    title={confirmMeta[confirmTarget].title}
-                    message={confirmMeta[confirmTarget].message}
-                    confirmText={confirmMeta[confirmTarget].confirmText}
-                    cancelText="Cancel"
+                    title={t(confirmMeta[confirmTarget].title as Parameters<typeof t>[0])}
+                    message={t(confirmMeta[confirmTarget].message as Parameters<typeof t>[0])}
+                    confirmText={t(confirmMeta[confirmTarget].confirmText as Parameters<typeof t>[0])}
+                    cancelText={t("Cancel")}
                     variant="danger"
                 />
             )}
