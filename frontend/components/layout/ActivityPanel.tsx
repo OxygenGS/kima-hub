@@ -43,6 +43,7 @@ export function ActivityPanel({
     activeTab,
     onTabChange,
 }: ActivityPanelProps) {
+    const { t } = useLanguage();
     const { settingsContent, setSettingsContent } = useActivityPanelSettings();
     const [internalActiveTab, setInternalActiveTab] =
         useState<ActivityTab>("notifications");
