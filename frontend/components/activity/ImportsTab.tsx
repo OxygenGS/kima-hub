@@ -14,6 +14,8 @@ import {
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "../ui/EmptyState";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { useAuth } from "@/lib/auth-context";
 import { timeAgo } from "@/lib/relative-time";
@@ -78,6 +80,7 @@ function statusColor(status: string): string {
 }
 
 export function ImportsTab() {
+    const { locale, t } = useLanguage();
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
     const [cancelling, setCancelling] = useState<Set<string>>(new Set());
@@ -118,8 +121,8 @@ export function ImportsTab() {
         return (
             <EmptyState
                 icon={<ListMusic className="w-8 h-8" />}
-                title="No imports yet"
-                description="Playlist imports will appear here"
+                title={t("No imports yet")}
+                description={t("Playlist imports will appear here")}
             />
         );
     }
@@ -309,7 +312,7 @@ function ImportJobCard({
                         onClick={() => onCancel(job.id)}
                         disabled={cancelling}
                         className="p-1 hover:bg-white/10 transition-colors shrink-0"
-                        title="cancel import"
+                        title={t("cancel import")}
                     >
                         <X className="w-3 h-3 text-[var(--text-muted)] hover:text-danger-light" />
                     </button>
