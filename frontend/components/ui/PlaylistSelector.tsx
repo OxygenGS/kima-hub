@@ -6,6 +6,8 @@ import { X, Plus, Music2, Check } from "lucide-react";
 import { GradientSpinner } from "./GradientSpinner";
 import { Button } from "@/components/ui/Button";
 import { useDialog } from "@/hooks/useDialog";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface PlaylistSelectorProps {
     isOpen: boolean;
@@ -26,6 +28,7 @@ export function PlaylistSelector({
     isLoading: isSaving,
     loadingMessage,
 }: PlaylistSelectorProps) {
+    const { t, locale } = useLanguage();
     const [playlists, setPlaylists] = useState<Array<{ id: string; name: string; trackCount?: number }>>([]);
     const [newPlaylistName, setNewPlaylistName] = useState("");
     const [isPublic, setIsPublic] = useState(false);
@@ -101,7 +104,7 @@ export function PlaylistSelector({
             );
         } catch (error) {
             console.error("Failed to create playlist:", error);
-            setError("Couldn't create that playlist — try again.");
+            setError(t("Couldn't create that playlist — try again."));
         } finally {
             setIsCreating(false);
         }
@@ -131,7 +134,7 @@ export function PlaylistSelector({
             onClose();
         } catch (error) {
             console.error("Failed to add to playlist:", error);
-            setError("Couldn't add to that playlist — try again.");
+            setError(t("Couldn't add to that playlist — try again."));
         }
     };
 
@@ -150,7 +153,7 @@ export function PlaylistSelector({
             onClose();
         } catch (error) {
             console.error("Failed to add to playlists:", error);
-            setError("Couldn't add to those playlists — try again.");
+            setError(t("Couldn't add to those playlists — try again."));
         } finally {
             setIsConfirming(false);
         }
@@ -173,11 +176,11 @@ export function PlaylistSelector({
             >
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <h2 id="playlist-selector-title" className="text-2xl font-bold text-white">
-                        Add to Playlist
+                        {t("Add to Playlist")}
                     </h2>
                     <button
                         onClick={onClose}
-                        aria-label="Close"
+                        aria-label={t("Close")}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
                     >
                         <X className="w-5 h-5 text-[var(--text-secondary)]" />
@@ -187,7 +190,7 @@ export function PlaylistSelector({
                 {isSaving && (
                     <div className="px-6 py-3 flex items-center gap-3 bg-black/30 border-b border-white/10 text-sm text-[var(--text-primary)]">
                         <GradientSpinner size="sm" />
-                        <span>{loadingMessage || "Adding..."}</span>
+                        <span>{loadingMessage ? translate(locale, loadingMessage) : t("Adding...")}</span>
                     </div>
                 )}
 
@@ -208,9 +211,9 @@ export function PlaylistSelector({
                     ) : playlists.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <Music2 className="w-12 h-12 text-[var(--text-muted)] mb-3" />
-                            <p className="text-[var(--text-secondary)]">No playlists yet</p>
+                            <p className="text-[var(--text-secondary)]">{t("No playlists yet")}</p>
                             <p className="text-[var(--text-muted)] text-sm mt-1">
-                                Create one below to get started
+                                {t("Create one below to get started")}
                             </p>
                         </div>
                     ) : (
@@ -255,8 +258,8 @@ export function PlaylistSelector({
                                             <p className="text-xs text-[var(--text-secondary)] mt-1">
                                                 {playlist.trackCount || 0}{" "}
                                                 {playlist.trackCount === 1
-                                                    ? "track"
-                                                    : "tracks"}
+                                                    ? t("track")
+                                                    : t("tracks")}
                                             </p>
                                         </div>
                                         {!isMulti && (
@@ -281,9 +284,9 @@ export function PlaylistSelector({
                             {isConfirming ? (
                                 <GradientSpinner size="sm" />
                             ) : selected.size > 0 ? (
-                                `Add to ${selected.size} playlist${selected.size > 1 ? "s" : ""}`
+                                `${t("Add to")} ${selected.size} ${selected.size === 1 ? t("playlist") : t("playlists")}`
                             ) : (
-                                "Select playlists"
+                                t("Select playlists")
                             )}
                         </Button>
                     </div>
@@ -291,12 +294,12 @@ export function PlaylistSelector({
 
                 <div className="p-6 border-t border-white/10 bg-[var(--bg-primary)]/50">
                     <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">
-                        Create New Playlist
+                        {t("Create New Playlist")}
                     </p>
                     <div className="flex gap-2 mb-3">
                         <input
                             type="text"
-                            placeholder="Enter playlist name..."
+                            placeholder={t("Enter playlist name...")}
                             value={newPlaylistName}
                             onChange={(e) => setNewPlaylistName(e.target.value)}
                             onKeyDown={(e) =>
@@ -314,7 +317,7 @@ export function PlaylistSelector({
                             }
                         >
                             <Plus className="w-5 h-5" />
-                            <span className="hidden sm:inline">Create</span>
+                            <span className="hidden sm:inline">{t("Create")}</span>
                         </Button>
                     </div>
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -329,7 +332,7 @@ export function PlaylistSelector({
                             <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5" />
                         </div>
                         <span className="text-sm text-[var(--text-secondary)] group-hover:text-gray-300 transition-colors">
-                            Share with other users
+                            {t("Share with other users")}
                         </span>
                     </label>
                 </div>
