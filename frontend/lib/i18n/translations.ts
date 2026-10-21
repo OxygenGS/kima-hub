@@ -3,6 +3,10 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Queue limit": "Queue limit",
+    "Maximum tracks in the play queue.": "Maximum tracks in the play queue.",
+    "to": "to",
+    "Please enter a name of up to 60 characters.": "Please enter a name of up to 60 characters.",
     "Enrichment Status": "Enrichment Status",
     "Audio analysis running": "Audio analysis running",
     "Vibe embeddings running": "Vibe embeddings running",
@@ -1727,6 +1731,10 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Queue limit": "Wachtrijlimiet",
+    "Maximum tracks in the play queue.": "Maximumaantal nummers in de afspeelwachtrij.",
+    "to": "tot",
+    "Please enter a name of up to 60 characters.": "Voer een naam in van maximaal 60 tekens.",
     "Enrichment Status": "Verrijkingsstatus",
     "Audio analysis running": "Audioanalyse wordt uitgevoerd",
     "Vibe embeddings running": "Vibe-embeddings worden verwerkt",
