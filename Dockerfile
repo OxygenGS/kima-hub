@@ -173,7 +173,7 @@ RUN pip3 install --no-cache-dir --break-system-packages 'numpy==1.24.4' 'six' 'p
 
 # numpy 1.24.4 is what Essentia, the MusiCNN gate and the CLAP parity were validated with.
 # Force exact wheel versions to avoid resolver drift leaving incompatible pandas/scipy.
-RUN pip3 uninstall -y pandas scipy numpy || true \
+RUN pip3 uninstall --break-system-packages -y pandas scipy numpy || true \
     && pip3 install --no-cache-dir --break-system-packages --force-reinstall \
     'numpy==1.24.4' \
     'scipy==1.10.1' \
