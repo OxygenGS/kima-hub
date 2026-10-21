@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { memo, type ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 type SectionType = "featured" | "track" | "album" | "artist" | "podcast" | "audiobook";
 
@@ -36,6 +39,7 @@ export const SectionHeader = memo(function SectionHeader({
     size = "md",
     className,
 }: SectionHeaderProps) {
+    const { t } = useLanguage();
     return (
         <div className={cn("flex items-center gap-3", size === "md" ? "mb-6" : "mb-4", className)}>
             <span
@@ -55,7 +59,7 @@ export const SectionHeader = memo(function SectionHeader({
                     href={showAllHref}
                     className="flex items-center gap-1 -my-3 py-3 min-h-[44px] text-xs text-[var(--text-muted)] hover:text-white transition-colors group shrink-0"
                 >
-                    Show all
+                    {t("Show all")}
                     <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                 </Link>
             ) : null}
