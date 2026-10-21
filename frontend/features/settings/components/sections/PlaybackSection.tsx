@@ -122,8 +122,8 @@ export function PlaybackSection({ value, onChange, maxQueueLength, onMaxQueueLen
                 a greyed field invites a question nobody can answer. */}
             {onMaxQueueLength && (
                 <SettingsRow
-                    label="Queue limit"
-                    description={`Maximum tracks in the play queue. ${QUEUE_MIN.toLocaleString()} to ${QUEUE_MAX.toLocaleString()}.`}
+                    label={t("Queue limit")}
+                    description={`${t("Maximum tracks in the play queue.")} ${QUEUE_MIN.toLocaleString()} ${t("to")} ${QUEUE_MAX.toLocaleString()}.`}
                 >
                     <QueueLimitInput value={maxQueueLength} onCommit={onMaxQueueLength} />
                 </SettingsRow>
