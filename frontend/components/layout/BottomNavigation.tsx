@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Library, Sparkles, BookOpen, Mic, ListMusic } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 
 const navigationItems = [
@@ -41,6 +42,7 @@ const navigationItems = [
 
 export function BottomNavigation() {
     const pathname = usePathname();
+    const { t } = useLanguage();
     const isMobile = useIsMobile();
     const isTablet = useIsTablet();
     const isMobileOrTablet = isMobile || isTablet;
@@ -51,7 +53,7 @@ export function BottomNavigation() {
         <nav
             className="fixed bottom-0 left-0 right-0 z-(--z-nav) bg-black border-t border-white/10"
             role="navigation"
-            aria-label="Main navigation"
+            aria-label={t("Main navigation")}
             style={{
                 paddingBottom: 'var(--standalone-safe-area-bottom, 0px)'
             }}
@@ -71,7 +73,7 @@ export function BottomNavigation() {
                                     ? "text-white"
                                     : "text-[var(--text-muted)] active:text-gray-300"
                             )}
-                            aria-label={item.name}
+                            aria-label={t(item.name as Parameters<typeof t>[0])}
                             aria-current={isActive ? "page" : undefined}
                         >
                             <Icon
@@ -87,7 +89,7 @@ export function BottomNavigation() {
                                     isActive ? "font-semibold" : "font-medium"
                                 )}
                             >
-                                {item.name}
+                                {t(item.name as Parameters<typeof t>[0])}
                             </span>
                         </Link>
                     );
