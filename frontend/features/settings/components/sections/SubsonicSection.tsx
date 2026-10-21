@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState, useEffect } from "react";
 import { SettingsSection, SettingsRow, SettingsInput } from "../ui";
@@ -18,6 +19,7 @@ interface ApiKey {
 
 export function SubsonicSection() {
     const { user } = useAuth();
+    const { t } = useLanguage();
 
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [generating, setGenerating] = useState(false);
@@ -63,11 +65,11 @@ export function SubsonicSection() {
             });
             setNewToken(data.apiKey);
             setStatus("success");
-            setMessage("Token generated");
+            setMessage(t("Token generated"));
             await loadApiKeys();
         } catch (error: unknown) {
             setStatus("error");
-            setMessage(error instanceof Error ? error.message : "Failed to generate token");
+            setMessage(error instanceof Error ? error.message : t("Failed to generate token"));
         } finally {
             setGenerating(false);
         }
@@ -82,7 +84,7 @@ export function SubsonicSection() {
             setApiKeys((prev) => prev.filter((k) => k.id !== id));
         } catch {
             setStatus("error");
-            setMessage("Failed to revoke token");
+            setMessage(t("Failed to revoke token"));
         } finally {
             setRevoking(null);
         }
@@ -97,10 +99,10 @@ export function SubsonicSection() {
     };
 
     return (
-        <SettingsSection id="subsonic" title="Native Apps">
+        <SettingsSection id="subsonic" title={t("Native Apps")}>
             <SettingsRow
-                label="Server URL"
-                description="Enter this in your Subsonic-compatible client. Admins can set a persistent URL in Storage settings."
+                label={t("Server URL")}
+                description={t("Enter this in your Subsonic-compatible client. Admins can set a persistent URL in Storage settings.")}
             >
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg tabular-nums break-all flex-1 min-w-0">
@@ -110,14 +112,14 @@ export function SubsonicSection() {
                         onClick={() => void copyText(serverUrl)}
                         className="text-xs text-brand hover:text-brand-hover transition-colors shrink-0"
                     >
-                        Copy
+                        {t("Copy")}
                     </button>
                 </div>
             </SettingsRow>
 
             <SettingsRow
-                label="Username"
-                description="Use your Kima username in the client"
+                label={t("Username")}
+                description={t("Use your Kima username in the client")}
             >
                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
                     {user?.username}
@@ -125,14 +127,14 @@ export function SubsonicSection() {
             </SettingsRow>
 
             <SettingsRow
-                label="API Token"
-                description="Generate a token to use as the password in your client"
+                label={t("API Token")}
+                description={t("Generate a token to use as the password in your client")}
             >
                 <div className="flex flex-col gap-2">
                     <SettingsInput
                         value={deviceName}
                         onChange={setDeviceName}
-                        placeholder="Client name (e.g. Amperfy, Symfonium, DSub)"
+                        placeholder={t("Client name (e.g. Amperfy, Symfonium, DSub)")}
                     />
                     <div className="inline-flex items-center gap-3">
                         <Button
@@ -141,7 +143,7 @@ export function SubsonicSection() {
                             onClick={handleGenerate}
                             disabled={generating}
                         >
-                            {generating ? "Generating..." : "Generate Token"}
+                            {generating ? t("Generating...") : t("Generate Token")}
                         </Button>
                         <InlineStatus
                             status={status}
@@ -155,7 +157,7 @@ export function SubsonicSection() {
             {newToken && (
                 <div className="py-4 space-y-3 border-t border-b border-white/5">
                     <p className="text-xs text-warning">
-                        Save this key — it won&apos;t be shown again.
+                        {t("Save this key — it won't be shown again.")}
                     </p>
                     <div className="flex items-start gap-2 min-w-0 overflow-hidden">
                         <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-2 rounded-lg font-mono break-all flex-1 min-w-0 overflow-hidden">
@@ -165,7 +167,7 @@ export function SubsonicSection() {
                             onClick={() => void copyText(newToken)}
                             className="text-xs text-brand hover:text-brand-hover transition-colors shrink-0 pt-2"
                         >
-                            Copy
+                            {t("Copy")}
                         </button>
                     </div>
                 </div>
@@ -173,21 +175,21 @@ export function SubsonicSection() {
 
             {newToken && (
                 <SettingsRow
-                    label="Setup Guide"
-                    description="How to connect your client"
+                    label={t("Setup Guide")}
+                    description={t("How to connect your client")}
                 >
                     <div className="space-y-1 text-xs tabular-nums text-[var(--text-muted)]">
-                        <p>1. Server URL — paste the URL above</p>
-                        <p>2. Username — your Kima username</p>
-                        <p>3. Password / API key — paste the token above</p>
+                        <p>{t("1. Server URL — paste the URL above")}</p>
+                        <p>{t("2. Username — your Kima username")}</p>
+                        <p>{t("3. Password / API key — paste the token above")}</p>
                     </div>
                 </SettingsRow>
             )}
 
             {apiKeys.length > 0 && (
                 <SettingsRow
-                    label="Active Tokens"
-                    description="Revoke tokens to disconnect clients"
+                    label={t("Active Tokens")}
+                    description={t("Revoke tokens to disconnect clients")}
                 >
                     <div className="space-y-2 w-full">
                         {apiKeys.map((key) => (
@@ -198,8 +200,8 @@ export function SubsonicSection() {
                                 <div className="min-w-0">
                                     <p className="text-xs tabular-nums text-white truncate">{key.name}</p>
                                     <p className="text-xs tabular-nums text-[var(--text-muted)]">
-                                        Created {formatDate(key.createdAt)}
-                                        {key.lastUsed && ` · Last used ${formatDate(key.lastUsed)}`}
+                                        {t("Created")} {formatDate(key.createdAt)}
+                                        {key.lastUsed && ` · ${t("Last used")} ${formatDate(key.lastUsed)}`}
                                     </p>
                                 </div>
                                 <button
@@ -207,7 +209,7 @@ export function SubsonicSection() {
                                     disabled={revoking === key.id}
                                     className="text-xs tabular-nums text-danger-light hover:brightness-125 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {revoking === key.id ? "Revoking..." : "Revoke"}
+                                    {revoking === key.id ? t("Revoking...") : t("Revoke")}
                                 </button>
                             </div>
                         ))}
@@ -221,9 +223,9 @@ export function SubsonicSection() {
                     if (confirmRevoke) void handleRevoke(confirmRevoke.id);
                     setConfirmRevoke(null);
                 }}
-                title="Revoke this token?"
-                message={`${confirmRevoke?.name ?? "This token"} stops working at once. The app using it needs a new token to connect again.`}
-                confirmText="Revoke"
+                title={t("Revoke this token?")}
+                message={`${confirmRevoke?.name ?? t("This token")} stops working at once. The app using it needs a new token to connect again.`}
+                confirmText={t("Revoke")}
             />
         </SettingsSection>
     );
