@@ -3,6 +3,8 @@
 import { ReactNode, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { Button } from "./Button";
 import { useDialog } from "@/hooks/useDialog";
 
@@ -23,6 +25,7 @@ export function Modal({
     footer,
     className,
 }: ModalProps) {
+    const { t, locale } = useLanguage();
     const dialogRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
     useDialog(dialogRef, isOpen, onClose);
@@ -46,11 +49,11 @@ export function Modal({
                 )}
             >
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-[var(--border-subtle)]">
-                    <h2 id={titleId} className="text-lg font-medium text-white">{title}</h2>
+                    <h2 id={titleId} className="text-lg font-medium text-white">{translate(locale, title)}</h2>
                     <Button
                         variant="icon"
                         onClick={onClose}
-                        aria-label="Close"
+                        aria-label={t("Close")}
                     >
                         <X className="w-5 h-5" />
                     </Button>
