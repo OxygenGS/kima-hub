@@ -14,6 +14,7 @@ import { notify } from "@/lib/notify";
 import { useFeatures } from "@/lib/features-context";
 import { MobileSidebar } from "./MobileSidebar";
 import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 const allNavigation = [
     { name: "Collection", href: "/collection", feature: null },
@@ -38,6 +39,7 @@ interface Playlist {
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { t } = useLanguage();
     const router = useRouter();
     const queryClient = useQueryClient();
     const { isAuthenticated } = useAuth();
@@ -115,7 +117,7 @@ export function Sidebar() {
             setNewPlaylistName("");
             router.push(`/playlist/${result.id}`);
         } catch {
-            notify.error("Failed to create playlist");
+            notify.error(t("Failed to create playlist"));
         } finally {
             setIsCreating(false);
         }
@@ -132,12 +134,12 @@ export function Sidebar() {
             <nav
                 className="pt-6 px-3"
                 role="navigation"
-                aria-label="Main navigation"
+                aria-label={t("Main navigation")}
             >
                 <div className="mb-3 flex items-center gap-2 px-2 animate-rise">
                     <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                     <span className="t-eyebrow">
-                        Navigation Index
+                        {t("Navigation Index")}
                     </span>
                 </div>
                 <div className="space-y-0.5">
@@ -148,7 +150,7 @@ export function Sidebar() {
 
                         return (
                             <Link
-                                key={item.name}
+                                key={t(item.name as Parameters<typeof t>[0])}
                                 href={item.href}
                                 prefetch={false}
                                 aria-current={isActive ? "page" : undefined}
@@ -210,7 +212,7 @@ export function Sidebar() {
                             className="group/link"
                         >
                             <span className="text-xs font-medium text-[var(--text-muted)] group-hover/link:text-brand transition-colors">
-                                Playlist Stack
+                                {t("Playlist Stack")}
                             </span>
                         </Link>
                     </div>
@@ -221,8 +223,8 @@ export function Sidebar() {
                                 setNewPlaylistName("");
                             }}
                             className="w-6 h-6 flex items-center justify-center bg-[var(--bg-primary)] border-2 border-white/10 text-[var(--text-muted)] hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-all duration-200"
-                            aria-label="Create playlist"
-                            title="create playlist"
+                            aria-label={t("Create playlist")}
+                            title={t("Create playlist")}
                         >
                             <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -242,7 +244,7 @@ export function Sidebar() {
                                             setNewPlaylistName("");
                                         }
                                     }}
-                                    placeholder="Playlist name"
+                                    placeholder={t("Playlist name")}
                                     autoFocus
                                     className="w-full bg-[var(--bg-primary)] border border-white/10 rounded px-2.5 py-1.5 text-xs text-white placeholder-gray-600 outline-none focus:border-brand/50 transition-colors"
                                 />
@@ -255,7 +257,7 @@ export function Sidebar() {
                                     }
                                     className="mt-2 w-full"
                                 >
-                                    {isCreating ? "Creating..." : "Create"}
+                                    {isCreating ? t("Creating...") : t("Create")}
                                 </Button>
                             </div>
                         )}
