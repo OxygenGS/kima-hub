@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { useState } from "react";
 import { SettingsSection, SettingsRow } from "../ui";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 
 export function CorruptTracksSection() {
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     const [expanded, setExpanded] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -33,19 +35,19 @@ export function CorruptTracksSection() {
     return (
         <SettingsSection
             id="corrupt-tracks"
-            title="Corrupt Tracks"
-            description="Tracks that could not be read or decoded during library scan"
+            title={t("Corrupt Tracks")}
+            description={t("Tracks that could not be read or decoded during library scan")}
         >
             <SettingsRow
-                label="Corrupt files detected"
-                description="These files could not be read in the last scan and may be incomplete or damaged"
+                label={t("Corrupt files detected")}
+                description={t("These files could not be read in the last scan and may be incomplete or damaged")}
             >
                 <div className="flex items-center gap-3">
                     {isLoading ? (
                         <GradientSpinner size="sm" />
                     ) : (
                         <span className={`text-sm tabular-nums ${count > 0 ? "text-warning": "text-[var(--text-muted)]"}`}>
-                            {count} file{count !== 1 ? "s" : ""}
+                            {count} {count === 1 ? t("file") : t("files")}
                         </span>
                     )}
                 </div>
@@ -63,7 +65,7 @@ export function CorruptTracksSection() {
                             ) : (
                                 <ChevronDown className="w-3 h-3" />
                             )}
-                            {expanded ? "Hide" : "Show"} details
+                            {expanded ? t("Hide") : t("Show")} details
                         </button>
 
                         {expanded && (
@@ -99,7 +101,7 @@ export function CorruptTracksSection() {
                             isLoading={clearMutation.isPending}
                         >
                             {!clearMutation.isPending && <RotateCcw className="w-3.5 h-3.5" />}
-                            Clear the corrupt marks
+                            {t("Clear the corrupt marks")}
                         </Button>
                     </div>
                 </>
@@ -109,9 +111,9 @@ export function CorruptTracksSection() {
                 isOpen={showConfirm}
                 onClose={() => setShowConfirm(false)}
                 onConfirm={() => clearMutation.mutate()}
-                title="Clear the corrupt marks"
-                message={`This clears the corrupt mark on ${count} track${count !== 1 ? "s" : ""}. Nothing is deleted. The next library scan reads each file again and marks any that are still broken.`}
-                confirmText="Clear marks"
+                title={t("Clear the corrupt marks")}
+                message={`${t("This clears the corrupt mark on")} ${count} ${count === 1 ? t("track") : t("tracks")}. ${t("Nothing is deleted. The next library scan reads each file again and marks any that are still broken.")}`}
+                confirmText={t("Clear marks")}
                 variant="warning"
             />
         </SettingsSection>
