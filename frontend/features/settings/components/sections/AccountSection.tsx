@@ -309,7 +309,7 @@ export function AccountSection() {
                 <div className="space-y-4">
                     <div className="bg-danger/10 border border-danger/30 rounded-lg p-3">
                         <p className="text-xs text-danger-light">
-                            {t("Save these codes! You\u0027ll need them if you lose your authenticator.")}
+                            {t("Save these codes! You'll need them if you lose your authenticator.")}
                         </p>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
