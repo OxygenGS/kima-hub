@@ -92,6 +92,7 @@ function EnrichmentStage({
     queued?: number;
     processing?: number;
 }) {
+    const { t } = useLanguage();
     const isComplete = progress === 100;
     const hasActivity = processing > 0;
 
@@ -117,7 +118,7 @@ function EnrichmentStage({
                     </span>
                     {isBackground && !isComplete && (
                         <span className="text-xs px-1.5 py-0.5 rounded-lg bg-white/5 border border-white/10 text-[var(--text-muted)]">
-                            background
+                            {t("background")}
                         </span>
                     )}
                 </div>
@@ -140,19 +141,19 @@ function EnrichmentStage({
                     </span>
                     {queued > 0 && (
                         <span className="text-[var(--text-secondary)]">
-                            {queued} queued
+                            {queued} {t("queued")}
                         </span>
                     )}
                     {processing > 0 && (
                         <span className="text-brand">
-                            {processing} processing
+                            {processing} {t("processing")}
                         </span>
                     )}
                     {failed > 0 && (
-                        <span className="text-danger-light">{failed} failed</span>
+                        <span className="text-danger-light">{failed} {t("failed")}</span>
                     )}
                     {permanentlyFailed > 0 && (
-                        <span className="text-danger-light/60">{permanentlyFailed} permanently failed</span>
+                        <span className="text-danger-light/60">{permanentlyFailed} {t("permanently failed")}</span>
                     )}
                 </div>
             </div>
@@ -174,6 +175,7 @@ function WorkerSliderRow({ label, description, config, isLoading, setWorkers }: 
     isLoading: boolean;
     setWorkers: (workers: number) => void;
 }) {
+    const { t } = useLanguage();
     return (
         <SettingsRow label={label} description={description}>
             <div className="flex items-center gap-3">
@@ -190,21 +192,21 @@ function WorkerSliderRow({ label, description, config, isLoading, setWorkers }: 
                 <div className="flex flex-col items-end gap-0.5">
                     {isLoading ? (
                         <span className="text-xs text-[var(--text-muted)] w-24 text-right">
-                            Loading...
+                            {t("Loading...")}
                         </span>
                     ) : (
                         <>
                             <span className="text-xs tabular-nums text-[var(--text-secondary)] w-24 text-right">
-                                {config?.workers ?? 2} workers
+                                {config?.workers ?? 2} {t("workers")}
                             </span>
                             {config && (
                                 <span className="text-xs tabular-nums text-[var(--text-muted)] w-24 text-right">
-                                    {config.cpuCores} cores available
+                                    {config.cpuCores} {t("cores available")}
                                 </span>
                             )}
                             {config?.analyzerOnline === false && (
                                 <span className="text-xs text-warning w-24 text-right">
-                                    analyzer offline
+                                    {t("analyzer offline")}
                                 </span>
                             )}
                         </>
@@ -311,7 +313,7 @@ function GpuSwitchRow({ id, label, description, gpu, on, effective, fellBack, pe
                                   : "text-[var(--text-muted)]"
                         }`}
                     >
-                        {gpuStatusText(gpu, on, effective, fellBack)}
+                        {t(gpuStatusText(gpu, on, effective, fellBack) as Parameters<typeof t>[0])}
                     </span>
                 )}
             </div>
