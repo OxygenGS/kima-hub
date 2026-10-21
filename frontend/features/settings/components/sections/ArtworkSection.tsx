@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, ConnectionTestButton } from "../ui";
 import { ConnectionTestResult, SystemSettings } from "../../types";
@@ -12,17 +13,18 @@ interface ArtworkSectionProps {
 }
 
 export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: ArtworkSectionProps) {
+    const { t } = useLanguage();
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
 
     return (
         <SettingsSection
             id="artwork"
-            title="Artwork"
-            description="Enhance your library with high-quality artwork"
+            title={t("Artwork")}
+            description={t("Enhance your library with high-quality artwork")}
         >
             <SettingsRow
-                label="Enable Fanart.tv"
-                description="Enhanced artist and album artwork"
+                label={t("Enable Fanart.tv")}
+                description={t("Enhanced artist and album artwork")}
                 htmlFor="fanart-enabled"
             >
                 <SettingsToggle
@@ -34,12 +36,12 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
 
             {settings.fanartEnabled && (
                 <>
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.fanartApiKey}
                             onChange={(v) => onUpdate({ fanartApiKey: v })}
-                            placeholder="Enter Fanart.tv API key"
+                            placeholder={t("Enter Fanart.tv API key")}
                             className="w-64"
                         />
                     </SettingsRow>
@@ -53,16 +55,16 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
                     <p className="text-xs text-[var(--text-muted)]">
-                        AcoustID identifies tracks by their audio fingerprint. Add your own API key for higher rate limits.
+                        {t("AcoustID identifies tracks by their audio fingerprint. Add your own API key for higher rate limits.")}
                     </p>
                 </div>
 
-                <SettingsRow label="AcoustID API Key (Optional)">
+                <SettingsRow label={t("AcoustID API Key (Optional)")}>
                     <SettingsInput
                         type="password"
                         value={settings.acoustidApiKey || ""}
                         onChange={(v) => onUpdate({ acoustidApiKey: v })}
-                        placeholder="Optional: Your AcoustID API key"
+                        placeholder={t("Optional: Your AcoustID API key")}
                         className="w-64"
                     />
                 </SettingsRow>

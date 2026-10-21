@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, ConnectionTestButton } from "../ui";
 import { ConnectionTestResult, SystemSettings } from "../../types";
@@ -12,17 +13,18 @@ interface AudiobookshelfSectionProps {
 }
 
 export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }: AudiobookshelfSectionProps) {
+    const { t } = useLanguage();
     const connection = useConnectionTest(() => onTest("audiobookshelf"));
 
     return (
         <SettingsSection
             id="audiobookshelf"
-            title="Media Servers"
-            description="Connect to external media servers for audiobooks and podcasts"
+            title={t("Media Servers")}
+            description={t("Connect to external media servers for audiobooks and podcasts")}
         >
             <SettingsRow
-                label="Enable Audiobookshelf"
-                description="Connect for audiobooks and podcasts"
+                label={t("Enable Audiobookshelf")}
+                description={t("Connect for audiobooks and podcasts")}
                 htmlFor="abs-enabled"
             >
                 <SettingsToggle
@@ -34,7 +36,7 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
 
             {settings.audiobookshelfEnabled && (
                 <>
-                    <SettingsRow label="Server URL">
+                    <SettingsRow label={t("Server URL")}>
                         <SettingsInput
                             value={settings.audiobookshelfUrl}
                             onChange={(v) => onUpdate({ audiobookshelfUrl: v })}
@@ -43,12 +45,12 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                         />
                     </SettingsRow>
 
-                    <SettingsRow label="API Key">
+                    <SettingsRow label={t("API Key")}>
                         <SettingsInput
                             type="password"
                             value={settings.audiobookshelfApiKey}
                             onChange={(v) => onUpdate({ audiobookshelfApiKey: v })}
-                            placeholder="Enter API key"
+                            placeholder={t("Enter API key")}
                             className="w-64"
                         />
                     </SettingsRow>
