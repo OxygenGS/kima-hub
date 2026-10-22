@@ -3,6 +3,11 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Endless shuffles from your own music": "Endless shuffles from your own music",
+    "stations, each an endless shuffle from your own music": "stations, each an endless shuffle from your own music",
+    "Could not load": "Could not load",
+    "Retry loading": "Retry loading",
+    "Genre and decade stations appear once your library has enough tracks for them.": "Genre and decade stations appear once your library has enough tracks for them.",
     "Devices": "Devices",
     "Link a device": "Link a device",
     "Scan the QR code, or type the code into the app on your phone": "Scan the QR code, or type the code into the app on your phone",
@@ -1772,6 +1777,11 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Endless shuffles from your own music": "Eindeloos willekeurig afspelen uit je eigen muziek",
+    "stations, each an endless shuffle from your own music": "stations, elk met eindeloos willekeurig afspelen uit je eigen muziek",
+    "Could not load": "Kan niet laden:",
+    "Retry loading": "Opnieuw laden:",
+    "Genre and decade stations appear once your library has enough tracks for them.": "Genre- en decenniumstations verschijnen zodra je bibliotheek er voldoende nummers voor heeft.",
     "Devices": "Apparaten",
     "Link a device": "Apparaat koppelen",
     "Scan the QR code, or type the code into the app on your phone": "Scan de QR-code of voer de code in op je telefoon",
