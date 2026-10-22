@@ -8,6 +8,8 @@ import { cn } from "@/lib/cn";
 import { isMbid } from "@/lib/mbid";
 import { timeAgo } from "@/lib/relative-time";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 export interface DownloadRowItem {
     id: string;
@@ -58,6 +60,7 @@ export function DownloadRow({
     /** The outcome of an action taken on the row, shown on it. */
     notice?: string;
 }) {
+    const { locale } = useLanguage();
     const album = text(item.metadata?.albumTitle);
     const artist = text(item.metadata?.artistName);
     const title = album && artist ? album : item.subject;
@@ -111,8 +114,8 @@ export function DownloadRow({
                     <p className="truncate text-xs leading-4 text-[var(--text-muted)] tabular-nums">
                         {[
                             album && artist ? artist : undefined,
-                            tone === "active" ? source ?? STATUS_LABEL[item.status] ?? item.status : undefined,
-                            tone === "failed" ? "Failed" : undefined,
+                            tone === "active" ? (source ?? (STATUS_LABEL[item.status] ? translate(locale, STATUS_LABEL[item.status]) : item.status)) : undefined,
+                            tone === "failed" ? translate(locale, "Failed") : undefined,
                             when,
                         ]
                             .filter(Boolean)
@@ -125,7 +128,7 @@ export function DownloadRow({
                     )}
                     {notice && (
                         <p role="status" className="mt-0.5 truncate text-xs leading-4 text-danger-light" title={notice.toLowerCase()}>
-                            {notice}
+                            {translate(locale, notice)}
                         </p>
                     )}
                 </div>
@@ -151,13 +154,14 @@ export function RowAction({
     danger?: boolean;
     children: ReactNode;
 }) {
+    const { locale } = useLanguage();
     return (
         <button
             type="button"
             onClick={onClick}
             disabled={disabled}
-            aria-label={label}
-            title={label.toLowerCase()}
+            aria-label={translate(locale, label)}
+            title={translate(locale, label)}
             className={cn(
                 "flex size-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition-colors",
                 "hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50",
