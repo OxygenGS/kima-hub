@@ -5,12 +5,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Trash2, RotateCcw, History } from "lucide-react";
 import { api } from "@/lib/api";
 import { EmptyState } from "../ui/EmptyState";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { GradientSpinner } from "../ui/GradientSpinner";
 import { cn } from "@/lib/cn";
 import { useDownloadHistory, type DownloadHistoryItem } from "@/hooks/useNotifications";
 import { DownloadRow, RowAction } from "./DownloadRow";
 
 export function HistoryTab() {
+    const { t } = useLanguage();
     const queryClient = useQueryClient();
     const { history, isLoading: loading } = useDownloadHistory();
     const [retrying, setRetrying] = useState<Set<string>>(new Set());
@@ -72,8 +74,8 @@ export function HistoryTab() {
         return (
             <EmptyState
                 icon={<History className="w-8 h-8" />}
-                title="No download history"
-                description="Completed downloads will appear here"
+                title={t("No download history")}
+                description={t("Completed downloads will appear here")}
             />
         );
     }
@@ -92,7 +94,7 @@ export function HistoryTab() {
 
             <div className="flex-1 overflow-y-auto">
                 {failed.length > 0 && (
-                    <Section label="Failed" count={failed.length}>
+                    <Section label={t("Failed")} count={failed.length}>
                         {failed.map((item) => (
                             <DownloadRow
                                 key={item.id}
@@ -118,7 +120,7 @@ export function HistoryTab() {
                     </Section>
                 )}
                 {completed.length > 0 && (
-                    <Section label="Completed" count={completed.length}>
+                    <Section label={t("Completed")} count={completed.length}>
                         {completed.map((item) => (
                             <DownloadRow
                                 key={item.id}
