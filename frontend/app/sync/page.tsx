@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { KimaMark } from "@/components/ui/KimaMark";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 function deriveProgress(p: number): number {
     return Math.min(p, 90);
@@ -28,6 +30,7 @@ function deriveMessage(p: number): string {
 }
 
 export default function SyncPage() {
+    const { t, locale } = useLanguage();
     const queryClient = useQueryClient();
     const router = useRouter();
     const [initError, setInitError] = useState("");
@@ -208,10 +211,10 @@ export default function SyncPage() {
                         <div className="p-6 md:p-8 space-y-6">
                             <div>
                                 <h2 className="text-2xl font-bold text-white mb-1">
-                                    {syncing ? "Setting Things Up" : "Ready to Go!"}
+                                    {syncing ? t("Setting Things Up") : t("Ready to Go!")}
                                 </h2>
                                 <p className="text-[var(--text-secondary)]">
-                                    {error || message}
+                                    {translate(locale, error || message)}
                                 </p>
                             </div>
 
@@ -224,7 +227,7 @@ export default function SyncPage() {
                                         />
                                     </div>
                                     <p className="text-xs text-[var(--text-muted)] text-center">
-                                        {progress}% complete
+                                        {progress}% {t("complete")}
                                     </p>
                                 </div>
                             )}
@@ -232,7 +235,7 @@ export default function SyncPage() {
                             {error && (
                                 <div className="p-4 bg-danger/10 border border-danger/20 rounded-lg">
                                     <p className="text-danger-light text-sm">
-                                        {error}
+                                        {translate(locale, error)}
                                     </p>
                                 </div>
                             )}
@@ -275,7 +278,7 @@ export default function SyncPage() {
                                                         : "text-[var(--text-muted)]"
                                                 }
                                             >
-                                                {step.label}
+                                                {translate(locale, step.label)}
                                             </span>
                                         </div>
                                     );
@@ -289,12 +292,12 @@ export default function SyncPage() {
                             onClick={handleSkip}
                             className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-white/70 transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 rounded"
                         >
-                            Skip for now
+                            {t("Skip for now")}
                         </button>
                     </div>
 
                     <p className="text-center text-[var(--text-muted)] text-xs mt-6">
-                        Enrichment and metadata analysis will continue in the background once you&apos;re in.
+                        {t("Enrichment and metadata analysis will continue in the background once you're in.")}
                     </p>
                 </div>
             </div>
