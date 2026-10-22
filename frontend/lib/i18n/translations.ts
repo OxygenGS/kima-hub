@@ -3,6 +3,10 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "matched track": "matched track",
+    "matched tracks": "matched tracks",
+    "new song": "new song",
+    "new songs": "new songs",
     "Endless shuffles from your own music": "Endless shuffles from your own music",
     "stations, each an endless shuffle from your own music": "stations, each an endless shuffle from your own music",
     "Could not load": "Could not load",
@@ -1777,6 +1781,10 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "matched track": "overeenkomend nummer",
+    "matched tracks": "overeenkomende nummers",
+    "new song": "nieuw nummer",
+    "new songs": "nieuwe nummers",
     "Endless shuffles from your own music": "Eindeloos willekeurig afspelen uit je eigen muziek",
     "stations, each an endless shuffle from your own music": "stations, elk met eindeloos willekeurig afspelen uit je eigen muziek",
     "Could not load": "Kan niet laden:",
