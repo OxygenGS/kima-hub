@@ -16,6 +16,8 @@ import {
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 function SectionSkeleton() {
     return (
@@ -34,13 +36,14 @@ interface StationGridProps {
 }
 
 function StationGrid({ stations, loadingStation, onStart }: StationGridProps) {
+    const { locale } = useLanguage();
     return (
         <div className="grid-media">
             {stations.map((station) => (
                 <TileCard
                     key={station.id}
-                    title={station.name}
-                    subtitle={station.description}
+                    title={translate(locale, station.name)}
+                    subtitle={translate(locale, station.description)}
                     tint={station.color}
                     hoverBorder={station.hoverBorder}
                     accent={station.accentGradient}
@@ -66,24 +69,25 @@ interface StationSectionProps extends Omit<StationGridProps, "stations"> {
 }
 
 function StationSection({ title, unit, noun, stations, isLoading, isError, onRetry, ...grid }: StationSectionProps) {
+    const { t, locale } = useLanguage();
     if (!isLoading && !isError && stations.length === 0) return null;
 
     return (
         <section>
             <SectionHeader
                 type="track"
-                title={title}
-                count={!isLoading && !isError ? `${stations.length} ${unit}` : undefined}
+                title={translate(locale, title)}
+                count={!isLoading && !isError ? `${stations.length} ${translate(locale, unit)}` : undefined}
             />
             {isLoading ? (
                 <SectionSkeleton />
             ) : isError ? (
                 <div className="flex items-center gap-3 py-4">
                     <p className="text-sm text-[var(--text-secondary)]">
-                        Could not load {noun} stations.
+                        {t("Could not load")} {translate(locale, noun)} {t("stations")}.
                     </p>
-                    <Button onClick={onRetry} aria-label={`Retry loading ${noun} stations`}>
-                        Retry
+                    <Button onClick={onRetry} aria-label={`${t("Retry loading")} ${translate(locale, noun)} ${t("stations")}`}>
+                        {t("Retry")}
                     </Button>
                 </div>
             ) : (
@@ -94,6 +98,7 @@ function StationSection({ title, unit, noun, stations, isLoading, isError, onRet
 }
 
 export default function RadioPage() {
+    const { t, locale } = useLanguage();
     const { loadingStation, startRadio } = useRadioPlayer();
 
     const { data: genresData, isLoading: genresLoading, isError: genresError, refetch: refetchGenres } = useQuery({
@@ -119,24 +124,24 @@ export default function RadioPage() {
         <div className="min-h-screen">
             <div className="relative">
                 <PageHeader
-                    eyebrow="Your library"
-                    title="Radio"
+                    eyebrow={t("Your library")}
+                    title={t("Radio")}
                     description={
                         isLoading
-                            ? "Endless shuffles from your own music"
-                            : `${STATIC_STATIONS.length + genreStations.length + decadeStations.length} stations, each an endless shuffle from your own music`
+                            ? t("Endless shuffles from your own music")
+                            : `${STATIC_STATIONS.length + genreStations.length + decadeStations.length} ${t("stations, each an endless shuffle from your own music")}`
                     }
                 />
 
                 <div className="relative page-shell pb-32 pt-2 animate-rise">
                     <div className="section-stack">
                         <section>
-                            <SectionHeader title="Quick Start" />
+                            <SectionHeader title={t("Quick Start")} />
                             <StationGrid stations={STATIC_STATIONS} loadingStation={loadingStation} onStart={startRadio} />
                         </section>
 
                         <StationSection
-                            title="By Genre"
+                            title={t("By Genre")}
                             unit="genres"
                             noun="genre"
                             stations={genreStations}
@@ -148,7 +153,7 @@ export default function RadioPage() {
                         />
 
                         <StationSection
-                            title="By Decade"
+                            title={t("By Decade")}
                             unit="decades"
                             noun="decade"
                             stations={decadeStations}
@@ -160,7 +165,7 @@ export default function RadioPage() {
                         />
 
                         <p className="t-meta">
-                            Genre and decade stations appear once your library has enough tracks for them.
+                            {t("Genre and decade stations appear once your library has enough tracks for them.")}
                         </p>
                     </div>
                 </div>
