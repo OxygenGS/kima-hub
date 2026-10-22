@@ -952,21 +952,20 @@ function ImportPlaylistPageContent() {
                         ) : importJob.status === "cancelled" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.createdPlaylistId
-                                    ? `Import cancelled. A playlist was created with ${plural(importJob.tracksMatched, "matched track")}.`
+                                    ? `${t("Import cancelled. A playlist was created with")} ${importJob.tracksMatched.toLocaleString()} ${t(importJob.tracksMatched === 1 ? "matched track" : "matched tracks")}.`
                                     : t("Import cancelled. No tracks had been matched yet.")}
                             </p>
                         ) : (
                             <>
                                 <p className="text-sm text-[var(--text-secondary)]">
                                     {importJob.tracksMatched > 0
-                                        ? `Added ${importJob.tracksMatched} songs to your playlist`
-                                        : "Playlist created (songs still downloading)"}
+                                        ? `${t("Added")} ${importJob.tracksMatched.toLocaleString()} ${t("songs to your playlist")}`
+                                        : t("Playlist created (songs still downloading)")}
                                 </p>
                                 {importJob.tracksDownloadable > 0 &&
                                     importJob.tracksMatched < importJob.tracksTotal && (
                                         <p className="text-sm text-warning mt-2">
-                                            {importJob.tracksDownloadable} songs still
-                                            downloading
+                                            {importJob.tracksDownloadable} {t("songs still downloading")}
                                         </p>
                                     )}
                             </>
@@ -1002,7 +1001,7 @@ function ImportPlaylistPageContent() {
                                                 );
                                                 if (result.added > 0) {
                                                     setRefreshStatusMessage(
-                                                        `Added ${plural(result.added, "new song")}.`
+                                                        `${t("Added")} ${result.added.toLocaleString()} ${t(result.added === 1 ? "new song" : "new songs")}.`
                                                     );
                                                     setImportJob((prev) =>
                                                         prev
@@ -1015,12 +1014,12 @@ function ImportPlaylistPageContent() {
                                                     );
                                                 } else {
                                                     setRefreshStatusMessage(
-                                                        "Albums still downloading. Try again later."
+                                                        t("Albums still downloading. Try again later.")
                                                     );
                                                 }
                                             } catch {
                                                 setRefreshStatusMessage(
-                                                    "Failed to refresh."
+                                                    t("Failed to refresh.")
                                                 );
                                             } finally {
                                                 setIsLoading(false);
@@ -1029,8 +1028,8 @@ function ImportPlaylistPageContent() {
                                         disabled={isLoading}
                                     >
                                         {isLoading
-                                            ? "Refreshing..."
-                                            : "Refresh"}
+                                            ? t("Refreshing...")
+                                            : t("Refresh")}
                                     </Button>
                                 )}
                             {refreshStatusMessage && (
