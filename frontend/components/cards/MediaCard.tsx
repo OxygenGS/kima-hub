@@ -6,6 +6,8 @@ import { Loader2, Trash2, type LucideIcon } from "lucide-react";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { cn } from "@/lib/cn";
 import { MOOD_COLORS, moodLabel } from "@/features/vibe/mapUtils";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 type MediaType = "artist" | "album" | "track" | "podcast" | "audiobook";
 
@@ -118,6 +120,7 @@ export const MediaCard = memo(function MediaCard({
     onDelete,
     className,
 }: MediaCardProps) {
+    const { locale } = useLanguage();
     const styles = TYPE_STYLES[type];
     const ActionIcon = action?.busy ? Loader2 : action?.icon;
     const moodColour = moodKey && moodKey !== "unanalyzed" ? MOOD_COLORS[moodKey] ?? null : null;
@@ -150,8 +153,8 @@ export const MediaCard = memo(function MediaCard({
                             type="button"
                             onClick={stop(action.onClick)}
                             disabled={action.busy}
-                            aria-label={`${action.label} ${title}`}
-                            title={action.label.toLowerCase()}
+                            aria-label={`${translate(locale, action.label)} ${title}`}
+                            title={translate(locale, action.label)}
                             className={cn(
                                 "absolute bottom-3 right-3 w-11 h-11 rounded-full border border-white/15 bg-black/55 backdrop-blur-[2px]",
                                 "flex items-center justify-center transition-[transform,background-color] duration-150",
@@ -169,8 +172,8 @@ export const MediaCard = memo(function MediaCard({
                     <button
                         type="button"
                         onClick={stop(onDelete)}
-                        aria-label={`Delete ${title}`}
-                        title={`Delete ${title}`.toLowerCase()}
+                        aria-label={`${translate(locale, "Delete")} ${title}`}
+                        title={`${translate(locale, "Delete")} ${title}`}
                         className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/80 border border-white/20 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-danger/90 transition-opacity duration-150"
                     >
                         <Trash2 className="w-4 h-4 text-white" />
@@ -189,8 +192,8 @@ export const MediaCard = memo(function MediaCard({
                         {moodColour && (
                             <span
                                 role="img"
-                                aria-label={moodLabel(moodKey!).toLowerCase()}
-                                title={moodLabel(moodKey!).toLowerCase()}
+                                aria-label={translate(locale, moodLabel(moodKey!))}
+                                title={translate(locale, moodLabel(moodKey!))}
                                 className="size-1.5 shrink-0 rounded-full"
                                 style={{ background: `rgb(${moodColour[0]} ${moodColour[1]} ${moodColour[2]})` }}
                             />
