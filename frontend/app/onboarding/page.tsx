@@ -337,7 +337,7 @@ export default function OnboardingPage() {
                                                         )
                                                     }
                                                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-transparent transition-all"
-                                                    placeholder="Choose a username"
+                                                    placeholder={t("Choose a username")}
                                                     required
                                                     minLength={3}
                                                 />
@@ -364,7 +364,7 @@ export default function OnboardingPage() {
                                                         "border-danger/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder="At least 6 characters"
+                                                    placeholder={t("At least 6 characters")}
                                                     required
                                                     minLength={6}
                                                 />
@@ -391,7 +391,7 @@ export default function OnboardingPage() {
                                                         "border-danger/50"
                                                         : "border-white/10"
                                                     }`}
-                                                    placeholder="Confirm your password"
+                                                    placeholder={t("Confirm your password")}
                                                     required
                                                 />
                                             </div>
