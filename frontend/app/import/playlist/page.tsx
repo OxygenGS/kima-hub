@@ -233,7 +233,7 @@ function ImportPlaylistPageContent() {
             setSelectedAlbums(new Set(downloadableAlbumIds));
             setStep("preview");
         } else if (ssePreviewStatus.status === "failed") {
-            notify.error("Failed to generate preview", { message: ssePreviewStatus.error ?? undefined });
+            notify.error(t("Failed to generate preview"), { message: ssePreviewStatus.error ?? undefined });
             setStep("input");
             setPreviewJobId(null);
         }
@@ -292,7 +292,7 @@ function ImportPlaylistPageContent() {
             setPreviewJobId(jobId);
             setStep("previewing");
         } catch (err) {
-            notify.error("Failed to start preview", {
+            notify.error(t("Failed to start preview"), {
                 message: err instanceof Error ? err.message : undefined,
             });
         } finally {
@@ -314,7 +314,7 @@ function ImportPlaylistPageContent() {
             setImportJob(pendingImportJob(jobId));
             setStep("importing");
         } catch (err) {
-            notify.error("Failed to start import", {
+            notify.error(t("Failed to start import"), {
                 message: err instanceof Error ? err.message : undefined,
             });
         } finally {
@@ -355,7 +355,7 @@ function ImportPlaylistPageContent() {
             }));
             setStep("importing");
         } catch (err) {
-            notify.error("Failed to start import", {
+            notify.error(t("Failed to start import"), {
                 message: err instanceof Error ? err.message : undefined,
             });
         } finally {
@@ -415,7 +415,7 @@ function ImportPlaylistPageContent() {
 
             queryClient.invalidateQueries({ queryKey: ["notifications"] });
         } catch (err) {
-            notify.error("Failed to cancel import", {
+            notify.error(t("Failed to cancel import"), {
                 message: err instanceof Error ? err.message : undefined,
             });
         } finally {
@@ -444,13 +444,13 @@ function ImportPlaylistPageContent() {
                     <button
                         onClick={() => router.back()}
                         className="p-2 hover:bg-white/5 rounded-full transition-colors"
-                        aria-label="Back"
+                        aria-label={t("Back")}
                     >
                         <ArrowLeft className="w-5 h-5 text-[var(--text-secondary)]" />
                     </button>
                     <div>
                         <h1 className="text-2xl font-bold text-white">
-                            Import Playlist
+                            {t("Import Playlist")}
                         </h1>
                         <p className="text-sm text-[var(--text-secondary)]">
                             Import from Spotify or Deezer
@@ -528,9 +528,9 @@ function ImportPlaylistPageContent() {
                 {step === "previewing" && (
                     <div className="text-center py-12">
                         <GradientSpinner size="lg" className="mx-auto mb-4" />
-                        <h2 className="text-lg font-bold text-white mb-1">Analysing Playlist</h2>
+                        <h2 className="text-lg font-bold text-white mb-1">{t("Analysing Playlist")}</h2>
                         <p className="text-[var(--text-secondary)] text-sm">
-                            {ssePreviewStatus?.message || "Matching tracks to your library..."}
+                            {ssePreviewStatus?.message || t("Matching tracks to your library...")}
                         </p>
                     </div>
                 )}
@@ -809,7 +809,7 @@ function ImportPlaylistPageContent() {
                                 onChange={(e) =>
                                     setPlaylistName(e.target.value)
                                 }
-                                placeholder="Enter playlist name"
+                                placeholder={t("Enter playlist name")}
                                 className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-spotify/50 focus:border-spotify transition-colors"
                             />
                         </div>
@@ -870,7 +870,7 @@ function ImportPlaylistPageContent() {
                         </h2>
                         <p className="text-sm text-[var(--text-secondary)] mb-6">
                             {importJob.status === "fetching" && (
-                                <>Fetching tracks and matching to your library...</>
+                                <>{t("Fetching tracks and matching to your library...")}</>
                             )}
                             {importJob.status === "downloading" && (
                                 <>
@@ -882,11 +882,11 @@ function ImportPlaylistPageContent() {
                                 <>
                                     {importJob.albumsTotal > 0
                                         ? `Waiting for ${importJob.albumsTotal - importJob.albumsCompleted} downloads to complete`
-                                        : "Preparing import..."}
+                                        : t("Preparing import...")}
                                 </>
                             )}
                             {importJob.status === "scanning" && (
-                                <>Importing downloaded files into library</>
+                                <>{t("Importing downloaded files into library")}</>
                             )}
                             {(importJob.status === "creating_playlist" ||
                                 importJob.status === "matching_tracks") && (
