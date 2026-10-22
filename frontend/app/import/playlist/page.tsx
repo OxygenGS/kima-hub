@@ -453,7 +453,7 @@ function ImportPlaylistPageContent() {
                             {t("Import Playlist")}
                         </h1>
                         <p className="text-sm text-[var(--text-secondary)]">
-                            Import from Spotify or Deezer
+                            {t("Import from Spotify or Deezer")}
                         </p>
                     </div>
                 </div>
@@ -476,7 +476,7 @@ function ImportPlaylistPageContent() {
                     <div className="space-y-4">
                         <div>
                             <label htmlFor="playlist-url" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Playlist URL
+                                {t("Playlist URL")}
                             </label>
                             <input
                                 id="playlist-url"
@@ -517,7 +517,7 @@ function ImportPlaylistPageContent() {
                                 {isLoading ? "Loading..." : (
                                     <>
                                         <Zap className="w-4 h-4" />
-                                        Import Now
+                                        {t("Import Now")}
                                     </>
                                 )}
                             </Button>
@@ -591,7 +591,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.total}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    Total
+                                    {t("Total")}
                                 </div>
                             </div>
                             <div className="animate-rise text-center py-3 bg-success/10 rounded-lg" style={{ "--i": 1 } as CSSProperties}>
@@ -599,7 +599,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.inLibrary}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    In Library
+                                    {t("In Library")}
                                 </div>
                             </div>
                             <div className="animate-rise text-center py-3 bg-success/10 rounded-lg" style={{ "--i": 2 } as CSSProperties}>
@@ -607,7 +607,7 @@ function ImportPlaylistPageContent() {
                                     {preview.summary.downloadable}
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    To Download
+                                    {t("To Download")}
                                 </div>
                             </div>
                             <div className="animate-rise text-center py-3 bg-success/10 rounded-lg" style={{ "--i": 3 } as CSSProperties}>
@@ -615,7 +615,7 @@ function ImportPlaylistPageContent() {
                                     ✓
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)]">
-                                    All Matched
+                                    {t("All Matched")}
                                 </div>
                             </div>
                         </div>
@@ -800,7 +800,7 @@ function ImportPlaylistPageContent() {
 
                         <div>
                             <label htmlFor="playlist-name" className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-                                Playlist Name
+                                {t("Playlist Name")}
                             </label>
                             <input
                                 id="playlist-name"
@@ -856,17 +856,17 @@ function ImportPlaylistPageContent() {
                         <GradientSpinner size="lg" className="mx-auto mb-4" />
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "fetching"
-                                ? "Fetching Playlist"
+                                ? t("Fetching Playlist")
                                 : importJob.status === "downloading"
-                                ? "Queueing Album Downloads"
+                                ? t("Queueing Album Downloads")
                                 : importJob.status === "scanning"
-                                ? "Scanning Library"
+                                ? t("Scanning Library")
                                 : importJob.status === "creating_playlist" ||
                                   importJob.status === "matching_tracks"
-                                ? "Creating Playlist"
+                                ? t("Creating Playlist")
                                 : importJob.status === "pending"
-                                ? "Starting Import"
-                                : "Starting Import"}
+                                ? t("Starting Import")
+                                : t("Starting Import")}
                         </h2>
                         <p className="text-sm text-[var(--text-secondary)] mb-6">
                             {importJob.status === "fetching" && (
@@ -874,8 +874,8 @@ function ImportPlaylistPageContent() {
                             )}
                             {importJob.status === "downloading" && (
                                 <>
-                                    Queued {importJob.albumsCompleted} of{" "}
-                                    {importJob.albumsTotal} albums
+                                    {t("Queued")} {importJob.albumsCompleted} {t("of")}{" "}
+                                    {importJob.albumsTotal} {t("albums")}
                                 </>
                             )}
                             {importJob.status === "pending" && (
@@ -890,7 +890,7 @@ function ImportPlaylistPageContent() {
                             )}
                             {(importJob.status === "creating_playlist" ||
                                 importJob.status === "matching_tracks") && (
-                                <>Adding {importJob.tracksMatched} songs</>
+                                <>{t("Adding")} {importJob.tracksMatched} {t("songs")}</>
                             )}
                         </p>
                         <div className="w-full max-w-xs mx-auto bg-white/10 rounded-full h-1.5">
@@ -983,7 +983,7 @@ function ImportPlaylistPageContent() {
                                     setRefreshStatusMessage(null);
                                 }}
                             >
-                                Import Another
+                                {t("Import Another")}
                             </Button>
                             {importJob.tracksDownloadable > 0 &&
                                 importJob.tracksMatched <
@@ -1049,7 +1049,7 @@ function ImportPlaylistPageContent() {
                                     }
                                     className="bg-success hover:bg-success hover:brightness-110"
                                 >
-                                    View Playlist
+                                    {t("View Playlist")}
                                 </Button>
                             )}
                         </div>
