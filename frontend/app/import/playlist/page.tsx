@@ -461,12 +461,12 @@ function ImportPlaylistPageContent() {
                 {step === "input" && (
                     <div className="mb-6 p-4 bg-white/5 rounded-lg border border-white/10">
                         <p className="text-sm text-[var(--text-primary)]">
-                            Looking for playlists to import?{" "}
+                            {t("Looking for playlists to import?")}{" "}
                             <Link
                                 href="/browse/playlists"
                                 className="text-brand hover:underline font-medium"
                             >
-                                Browse Deezer playlists & radio stations →
+                                {t("Browse Deezer playlists & radio stations →")}
                             </Link>
                         </p>
                     </div>
@@ -490,11 +490,11 @@ function ImportPlaylistPageContent() {
                                 }
                             />
                             <p className="text-xs text-[var(--text-muted)] mt-2">
-                                Paste a public{" "}
+                                {t("Paste a public")}{" "}
                                 <span className="text-[#AD47FF]">Deezer</span>{" "}
-                                or{" "}
+                                {t("or")}{" "}
                                 <span className="text-spotify">Spotify</span>{" "}
-                                playlist URL
+                                {t("playlist URL")}
                             </p>
                         </div>
                         <div className="flex gap-3">
@@ -822,7 +822,7 @@ function ImportPlaylistPageContent() {
                                     setPreview(null);
                                 }}
                             >
-                                Back
+                                {t("Back")}
                             </Button>
                             <Button
                                 variant="primary"
@@ -909,11 +909,10 @@ function ImportPlaylistPageContent() {
                             isLoading={isCancelling}
                             className="mt-6"
                         >
-                            {isCancelling ? "Cancelling..." : "Cancel Import"}
+                            {isCancelling ? t("Cancelling...") : t("Cancel Import")}
                         </Button>
                         <p className="text-xs text-[var(--text-muted)] mt-2">
-                            Playlist will be created with tracks downloaded so
-                            far
+                            {t("Playlist will be created with tracks downloaded so far")}
                         </p>
                     </div>
                 )}
@@ -939,22 +938,22 @@ function ImportPlaylistPageContent() {
 
                         <h2 className="text-lg font-bold text-white mb-1">
                             {importJob.status === "failed"
-                                ? "Import Failed"
+                                ? t("Import Failed")
                                 : importJob.status === "cancelled"
-                                ? "Import Cancelled"
-                                : "Import Complete"}
+                                ? t("Import Cancelled")
+                                : t("Import Complete")}
                         </h2>
 
                         {importJob.status === "failed" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.error ||
-                                    "Something went wrong while importing."}
+                                    t("Something went wrong while importing.")}
                             </p>
                         ) : importJob.status === "cancelled" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.createdPlaylistId
                                     ? `Import cancelled. A playlist was created with ${plural(importJob.tracksMatched, "matched track")}.`
-                                    : "Import cancelled. No tracks had been matched yet."}
+                                    : t("Import cancelled. No tracks had been matched yet.")}
                             </p>
                         ) : (
                             <>
