@@ -15,6 +15,8 @@ import { useDoubleTapList } from "@/hooks/useDoubleTap";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { PageMessage } from "@/components/ui/PageMessage";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 interface MixTrack {
     id: string;
@@ -32,6 +34,8 @@ interface MixTrack {
 }
 
 export default function MixPage() {
+    const { locale } = useLanguage();
+    const t = (text: string) => translate(locale, text);
     const params = useParams();
     const router = useRouter();
     const mixId = params.id as string;
@@ -129,14 +133,14 @@ export default function MixPage() {
             console.error("Failed to save mix as playlist:", error);
             const err = error as { status?: number; data?: { playlistId?: string } };
             if (err?.status === 409) {
-                notify.info("You've already saved this mix as a playlist.");
+                notify.info(t("You've already saved this mix as a playlist."));
                 if (err?.data?.playlistId) {
                     setTimeout(() => {
                         router.push(`/playlist/${err.data!.playlistId}`);
                     }, 1000);
                 }
             } else {
-                notify.error("Failed to save mix as playlist", {
+                notify.error(t("Failed to save mix as playlist"), {
                     message: error instanceof Error ? error.message : undefined,
                 });
             }
@@ -212,7 +216,7 @@ export default function MixPage() {
                         </div>
 
                         <div className="flex-1 min-w-0 pb-1">
-                            <p className="text-xs font-medium text-[var(--text-primary)] mb-1">Mix</p>
+                            <p className="text-xs font-medium text-[var(--text-primary)] mb-1">{t("Mix")}</p>
                             <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight line-clamp-2 mb-2">
                                 {mix.name}
                             </h1>
@@ -236,7 +240,7 @@ export default function MixPage() {
                     {mix.tracks && mix.tracks.length > 0 && (
                         <button
                             onClick={handlePlayMix}
-                            aria-label={isThisMixPlaying && isPlaying ? `Pause ${mix.name}` : `Play ${mix.name}`}
+                            aria-label={`${t(isThisMixPlaying && isPlaying ? "Pause" : "Play")} ${mix.name}`}
                             className="h-12 w-12 rounded-full bg-brand hover:bg-brand-hover hover:scale-105 flex items-center justify-center transition-all"
                         >
                             {isThisMixPlaying && isPlaying ? (
@@ -250,7 +254,7 @@ export default function MixPage() {
                     {mix.tracks && mix.tracks.length > 1 && (
                         <button
                             onClick={handleShuffle}
-                            aria-label={`Shuffle play ${mix.name}`}
+                            aria-label={`${t("shuffle play")} ${mix.name}`}
                             className="h-8 w-8 rounded-full hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all"
                         >
                             <Shuffle className="w-5 h-5" />
@@ -264,7 +268,7 @@ export default function MixPage() {
                     >
                         <Save className="w-4 h-4" />
                         <span className="hidden sm:inline">
-                            {isSaving ? "Saving..." : "Save as Playlist"}
+                            {isSaving ? t("Saving...") : t("Save as Playlist")}
                         </span>
                     </button>
                 </div>
@@ -275,9 +279,9 @@ export default function MixPage() {
                     <div className="w-full">
                         <div className="hidden md:grid grid-cols-[40px_minmax(200px,4fr)_minmax(100px,1fr)_80px] gap-4 px-4 py-2 text-xs text-[var(--text-secondary)] border-b border-white/10 mb-2">
                             <span className="text-center">#</span>
-                            <span>Title</span>
-                            <span>Album</span>
-                            <span className="text-right">Duration</span>
+                            <span>{t("Title")}</span>
+                            <span>{t("Album")}</span>
+                            <span className="text-right">{t("Duration")}</span>
                         </div>
 
                         <div>

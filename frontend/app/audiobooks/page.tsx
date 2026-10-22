@@ -279,7 +279,7 @@ export default function AudiobooksPage() {
             }
             await queryClient.refetchQueries({ queryKey: queryKeys.audiobooks() });
         } catch (error) {
-            notify.error("Audiobook sync failed", { message: (error as Error)?.message });
+            notify.error(t("Audiobook sync failed"), { message: (error as Error)?.message });
         } finally {
             setIsSyncing(false);
         }
