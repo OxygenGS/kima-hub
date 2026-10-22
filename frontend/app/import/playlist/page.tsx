@@ -881,7 +881,7 @@ function ImportPlaylistPageContent() {
                             {importJob.status === "pending" && (
                                 <>
                                     {importJob.albumsTotal > 0
-                                        ? `Waiting for ${importJob.albumsTotal - importJob.albumsCompleted} downloads to complete`
+                                        ? `${t("Waiting for")} ${importJob.albumsTotal - importJob.albumsCompleted} ${t("downloads to complete")}`
                                         : t("Preparing import...")}
                                 </>
                             )}
@@ -900,8 +900,7 @@ function ImportPlaylistPageContent() {
                             />
                         </div>
                         <p className="text-xs text-[var(--text-muted)] mt-3">
-                            {importJob.progress}% complete • downloads continue
-                            in the background
+                            {importJob.progress}% {t("complete • downloads continue in the background")}
                         </p>
                         <Button
                             variant="secondary"
