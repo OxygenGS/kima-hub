@@ -3,6 +3,16 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Devices": "Devices",
+    "Link a device": "Link a device",
+    "Scan the QR code, or type the code into the app on your phone": "Scan the QR code, or type the code into the app on your phone",
+    "Unlink": "Unlink",
+    "Open the Kima app on your mobile device": "Open the Kima app on your mobile device",
+    "Unlink this device?": "Unlink this device?",
+    "This device": "This device",
+    "will be signed out and need a new code to link again.": "will be signed out and need a new code to link again.",
+    "Couldn't unlink device": "Couldn't unlink device",
+    "is still linked. Try again.": "is still linked. Try again.",
     "No active downloads": "No active downloads",
     "Downloads will appear here": "Downloads will appear here",
     "No download history": "No download history",
@@ -1762,6 +1772,16 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Devices": "Apparaten",
+    "Link a device": "Apparaat koppelen",
+    "Scan the QR code, or type the code into the app on your phone": "Scan de QR-code of voer de code in op je telefoon",
+    "Unlink": "Ontkoppelen",
+    "Open the Kima app on your mobile device": "Open de Kima-app op je mobiele apparaat",
+    "Unlink this device?": "Dit apparaat ontkoppelen?",
+    "This device": "Dit apparaat",
+    "will be signed out and need a new code to link again.": "wordt afgemeld en heeft een nieuwe code nodig om opnieuw te koppelen.",
+    "Couldn't unlink device": "Apparaat kon niet worden ontkoppeld",
+    "is still linked. Try again.": "is nog gekoppeld. Probeer het opnieuw.",
     "No active downloads": "Geen actieve downloads",
     "Downloads will appear here": "Downloads verschijnen hier",
     "No download history": "Geen downloadgeschiedenis",
