@@ -140,7 +140,7 @@ const TrackRow = memo(
                             onAddToQueue(track);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="add to queue"
+                        title={translate(locale, "Add to queue")}
                     >
                         <ListPlus className="w-4 h-4" />
                     </button>
@@ -150,7 +150,7 @@ const TrackRow = memo(
                             onShowAddToPlaylist(track.id);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
-                        title="add to playlist"
+                        title={translate(locale, "Add to playlist")}
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -160,7 +160,7 @@ const TrackRow = memo(
                             onDelete(track.id, track.title);
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-danger/30"
-                        title="delete track"
+                        title={translate(locale, "Delete Track")}
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
