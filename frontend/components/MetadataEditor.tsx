@@ -143,11 +143,7 @@ export function MetadataEditor({
                         <div className="flex items-center justify-between p-6 border-b border-white/10">
                             <h2 id="metadata-editor-title" className="text-2xl font-bold text-white">
                                 {t("Edit")}{" "}
-                                {type === "artist"
-                                    ? "Artist"
-                                    : type === "album"
-                                    ? "Album"
-                                    : "Track"}{" "}
+                                {t(type === "artist" ? "Artist" : type === "album" ? "Album" : "Track")}{" "}
                                 {t("Metadata")}
                             </h2>
                             <button
@@ -162,11 +158,7 @@ export function MetadataEditor({
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
-                                    {type === "artist"
-                                        ? "Artist Name"
-                                        : type === "album"
-                                        ? "Album Title"
-                                        : "Track Title"}
+                                    {t(type === "artist" ? "Artist Name" : type === "album" ? "Album Title" : "Track Title")}
                                 </label>
                                 <input
                                     type="text"
@@ -188,7 +180,7 @@ export function MetadataEditor({
                                     currentData._originalName !==
                                         (formData.name || "") && (
                                         <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            Original:{" "}
+                                            {t("Original:")}{" "}
                                             {currentData._originalName}
                                         </p>
                                     )}
@@ -197,7 +189,7 @@ export function MetadataEditor({
                                     currentData._originalTitle !==
                                         (formData.title || "") && (
                                         <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            Original:{" "}
+                                            {t("Original:")}{" "}
                                             {currentData._originalTitle}
                                         </p>
                                     )}
@@ -206,7 +198,7 @@ export function MetadataEditor({
                             {type === "artist" && (
                                 <div>
                                     <label className="block text-sm font-bold text-white mb-2">
-                                        Biography
+                                        {t("Biography")}
                                     </label>
                                     <textarea
                                         value={formData.bio || ""}
@@ -220,7 +212,7 @@ export function MetadataEditor({
                                         currentData._originalBio !==
                                             (formData.bio || "") && (
                                             <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                Original:{" "}
+                                                {t("Original:")}{" "}
                                                 {currentData._originalBio.substring(
                                                     0,
                                                     100
@@ -234,7 +226,7 @@ export function MetadataEditor({
                             {type === "album" && (
                                 <div>
                                     <label className="block text-sm font-bold text-white mb-2">
-                                        Release Year
+                                        {t("Release Year")}
                                     </label>
                                     <input
                                         type="number"
@@ -251,7 +243,7 @@ export function MetadataEditor({
                                         currentData._originalYear !==
                                             (formData.year || null) && (
                                             <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                                Original:{" "}
+                                                {t("Original:")}{" "}
                                                 {currentData._originalYear}
                                             </p>
                                         )}
@@ -260,9 +252,9 @@ export function MetadataEditor({
 
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
-                                    Genres
+                                    {t("Genres")}
                                     <span className="text-xs text-[var(--text-secondary)] ml-2">
-                                        (comma-separated)
+                                        {t("(comma-separated)")}
                                     </span>
                                 </label>
                                 <input
@@ -289,7 +281,7 @@ export function MetadataEditor({
                                             (formData.genres || []).sort()
                                         ) && (
                                         <p className="mt-1 text-xs text-[var(--text-muted)]">
-                                            Original:{" "}
+                                            {t("Original:")}{" "}
                                             {currentData._originalGenres.join(
                                                 ", "
                                             )}
@@ -301,7 +293,7 @@ export function MetadataEditor({
                                 <label className="block text-sm font-bold text-white mb-2">
                                     MusicBrainz ID
                                     <span className="text-xs text-[var(--text-secondary)] ml-2">
-                                        (leave empty to auto-fetch)
+                                        {t("(leave empty to auto-fetch)")}
                                     </span>
                                 </label>
                                 <input
@@ -330,11 +322,9 @@ export function MetadataEditor({
 
                             <div>
                                 <label className="block text-sm font-bold text-white mb-2">
-                                    {type === "artist"
-                                        ? "Artist Image URL"
-                                        : "Cover Art URL"}
+                                    {t(type === "artist" ? "Artist Image URL" : "Cover Art URL")}
                                     <span className="text-xs text-[var(--text-secondary)] ml-2">
-                                        (leave empty to auto-fetch)
+                                        {t("(leave empty to auto-fetch)")}
                                     </span>
                                 </label>
                                 <input
@@ -360,7 +350,7 @@ export function MetadataEditor({
                                     currentData._originalHeroUrl !==
                                         (formData.heroUrl || "") && (
                                         <p className="mt-1 text-xs text-[var(--text-muted)] truncate">
-                                            Original:{" "}
+                                            {t("Original:")}{" "}
                                             {currentData._originalHeroUrl}
                                         </p>
                                     )}
@@ -369,7 +359,7 @@ export function MetadataEditor({
                                     currentData._originalCoverUrl !==
                                         (formData.coverUrl || "") && (
                                         <p className="mt-1 text-xs text-[var(--text-muted)] truncate">
-                                            Original:{" "}
+                                            {t("Original:")}{" "}
                                             {currentData._originalCoverUrl}
                                         </p>
                                     )}
@@ -380,7 +370,7 @@ export function MetadataEditor({
                                                 (formData.heroUrl ||
                                                 formData.coverUrl)!
                                             }
-                                            alt="Preview"
+                                            alt={t("Preview")}
                                             width={128}
                                             height={128}
                                             className="w-32 h-32 object-cover rounded"
