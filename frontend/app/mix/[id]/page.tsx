@@ -56,8 +56,8 @@ export default function MixPage() {
         const total = Math.max(1, Math.round(seconds / 60));
         const hours = Math.floor(total / 60);
         const mins = total % 60;
-        if (hours === 0) return `${mins} min`;
-        return mins === 0 ? `${hours} hr` : `${hours} hr ${mins} min`;
+        if (hours === 0) return `${mins.toLocaleString(locale)} ${t("min")}`;
+        return mins === 0 ? `${hours.toLocaleString(locale)} ${t("hr")}` : `${hours.toLocaleString(locale)} ${t("hr")} ${mins.toLocaleString(locale)} ${t("min")}`;
     };
 
     const mixTrackIds = useMemo(() => {

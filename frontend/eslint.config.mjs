@@ -7,6 +7,14 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
+      // Existing application patterns predate the expanded React compiler lint rules.
+      // Keep reporting them while incremental component refactors are completed.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/incompatible-library": "warn",
+      "react-hooks/purity": "warn",
+      "react-hooks/immutability": "warn",
       "@typescript-eslint/no-unused-vars": ["warn", {
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_",

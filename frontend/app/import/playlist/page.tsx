@@ -125,7 +125,7 @@ const pendingImportJob = (id: string, totals: Partial<ImportJob> = {}): ImportJo
 function ImportPlaylistPageContent() {
     const router = useRouter();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
@@ -881,7 +881,7 @@ function ImportPlaylistPageContent() {
                             {importJob.status === "pending" && (
                                 <>
                                     {importJob.albumsTotal > 0
-                                        ? `${t("Waiting for")} ${importJob.albumsTotal - importJob.albumsCompleted} ${t("downloads to complete")}`
+                                        ? `${t("Waiting for")} ${(importJob.albumsTotal - importJob.albumsCompleted).toLocaleString(locale)} ${t("downloads to complete")}`
                                         : t("Preparing import...")}
                                 </>
                             )}
@@ -951,14 +951,14 @@ function ImportPlaylistPageContent() {
                         ) : importJob.status === "cancelled" ? (
                             <p className="text-sm text-[var(--text-secondary)]">
                                 {importJob.createdPlaylistId
-                                    ? `${t("Import cancelled. A playlist was created with")} ${importJob.tracksMatched.toLocaleString()} ${t(importJob.tracksMatched === 1 ? "matched track" : "matched tracks")}.`
+                                    ? `${t("Import cancelled. A playlist was created with")} ${importJob.tracksMatched.toLocaleString(locale)} ${t(importJob.tracksMatched === 1 ? "matched track" : "matched tracks")}.`
                                     : t("Import cancelled. No tracks had been matched yet.")}
                             </p>
                         ) : (
                             <>
                                 <p className="text-sm text-[var(--text-secondary)]">
                                     {importJob.tracksMatched > 0
-                                        ? `${t("Added")} ${importJob.tracksMatched.toLocaleString()} ${t("songs to your playlist")}`
+                                        ? `${t("Added")} ${importJob.tracksMatched.toLocaleString(locale)} ${t("songs to your playlist")}`
                                         : t("Playlist created (songs still downloading)")}
                                 </p>
                                 {importJob.tracksDownloadable > 0 &&
@@ -1000,7 +1000,7 @@ function ImportPlaylistPageContent() {
                                                 );
                                                 if (result.added > 0) {
                                                     setRefreshStatusMessage(
-                                                        `${t("Added")} ${result.added.toLocaleString()} ${t(result.added === 1 ? "new song" : "new songs")}.`
+                                                        `${t("Added")} ${result.added.toLocaleString(locale)} ${t(result.added === 1 ? "new song" : "new songs")}.`
                                                     );
                                                     setImportJob((prev) =>
                                                         prev
