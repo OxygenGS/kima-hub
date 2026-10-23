@@ -130,7 +130,7 @@ export default function OnboardingPage() {
                     );
                 }
             } else {
-                setError(message || "Failed to create account");
+                setError(message || t("Failed to create account"));
             }
         } finally {
             setSubmitting(false);
@@ -165,7 +165,7 @@ export default function OnboardingPage() {
                 });
             } else if (type === "soulseek") {
                 if (!soulseek.username || !soulseek.password) {
-                    throw new Error("Username and password are required");
+                    throw new Error(t("Username and password are required"));
                 }
                 await api.post("/system-settings/test-soulseek", {
                     username: soulseek.username,
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
             setError(
                 err instanceof Error ?
                     err.message
-                : "Failed to save configuration",
+                : t("Failed to save configuration"),
             );
         } finally {
             setSubmitting(false);
@@ -550,7 +550,7 @@ export default function OnboardingPage() {
                                                         await api.post("/onboarding/complete");
                                                         router.push("/sync");
                                                     } catch {
-                                                        setError("Failed to complete setup");
+                                                        setError(t("Failed to complete setup"));
                                                         setSubmitting(false);
                                                     }
                                                 }}
