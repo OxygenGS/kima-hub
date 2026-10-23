@@ -518,7 +518,7 @@ export default function PlaylistDetailPage() {
                                     onClick={() => handlePlayPreview(pending.id)}
                                     className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors"
                                     aria-label={t("Play a 30-second preview")}
-                                    title="play a 30-second preview"
+                                    title={t("Play a 30-second preview")}
                                 >
                                     {isPreviewPlaying ? (
                                         <Volume2 className="w-5 h-5 text-brand animate-pulse" />
@@ -564,7 +564,7 @@ export default function PlaylistDetailPage() {
                                             : "text-[var(--text-muted)] hover:text-white/60"
                                     )}
                                     aria-label={t("Retry download")}
-                                    title="retry download"
+                                    title={t("Retry download")}
                                 >
                                     {isRetrying ? (
                                         <GradientSpinner size="sm" />
@@ -582,7 +582,7 @@ export default function PlaylistDetailPage() {
                                     disabled={isRemoving}
                                     className="w-11 h-11 md:w-9 md:h-9 flex items-center justify-center rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-danger-light transition-all"
                                     aria-label={t("Remove from playlist")}
-                                    title="remove from playlist"
+                                    title={t("Remove from playlist")}
                                 >
                                     {isRemoving ? (
                                         <GradientSpinner size="sm" />
@@ -636,7 +636,7 @@ export default function PlaylistDetailPage() {
                                 handlePlayTrack(trackIndex);
                             }}
                             className="w-8 h-8 flex items-center justify-center"
-                            aria-label={isCurrentlyPlaying && isPlaying ? "Pause" : "Play"}
+                            aria-label={t(isCurrentlyPlaying && isPlaying ? "Pause" : "Play")}
                         >
                             <span
                                 className={cn(
@@ -735,7 +735,7 @@ export default function PlaylistDetailPage() {
                                 handleAddToQueue(playlistItem.track);
                             }}
                             aria-label={t("Add to queue")}
-                            title="add to queue"
+                            title={t("Add to queue")}
                         >
                             <ListPlus className="w-4 h-4" />
                         </button>
@@ -748,7 +748,7 @@ export default function PlaylistDetailPage() {
                                         e.stopPropagation();
                                         handleMoveTrackUp(playlistItem.id);
                                     }}
-                                    title="move up"
+                                    title={t("Move up")}
                                 >
                                     <ChevronUp className="w-4 h-4" />
                                 </button>
@@ -759,7 +759,7 @@ export default function PlaylistDetailPage() {
                                         e.stopPropagation();
                                         handleMoveTrackDown(playlistItem.id);
                                     }}
-                                    title="move down"
+                                    title={t("Move down")}
                                 >
                                     <ChevronDown className="w-4 h-4" />
                                 </button>
@@ -770,7 +770,7 @@ export default function PlaylistDetailPage() {
                                         handleRemoveTrack(playlistItem.track.id);
                                     }}
                                     aria-label={t("Remove from playlist")}
-                                    title="remove from playlist"
+                                    title={t("Remove from playlist")}
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
@@ -956,7 +956,7 @@ export default function PlaylistDetailPage() {
                     {playlist.items && playlist.items.length > 0 && (
                         <button
                             onClick={handlePlayPlaylist}
-                            aria-label={isThisPlaylistPlaying && isPlaying ? "Pause" : "Play all"}
+                            aria-label={t(isThisPlaylistPlaying && isPlaying ? "Pause" : "Play all")}
                             className="h-12 w-12 rounded-lg bg-brand hover:bg-brand-hover hover:scale-105 flex items-center justify-center transition-all"
                         >
                             {isThisPlaylistPlaying && isPlaying ? (
@@ -971,7 +971,7 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={() => playTracks(shuffleArray(playlist.items.map((item: PlaylistItem) => toAudioTrack(item.track))), 0)}
                             className="h-8 w-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-[var(--text-muted)] hover:text-white transition-all"
-                            title="shuffle play"
+                            title={t("Shuffle play")}
                         >
                             <Shuffle className="w-5 h-5" />
                         </button>
@@ -991,7 +991,7 @@ export default function PlaylistDetailPage() {
                                         : "text-[var(--text-muted)] hover:text-white/60",
                                     shareLoading && "opacity-50 cursor-not-allowed"
                                 )}
-                                title="share playlist"
+                                title={t("Share playlist")}
                             >
                                 {shareLoading ? (
                                     <GradientSpinner size="sm" />
@@ -1068,7 +1068,7 @@ export default function PlaylistDetailPage() {
                                     : "text-[var(--text-muted)] hover:text-white/60",
                                 isUpdatingPlaylist && "opacity-50 cursor-not-allowed"
                             )}
-                            title={playlist.isPublic ? "make private" : "make public"}
+                            title={t(playlist.isPublic ? "Make private" : "Make public")}
                         >
                             {playlist.isPublic ? (
                                 <Globe className="w-5 h-5" />
@@ -1088,7 +1088,7 @@ export default function PlaylistDetailPage() {
                                 : "text-[var(--text-muted)] hover:text-white/60",
                             isHiding && "opacity-50 cursor-not-allowed"
                         )}
-                        title={playlist.isHidden ? "show playlist" : "hide playlist"}
+                        title={t(playlist.isHidden ? "Show playlist" : "Hide playlist")}
                     >
                         {playlist.isHidden ? (
                             <Eye className="w-5 h-5" />
@@ -1101,7 +1101,7 @@ export default function PlaylistDetailPage() {
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
                             className="h-8 w-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-danger-light transition-all"
-                            title="delete playlist"
+                            title={t("Delete Playlist")}
                         >
                             <Trash2 className="w-5 h-5" />
                         </button>
