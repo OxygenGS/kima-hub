@@ -51,6 +51,7 @@ import { CachedImage } from "@/components/ui/CachedImage";
 import { PageMessage } from "@/components/ui/PageMessage";
 import { copyText } from "@/lib/clipboard";
 import { openActivityPanel } from "@/hooks/useActivityPanel";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 interface Track {
     id: string;
@@ -108,6 +109,7 @@ const TRACK_GRID = "grid-cols-[64px_minmax(0,2fr)_minmax(0,1fr)_56px_160px]";
 const TRACK_GRID_MD = "md:grid-cols-[64px_minmax(0,2fr)_minmax(0,1fr)_56px_160px]";
 
 export default function PlaylistDetailPage() {
+    const { t } = useLanguage();
     const params = useParams();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -515,7 +517,7 @@ export default function PlaylistDetailPage() {
                                 <button
                                     onClick={() => handlePlayPreview(pending.id)}
                                     className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors"
-                                    aria-label="Play a 30-second preview"
+                                    aria-label={t("Play a 30-second preview")}
                                     title="play a 30-second preview"
                                 >
                                     {isPreviewPlaying ? (
@@ -561,7 +563,7 @@ export default function PlaylistDetailPage() {
                                             ? "text-brand"
                                             : "text-[var(--text-muted)] hover:text-white/60"
                                     )}
-                                    aria-label="Retry download"
+                                    aria-label={t("Retry download")}
                                     title="retry download"
                                 >
                                     {isRetrying ? (
@@ -579,7 +581,7 @@ export default function PlaylistDetailPage() {
                                     }}
                                     disabled={isRemoving}
                                     className="w-11 h-11 md:w-9 md:h-9 flex items-center justify-center rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-danger-light transition-all"
-                                    aria-label="Remove from playlist"
+                                    aria-label={t("Remove from playlist")}
                                     title="remove from playlist"
                                 >
                                     {isRemoving ? (
@@ -662,7 +664,7 @@ export default function PlaylistDetailPage() {
                                     handleDragStart(playlistItem.id);
                                 }}
                                 onDragEnd={handleDragEnd}
-                                aria-label="Drag to reorder"
+                                aria-label={t("Drag to reorder")}
                                 className="touch-reveal w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-60 hover:opacity-100 focus-visible:opacity-100 transition-all cursor-grab active:cursor-grabbing text-[var(--text-muted)] hover:text-white"
                             >
                                 <GripVertical className="w-4 h-4" />
@@ -732,7 +734,7 @@ export default function PlaylistDetailPage() {
                                 e.stopPropagation();
                                 handleAddToQueue(playlistItem.track);
                             }}
-                            aria-label="Add to queue"
+                            aria-label={t("Add to queue")}
                             title="add to queue"
                         >
                             <ListPlus className="w-4 h-4" />
@@ -740,7 +742,7 @@ export default function PlaylistDetailPage() {
                         {playlist?.isOwner && (
                             <>
                                 <button
-                                    aria-label="Move up"
+                                    aria-label={t("Move up")}
                                     className="hidden md:flex w-9 h-9 items-center justify-center rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -751,7 +753,7 @@ export default function PlaylistDetailPage() {
                                     <ChevronUp className="w-4 h-4" />
                                 </button>
                                 <button
-                                    aria-label="Move down"
+                                    aria-label={t("Move down")}
                                     className="hidden md:flex w-9 h-9 items-center justify-center rounded-lg hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-all"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -767,7 +769,7 @@ export default function PlaylistDetailPage() {
                                         e.stopPropagation();
                                         handleRemoveTrack(playlistItem.track.id);
                                     }}
-                                    aria-label="Remove from playlist"
+                                    aria-label={t("Remove from playlist")}
                                     title="remove from playlist"
                                 >
                                     <X className="w-4 h-4" />
@@ -1138,10 +1140,10 @@ export default function PlaylistDetailPage() {
                                 so they share one heading. See TRACK_GRID. */}
                             <div className={cn("hidden md:grid", TRACK_GRID, "gap-4 px-4 py-2 text-xs text-[var(--text-muted)] border-b border-white/10 mb-2")}>
                                 <span className="text-center">#</span>
-                                <span>Title</span>
-                                <span>Album</span>
-                                <span className="text-right">Duration</span>
-                                <span className="sr-only">Actions</span>
+                                <span>{t("Title")}</span>
+                                <span>{t("Album")}</span>
+                                <span className="text-right">{t("Duration")}</span>
+                                <span className="sr-only">{t("Actions")}</span>
                             </div>
 
                             <div
