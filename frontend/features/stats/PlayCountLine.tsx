@@ -9,6 +9,8 @@
 import Link from "next/link";
 import { useTrackPlays } from "./useTrackPlays";
 import { ordinal } from "./format";
+import { useStoredLocale } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useTrackMood } from "./useTrackMood";
 import { MOOD_COLORS, moodLabel } from "@/features/vibe/mapUtils";
 
@@ -23,13 +25,14 @@ export function PlayCountLine({
 }) {
     // Counted before the play in progress records, so the one being heard is
     // the next one up. See `useTrackPlays` for why that is the honest number.
+    const locale = useStoredLocale();
     const heardBefore = useTrackPlays(trackId);
     const mood = useTrackMood(trackId);
     const colour = mood && mood !== "unanalyzed" ? MOOD_COLORS[mood] : null;
     const counted = heardBefore !== null && heardBefore >= 1;
     if (!colour && !counted) return null;
 
-    const label = colour ? moodLabel(mood!).toLowerCase() : "";
+    const label = colour ? translate(locale, moodLabel(mood!).toLowerCase()) : "";
     return (
         <span className={`inline-flex max-w-full min-w-0 items-center gap-1.5 text-micro leading-tight text-[var(--text-muted)] ${className}`.trim()}>
             {colour && (
@@ -42,8 +45,8 @@ export function PlayCountLine({
                 />
             )}
             {counted && (
-                <Link href="/stats" title="open stats" className="truncate hover:text-[var(--text-secondary)] hover:underline">
-                    {ordinal(heardBefore + 1)} play
+                <Link href="/stats" title={translate(locale, "open stats")} className="truncate hover:text-[var(--text-secondary)] hover:underline">
+                    {ordinal(heardBefore + 1, locale)} {translate(locale, "play (count)")}
                 </Link>
             )}
         </span>

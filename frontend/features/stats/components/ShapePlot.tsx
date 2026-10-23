@@ -11,6 +11,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useReveal } from "../useReveal";
 import { monthLabel, monthLong } from "../format";
+import { formatStatsCount } from "../locale-format";
+import { useStoredLocale } from "@/lib/i18n/language-context";
+import { translate, type Locale } from "@/lib/i18n/translations";
 import type { ListeningStats } from "../types";
 
 const BUCKETS = 24;
@@ -39,11 +42,12 @@ interface Region {
     energy: number | null; valence: number | null; bpm: number | null;
 }
 
-const brightness = (v: number) => (v < 0.4 ? "dark" : v > 0.6 ? "bright" : "neutral");
-const energyWord = (e: number) => (e < 0.4 ? "low energy" : e > 0.6 ? "high energy" : "medium energy");
-const plays = (n: number) => `${n.toLocaleString()} ${n === 1 ? "play" : "plays"}`;
+const brightness = (v: number, locale: Locale) => translate(locale, v < 0.4 ? "dark" : v > 0.6 ? "bright" : "neutral");
+const energyWord = (e: number, locale: Locale) => translate(locale, e < 0.4 ? "low energy" : e > 0.6 ? "high energy" : "medium energy");
+const plays = (n: number, locale: Locale) => `${formatStatsCount(n, locale)} ${translate(locale, n === 1 ? "play (count)" : "plays")}`;
 
 export function ShapePlot({ listening, period }: { listening: ListeningStats; period?: string }) {
+    const locale = useStoredLocale();
     const { shape, drift } = listening;
     const [at, setAt] = useState<number | null>(null);
     const { ref, shown } = useReveal<HTMLElement>({ threshold: 0.25 });
@@ -166,16 +170,16 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
         const dE = latest.energy - first.energy;
         const dV = latest.valence - first.valence;
         const parts: string[] = [];
-        if (Math.abs(dE) > 0.02) parts.push(dE > 0 ? "higher energy" : "lower energy");
-        if (Math.abs(dV) > 0.02) parts.push(dV > 0 ? "brighter" : "darker");
-        if (parts.length === 0) return `no change since ${monthLong(first.month)}`;
-        return `since ${monthLong(first.month)}: ${parts.join(", ")}`;
-    }, [path, latest]);
+        if (Math.abs(dE) > 0.02) parts.push(translate(locale, dE > 0 ? "higher energy" : "lower energy"));
+        if (Math.abs(dV) > 0.02) parts.push(translate(locale, dV > 0 ? "brighter" : "darker"));
+        if (parts.length === 0) return `${translate(locale, "no change since")} ${monthLong(first.month, locale)}`;
+        return `${translate(locale, "since")} ${monthLong(first.month, locale)}: ${parts.join(", ")}`;
+    }, [path, latest, locale]);
 
     if (cloud.length === 0) {
         return (
             <p className="t-body max-w-[46ch]">
-                needs audio analysis
+                {translate(locale, "needs audio analysis")}
             </p>
         );
     }
@@ -187,8 +191,8 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
         >
             <>
                 <div className="flex flex-col justify-between items-end text-right leading-tight t-label py-0.5">
-                    <span>high energy</span>
-                    <span>low energy</span>
+                    <span>{translate(locale, "high energy")}</span>
+                    <span>{translate(locale, "low energy")}</span>
                 </div>
 
                 <svg
@@ -199,8 +203,8 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                     role="img"
                     aria-label={
                         overall
-                            ? `average: ${energyWord(overall.energy)}, ${brightness(overall.valence)}`
-                            : "brightness and energy plot"
+                            ? `${translate(locale, "average:")} ${energyWord(overall.energy, locale)}, ${brightness(overall.valence, locale)}`
+                            : translate(locale, "brightness and energy plot")
                     }
                 >
                     <g stroke="var(--chart-ink-empty)" strokeWidth="0.3">
@@ -297,8 +301,8 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
 
                 <div />
                 <div className="flex justify-between t-label">
-                    <span>dark</span>
-                    <span>bright</span>
+                    <span>{translate(locale, "dark")}</span>
+                    <span>{translate(locale, "bright")}</span>
                 </div>
             </>
 
@@ -308,7 +312,7 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                         className="t-label text-right self-end pb-1 mt-4"
                         onMouseLeave={() => setAt(null)}
                     >
-                        plays per month
+                        {translate(locale, "plays per month")}
                     </span>
                     <div
                         className="flex items-end gap-[3px] h-12 mt-4"
@@ -321,9 +325,9 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                                 onMouseEnter={() => setAt(i)}
                                 onFocus={() => setAt(i)}
                                 onClick={() => setAt(i)}
-                                aria-label={`${monthLabel(p.month)}, ${plays(p.plays)}`}
+                                aria-label={`${monthLabel(p.month, locale)}, ${plays(p.plays, locale)}`}
                                 className="flex-1 flex items-end h-full rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
-                                title={`${monthLabel(p.month)}: ${plays(p.plays)}`.toLowerCase()}
+                                title={`${monthLabel(p.month, locale)}: ${plays(p.plays, locale)}`.toLowerCase()}
                             >
                                 <span
                                     className="block w-full transition-colors duration-150"
@@ -348,24 +352,24 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                 so the table is pinned to one pixel to never widen the page. */}
             <div className="absolute w-px h-px overflow-hidden [clip-path:inset(50%)] whitespace-nowrap border-0 p-0 -m-px">
             <table>
-                <caption>plays by month: brightness, energy, bpm</caption>
+                <caption>{translate(locale, "plays by month: brightness, energy, bpm")}</caption>
                 <thead>
                     <tr>
-                        <th scope="col">month</th>
-                        <th scope="col">brightness (0–100)</th>
-                        <th scope="col">energy (0–100)</th>
-                        <th scope="col">bpm</th>
-                        <th scope="col">plays</th>
+                        <th scope="col">{translate(locale, "month")}</th>
+                        <th scope="col">{translate(locale, "brightness (0–100)")}</th>
+                        <th scope="col">{translate(locale, "energy (0–100)")}</th>
+                        <th scope="col">{translate(locale, "bpm")}</th>
+                        <th scope="col">{translate(locale, "plays")}</th>
                     </tr>
                 </thead>
                 <tbody>
                     {path.map((m) => (
                         <tr key={`row-${m.month}`}>
-                            <th scope="row">{monthLong(m.month)}</th>
+                            <th scope="row">{monthLong(m.month, locale)}</th>
                             <td>{Math.round(m.valence * 100)}</td>
                             <td>{Math.round(m.energy * 100)}</td>
-                            <td>{m.bpm ? Math.round(m.bpm) : "unknown"}</td>
-                            <td>{m.plays.toLocaleString()}</td>
+                            <td>{m.bpm ? Math.round(m.bpm) : translate(locale, "unknown")}</td>
+                            <td>{formatStatsCount(m.plays, locale)}</td>
                         </tr>
                     ))}
                 </tbody>
@@ -381,11 +385,11 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                 {region && region.listens > 0 ? (
                     <>
                         <p className="text-[length:var(--stat-lead)] leading-snug font-light text-[var(--text-primary)] max-w-[30ch]">
-                            {energyWord(region.energy ?? 0.5)}, {brightness(region.valence ?? 0.5)}
+                            {energyWord(region.energy ?? 0.5, locale)}, {brightness(region.valence ?? 0.5, locale)}
                         </p>
                         <p className="t-meta">
-                            {plays(region.listens)} here
-                            {region.bpm ? ` · avg ${Math.round(region.bpm)} bpm` : ""}
+                            {plays(region.listens, locale)} {translate(locale, "here")}
+                            {region.bpm ? ` · ${translate(locale, "avg")} ${Math.round(region.bpm)} bpm` : ""}
                         </p>
                         <ul className="flex flex-col gap-1 mt-1">
                             {region.tracks.map((t) => (
@@ -403,24 +407,24 @@ export function ShapePlot({ listening, period }: { listening: ListeningStats; pe
                     <>
                         <p className="text-[length:var(--stat-lead)] leading-snug font-light text-[var(--text-primary)] max-w-[30ch]">
                             {at == null && overall
-                                ? <>average: {energyWord(overall.energy)}, {brightness(overall.valence)}</>
-                                : <>{monthLong(here.month)}: {energyWord(here.energy)}, {brightness(here.valence)}</>}
+                                ? <>{translate(locale, "average:")} {energyWord(overall.energy, locale)}, {brightness(overall.valence, locale)}</>
+                                : <>{monthLong(here.month, locale)}: {energyWord(here.energy, locale)}, {brightness(here.valence, locale)}</>}
                         </p>
                         <p className="t-body max-w-[36ch]">
                             {at == null
                                 ? movement
-                                : `${plays(here.plays)}${here.bpm ? ` · avg ${Math.round(here.bpm)} bpm` : ""}`}
+                                : `${plays(here.plays, locale)}${here.bpm ? ` · ${translate(locale, "avg")} ${Math.round(here.bpm)} bpm` : ""}`}
                         </p>
                         <p className="t-meta mt-1">
                             {at == null && barestCorner && (
                                 <>
-                                    least played: {barestCorner.name} ({barestCorner.percent}%)
+                                    {translate(locale, "least played:")} {translate(locale, barestCorner.name)} ({barestCorner.percent}%)
                                     <span className="hidden sm:inline"> · </span>
                                     <br className="sm:hidden" />
                                 </>
                             )}
                             <span className="hidden sm:inline">
-                                hover to see tracks
+                                {translate(locale, "hover to see tracks")}
                             </span>
                         </p>
                     </>

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { hourLabel, whenLabel, monthYear } from "./format";
+import { hourLabel, whenLabel, monthYear, monthLabel, monthLong, ordinal } from "./format";
 
 describe("Stats locale-specific time labels", () => {
+    it("formats Dutch chart month labels and player play counts", () => {
+        expect(monthLabel("2026-05", "nl")).toBe("mei 26");
+        expect(monthLong("2026-10", "nl")).toBe("oktober 2026");
+        expect(monthLabel("2026-05")).toBe("may 26");
+        expect(monthLong("2026-10")).toBe("october 2026");
+        expect(ordinal(45, "nl")).toBe("45e");
+        expect(ordinal(45)).toBe("45th");
+    });
+
     it("keeps the existing English output by default", () => {
         expect(hourLabel(0)).toBe("12am");
         expect(hourLabel(21)).toBe("9pm");
