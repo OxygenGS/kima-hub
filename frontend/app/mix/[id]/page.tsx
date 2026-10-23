@@ -162,13 +162,13 @@ export default function MixPage() {
         return (error as { status?: number } | null)?.status === 404 ? (
             <PageMessage
                 title="Mix not found"
-                description="This mix no longer exists. Rebuilding mixes replaces them with new ones."
+                description={t("This mix no longer exists. Rebuilding mixes replaces them with new ones.")}
                 action={{ label: "Home", href: "/" }}
             />
         ) : (
             <PageMessage
-                title="Couldn't load this mix"
-                description="The server didn't answer. Try again in a moment."
+                title={t("Couldn't load this mix")}
+                description={t("The server didn't answer. Try again in a moment.")}
                 action={{ label: "Try again", onClick: () => void refetch() }}
             />
         );
