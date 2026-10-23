@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "View profile": "View profile",
     "Page not found.": "Page not found.",
     "Page not found": "Page not found",
     "something went wrong": "something went wrong",
@@ -1807,6 +1808,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "View profile": "Profiel bekijken",
     "Page not found.": "Pagina niet gevonden.",
     "Page not found": "Pagina niet gevonden",
     "something went wrong": "Er is iets misgegaan",
