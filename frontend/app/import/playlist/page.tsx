@@ -881,7 +881,7 @@ function ImportPlaylistPageContent() {
                             {importJob.status === "pending" && (
                                 <>
                                     {importJob.albumsTotal > 0
-                                        ? `${t("Waiting for")} ${importJob.albumsTotal - importJob.albumsCompleted} ${t("downloads to complete")}`
+                                        ? `${t("Waiting for")} ${(importJob.albumsTotal - importJob.albumsCompleted).toLocaleString(locale)} ${t("downloads to complete")}`
                                         : t("Preparing import...")}
                                 </>
                             )}
