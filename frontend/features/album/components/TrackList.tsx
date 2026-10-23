@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo } from "react";
 import { Play, Pause, Volume2, ListPlus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type { Track, Album, AlbumSource } from "../types";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatNumber, formatTime } from "@/lib/format";
@@ -49,6 +50,7 @@ const TrackRow = memo(
         onAddToPlaylist,
         onPreview,
     }: TrackRowProps) {
+        const { t } = useLanguage();
         const isMissingTrack = !!track.isMissing;
         const isPreviewOnly = !isOwned || isMissingTrack;
         const displayTrackNumber =
@@ -120,7 +122,7 @@ const TrackRow = memo(
                             handleRowClick();
                         }}
                         className="w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/5 transition-colors"
-                        aria-label={isPlaying ? "Pause" : "Play"}
+                        aria-label={t(isPlaying ? "Pause" : "Play")}
                     >
                         <span
                             className={cn(
@@ -190,7 +192,7 @@ const TrackRow = memo(
                             <button
                                 onClick={handleAddToQueue}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
-                                aria-label="Add to queue"
+                                aria-label={t("Add to queue")}
                                 title="add to queue"
                             >
                                 <ListPlus className="w-4 h-4" />
@@ -198,7 +200,7 @@ const TrackRow = memo(
                             <button
                                 onClick={handleAddToPlaylist}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
-                                aria-label="Add to playlist"
+                                aria-label={t("Add to playlist")}
                                 title="add to playlist"
                             >
                                 <Plus className="w-4 h-4" />
@@ -210,7 +212,7 @@ const TrackRow = memo(
                             onClick={handlePreview}
                             className="p-1.5 rounded-lg bg-[var(--bg-hover)] hover:bg-white/10 transition-colors text-white"
                             aria-label={
-                                isPreviewPlaying ? "Pause preview" : "Play preview"
+                                t(isPreviewPlaying ? "Pause preview" : "Play preview")
                             }
                         >
                             {isPreviewPlaying ? (

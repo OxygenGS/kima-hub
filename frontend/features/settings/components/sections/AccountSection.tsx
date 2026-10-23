@@ -223,7 +223,7 @@ export function AccountSection() {
 
                         {twoFactorSecret && (
                             <div className="text-center">
-                                <p className="text-xs text-[var(--text-muted)] mb-1">Manual entry code</p>
+                                <p className="text-xs text-[var(--text-muted)] mb-1">{t("Manual entry code")}</p>
                                 <code className="text-sm text-white bg-white/5 border border-white/10 px-3 py-1 rounded-lg font-mono">
                                     {twoFactorSecret}
                                 </code>

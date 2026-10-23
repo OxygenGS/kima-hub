@@ -46,6 +46,7 @@ const TrackRow = memo(
         onShowAddToPlaylist,
         onDelete,
     }: TrackRowProps) {
+        const { locale } = useLanguage();
         const doubleTapProps = useDoubleTap(onPlayTrack);
         const displayTrackNumber =
             typeof track.trackNumber === "number"
@@ -80,7 +81,7 @@ const TrackRow = memo(
                             onPlayTrack();
                         }}
                         className="group/play w-10 h-10 flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                        aria-label={isCurrentlyPlaying ? "Pause" : "Play"}
+                        aria-label={translate(locale, isCurrentlyPlaying ? "Pause" : "Play")}
                     >
                         <span
                             className={cn(
@@ -232,8 +233,8 @@ export function TracksList({
             <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
                 <div className="w-8 text-center text-xs font-semibold text-[var(--text-muted)]">#</div>
                 <div className="text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Title")}</div>
-                <div className="hidden md:block text-xs font-semibold text-[var(--text-muted)]">Album</div>
-                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">Duration</div>
+                <div className="hidden md:block text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Album")}</div>
+                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Duration")}</div>
             </div>
 
             <div key={gridKey} data-tv-section="library-tracks" className="space-y-1" style={cascadeStyle(tracks.length)}>

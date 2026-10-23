@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Download, CheckCircle, Music } from "lucide-react";
 import { LibraryTracksList } from "./LibraryTracksList";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { useMusicPermissions } from "@/lib/auth-context";
 import { getQualityBadge, parseFilename } from "./soulseekHelpers";
 import type { LibraryTrack, SoulseekResult } from "../types";
@@ -30,6 +31,7 @@ export function UnifiedSongsList({
     maxTotal = 6,
     maxLibrary = 4,
 }: UnifiedSongsListProps) {
+    const { t } = useLanguage();
     const { canDownloadTracks } = useMusicPermissions();
     const librarySlice = tracks.slice(0, maxLibrary);
     const soulseekSlots = maxTotal - librarySlice.length;
@@ -72,7 +74,7 @@ export function UnifiedSongsList({
                                 onClick={() => !isDownloading && onDownload(result)}
                                 disabled={isDownloading}
                                 className="w-10 h-10 flex items-center justify-center flex-shrink-0"
-                                aria-label="Download track"
+                                aria-label={t("Download track")}
                             >
                                 {isDownloading ? (
                                     <CheckCircle className="w-4 h-4 text-success" />

@@ -4,6 +4,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { Loader2 } from "lucide-react";
 import { useLyricsSync } from "@/hooks/useLyricsSync";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 const fade = (edge: number): CSSProperties => {
     const mask = `linear-gradient(to bottom, transparent 0%, black ${edge}%, black ${100 - edge}%, transparent 100%)`;
@@ -40,6 +41,7 @@ const VARIANTS = {
 } as const;
 
 export function LyricsView({ variant }: { variant: keyof typeof VARIANTS }) {
+    const { t } = useLanguage();
     const v = VARIANTS[variant];
     const { lines, activeIndex, isLoading, hasLyrics, isSynced, plainLyrics } = useLyricsSync();
     const activeRef = useRef<HTMLDivElement>(null);
@@ -65,7 +67,7 @@ export function LyricsView({ variant }: { variant: keyof typeof VARIANTS }) {
     if (!hasLyrics) {
         return (
             <div className={cn(v.frame, "flex items-center justify-center")}>
-                <p className={cn(v.empty, "text-[var(--text-muted)]")}>No lyrics available</p>
+                <p className={cn(v.empty, "text-[var(--text-muted)]")}>{t("No lyrics available")}</p>
             </div>
         );
     }

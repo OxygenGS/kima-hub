@@ -15,10 +15,12 @@ import { AudiobooksGrid } from "@/features/home/components/AudiobooksGrid";
 import { FeaturedPlaylistsGrid, FeaturedPlaylistsSkeleton } from "@/features/home/components/FeaturedPlaylistsGrid";
 import { LibraryRadioStations } from "@/features/home/components/LibraryRadioStations";
 import { Button } from "@/components/ui/Button";
+import { useLanguage } from "@/lib/i18n/language-context";
 
 const MoodMixer = lazy(() => import("@/components/MoodMixer").then(mod => ({ default: mod.MoodMixer })));
 
 export default function HomePage() {
+    const { t } = useLanguage();
     const [showMoodMixer, setShowMoodMixer] = useState(false);
     const {
         recentlyListened,
@@ -80,14 +82,14 @@ export default function HomePage() {
                                                 onClick={() => setShowMoodMixer(true)}
                                             >
                                                 <AudioWaveform className="w-3.5 h-3.5" />
-                                                <span className="hidden sm:inline">Mood Mixer</span>
+                                                <span className="hidden sm:inline">{t("Mood Mixer")}</span>
                                             </Button>
                                             <Button
                                                 variant="secondary"
                                                 size="sm"
                                                 onClick={handleRefreshMixes}
                                                 disabled={isRefreshingMixes}
-                                                aria-label="Refresh mixes"
+                                                aria-label={t("Refresh mixes")}
                                             >
                                                 {isRefreshingMixes ? (
                                                     <GradientSpinner size="sm" />
