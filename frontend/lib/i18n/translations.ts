@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.",
+    "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.": "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.",
     "Cannot reach the server. Check that Kima is fully started and try again.": "Cannot reach the server. Check that Kima is fully started and try again.",
     "connected successfully!": "connected successfully!",
     "Failed to connect to": "Failed to connect to",
@@ -1790,6 +1792,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "Na het afronden scant Kima je muziekbibliotheek en start de verwerking op de achtergrond. Bij grote collecties kan dit enkele minuten duren.",
+    "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.": "Dit is het beheerdersaccount voor je Kima-server. Hiermee beheer je gebruikers, integraties en instellingen.",
     "Cannot reach the server. Check that Kima is fully started and try again.": "Kan de server niet bereiken. Controleer of Kima volledig is opgestart en probeer het opnieuw.",
     "connected successfully!": "succesvol verbonden!",
     "Failed to connect to": "Verbinding mislukt met",
