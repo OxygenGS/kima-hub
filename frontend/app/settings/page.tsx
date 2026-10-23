@@ -299,9 +299,9 @@ export default function SettingsPage() {
                     <InlineStatus {...saveStatus.props} />
                     {isDirty && (
                         <>
-                            <span className="mr-auto text-sm text-[var(--text-secondary)]">Unsaved changes</span>
+                            <span className="mr-auto text-sm text-[var(--text-secondary)]">{translate(locale, "Unsaved changes")}</span>
                             <Button variant="primary" onClick={handleSaveAll} disabled={isSaving}>
-                                {isSaving ? "Saving..." : "Save changes"}
+                                {isSaving ? translate(locale, "Saving...") : translate(locale, "Save changes")}
                             </Button>
                         </>
                     )}
