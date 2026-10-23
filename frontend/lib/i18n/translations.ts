@@ -3,6 +3,17 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "something went wrong": "something went wrong",
+    "Back to activity": "Back to activity",
+    "Failed to reset metadata": "Failed to reset metadata",
+    "Failed to update metadata": "Failed to update metadata",
+    "Resetting...": "Resetting...",
+    "Reset to Original": "Reset to Original",
+    "reset all metadata to original values? this cannot be undone.": "reset all metadata to original values? this cannot be undone.",
+    "Edit": "Edit",
+    "Metadata": "Metadata",
+    "Note:": "Note:",
+    "Manually edited metadata will not be overwritten by automatic enrichment.": "Manually edited metadata will not be overwritten by automatic enrichment.",
     "Play a 30-second preview": "Play a 30-second preview",
     "Settings could not be loaded": "Settings could not be loaded",
     "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.",
@@ -1794,6 +1805,17 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "something went wrong": "Er is iets misgegaan",
+    "Back to activity": "Terug naar activiteit",
+    "Failed to reset metadata": "Metadata herstellen mislukt",
+    "Failed to update metadata": "Metadata bijwerken mislukt",
+    "Resetting...": "Herstellen...",
+    "Reset to Original": "Oorspronkelijke waarden herstellen",
+    "reset all metadata to original values? this cannot be undone.": "Alle metadata herstellen naar de oorspronkelijke waarden? Dit kan niet ongedaan worden gemaakt.",
+    "Edit": "Bewerken",
+    "Metadata": "Metadata",
+    "Note:": "Let op:",
+    "Manually edited metadata will not be overwritten by automatic enrichment.": "Handmatig gewijzigde metadata wordt niet overschreven door automatische verrijking.",
     "Play a 30-second preview": "Een voorbeeld van 30 seconden afspelen",
     "Settings could not be loaded": "Instellingen konden niet worden geladen",
     "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "Na het afronden scant Kima je muziekbibliotheek en start de verwerking op de achtergrond. Bij grote collecties kan dit enkele minuten duren.",
