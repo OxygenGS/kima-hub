@@ -274,7 +274,7 @@ export default function AudiobooksPage() {
             const r = res.result;
             if (r && r.failed > 0) {
                 notify.error(t("Some audiobooks failed to sync"), {
-                    message: `Synced ${r.synced}, failed ${r.failed}${r.errors[0] ? `: ${r.errors[0]}` : ""}`,
+                    message: `${t("Synced")} ${r.synced.toLocaleString(locale)}, ${t("failed")} ${r.failed.toLocaleString(locale)}${r.errors[0] ? `: ${r.errors[0]}` : ""}`,
                 });
             }
             await queryClient.refetchQueries({ queryKey: queryKeys.audiobooks() });
