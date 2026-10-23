@@ -557,7 +557,7 @@ export default function OnboardingPage() {
                                                 disabled={submitting}
                                                 className="flex-1"
                                             >
-                                                Finish without integrations
+                                                {t("Finish without integrations")}
                                             </Button>
                                             <Button
                                                 variant="primary"
@@ -566,7 +566,7 @@ export default function OnboardingPage() {
                                                 isLoading={submitting}
                                                 className="flex-1"
                                             >
-                                                {submitting ? "Saving..." : "Save & Finish"}
+                                                {t(submitting ? "Saving..." : "Save & Finish")}
                                             </Button>
                                         </div>
                                     </div>
