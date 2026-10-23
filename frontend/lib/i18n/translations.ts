@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "connected successfully!": "connected successfully!",
+    "Failed to connect to": "Failed to connect to",
     "Save changes": "Save changes",
     "Unsaved changes": "Unsaved changes",
     "Failed to load playlist": "Failed to load playlist",
@@ -1787,6 +1789,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "connected successfully!": "succesvol verbonden!",
+    "Failed to connect to": "Verbinding mislukt met",
     "Save changes": "Wijzigingen opslaan",
     "Unsaved changes": "Niet-opgeslagen wijzigingen",
     "Failed to load playlist": "Afspeellijst laden mislukt",
