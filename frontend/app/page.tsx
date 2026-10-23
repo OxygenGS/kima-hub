@@ -53,26 +53,26 @@ export default function HomePage() {
                     const sections: Array<{ key: string; visible: boolean; content: React.ReactNode }> = [
                         { key: "library-radio", visible: true, content: (
                             <section data-tv-section="library-radio">
-                                <SectionHeader title="Library Radio" showAllHref="/radio" type="featured" />
+                                <SectionHeader title={t("Library Radio")} showAllHref="/radio" type="featured" />
                                 <LibraryRadioStations />
                             </section>
                         )},
                         { key: "continue-listening", visible: recentlyListened.length > 0, content: (
                             <section data-tv-section="continue-listening">
-                                <SectionHeader title="Continue Listening" showAllHref="/collection?tab=artists" type="featured" />
+                                <SectionHeader title={t("Continue Listening")} showAllHref="/collection?tab=artists" type="featured" />
                                 <ContinueListening items={recentlyListened} />
                             </section>
                         )},
                         { key: "recently-added", visible: recentlyAdded.length > 0, content: (
                             <section data-tv-section="recently-added">
-                                <SectionHeader title="Recently Added" showAllHref="/collection?tab=artists" type="artist" />
+                                <SectionHeader title={t("Recently Added")} showAllHref="/collection?tab=artists" type="artist" />
                                 <ArtistsGrid artists={recentlyAdded} />
                             </section>
                         )},
                         { key: "made-for-you", visible: mixes.length > 0, content: (
                             <section data-tv-section="made-for-you">
                                 <SectionHeader
-                                    title="Made For You"
+                                    title={t("Made For You")}
                                     type="track"
                                     action={
                                         <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function HomePage() {
                                                     <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-150" />
                                                 )}
                                                 <span className="hidden sm:inline">
-                                                    {isRefreshingMixes ? "Refreshing..." : "Refresh"}
+                                                    {isRefreshingMixes ? t("Refreshing...") : t("Refresh")}
                                                 </span>
                                             </Button>
                                         </div>
@@ -108,19 +108,19 @@ export default function HomePage() {
                         )},
                         { key: "recommended", visible: recommended.length > 0, content: (
                             <section data-tv-section="recommended">
-                                <SectionHeader title="Recommended" showAllHref="/discover" badge="Local Engine" type="artist" />
+                                <SectionHeader title={t("Recommended")} showAllHref="/discover" badge={t("Local Engine")} type="artist" />
                                 <ArtistsGrid artists={recommended} />
                             </section>
                         )},
                         { key: "popular-artists", visible: popularArtists.length > 0, content: (
                             <section data-tv-section="popular-artists">
-                                <SectionHeader title="Popular Artists" badge="ListenBrainz" type="artist" />
+                                <SectionHeader title={t("Popular Artists")} badge="ListenBrainz" type="artist" />
                                 <PopularArtistsGrid artists={popularArtists} />
                             </section>
                         )},
                         { key: "featured-playlists", visible: isBrowseLoading || featuredPlaylists.length > 0, content: (
                             <section data-tv-section="featured-playlists">
-                                <SectionHeader title="Featured Playlists" showAllHref="/browse/playlists" badge="Deezer" type="track" />
+                                <SectionHeader title={t("Featured Playlists")} showAllHref="/browse/playlists" badge="Deezer" type="track" />
                                 {isBrowseLoading && featuredPlaylists.length === 0 ? (
                                     <FeaturedPlaylistsSkeleton />
                                 ) : (
@@ -130,13 +130,13 @@ export default function HomePage() {
                         )},
                         { key: "popular-podcasts", visible: recentPodcasts.length > 0, content: (
                             <section data-tv-section="popular-podcasts">
-                                <SectionHeader title="Popular Podcasts" showAllHref="/podcasts" type="podcast" />
+                                <SectionHeader title={t("Popular Podcasts")} showAllHref="/podcasts" type="podcast" />
                                 <PodcastsGrid podcasts={recentPodcasts} />
                             </section>
                         )},
                         { key: "audiobooks", visible: recentAudiobooks.length > 0, content: (
                             <section data-tv-section="audiobooks">
-                                <SectionHeader title="Audiobooks" showAllHref="/audiobooks" type="audiobook" />
+                                <SectionHeader title={t("Audiobooks")} showAllHref="/audiobooks" type="audiobook" />
                                 <AudiobooksGrid audiobooks={recentAudiobooks} />
                             </section>
                         )},
