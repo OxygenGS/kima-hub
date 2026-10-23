@@ -34,7 +34,8 @@ export function uptime(seconds: number): string {
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 /** "1st", "2nd", "45th"; 11-13 take "th", so the last two digits decide first. */
-export function ordinal(n: number): string {
+export function ordinal(n: number, locale: Locale = "en"): string {
+    if (locale === "nl") return `${n}e`;
     const lastTwo = n % 100;
     if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
     switch (n % 10) {
@@ -59,9 +60,11 @@ export function whenLabel(weekday: number, hour: number, locale: "en" | "nl" = "
     return `${(locale === "nl" ? DUTCH_WEEKDAYS : WEEKDAYS)[weekday]} ${hourLabel(hour, locale)}`;
 }
 
-export function monthLabel(iso: string): string {
+export function monthLabel(iso: string, locale: Locale = "en"): string {
     const [y, m] = iso.split("-");
-    const names = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const english = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const dutch = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+    const names = locale === "nl" ? dutch : english;
     return `${names[Number(m) - 1]} ${y.slice(2)}`;
 }
 
@@ -78,9 +81,12 @@ export function percent(part: number, whole: number): number {
 }
 
 /** "september 2025" — where "sep 25" would read as a day of the month. */
-export function monthLong(iso: string): string {
+export function monthLong(iso: string, locale: Locale = "en"): string {
     const [y, m] = iso.split("-");
-    const names = ["january", "february", "march", "april", "may", "june",
+    const english = ["january", "february", "march", "april", "may", "june",
         "july", "august", "september", "october", "november", "december"];
+    const dutch = ["januari", "februari", "maart", "april", "mei", "juni",
+        "juli", "augustus", "september", "oktober", "november", "december"];
+    const names = locale === "nl" ? dutch : english;
     return `${names[Number(m) - 1]} ${y}`;
 }
