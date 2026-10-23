@@ -174,13 +174,13 @@ export default function OnboardingPage() {
             }
             setIntegrationResults((prev) => ({
                 ...prev,
-                [type]: { ok: true, message: `${type} connected successfully!` },
+                [type]: { ok: true, message: `${type} ${t("connected successfully!")}` },
             }));
         } catch (err: unknown) {
             const errorMessage =
                 err instanceof Error ?
                     err.message
-                :   `Failed to connect to ${type}`;
+                :   `${t("Failed to connect to")} ${type}`;
             setIntegrationResults((prev) => ({
                 ...prev,
                 [type]: { ok: false, message: errorMessage },
@@ -612,7 +612,7 @@ function IntegrationShell({
     result,
     children,
 }: IntegrationShellProps) {
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     return (
         <div
             className={`border rounded-lg transition-all ${
@@ -667,7 +667,7 @@ function IntegrationShell({
                                     : "text-danger-light"
                                 }`}
                             >
-                                {result.message}
+                                {translate(locale, result.message)}
                             </p>
                         )}
                         <Button
@@ -677,7 +677,7 @@ function IntegrationShell({
                             isLoading={testing}
                             className="w-full"
                         >
-                            {testing ? "Testing..." : "Test Connection"}
+                            {t(testing ? "Testing..." : "Test Connection")}
                         </Button>
                     </div>
                 )}
@@ -774,7 +774,7 @@ function SoulseekCard({
                 className={INPUT_CLASS}
             />
             <p className="text-xs text-[var(--text-secondary)]">
-                Create an account at{" "}
+                {t("Create an account at")}{" "}
                 <a
                     href="https://www.slsknet.org/news/node/1"
                     target="_blank"
