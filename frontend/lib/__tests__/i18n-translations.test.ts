@@ -9,6 +9,8 @@ describe("UI translations", () => {
         expect(translate("nl", "Failed to refresh mixes")).toBe("Mixen vernieuwen mislukt");
         expect(translate("nl", "Failed to mark as completed")).toBe("Markeren als voltooid mislukt");
         expect(translate("nl", "Couldn't subscribe to this podcast")).toBe("Abonneren op deze podcast mislukt");
+        expect(translate("nl", "No preview for this song")).toBe("Geen voorbeeld beschikbaar voor dit nummer");
+        expect(translate("nl", "Couldn't play this preview")).toBe("Kan dit voorbeeld niet afspelen");
         expect(translate("nl", "Artist name from API")).toBe("Artist name from API");
     });
 
