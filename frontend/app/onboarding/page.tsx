@@ -429,7 +429,7 @@ export default function OnboardingPage() {
                                         <div className="space-y-4 mt-8">
                                             <IntegrationCard
                                                 title="Lidarr"
-                                                description="Automatically find and download albums missing from your library."
+                                                description={t("Automatically find and download albums missing from your library.")}
                                                 localPort="localhost:8686"
                                                 icon={<Music className="w-6 h-6" />}
                                                 enabled={lidarr.enabled}
@@ -463,7 +463,7 @@ export default function OnboardingPage() {
 
                                             <IntegrationCard
                                                 title="Audiobookshelf"
-                                                description="Browse and stream your audiobook collection alongside your music."
+                                                description={t("Browse and stream your audiobook collection alongside your music.")}
                                                 localPort="localhost:13378"
                                                 icon={<BookOpen className="w-6 h-6" />}
                                                 enabled={audiobookshelf.enabled}
@@ -755,7 +755,7 @@ function SoulseekCard({
         <IntegrationShell
             {...shell}
             title="Soulseek"
-            description="Peer-to-peer search to fill in tracks you don't own."
+            description={t("Peer-to-peer search to fill in tracks you don't own.")}
             icon={<Search className="w-6 h-6" />}
             canTest={!shell.testing && !!username && !!password}
         >

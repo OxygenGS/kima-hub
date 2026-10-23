@@ -176,7 +176,7 @@ export default function SettingsPage() {
             <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
                 <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6">
                     <h2 className="text-lg font-semibold text-[var(--text-primary)]">
-                        Settings could not be loaded
+                        {translate(locale, "Settings could not be loaded")}
                     </h2>
                     <p className="mt-1 text-xs text-[var(--text-muted)]">{loadError}</p>
                     <Button
@@ -184,7 +184,7 @@ export default function SettingsPage() {
                         onClick={retryLoad}
                         className="mt-4"
                     >
-                        Try again
+                        {translate(locale, "Try again")}
                     </Button>
                 </div>
             </SettingsLayout>
