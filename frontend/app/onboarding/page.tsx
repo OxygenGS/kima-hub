@@ -312,7 +312,7 @@ export default function OnboardingPage() {
                                                 {t("Create Your Admin Account")}
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                This is the owner account for your Kima server. You&apos;ll manage users, integrations, and settings from here.
+                                                {t("This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.")}
                                             </p>
                                         </div>
 
@@ -419,10 +419,10 @@ export default function OnboardingPage() {
                                     <div className="space-y-6">
                                         <div>
                                             <h2 className="text-2xl font-bold text-white mb-1">
-                                                Connect Your Services
+                                                {t("Connect Your Services")}
                                             </h2>
                                             <p className="text-[var(--text-secondary)]">
-                                                All integrations are optional -- you can enable or change them later in Settings.
+                                                {t("All integrations are optional -- you can enable or change them later in Settings.")}
                                             </p>
                                         </div>
 
@@ -537,7 +537,7 @@ export default function OnboardingPage() {
                                         )}
 
                                         <p className="text-sm text-[var(--text-muted)] border-t border-white/10 pt-4">
-                                            After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.
+                                            {t("After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.")}
                                         </p>
 
                                         <div className="flex gap-3">
