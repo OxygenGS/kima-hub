@@ -125,7 +125,7 @@ const pendingImportJob = (id: string, totals: Partial<ImportJob> = {}): ImportJo
 function ImportPlaylistPageContent() {
     const router = useRouter();
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
