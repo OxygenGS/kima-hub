@@ -1,0 +1,34 @@
+name: One-time Next.js security lockfile upgrade
+on:
+  push:
+    branches:
+      - feature/nl-bulk-dynamic-copy
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch-next:
+    if: github.repository == 'OxygenGS/kima-hub'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Generate secure, reproducible dependency lockfile
+        run: |
+          cd frontend
+          npm install --package-lock-only --save-exact next@16.4.2 eslint-config-next@16.4.2
+          npm ci --ignore-scripts --no-audit
+      - name: Commit dependencies and remove this temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-time-next-security.yml
+          git add frontend/package.json frontend/package-lock.json
+          git commit -m "fix(security): upgrade Next.js to patched 16.4.2 and regenerate lockfile"
+          git push origin HEAD:feature/nl-bulk-dynamic-copy
