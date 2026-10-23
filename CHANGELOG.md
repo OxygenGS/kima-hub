@@ -2,6 +2,15 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
+## OxygenGS fork v1.11.4 — release preparation (unpublished)
+
+Patch release based on v1.11.3 with the consolidated Dutch interface work from merged PRs #81–#86:
+- Complete the typed EN/NL catalog and localize the home, search, library, artist, album, playlist, metadata editor and error interfaces.
+- Localize notifications, activity timestamps, import progress, preview errors, download failures, podcast/audiobook actions and accessibility tooltips.
+- Localize Stats charts, month labels and playback counts, retaining English behavior and preserving third-party music metadata.
+- Expand unit and public browser language-switching regressions; preserve user permissions and existing data formats.
+- No new database migrations or persistent-volume changes in this patch.
+
 ## OxygenGS fork v1.11.3 — release preparation (unpublished)
 
 Patch release for v1.11.2:
