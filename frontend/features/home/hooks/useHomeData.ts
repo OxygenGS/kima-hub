@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { notify } from "@/lib/notify";
+import { useLanguage } from "@/lib/i18n/language-context";
 import type {
     Artist,
     ListenedItem,
@@ -48,6 +49,7 @@ export interface UseHomeDataReturn {
 
 /** Every Home section: continue listening, recently added, recommended, mixes, popular, podcasts, audiobooks. */
 export function useHomeData(): UseHomeDataReturn {
+    const { t } = useLanguage();
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
 
@@ -92,7 +94,7 @@ export function useHomeData(): UseHomeDataReturn {
             await refreshMixes();
         } catch (error) {
             console.error("Failed to refresh mixes:", error);
-            notify.error("Failed to refresh mixes");
+            notify.error(t("Failed to refresh mixes"));
         }
     };
 
