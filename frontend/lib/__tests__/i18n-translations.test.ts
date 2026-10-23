@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("localizes the final home, search, playlist and discography labels", () => {
+        expect(translate("nl", "Feed")).toBe("Activiteiten");
+        expect(translate("nl", "Library Radio")).toBe("Bibliotheekradio");
+        expect(translate("nl", "Top Match")).toBe("Beste resultaat");
+        expect(translate("nl", "No matches found")).toBe("Geen resultaten gevonden");
+        expect(translate("nl", "Share playlist")).toBe("Afspeellijst delen");
+        expect(translate("nl", "Local Engine")).toBe("Lokale engine");
+        expect(translate("nl", "year (newest)")).toBe("jaar (nieuwste eerst)");
+        expect(translate("nl", "date added (recent)")).toBe("toegevoegd (recentste eerst)");
+        expect(translate("en", "Feed")).toBe("Feed");
+    });
+
     it("localizes release actions and mood-mix decisions without rewriting stored choices", () => {
         expect(translate("nl", "What's new in")).toBe("Nieuw in");
         expect(translate("nl", "Needs you")).toBe("Jouw aandacht nodig");
