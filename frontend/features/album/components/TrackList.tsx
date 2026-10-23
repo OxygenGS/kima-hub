@@ -155,12 +155,12 @@ const TrackRow = memo(
                             </span>
                             {isMissingTrack && (
                                 <span className="shrink-0 text-micro bg-warning/20 text-warning px-1.5 py-0.5 rounded border border-warning/30 font-medium">
-                                    MISSING
+                                    {t("MISSING")}
                                 </span>
                             )}
                             {isPreviewOnly && (
                                 <span className="shrink-0 text-micro bg-white/10 text-[var(--text-secondary)] px-1.5 py-0.5 rounded border border-white/10 font-medium">
-                                    Preview
+                                    {t("Preview")}
                                 </span>
                             )}
                         </div>
@@ -193,7 +193,7 @@ const TrackRow = memo(
                                 onClick={handleAddToQueue}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
                                 aria-label={t("Add to queue")}
-                                title="add to queue"
+                                title={t("Add to queue")}
                             >
                                 <ListPlus className="w-4 h-4" />
                             </button>
@@ -201,7 +201,7 @@ const TrackRow = memo(
                                 onClick={handleAddToPlaylist}
                                 className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
                                 aria-label={t("Add to playlist")}
-                                title="add to playlist"
+                                title={t("Add to playlist")}
                             >
                                 <Plus className="w-4 h-4" />
                             </button>
@@ -257,6 +257,7 @@ export const TrackList = memo(function TrackList({
     previewPlaying,
     onPreview,
 }: TrackListProps) {
+    const { t } = useLanguage();
     const isOwned = source === "library";
     const discNumbers = useMemo(
         () => Array.from(new Set(tracks.map((track) => track.discNumber).filter((disc) => disc != null))),
@@ -287,7 +288,7 @@ export const TrackList = memo(function TrackList({
                         <React.Fragment key={track.id}>
                             {showDiscHeader && (
                                 <div className="px-3 md:px-4 py-2 text-xs font-semibold tracking-wide text-[var(--text-secondary)] bg-[#121212]">
-                                    Disc {discNumber}{discLabel ? ` -- ${discLabel}` : ""}
+                                    {t("Disc")} {discNumber}{discLabel ? ` -- ${discLabel}` : ""}
                                 </div>
                             )}
                             <TrackRow
