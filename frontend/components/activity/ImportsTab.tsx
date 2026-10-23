@@ -142,7 +142,7 @@ export function ImportsTab() {
                         <span className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
                         <span className="t-eyebrow">
                             {String(activeImports.length).padStart(2, "0")}{" "}
-                            ACTIVE
+                            {t("ACTIVE")}
                         </span>
                     </div>
                 </div>
@@ -162,7 +162,7 @@ export function ImportsTab() {
                 {pastImports.length > 0 && activeImports.length > 0 && (
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
                         <span className="text-xs font-semibold text-[var(--text-muted)]">
-                            Previous
+                            {t("Previous")}
                         </span>
                         <span className="flex-1 border-t border-white/5" />
                     </div>
@@ -253,7 +253,7 @@ function ImportJobCard({
                                 </span>
                                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
                                     {job.albumsCompleted}/{job.albumsTotal}{" "}
-                                    albums
+                                    {t("albums")}
                                 </span>
                             </>
                         )}
@@ -264,7 +264,7 @@ function ImportJobCard({
                                     --
                                 </span>
                                 <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                                    {job.tracksMatched} tracks matched
+                                    {job.tracksMatched} {t("tracks matched")}
                                 </span>
                             </>
                         )}
@@ -273,7 +273,7 @@ function ImportJobCard({
                             --
                         </span>
                         <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                            {timeAgo(job.createdAt)}
+                            {timeAgo(job.createdAt, locale)}
                         </span>
                     </div>
 
