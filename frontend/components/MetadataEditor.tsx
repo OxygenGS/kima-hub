@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Edit, X, Save } from "lucide-react";
 import { api } from "@/lib/api";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { notify } from "@/lib/notify";
 import { GradientSpinner } from "./ui/GradientSpinner";
 import { Button } from "@/components/ui/Button";
@@ -42,6 +43,7 @@ export function MetadataEditor({
     currentData,
     onSave,
 }: MetadataEditorProps) {
+    const { t } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
@@ -64,7 +66,7 @@ export function MetadataEditor({
     const handleReset = async () => {
         if (
             !confirm(
-                "reset all metadata to original values? this cannot be undone."
+                t("reset all metadata to original values? this cannot be undone.")
             )
         ) {
             return;
@@ -83,7 +85,7 @@ export function MetadataEditor({
             onSave?.(null);
             setIsOpen(false);
         } catch (error: unknown) {
-            notify.error("Failed to reset metadata", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Failed to reset metadata"), { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsResetting(false);
         }
@@ -104,7 +106,7 @@ export function MetadataEditor({
             onSave?.(response);
             setIsOpen(false);
         } catch (error: unknown) {
-            notify.error("Failed to update metadata", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Failed to update metadata"), { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsSaving(false);
         }
@@ -119,8 +121,8 @@ export function MetadataEditor({
             <button
                 onClick={handleOpen}
                 className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                title={`Edit ${type} metadata`.toLowerCase()}
-                aria-label={`Edit ${type} metadata`}
+                title={`${t("Edit")} ${t(type === "artist" ? "Artist" : type === "album" ? "Album" : "Track")} ${t("Metadata")}`}
+                aria-label={`${t("Edit")} ${t(type === "artist" ? "Artist" : type === "album" ? "Album" : "Track")} ${t("Metadata")}`}
             >
                 <Edit className="w-4 h-4 text-white" />
             </button>
@@ -140,17 +142,17 @@ export function MetadataEditor({
                     >
                         <div className="flex items-center justify-between p-6 border-b border-white/10">
                             <h2 id="metadata-editor-title" className="text-2xl font-bold text-white">
-                                Edit{" "}
+                                {t("Edit")}{" "}
                                 {type === "artist"
                                     ? "Artist"
                                     : type === "album"
                                     ? "Album"
                                     : "Track"}{" "}
-                                Metadata
+                                {t("Metadata")}
                             </h2>
                             <button
                                 onClick={handleClose}
-                                aria-label="Close"
+                                aria-label={t("Close")}
                                 className="p-2 hover:bg-white/10 rounded-full transition-all"
                             >
                                 <X className="w-6 h-6 text-white" />
@@ -389,9 +391,7 @@ export function MetadataEditor({
 
                             <div className="bg-warning/10 border border-warning/20 rounded p-4">
                                 <p className="text-sm text-warning">
-                                    <strong>Note:</strong> Manually edited
-                                    metadata will not be overwritten by
-                                    automatic enrichment.
+                                    <strong>{t("Note:")}</strong> {t("Manually edited metadata will not be overwritten by automatic enrichment.")}
                                 </p>
                             </div>
                         </div>
@@ -404,8 +404,8 @@ export function MetadataEditor({
                                     disabled={isSaving || isResetting}
                                 >
                                     {isResetting
-                                        ? "Resetting..."
-                                        : "Reset to Original"}
+                                        ? t("Resetting...")
+                                        : t("Reset to Original")}
                                 </Button>
                             )}
                             <Button
@@ -413,7 +413,7 @@ export function MetadataEditor({
                                 onClick={handleClose}
                                 disabled={isSaving}
                             >
-                                Cancel
+                                {t("Cancel")}
                             </Button>
                             <Button
                                 variant="primary"
@@ -423,12 +423,12 @@ export function MetadataEditor({
                                 {isSaving ? (
                                     <>
                                         <GradientSpinner size="sm" />
-                                        Saving...
+                                        {t("Saving...")}
                                     </>
                                 ) : (
                                     <>
                                         <Save className="w-4 h-4" />
-                                        Save Changes
+                                        {t("Save Changes")}
                                     </>
                                 )}
                             </Button>
