@@ -710,20 +710,21 @@ function IntegrationCard({
     onApiKeyChange,
     ...shell
 }: IntegrationCardProps) {
+    const { t } = useLanguage();
     return (
         <IntegrationShell {...shell} canTest={!shell.testing && !!url && !!apiKey}>
             <input
                 type="url"
                 value={url}
                 onChange={(e) => onUrlChange(e.target.value)}
-                placeholder={`Server URL (e.g., http://${localPort || "localhost:PORT"})`}
+                placeholder={`${t("Server URL")} (http://${localPort || "localhost:PORT"})`}
                 className={INPUT_CLASS}
             />
             <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => onApiKeyChange(e.target.value)}
-                placeholder="API Key"
+                placeholder={t("API Key")}
                 className={INPUT_CLASS}
             />
         </IntegrationShell>
@@ -749,6 +750,7 @@ function SoulseekCard({
     onPasswordChange,
     ...shell
 }: SoulseekCardProps) {
+    const { t } = useLanguage();
     return (
         <IntegrationShell
             {...shell}
@@ -761,14 +763,14 @@ function SoulseekCard({
                 type="text"
                 value={username}
                 onChange={(e) => onUsernameChange(e.target.value)}
-                placeholder="Soulseek Username"
+                placeholder={t("Soulseek Username")}
                 className={INPUT_CLASS}
             />
             <input
                 type="password"
                 value={password}
                 onChange={(e) => onPasswordChange(e.target.value)}
-                placeholder="Soulseek Password"
+                placeholder={t("Soulseek Password")}
                 className={INPUT_CLASS}
             />
             <p className="text-xs text-[var(--text-secondary)]">
