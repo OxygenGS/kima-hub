@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { LibraryFilter, SortOption } from "@/hooks/useQueries";
 import { Tab } from "../types";
 
@@ -71,6 +73,7 @@ export function RefinePanel({
     onSortChange,
     onItemsPerPageChange,
 }: RefinePanelProps) {
+    const { locale } = useLanguage();
     const [open, setOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -119,7 +122,7 @@ export function RefinePanel({
                 type="button"
                 aria-expanded={open}
                 aria-controls="refine-panel"
-                aria-label="Refine: filter, sort, and per-page options"
+                aria-label={translate(locale, "Refine: filter, sort, and per-page options")}
                 onClick={() => setOpen((prev) => !prev)}
                 className={cn(
                     // Matches the segmented control beside it: sentence case,
@@ -133,10 +136,10 @@ export function RefinePanel({
                 )}
             >
                 <SlidersHorizontal className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Refine</span>
+                <span>{translate(locale, "Refine")}</span>
                 {hasRefinements && !open && (
                     <span
-                        aria-label="Refinements active"
+                        aria-label={translate(locale, "Refinements active")}
                         className="w-1.5 h-1.5 rounded-full bg-[var(--color-brand)] flex-shrink-0"
                     />
                 )}
@@ -147,16 +150,16 @@ export function RefinePanel({
                     id="refine-panel"
                     ref={panelRef}
                     role="dialog"
-                    aria-label="Refine options"
+                    aria-label={translate(locale, "Refine options")}
                     // Anchored to the button's left edge: the trigger starts the
                     // toolbar at every width, so right-0 would push the panel off the page.
                     className="absolute left-0 top-full mt-2 z-(--z-dropdown) w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-secondary)] p-4 flex flex-col gap-5 animate-panel-up"
                 >
                     <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-white">Refine</span>
+                        <span className="text-sm font-medium text-white">{translate(locale, "Refine")}</span>
                         <button
                             type="button"
-                            aria-label="Close refine panel"
+                            aria-label={translate(locale, "Close refine panel")}
                             onClick={() => {
                                 setOpen(false);
                                 buttonRef.current?.focus();
@@ -169,9 +172,7 @@ export function RefinePanel({
 
                     {showFilterSection && (
                         <fieldset className="flex flex-col gap-1.5">
-                            <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
-                                Show
-                            </legend>
+                            <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">{translate(locale, "Show")}</legend>
                             {FILTER_OPTIONS.map((opt) => {
                                 const isActive = filter === opt.value;
                                 return (
@@ -193,10 +194,10 @@ export function RefinePanel({
                                                 isActive ? "text-[var(--color-brand)]" : "text-white",
                                             )}
                                         >
-                                            {opt.label}
+                                            {translate(locale, opt.label)}
                                         </span>
                                         <span className="text-xs text-[var(--text-muted)] mt-0.5">
-                                            {opt.description}
+                                            {translate(locale, opt.description)}
                                         </span>
                                     </button>
                                 );
@@ -205,9 +206,7 @@ export function RefinePanel({
                     )}
 
                     <fieldset className="flex flex-col gap-1">
-                        <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
-                            Sort by
-                        </legend>
+                        <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">{translate(locale, "Sort by")}</legend>
                         <div className="grid grid-cols-2 gap-1.5">
                             {sortOptions.map((opt) => (
                                 <button
@@ -222,16 +221,14 @@ export function RefinePanel({
                                             : "border-white/5 bg-white/3 text-[var(--text-secondary)] hover:bg-white/8 hover:border-white/15 hover:text-white",
                                     )}
                                 >
-                                    {opt.label}
+                                    {translate(locale, opt.label)}
                                 </button>
                             ))}
                         </div>
                     </fieldset>
 
                     <fieldset className="flex flex-col gap-1">
-                        <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">
-                            Items per page
-                        </legend>
+                        <legend className="text-xs font-medium text-[var(--text-muted)] mb-2">{translate(locale, "Items per page")}</legend>
                         <div className="grid grid-cols-4 gap-1.5">
                             {PER_PAGE_OPTIONS.map((n) => (
                                 <button
