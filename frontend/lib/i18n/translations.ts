@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Feed": "Feed",
     "Local Engine": "Local Engine",
     "year (newest)": "year (newest)",
     "date added (recent)": "date added (recent)",
@@ -1823,6 +1824,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Feed": "Activiteiten",
     "Local Engine": "Lokale engine",
     "year (newest)": "jaar (nieuwste eerst)",
     "date added (recent)": "toegevoegd (recentste eerst)",
