@@ -74,7 +74,7 @@ function BookSection({
 }
 
 export default function AudiobooksPage() {
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const router = useRouter();
     const { currentAudiobook } = useAudioState();
     const { pause } = useAudioControls();
