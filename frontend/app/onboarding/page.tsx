@@ -78,12 +78,12 @@ export default function OnboardingPage() {
         setError("");
 
         if (password !== confirmPassword) {
-            setError("Passwords don't match");
+            setError(t("Passwords don't match"));
             return;
         }
 
         if (password.length < 6) {
-            setError("Password must be at least 6 characters");
+            setError(t("Password must be at least 6 characters"));
             return;
         }
 
@@ -93,7 +93,7 @@ export default function OnboardingPage() {
                 const healthRes = await fetch("/api/health", { method: "GET" });
                 if (!healthRes.ok) throw new Error("not ready");
             } catch {
-                setError("Cannot reach the server. Check that Kima is fully started and try again.");
+                setError(t("Cannot reach the server. Check that Kima is fully started and try again."));
                 return;
             }
             const response = await api.post<{
@@ -126,7 +126,7 @@ export default function OnboardingPage() {
                     return;
                 } catch {
                     setError(
-                        "That username already exists and the password didn't match. If it's your account, sign in instead.",
+                        t("That username already exists and the password didn't match. If it's your account, sign in instead."),
                     );
                 }
             } else {
@@ -348,7 +348,7 @@ export default function OnboardingPage() {
                                                     htmlFor="password"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    Password
+                                                    {t("Password")}
                                                 </label>
                                                 <input
                                                     id="password"
@@ -375,7 +375,7 @@ export default function OnboardingPage() {
                                                     htmlFor="confirmPassword"
                                                     className="block text-sm font-medium text-[var(--text-primary)] mb-1.5"
                                                 >
-                                                    Confirm Password
+                                                    {t("Confirm Password")}
                                                 </label>
                                                 <input
                                                     id="confirmPassword"

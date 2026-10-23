@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Cannot reach the server. Check that Kima is fully started and try again.": "Cannot reach the server. Check that Kima is fully started and try again.",
     "connected successfully!": "connected successfully!",
     "Failed to connect to": "Failed to connect to",
     "Save changes": "Save changes",
@@ -1789,6 +1790,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Cannot reach the server. Check that Kima is fully started and try again.": "Kan de server niet bereiken. Controleer of Kima volledig is opgestart en probeer het opnieuw.",
     "connected successfully!": "succesvol verbonden!",
     "Failed to connect to": "Verbinding mislukt met",
     "Save changes": "Wijzigingen opslaan",
