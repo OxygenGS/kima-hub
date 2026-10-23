@@ -119,8 +119,7 @@ export default function SearchPage() {
                             {t("Find Your Sound")}
                         </h1>
                         <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-                            Search your library, discover new artists, or tap
-                            into the P2P network for rare tracks
+                            {t("Search your library, discover new artists, or tap into the P2P network for rare tracks")}
                         </p>
                     </div>
                 )}
@@ -136,7 +135,7 @@ export default function SearchPage() {
                                     <div className="flex items-center gap-2 text-sm text-brand">
                                         <div className="w-1 h-1 rounded-full bg-brand animate-ping" />
                                         <span className="font-medium">
-                                            Searching across sources...
+                                            {t("Searching across sources...")}
                                         </span>
                                     </div>
                                 )}
@@ -163,7 +162,7 @@ export default function SearchPage() {
                     <EmptyState
                         icon={<SearchIcon className="w-16 h-16" />}
                         title={t("Search your library")}
-                        description="Use the search bar above to find music, artists, and albums"
+                        description={t("Use the search bar above to find music, artists, and albums")}
                     />
                 )}
 
@@ -180,7 +179,7 @@ export default function SearchPage() {
                                 <div className="absolute inset-0 bg-gradient-to-r from-brand to-brand-dark opacity-20 blur-xl animate-pulse" />
                             </div>
                             <p className="text-[var(--text-secondary)] text-sm animate-pulse">
-                                Scanning library and network...
+                                {t("Scanning library and network...")}
                             </p>
                         </div>
                     )}
@@ -204,12 +203,12 @@ export default function SearchPage() {
                         {show2ColumnLayout ?
                             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-8 animate-fade-soft">
                                 <div className="space-y-4">
-                                    <SectionHeader title="Top Match" className="mb-0" />
+                                    <SectionHeader title={t("Top Match")} className="mb-0" />
                                     {topMatch}
                                 </div>
 
                                 <div className="space-y-4">
-                                    <SectionHeader type="track" title="Tracks" className="mb-0" />
+                                    <SectionHeader type="track" title={t("Tracks")} className="mb-0" />
                                     {trackList}
                                 </div>
                             </div>
@@ -218,14 +217,14 @@ export default function SearchPage() {
                                     (showDiscover || showLibrary) &&
                                     hasTopResult && (
                                         <section className="animate-fade-soft">
-                                            <SectionHeader title="Top Match" />
+                                            <SectionHeader title={t("Top Match")} />
                                             {topMatch}
                                         </section>
                                     )}
 
                                 {hasSearched && hasTracks && (
                                     <section className="animate-fade-soft">
-                                        <SectionHeader type="track" title="Tracks" />
+                                        <SectionHeader type="track" title={t("Tracks")} />
                                         {trackList}
                                     </section>
                                 )}
@@ -236,7 +235,7 @@ export default function SearchPage() {
                             showLibrary &&
                             (libraryResults?.albums?.length ?? 0) > 0 && (
                                 <section className="animate-fade-soft">
-                                    <SectionHeader type="album" title="Albums" />
+                                    <SectionHeader type="album" title={t("Albums")} />
                                     <LibraryAlbumsGrid
                                         albums={libraryResults!.albums!}
                                     />
@@ -247,7 +246,7 @@ export default function SearchPage() {
                             showLibrary &&
                             (libraryResults?.podcasts?.length ?? 0) > 0 && (
                                 <section className="animate-fade-soft">
-                                    <SectionHeader type="podcast" title="Podcasts" />
+                                    <SectionHeader type="podcast" title={t("Podcasts")} />
                                     <LibraryPodcastsGrid
                                         podcasts={libraryResults!.podcasts!}
                                     />
@@ -258,7 +257,7 @@ export default function SearchPage() {
                             showLibrary &&
                             (libraryResults?.audiobooks?.length ?? 0) > 0 && (
                                 <section className="animate-fade-soft">
-                                    <SectionHeader type="audiobook" title="Audiobooks" />
+                                    <SectionHeader type="audiobook" title={t("Audiobooks")} />
                                     <LibraryAudiobooksGrid
                                         audiobooks={libraryResults!.audiobooks!}
                                     />
@@ -269,7 +268,7 @@ export default function SearchPage() {
                             showDiscover &&
                             similarArtists.length > 0 && (
                                 <section className="animate-fade-soft">
-                                    <SectionHeader type="artist" title="Related Artists" />
+                                    <SectionHeader type="artist" title={t("Related Artists")} />
                                     <SimilarArtistsGrid
                                         similarArtists={similarArtists}
                                     />
@@ -291,11 +290,11 @@ export default function SearchPage() {
                             !libraryResults.episodes?.length)) && (
                         <EmptyState
                             icon={<SearchIcon className="w-16 h-16" />}
-                            title="No matches found"
-                            description="Try a different search term or check your spelling"
+                            title={t("No matches found")}
+                            description={t("Try a different search term or check your spelling")}
                         >
                             <p className="text-sm text-[var(--text-muted)]">
-                                Tip: Enable Soulseek to search the P2P network
+                                {t("Tip: Enable Soulseek to search the P2P network")}
                             </p>
                         </EmptyState>
                     )}
