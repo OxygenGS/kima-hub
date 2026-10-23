@@ -111,7 +111,7 @@ export function UnifiedPanel({ isOpen, onToggle }: UnifiedPanelProps) {
                         <div className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                             <span className="t-eyebrow">
-                                Feed
+                                {t("Feed")}
                             </span>
                         </div>
                         <button
