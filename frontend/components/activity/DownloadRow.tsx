@@ -69,7 +69,7 @@ export function DownloadRow({
     const lastError = tone === "active" ? text(item.metadata?.lastError) : item.error;
     const cover = useAlbumCover(item.targetMbid, item.type === "album");
     const FallbackIcon = item.type === "album" ? Disc3 : Music;
-    const when = timeAgo(tone === "active" ? item.createdAt : item.completedAt || item.createdAt);
+    const when = timeAgo(tone === "active" ? item.createdAt : item.completedAt || item.createdAt, locale);
 
     return (
         <li className="group rounded-xl transition-colors hover:bg-white/[0.03]">
