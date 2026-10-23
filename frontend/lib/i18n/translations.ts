@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "No preview for this song": "No preview for this song",
+    "Couldn't play this preview": "Couldn't play this preview",
     "Album data not available": "Album data not available",
     "Can't download this album": "Can't download this album",
     "It has no MusicBrainz ID.": "It has no MusicBrainz ID.",
@@ -1840,6 +1842,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "No preview for this song": "Geen voorbeeld beschikbaar voor dit nummer",
+    "Couldn't play this preview": "Kan dit voorbeeld niet afspelen",
     "Album data not available": "Albumgegevens niet beschikbaar",
     "Can't download this album": "Dit album kan niet worden gedownload",
     "It has no MusicBrainz ID.": "Dit album heeft geen MusicBrainz-ID.",
