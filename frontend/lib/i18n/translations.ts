@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Play a 30-second preview": "Play a 30-second preview",
     "Settings could not be loaded": "Settings could not be loaded",
     "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.",
     "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.": "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.",
@@ -1793,6 +1794,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Play a 30-second preview": "Een voorbeeld van 30 seconden afspelen",
     "Settings could not be loaded": "Instellingen konden niet worden geladen",
     "After finishing, Kima will scan your music library and start enrichment in the background. This may take a few minutes for large collections.": "Na het afronden scant Kima je muziekbibliotheek en start de verwerking op de achtergrond. Bij grote collecties kan dit enkele minuten duren.",
     "This is the owner account for your Kima server. You'll manage users, integrations, and settings from here.": "Dit is het beheerdersaccount voor je Kima-server. Hiermee beheer je gebruikers, integraties en instellingen.",
