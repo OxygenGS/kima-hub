@@ -3,6 +3,8 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Page not found.": "Page not found.",
+    "Page not found": "Page not found",
     "something went wrong": "something went wrong",
     "Back to activity": "Back to activity",
     "Failed to reset metadata": "Failed to reset metadata",
@@ -1805,6 +1807,8 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Page not found.": "Pagina niet gevonden.",
+    "Page not found": "Pagina niet gevonden",
     "something went wrong": "Er is iets misgegaan",
     "Back to activity": "Terug naar activiteit",
     "Failed to reset metadata": "Metadata herstellen mislukt",
