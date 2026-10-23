@@ -6,7 +6,8 @@ import { ReactNode } from "react";
 import { MetadataEditControls } from "@/components/MetadataEditControls";
 import { getArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
-import { plural } from "@/lib/format";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { formatStatsCount } from "@/features/stats/locale-format";
 import { MediaHero } from "@/components/ui/MediaHero";
 
 interface ArtistHeroProps {
@@ -30,6 +31,7 @@ export function ArtistHero({
     onReload,
     children,
 }: ArtistHeroProps) {
+    const { locale, t } = useLanguage();
     const displayData = getArtistDisplayData(artist);
     const ownedAlbums = albums.filter((a) => a.owned);
 
@@ -77,17 +79,17 @@ export function ArtistHero({
                 <>
                     {artist.listeners && artist.listeners > 0 && (
                         <>
-                            <span>{artist.listeners.toLocaleString()} listeners</span>
+                            <span>{formatStatsCount(artist.listeners, locale)} {t("listeners")}</span>
                             <span className="mx-1">•</span>
                         </>
                     )}
                     {albums.length > 0 && (
                         <>
-                            <span>{plural(albums.length, "album")}</span>
+                            <span>{formatStatsCount(albums.length, locale)} {t(albums.length === 1 ? "album" : "albums")}</span>
                             {ownedAlbums.length > 0 && (
                                 <>
                                     <span className="mx-1">•</span>
-                                    <span className="text-brand">{ownedAlbums.length} owned</span>
+                                    <span className="text-brand">{formatStatsCount(ownedAlbums.length, locale)} {t("owned")}</span>
                                 </>
                             )}
                         </>
