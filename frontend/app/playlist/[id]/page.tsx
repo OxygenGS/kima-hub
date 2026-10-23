@@ -187,11 +187,11 @@ export default function PlaylistDetailPage() {
             if (result.success) {
                 showRetryProgress(10000);
             } else {
-                notify.error("Track not found on Soulseek", { message: result.message });
+                notify.error(t("Track not found on Soulseek"), { message: result.message });
             }
         } catch (error) {
             console.error("Failed to retry download:", error);
-            notify.error("Failed to retry download");
+            notify.error(t("Failed to retry download"));
         } finally {
             setRetryingTrackId(null);
         }
@@ -208,7 +208,7 @@ export default function PlaylistDetailPage() {
             }
         } catch (error) {
             console.error("Failed to retry all downloads:", error);
-            notify.error("Failed to retry downloads");
+            notify.error(t("Failed to retry downloads"));
         } finally {
             setRetryingAll(false);
         }
@@ -224,7 +224,7 @@ export default function PlaylistDetailPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (error) {
             console.error("Failed to remove pending track:", error);
-            notify.error("Failed to remove pending track");
+            notify.error(t("Failed to remove pending track"));
         } finally {
             setRemovingTrackId(null);
         }
@@ -259,7 +259,7 @@ export default function PlaylistDetailPage() {
             }
         } catch (error) {
             console.error("Failed to toggle playlist visibility:", error);
-            notify.error("Failed to update playlist visibility");
+            notify.error(t("Failed to update playlist visibility"));
         } finally {
             setIsHiding(false);
         }
@@ -273,7 +273,7 @@ export default function PlaylistDetailPage() {
                 data: { isPublic: !playlist.isPublic },
             });
         } catch {
-            notify.error("Failed to update playlist visibility");
+            notify.error(t("Failed to update playlist visibility"));
         }
     };
 
@@ -287,7 +287,7 @@ export default function PlaylistDetailPage() {
             await removeTrack({ playlistId, trackId });
         } catch (error) {
             console.error("Failed to remove track:", error);
-            notify.error("Failed to remove track");
+            notify.error(t("Failed to remove track"));
         }
     };
 
@@ -302,7 +302,7 @@ export default function PlaylistDetailPage() {
             router.push("/playlists");
         } catch (error) {
             console.error("Failed to delete playlist:", error);
-            notify.error("Failed to delete playlist");
+            notify.error(t("Failed to delete playlist"));
         }
     };
 
@@ -320,7 +320,7 @@ export default function PlaylistDetailPage() {
             setShowSharePopover(true);
         } catch (err) {
             console.error("Failed to create share link:", err);
-            notify.error("Failed to create share link");
+            notify.error(t("Failed to create share link"));
         } finally {
             setShareLoading(false);
         }
@@ -422,7 +422,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: targetItemId,
             });
         } catch {
-            notify.error("Failed to reorder track");
+            notify.error(t("Failed to reorder track"));
         }
         handleDragEnd();
     };
@@ -442,7 +442,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: idx === 1 ? null : playlist.items[idx - 2].id,
             });
         } catch {
-            notify.error("Failed to move track");
+            notify.error(t("Failed to move track"));
         }
     };
 
@@ -457,7 +457,7 @@ export default function PlaylistDetailPage() {
                 afterItemId: playlist.items[idx + 1].id,
             });
         } catch {
-            notify.error("Failed to move track");
+            notify.error(t("Failed to move track"));
         }
     };
 
@@ -788,7 +788,7 @@ export default function PlaylistDetailPage() {
     if (!playlist) {
         return (
             <PageMessage
-                title="Playlist not found"
+                title={t("Playlist not found")}
                 description="Deleted or not shared."
                 action={{ label: "Your playlists", href: "/playlists" }}
             />
@@ -884,7 +884,7 @@ export default function PlaylistDetailPage() {
                                                         setIsEditingName(false);
                                                     } catch {
                                                         editSaveRef.current = false;
-                                                        notify.error("Failed to rename playlist");
+                                                        notify.error(t("Failed to rename playlist"));
                                                     }
                                                 } else {
                                                     setIsEditingName(false);
@@ -905,7 +905,7 @@ export default function PlaylistDetailPage() {
                                                     await updatePlaylist({ playlistId, data: { name: trimmed } });
                                                     setIsEditingName(false);
                                                 } catch {
-                                                    notify.error("Failed to rename playlist");
+                                                    notify.error(t("Failed to rename playlist"));
                                                 }
                                             } else {
                                                 setIsEditingName(false);
@@ -1045,7 +1045,7 @@ export default function PlaylistDetailPage() {
                                                 setShareToken(null);
                                                 setShowSharePopover(false);
                                             } catch {
-                                                notify.error("Failed to revoke share link");
+                                                notify.error(t("Failed to revoke share link"));
                                             }
                                         }}
                                         className="text-micro text-[var(--text-muted)] hover:text-danger-light/70 transition-colors mt-1"
@@ -1134,7 +1134,7 @@ export default function PlaylistDetailPage() {
 
                     {playlist.items?.length > 0 || playlist.pendingTracks?.length > 0 ? (
                         <div className="w-full">
-                            <SectionHeader type="track" title="Tracks" count={playlist.items?.length || 0} />
+                            <SectionHeader type="track" title={t("Tracks")} count={playlist.items?.length || 0} />
 
                             {/* The number and the drag handle share a row's first cell,
                                 so they share one heading. See TRACK_GRID. */}
@@ -1204,7 +1204,7 @@ export default function PlaylistDetailPage() {
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
                 onConfirm={handleDeletePlaylist}
-                title="Delete Playlist?"
+                title={t("Delete Playlist?")}
                 message={`Are you sure you want to delete "${playlist.name}"? This action cannot be undone.`}
                 confirmText="Delete"
                 cancelText="Cancel"
