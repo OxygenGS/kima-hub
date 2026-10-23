@@ -3,6 +3,18 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Artist Name": "Artist Name",
+    "Album Title": "Album Title",
+    "Track Title": "Track Title",
+    "Original:": "Original:",
+    "Biography": "Biography",
+    "Release Year": "Release Year",
+    "(comma-separated)": "(comma-separated)",
+    "(leave empty to auto-fetch)": "(leave empty to auto-fetch)",
+    "Artist Image URL": "Artist Image URL",
+    "Cover Art URL": "Cover Art URL",
+    "Preview": "Preview",
+    "MISSING": "MISSING",
     "View profile": "View profile",
     "Page not found.": "Page not found.",
     "Page not found": "Page not found",
@@ -1808,6 +1820,18 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Artist Name": "Naam artiest",
+    "Album Title": "Albumtitel",
+    "Track Title": "Tracktitel",
+    "Original:": "Oorspronkelijk:",
+    "Biography": "Biografie",
+    "Release Year": "Verschijningsjaar",
+    "(comma-separated)": "(gescheiden door komma's)",
+    "(leave empty to auto-fetch)": "(leeg laten om automatisch op te halen)",
+    "Artist Image URL": "URL van artiestafbeelding",
+    "Cover Art URL": "URL van albumhoes",
+    "Preview": "Voorbeeld",
+    "MISSING": "ONTBREEKT",
     "View profile": "Profiel bekijken",
     "Page not found.": "Pagina niet gevonden.",
     "Page not found": "Pagina niet gevonden",
