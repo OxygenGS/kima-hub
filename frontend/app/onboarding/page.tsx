@@ -612,6 +612,7 @@ function IntegrationShell({
     result,
     children,
 }: IntegrationShellProps) {
+    const { t } = useLanguage();
     return (
         <div
             className={`border rounded-lg transition-all ${
@@ -641,7 +642,7 @@ function IntegrationShell({
                     </div>
                     <button
                         onClick={onToggle}
-                        aria-label={`${enabled ? "Disable" : "Enable"} ${title}`}
+                        aria-label={`${t(enabled ? "Disable" : "Enable")} ${title}`}
                         aria-pressed={enabled}
                         className={`relative w-11 h-6 rounded-lg transition-all ${
                             enabled ? "bg-brand" : "bg-white/20"
