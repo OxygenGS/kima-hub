@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Music, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
@@ -10,6 +13,7 @@ interface TopResultProps {
 }
 
 export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
+    const { t } = useLanguage();
     if (!libraryArtist && !discoveryArtist) {
         return null;
     }
@@ -69,14 +73,14 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
                             </span>
                             <span className="w-1 h-1 rounded-full bg-brand/50" />
                             <span className="text-xs text-[var(--text-muted)]">
-                                {isLibrary ? "Your library" : "Discover"}
+                                {t(isLibrary ? "Your library" : "Discover")}
                             </span>
                         </div>
                         <h3 className="text-2xl md:text-4xl font-bold text-white mb-2 leading-tight line-clamp-2 break-words group-hover:text-brand transition-colors duration-200">
                             {name}
                         </h3>
                         <div className="flex items-center gap-2 text-[var(--text-secondary)] group-hover:text-gray-300 transition-colors">
-                            <span className="text-sm font-medium">View profile</span>
+                            <span className="text-sm font-medium">{t("View profile")}</span>
                             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-150" />
                         </div>
                     </div>
