@@ -57,7 +57,7 @@ interface DeezerPlaylistFull {
 
 export default function DeezerPlaylistDetailPage() {
     const { canRequestAlbums, canDownloadTracks } = useMusicPermissions();
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const mayImport = canImportExternalPlaylist({ canRequestAlbums, canDownloadTracks });
     const params = useParams();
     const router = useRouter();
@@ -82,7 +82,7 @@ export default function DeezerPlaylistDetailPage() {
                 );
                 setPlaylist(data);
             } catch (err) {
-                const message = err instanceof Error ? err.message : "Failed to load playlist";
+                const message = err instanceof Error ? err.message : t("Failed to load playlist");
                 setError(message);
             } finally {
                 setIsLoading(false);
@@ -109,8 +109,8 @@ export default function DeezerPlaylistDetailPage() {
     const formatTotalDuration = (ms: number) => {
         const hours = Math.floor(ms / 3600000);
         const mins = Math.floor((ms % 3600000) / 60000);
-        if (hours > 0) return `${hours} ${t("hr")} ${mins} ${t("min")}`;
-        return `${mins} min`;
+        if (hours > 0) return `${hours.toLocaleString(locale)} ${t("hr")} ${mins.toLocaleString(locale)} ${t("min")}`;
+        return `${mins.toLocaleString(locale)} ${t("min")}`;
     };
 
     if (isLoading) {
