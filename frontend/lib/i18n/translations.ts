@@ -3,6 +3,10 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Failed to load playlist": "Failed to load playlist",
+    "This mix no longer exists. Rebuilding mixes replaces them with new ones.": "This mix no longer exists. Rebuilding mixes replaces them with new ones.",
+    "Couldn't load this mix": "Couldn't load this mix",
+    "The server didn't answer. Try again in a moment.": "The server didn't answer. Try again in a moment.",
     "matched track": "matched track",
     "matched tracks": "matched tracks",
     "new song": "new song",
@@ -1781,6 +1785,10 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Failed to load playlist": "Afspeellijst laden mislukt",
+    "This mix no longer exists. Rebuilding mixes replaces them with new ones.": "Deze mix bestaat niet meer. Bij het opnieuw samenstellen worden de mixes vervangen door nieuwe.",
+    "Couldn't load this mix": "Deze mix kon niet worden geladen",
+    "The server didn't answer. Try again in a moment.": "De server reageerde niet. Probeer het zo opnieuw.",
     "matched track": "overeenkomend nummer",
     "matched tracks": "overeenkomende nummers",
     "new song": "nieuw nummer",
