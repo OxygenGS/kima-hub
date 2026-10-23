@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { Play, Pause, Volume2, Music } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -5,6 +7,7 @@ import { api } from "@/lib/api";
 import type { Track, Artist } from "../types";
 import { formatNumber, formatTime } from "@/lib/format";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { cascadeStyle } from "@/lib/motion";
 import { useDoubleTapList } from "@/hooks/useDoubleTap";
 import { CachedImage } from "@/components/ui/CachedImage";
@@ -32,6 +35,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     previewPlaying,
     onPreview,
 }) => {
+    const { t } = useLanguage();
     const activate = (track: Track) => {
         if (isUnownedTrack(track)) onPreview(track);
         else onPlayTrack(track);
@@ -42,7 +46,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
 
     return (
         <section>
-            <SectionHeader type="track" title="Popular" />
+            <SectionHeader type="track" title={t("Popular")} />
             <div data-tv-section="tracks" style={cascadeStyle(Math.min(tracks.length, 10))}>
                 {tracks.slice(0, 10).map((track, index) => {
                     const isPlaying = currentTrackId === track.id;
@@ -77,7 +81,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                         activate(track);
                                     }}
                                     className="group/play w-8 h-8 flex items-center justify-center"
-                                    aria-label={isPlaying ? "Pause" : "Play"}
+                                    aria-label={t(isPlaying ? "Pause" : "Play")}
                                 >
                                     <span
                                         className={cn(
@@ -127,7 +131,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                         </span>
                                         {isUnowned && (
                                             <span className="shrink-0 text-micro bg-white/10 text-[var(--text-secondary)] px-1.5 py-0.5 rounded font-medium">
-                                                Preview
+                                                {t("Preview")}
                                             </span>
                                         )}
                                     </div>
@@ -154,7 +158,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                             e.stopPropagation();
                                             onPreview(track);
                                         }}
-                                        aria-label={isPreviewPlaying ? `stop the preview of ${track.title}` : `play a preview of ${track.title}`}
+                                        aria-label={isPreviewPlaying ? `${t("Pause preview")}: ${track.title}` : `${t("Play preview")}: ${track.title}`}
                                         className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-hover:translate-y-0 focus-visible:translate-y-0 translate-y-1 transition-[opacity,transform] duration-150 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white"
                                     >
                                         {isPreviewPlaying ? (
