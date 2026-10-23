@@ -19,7 +19,7 @@ import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { timeAgo } from "@/lib/relative-time";
 
 export function NotificationsTab() {
-    const { t } = useLanguage();
+    const { t, locale } = useLanguage();
     const {
         notifications,
         isLoading: loading,
@@ -84,14 +84,13 @@ export function NotificationsTab() {
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between px-3 py-2 border-b-2 border-white/10">
                 <span className="text-xs tabular-nums font-semibold text-[var(--text-muted)]">
-                    {String(notifications.length).padStart(2, "0")} ITEM
-                    {notifications.length !== 1 ? "S" : ""}
+                    {String(notifications.length).padStart(2, "0")} {t(notifications.length === 1 ? "ITEM" : "ITEMS")}
                 </span>
                 <button
                     onClick={handleClearAll}
                     className="text-micro font-semibold text-[var(--text-muted)] hover:text-white transition-colors"
                 >
-                    CLEAR
+                    {t("CLEAR")}
                 </button>
             </div>
 
@@ -139,14 +138,14 @@ export function NotificationsTab() {
                                     )}
                                     <div className="flex items-center gap-2 mt-1.5">
                                         <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                                            {timeAgo(notification.createdAt)}
+                                            {timeAgo(notification.createdAt, locale)}
                                         </span>
                                         {link && (
                                             <Link
                                                 href={link}
                                                 className="text-micro font-semibold text-brand hover:underline flex items-center gap-1"
                                             >
-                                                VIEW
+                                                {t("VIEW")}
                                                 <ExternalLink className="w-2.5 h-2.5" />
                                             </Link>
                                         )}
