@@ -3,9 +3,12 @@
 import { ReactNode } from "react";
 import { ErrorBoundary } from "@/components/providers/ErrorBoundary";
 import { Button } from "@/components/ui/Button";
+import { useStoredLocale } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 
 /** Fallback page for errors that reach the top of the app. */
 export function GlobalErrorBoundary({ children }: { children: ReactNode }) {
+    const locale = useStoredLocale();
     return (
         <ErrorBoundary
             label="GlobalErrorBoundary"
@@ -14,11 +17,10 @@ export function GlobalErrorBoundary({ children }: { children: ReactNode }) {
                     <div className="max-w-md w-full text-center space-y-6">
                         <div className="space-y-2">
                             <h1 className="text-2xl font-bold">
-                                Something went wrong
+                                {translate(locale, "Something went wrong")}
                             </h1>
                             <p className="text-[var(--text-secondary)]">
-                                An unexpected error occurred. Please try
-                                reloading the page.
+                                {translate(locale, "An unexpected error occurred. Please try reloading the page.")}
                             </p>
                         </div>
                         {error && (
@@ -34,7 +36,7 @@ export function GlobalErrorBoundary({ children }: { children: ReactNode }) {
                             onClick={() => window.location.reload()}
                             className="w-full"
                         >
-                            Reload Page
+                            {translate(locale, "Reload Page")}
                         </Button>
                     </div>
                 </div>
