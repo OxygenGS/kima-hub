@@ -3,6 +3,9 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Local Engine": "Local Engine",
+    "year (newest)": "year (newest)",
+    "date added (recent)": "date added (recent)",
     "Artist Name": "Artist Name",
     "Album Title": "Album Title",
     "Track Title": "Track Title",
@@ -1820,6 +1823,9 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Local Engine": "Lokale engine",
+    "year (newest)": "jaar (nieuwste eerst)",
+    "date added (recent)": "toegevoegd (recentste eerst)",
     "Artist Name": "Naam artiest",
     "Album Title": "Albumtitel",
     "Track Title": "Tracktitel",
