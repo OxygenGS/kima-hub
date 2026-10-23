@@ -161,15 +161,15 @@ export default function MixPage() {
         // Only a 404 means the mix is gone (a rebuild makes new mixes); anything else is a failed request.
         return (error as { status?: number } | null)?.status === 404 ? (
             <PageMessage
-                title="Mix not found"
+                title={t("Mix not found")}
                 description={t("This mix no longer exists. Rebuilding mixes replaces them with new ones.")}
-                action={{ label: "Home", href: "/" }}
+                action={{ label: t("Home"), href: "/" }}
             />
         ) : (
             <PageMessage
                 title={t("Couldn't load this mix")}
                 description={t("The server didn't answer. Try again in a moment.")}
-                action={{ label: "Try again", onClick: () => void refetch() }}
+                action={{ label: t("Try again"), onClick: () => void refetch() }}
             />
         );
     }
@@ -305,7 +305,7 @@ export default function MixPage() {
                                                     handlePlayTrack(index);
                                                 }}
                                                 className="min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                                aria-label={isCurrentlyPlaying && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                                                aria-label={`${t(isCurrentlyPlaying && isPlaying ? "Pause" : "Play")} ${track.title}`}
                                             >
                                                 <span
                                                     className={cn(
@@ -365,7 +365,7 @@ export default function MixPage() {
                                                     e.stopPropagation();
                                                     handleAddToQueue(track);
                                                 }}
-                                                aria-label={`Add ${track.title} to queue`}
+                                                aria-label={`${t("Add to queue")}: ${track.title}`}
                                             >
                                                 <ListPlus className="w-4 h-4" />
                                             </button>
@@ -381,9 +381,9 @@ export default function MixPage() {
                 ) : (
                     <EmptyState
                         icon={<Music className="w-12 h-12" />}
-                        title="No tracks"
-                        description="This mix is empty"
-                        action={{ label: "Back to Mixes", onClick: () => router.push("/"), variant: "secondary" }}
+                        title={t("No tracks")}
+                        description={t("This mix is empty")}
+                        action={{ label: t("Back to Mixes"), onClick: () => router.push("/"), variant: "secondary" }}
                     />
                 )}
             </div>
