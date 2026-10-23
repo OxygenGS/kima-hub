@@ -7,11 +7,13 @@ import { useAudio } from "@/lib/audio-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { api } from "@/lib/api";
 import { notify } from "@/lib/notify";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Podcast, Episode, PodcastPreview } from "../types";
 import { queryKeys } from "@/hooks/useQueries";
 import { dispatchQueryEvent } from "@/lib/query-events";
 
 export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[]) {
+    const { t } = useLanguage();
     const router = useRouter();
     const queryClient = useQueryClient();
     const { playPodcast, currentPodcast, isPlaying, pause, resumeWithGesture } =
@@ -38,12 +40,12 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
                     router.push(`/podcasts/${response.podcast.id}`);
                 }
             } catch (error: unknown) {
-                notify.error("Couldn't subscribe to this podcast", { message: error instanceof Error ? error.message : undefined });
+                notify.error(t("Couldn't subscribe to this podcast"), { message: error instanceof Error ? error.message : undefined });
             } finally {
                 setIsSubscribing(false);
             }
         },
-        [router, queryClient]
+        [router, queryClient, t]
     );
 
     const handleRemovePodcast = useCallback(async () => {
@@ -53,9 +55,9 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
             queryClient.invalidateQueries({ queryKey: queryKeys.podcasts() });
             router.push("/podcasts");
         } catch (error) {
-            notify.error("Couldn't remove this podcast", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Couldn't remove this podcast"), { message: error instanceof Error ? error.message : undefined });
         }
-    }, [podcastId, router, queryClient]);
+    }, [podcastId, router, queryClient, t]);
 
     const handlePlayEpisode = useCallback(
         (episode: Episode, podcast: Podcast, around: Episode[] | undefined = sortedEpisodes) => {
@@ -119,10 +121,10 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
                 
                 dispatchQueryEvent("podcast-progress-updated");
             } catch (error) {
-                notify.error("Couldn't mark the episode as played", { message: error instanceof Error ? error.message : undefined });
+                notify.error(t("Couldn't mark the episode as played"), { message: error instanceof Error ? error.message : undefined });
             }
         },
-        [podcastId, queryClient]
+        [podcastId, queryClient, t]
     );
 
     const handleRefresh = useCallback(async () => {
@@ -132,11 +134,11 @@ export function usePodcastActions(podcastId: string, sortedEpisodes?: Episode[])
             queryClient.invalidateQueries({ queryKey: queryKeys.podcast(podcastId) });
             return result;
         } catch (error) {
-            notify.error("Couldn't refresh this podcast", { message: error instanceof Error ? error.message : undefined });
+            notify.error(t("Couldn't refresh this podcast"), { message: error instanceof Error ? error.message : undefined });
         } finally {
             setIsRefreshing(false);
         }
-    }, [podcastId, queryClient]);
+    }, [podcastId, queryClient, t]);
 
     return {
         isSubscribing,

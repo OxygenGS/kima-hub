@@ -5,6 +5,7 @@ import { useAudio } from "@/lib/audio-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioState } from "@/lib/audio-state-context";
 import { notify } from "@/lib/notify";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
 import type { Audiobook } from "../types";
 
@@ -24,6 +25,7 @@ export function useAudiobookActions(
     updateCurrentTime,
     seek,
   } = useAudio();
+  const { t } = useLanguage();
   const { playAudiobookAt } = useAudioControls();
   const { setCurrentAudiobook, setPlaybackType } = useAudioState();
 
@@ -79,7 +81,7 @@ export function useAudiobookActions(
       refetch();
     } catch (error) {
       console.error("Failed to mark as completed:", error);
-      notify.error("Failed to mark as completed");
+      notify.error(t("Failed to mark as completed"));
     }
   }, [
     audiobook,
@@ -90,6 +92,7 @@ export function useAudiobookActions(
     pause,
     setCurrentAudiobook,
     refetch,
+    t,
   ]);
 
   const handleResetProgress = useCallback(async () => {
@@ -112,7 +115,7 @@ export function useAudiobookActions(
       refetch();
     } catch (error) {
       console.error("Failed to reset progress:", error);
-      notify.error("Failed to reset progress");
+      notify.error(t("Failed to reset progress"));
     }
   }, [
     audiobookId,
@@ -124,6 +127,7 @@ export function useAudiobookActions(
     setPlaybackType,
     updateCurrentTime,
     refetch,
+    t,
   ]);
 
   const seekToSection = useCallback(

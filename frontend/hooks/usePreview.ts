@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/lib/notify";
+import { useStoredLocale } from "@/lib/i18n/language-context";
+import { translate } from "@/lib/i18n/translations";
 import { useAudioController } from "@/lib/audio-controller-context";
 import { useAudioState } from "@/lib/audio-state-context";
 
@@ -10,6 +12,7 @@ import { useAudioState } from "@/lib/audio-state-context";
  * the next render. A preview that failed is not asked again on this page.
  */
 export function usePreview() {
+    const locale = useStoredLocale();
     const controller = useAudioController();
     const { volume, isMuted } = useAudioState();
     const [previewId, setPreviewId] = useState<string | null>(null);
@@ -69,7 +72,7 @@ export function usePreview() {
                 return;
             }
             if (failed.current.has(id)) {
-                notify.info("No preview for this song");
+                notify.info(translate(locale, "No preview for this song"));
                 return;
             }
             end(false);
@@ -91,7 +94,7 @@ export function usePreview() {
                 if (isCurrent()) end(true);
             };
             audio.onerror = () => {
-                if (isCurrent()) fail("No preview for this song");
+                if (isCurrent()) fail(translate(locale, "No preview for this song"));
             };
             // A preview stopped before it started rejects too; only the current one is a failure.
             audio.play().then(
@@ -99,11 +102,11 @@ export function usePreview() {
                     if (isCurrent()) setPlaying(true);
                 },
                 () => {
-                    if (isCurrent()) fail("Couldn't play this preview");
+                    if (isCurrent()) fail(translate(locale, "Couldn't play this preview"));
                 },
             );
         },
-        [end],
+        [end, locale],
     );
 
     const stop = useCallback(() => end(true), [end]);

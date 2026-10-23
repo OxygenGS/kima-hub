@@ -2,6 +2,30 @@ import { describe, expect, it } from "vitest";
 import { dutch, english, translations, translate } from "../i18n/translations";
 
 describe("UI translations", () => {
+    it("translates action failure notifications while keeping media metadata intact", () => {
+        expect(translate("nl", "Album data not available")).toBe("Albumgegevens niet beschikbaar");
+        expect(translate("nl", "Can't download this album")).toBe("Dit album kan niet worden gedownload");
+        expect(translate("nl", "Can't download this artist")).toBe("Deze artiest kan niet worden gedownload");
+        expect(translate("nl", "Failed to refresh mixes")).toBe("Mixen vernieuwen mislukt");
+        expect(translate("nl", "Failed to mark as completed")).toBe("Markeren als voltooid mislukt");
+        expect(translate("nl", "Couldn't subscribe to this podcast")).toBe("Abonneren op deze podcast mislukt");
+        expect(translate("nl", "No preview for this song")).toBe("Geen voorbeeld beschikbaar voor dit nummer");
+        expect(translate("nl", "Couldn't play this preview")).toBe("Kan dit voorbeeld niet afspelen");
+        expect(translate("nl", "Artist name from API")).toBe("Artist name from API");
+    });
+
+    it("localizes the final home, search, playlist and discography labels", () => {
+        expect(translate("nl", "Feed")).toBe("Activiteiten");
+        expect(translate("nl", "Library Radio")).toBe("Bibliotheekradio");
+        expect(translate("nl", "Top Match")).toBe("Beste resultaat");
+        expect(translate("nl", "No matches found")).toBe("Geen resultaten gevonden");
+        expect(translate("nl", "Share playlist")).toBe("Afspeellijst delen");
+        expect(translate("nl", "Local Engine")).toBe("Lokale engine");
+        expect(translate("nl", "year (newest)")).toBe("jaar (nieuwste eerst)");
+        expect(translate("nl", "date added (recent)")).toBe("toegevoegd (recentste eerst)");
+        expect(translate("en", "Feed")).toBe("Feed");
+    });
+
     it("localizes release actions and mood-mix decisions without rewriting stored choices", () => {
         expect(translate("nl", "What's new in")).toBe("Nieuw in");
         expect(translate("nl", "Needs you")).toBe("Jouw aandacht nodig");
