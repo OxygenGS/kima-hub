@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
-# No push, no publish, no deployment: dry-run merging upstream v1.11.0 into
-# the fork's feature baseline on a throwaway GitHub Actions checkout.
+# Read-only compatibility report for a *specific upstream release tag*.
+# Run only in a disposable Actions checkout; never push, publish or deploy.
 set -euo pipefail
-
-mkdir -p audit
-report="audit/upstream-v1.11-merge-report.md"
-: > "$report"
 
 if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
   echo "This merge audit is intended for an isolated GitHub Actions checkout." >&2
   exit 1
 fi
 
-# The upstream tag is pinned. Do not fetch a floating 'main' reference.
-tag="v1.11.0"
-remote_ref="refs/remotes/upstream-compat/v1.11.0"
+# A selected release tag is safer and reproducible; never fetch floating main.
+tag="${UPSTREAM_TAG:-v1.11.0}"
+if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid upstream release tag: use vMAJOR.MINOR.PATCH (no branch or suffix)" >&2
+  exit 2
+fi
+remote_ref="refs/remotes/upstream-compat/$tag"
+
+# Always abort the throwaway merge, including on an unexpected script exit.
+trap 'git merge --abort >/dev/null 2>&1 || true' EXIT
+mkdir -p audit
+report="audit/upstream-merge-report.md"
+: > "$report"
 git fetch --no-tags https://github.com/Chevron7Locked/kima-hub.git "refs/tags/$tag:$remote_ref"
 
 {
-  echo "# Upstream v1.11.0 integration dry-run"
+  echo "# Upstream $tag integration dry-run"
   echo
   echo "- Fork base SHA: \`$(git rev-parse HEAD)\`"
   echo "- Upstream tag: \`$tag\`"
@@ -109,5 +115,4 @@ comm -13 audit/fork-pages.txt audit/upstream-pages.txt > audit/upstream-only-pag
 
 cat "$report" | tee -a "$GITHUB_STEP_SUMMARY"
 echo "Wrote $report ($count unresolved paths)."
-git merge --abort >/dev/null 2>&1 || true
 # Expected conflicts are not a CI infrastructure failure. All are reported.
