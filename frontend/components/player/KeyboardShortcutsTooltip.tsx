@@ -26,8 +26,18 @@ export function KeyboardShortcutsTooltip() {
             <button
                 onMouseEnter={() => setIsVisible(true)}
                 onMouseLeave={() => setIsVisible(false)}
-                onClick={() => setIsVisible(!isVisible)}
-                className="p-1.5 rounded transition-colors text-[var(--text-secondary)] hover:text-white"
+                onFocus={() => setIsVisible(true)}
+                onBlur={(event) => {
+                    if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setIsVisible(false);
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                        setIsVisible(false);
+                        event.stopPropagation();
+                    }
+                }}
+                onClick={() => setIsVisible((visible) => !visible)}
+                className="p-1.5 rounded transition-colors text-[var(--text-secondary)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 title={t("keyboard shortcuts")}
                 aria-label={t("keyboard shortcuts")}
                 aria-expanded={isVisible}
