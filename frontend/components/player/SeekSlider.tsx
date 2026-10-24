@@ -265,13 +265,13 @@ export function SeekSlider({
             aria-label={t("Playback position")}
             aria-disabled={!isActive || safeDuration <= 0}
             aria-valuemin={0}
-            aria-valuemax={Math.floor(safeDuration)}
-            aria-valuenow={Math.floor(currentTime)}
+            aria-valuemax={Math.max(1, Math.ceil(safeDuration))}
+            aria-valuenow={Math.min(Math.max(1, Math.ceil(safeDuration)), Math.floor(currentTime))}
             aria-valuetext={`${formatTime(currentTime)} / ${formatTime(safeDuration)}`}
             tabIndex={isActive && safeDuration > 0 ? 0 : -1}
             onKeyDown={handleKeyDown}
             className={cn(
-                "relative rounded-full transition-all",
+                "relative rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--bg-primary)]",
                 styles.container,
                 styles.track,
                 isActive ? "cursor-pointer group" : "cursor-not-allowed",
@@ -299,7 +299,7 @@ export function SeekSlider({
                             "absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-brand rounded-full transition-opacity ",
                             isDragging
                                 ? "opacity-100 scale-125"
-                                : "opacity-0 group-hover:opacity-100"
+                                : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
                         )}
                     />
                 )}
