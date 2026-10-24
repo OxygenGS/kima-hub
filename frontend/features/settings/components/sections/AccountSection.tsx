@@ -120,7 +120,7 @@ export function AccountSection() {
 
     return (
         <>
-            <SettingsSection id="account" title="Account">
+            <SettingsSection id="account" title={t("Account")}>
                 <SettingsRow label={t("Signed in as")} description={user?.role === "admin" ? t("Administrator") : t("Member")}>
                     <span className="text-sm text-white">{user?.username}</span>
                 </SettingsRow>
