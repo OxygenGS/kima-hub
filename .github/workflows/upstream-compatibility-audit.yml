@@ -1,0 +1,50 @@
+name: Upstream Compatibility Audit (manual, read-only)
+
+# This workflow never merges a PR, pushes a branch, publishes an image, or deploys.
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Official Chevron7Locked/kima-hub release tag (e.g. v1.11.0)"
+        required: true
+        type: string
+        default: "v1.11.0"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Dry-run upstream integration and list conflicts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+    steps:
+      - name: Check out fork without write credentials
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check audit script and reject non-release refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n .github/ci/upstream-v111-merge-audit.sh
+          for invalid in main v1.11.0-rc1 v1.11.0/anything; do
+            if UPSTREAM_TAG="$invalid" bash .github/ci/upstream-v111-merge-audit.sh >/dev/null 2>&1; then
+              echo "::error::Invalid upstream reference was accepted: $invalid"
+              exit 1
+            fi
+          done
+      - name: Generate throwaway merge and compatibility report
+        shell: bash
+        run: bash .github/ci/upstream-v111-merge-audit.sh
+      - name: Upload report (never publish an image)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compatibility-report
+          path: audit/
+          if-no-files-found: warn
+          retention-days: 14
