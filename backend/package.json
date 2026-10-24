@@ -1,6 +1,6 @@
 {
   "name": "kima-backend",
-  "version": "1.11.4",
+  "version": "1.11.5",
   "description": "Kima backend API server",
   "license": "GPL-3.0",
   "repository": {
@@ -42,7 +42,7 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.10.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.2.0",
+    "multer": "^2.5.0",
     "music-metadata": "^11.16.0",
     "node-cron": "^4.2.1",
     "p-limit": "^7.2.0",
@@ -54,7 +54,7 @@
     "sharp": "^0.35.3",
     "speakeasy": "^2.0.0",
     "typed-emitter": "^2.1.0",
-    "zod": "^3.22.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

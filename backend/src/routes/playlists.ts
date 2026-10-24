@@ -167,7 +167,7 @@ router.post("/", async (req, res) => {
         if (error instanceof z.ZodError) {
             return res
                 .status(400)
-                .json({ error: "Invalid request", details: error.errors });
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Create playlist error:", error);
         res.status(500).json({ error: "Failed to create playlist" });
@@ -298,7 +298,7 @@ router.put("/:id", requirePlaylistOwner, async (req, res) => {
         if (error instanceof z.ZodError) {
             return res
                 .status(400)
-                .json({ error: "Invalid request", details: error.errors });
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Update playlist error:", error);
         res.status(500).json({ error: "Failed to update playlist" });
@@ -377,7 +377,7 @@ router.post("/:id/items", requirePlaylistOwner, async (req, res) => {
         if (!parsed.success) {
             return res.status(400).json({
                 error: "Invalid request",
-                details: parsed.error.errors,
+                details: parsed.error.issues,
             });
         }
 
@@ -401,7 +401,7 @@ router.post("/:id/items", requirePlaylistOwner, async (req, res) => {
         if (error instanceof z.ZodError) {
             return res
                 .status(400)
-                .json({ error: "Invalid request", details: error.errors });
+                .json({ error: "Invalid request", details: error.issues });
         }
         if (String(error?.message || "").includes("more than")) {
             return res.status(400).json({ error: error.message });
@@ -418,7 +418,7 @@ router.delete("/:id/items", requirePlaylistOwner, async (req, res) => {
         if (!parsed.success) {
             return res.status(400).json({
                 error: "Invalid request",
-                details: parsed.error.errors,
+                details: parsed.error.issues,
             });
         }
 
@@ -452,7 +452,7 @@ router.post("/:id/items/batch", async (req, res) => {
         if (!parsed.success) {
             return res.status(400).json({
                 error: "Invalid request",
-                details: parsed.error.errors,
+                details: parsed.error.issues,
             });
         }
         const { trackIds } = parsed.data;
@@ -495,7 +495,7 @@ router.post("/:id/items/batch", async (req, res) => {
         if (error instanceof z.ZodError) {
             return res
                 .status(400)
-                .json({ error: "Invalid request", details: error.errors });
+                .json({ error: "Invalid request", details: error.issues });
         }
         logger.error("Batch add tracks to playlist error:", error);
         res.status(500).json({ error: "Failed to add tracks to playlist" });
@@ -527,7 +527,7 @@ router.patch("/:id/items/:itemId/move", requirePlaylistOwner, async (req, res) =
         if (!parsed.success) {
             return res.status(400).json({
                 error: "Invalid request",
-                details: parsed.error.errors,
+                details: parsed.error.issues,
             });
         }
 
