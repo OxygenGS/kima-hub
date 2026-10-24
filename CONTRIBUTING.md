@@ -6,7 +6,7 @@ This is the independently maintained [OxygenGS fork](https://github.com/OxygenGS
 
 - Contributions to **this fork** belong in OxygenGS pull requests. Do not submit fork-specific permissions, branding, release or EN/NL bugs to the upstream project as if it maintains our fork.
 - The fork currently has **Issues and Discussions disabled**. The inherited upstream Discussion and sponsorship links have therefore been removed from fork templates. Do not use unrelated upstream channels as a substitute for the fork's disabled tracker.
-- Normal focused changes should target `main`. Stacked Draft PRs are allowed for substantial coordinated work: currently #5 (language foundation), #6 (upstream v1.11 integration base), #7 (combined application).
+- Normal focused changes should target `main` via a reviewed pull request. Keep new upstream integration on a separate branch; review the [upstream compatibility policy](docs/upstream-compatibility.md) before merging.
 - Open a pull request containing a concise description, the relevant test results and any security or migration impact. Never commit real installation identifiers, environment files, passwords, private logs or production backup paths.
 
 ## Build and verify
