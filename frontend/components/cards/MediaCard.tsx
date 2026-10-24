@@ -43,6 +43,8 @@ interface MediaCardProps {
     /** One of the five mood keys; marks the card's meta with a dot in its map colour. */
     moodKey?: string | null;
     onDelete?: () => void;
+    /** Begin warming a linked detail page on user intent (hover/focus). */
+    onPrefetch?: () => void;
     className?: string;
 }
 
@@ -118,6 +120,7 @@ export const MediaCard = memo(function MediaCard({
     action,
     moodKey,
     onDelete,
+    onPrefetch,
     className,
 }: MediaCardProps) {
     const { locale } = useLanguage();
@@ -213,7 +216,7 @@ export const MediaCard = memo(function MediaCard({
     };
 
     return href ? (
-        <Link href={href} {...rootProps}>
+        <Link href={href} {...rootProps} onMouseEnter={onPrefetch} onFocus={onPrefetch}>
             {body}
         </Link>
     ) : (

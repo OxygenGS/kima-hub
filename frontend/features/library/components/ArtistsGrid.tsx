@@ -1,4 +1,10 @@
+"use client";
+
 import { memo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/hooks/useQueries";
+import { fetchArtistDetails } from "@/features/artist/hooks/useArtistData";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Music, Play } from "lucide-react";
 import { Artist } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -34,16 +40,26 @@ const ArtistCardItem = memo(
         onDelete,
         moodKey,
     }: ArtistCardItemProps) {
+        const queryClient = useQueryClient();
+        const { t } = useLanguage();
+        const prefetchArtist = () => {
+            void queryClient.prefetchQuery({
+                queryKey: queryKeys.artist(artist.id),
+                queryFn: () => fetchArtistDetails(artist.id),
+                staleTime: 10 * 60 * 1000,
+            });
+        };
         return (
             <MediaCard
                 href={`/artist/${artist.id}`}
+                onPrefetch={prefetchArtist}
                 title={artist.name}
                 subtitle={plural(artist.albumCount || 0, "album")}
                 imageUrl={artist.coverArt ? api.getCoverArtUrl(artist.coverArt, 200) : null}
                 fallbackIcon={Music}
                 type="artist"
                 index={index}
-                action={{ icon: Play, label: "Play", onClick: () => onPlay(artist.id) }}
+                action={{ icon: Play, label: t("Play"), onClick: () => onPlay(artist.id) }}
                 moodKey={moodKey}
                 onDelete={() => onDelete(artist.id, artist.name)}
             />

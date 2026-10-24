@@ -6,6 +6,24 @@ import { useDownloadContext } from "@/lib/download-context";
 import { ArtistSource } from "../types";
 import { useMemo, useEffect, useRef, useState } from "react";
 
+/** Shared lookup for navigation prefetch and the artist screen. */
+export async function fetchArtistDetails(id: string) {
+    if (!id) throw new Error("Artist ID is required");
+    try {
+        return await api.getArtist(id);
+    } catch (error) {
+        // Only unknown artists should fall back to external discovery.
+        // A slow/offline backend or an authorization failure is not a discovery request.
+        if ((error as { status?: number }).status !== 404) throw error;
+        try {
+            return await api.getArtistDiscovery(id);
+        } catch (discoveryError) {
+            if ((discoveryError as { status?: number }).status === 404) return null;
+            throw discoveryError;
+        }
+    }
+}
+
 export function useArtistData() {
     const params = useParams();
     const id = params.id as string;
@@ -20,20 +38,7 @@ export function useArtistData() {
         refetch,
     } = useQuery({
         queryKey: queryKeys.artist(id || ""),
-        queryFn: async () => {
-            if (!id) throw new Error("Artist ID is required");
-            try {
-                return await api.getArtist(id);
-            } catch {
-                try {
-                    return await api.getArtistDiscovery(id);
-                } catch (error) {
-                    // Neither the library nor MusicBrainz has it: that is "not found", not a failure.
-                    if ((error as { status?: number }).status === 404) return null;
-                    throw error;
-                }
-            }
-        },
+        queryFn: () => fetchArtistDetails(id),
         enabled: !!id,
         staleTime: 10 * 60 * 1000,
         retry: (failures, error) => (error as { status?: number }).status !== 404 && failures < 1,
