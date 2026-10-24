@@ -7,7 +7,7 @@ import {
     useAudioControls,
 } from "@/lib/audio-context";
 import { useDownloadContext } from "@/lib/download-context";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { ArtistPageSkeleton } from "@/features/artist/components/ArtistPageSkeleton";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
 import { notify } from "@/lib/notify";
@@ -136,7 +136,7 @@ export default function ArtistPage() {
     }
 
     if (loading) {
-        return <LoadingScreen message={t("Loading artist...")} />;
+        return <ArtistPageSkeleton />;
     }
 
     if (error) {
