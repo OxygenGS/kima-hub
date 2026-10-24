@@ -67,10 +67,12 @@ export function ArtistActionBar({
 
             {showDownloadAll && (
                 <button
+                    type="button"
+                    aria-label={isPendingDownload ? t("Requesting...") : t("Request albums")}
                     onClick={onDownloadAll}
                     disabled={isPendingDownload}
                     className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                        "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
                         isPendingDownload
                             ? "bg-white/5 text-[var(--text-secondary)] cursor-not-allowed"
                             : "bg-white/5 hover:bg-white/10 text-[var(--text-primary)] hover:text-white"

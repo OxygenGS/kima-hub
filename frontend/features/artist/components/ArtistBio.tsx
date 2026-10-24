@@ -15,10 +15,10 @@ export function ArtistBio({ bio }: ArtistBioProps) {
   return (
     <section>
       <SectionHeader type="artist" title={t("About")} />
-      <div className="bg-[var(--bg-tertiary)] rounded-md p-4">
+      <div className="bg-[var(--bg-tertiary)] border border-white/5 rounded-lg p-4 sm:p-5">
         <div
           className="prose prose-sm md:prose-base prose-invert max-w-none leading-relaxed [&_a]:text-brand [&_a]:no-underline [&_a:hover]:underline"
-          style={{ color: '#b3b3b3' }}
+          style={{ color: "var(--text-secondary)" }}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bio || "") }}
         />
       </div>
