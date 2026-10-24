@@ -2,6 +2,14 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
+## OxygenGS fork v1.11.5 — release preparation (unpublished)
+
+Security follow-up for v1.11.4 (release image publication blocked by Trivy):
+- Update backend multer and Zod to fixed major-compatible dependencies; regenerate pinned lockfiles and resolve both Express 4 and 5 body-parser trees to patched versions.
+- Retain strict HIGH/CRITICAL image vulnerability gates without allowlisting or weakening scans.
+- Validate backend schema compatibility, tests, AMD64/ARM64 AIO images, permissions, and EN/NL UI before publishing.
+- Supersedes the failed v1.11.4 Docker image publication; does not change database migrations, volumes, or user data.
+
 ## OxygenGS fork v1.11.4 — release preparation (unpublished)
 
 Patch release based on v1.11.3 with the consolidated Dutch interface work from merged PRs #81–#86:
