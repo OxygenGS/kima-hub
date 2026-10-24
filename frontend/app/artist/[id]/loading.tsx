@@ -1,5 +1,5 @@
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { ArtistPageSkeleton } from "@/features/artist/components/ArtistPageSkeleton";
 
 export default function Loading() {
-    return <LoadingScreen />;
+    return <ArtistPageSkeleton />;
 }
