@@ -2,7 +2,17 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
-## OxygenGS fork v1.11.5 — release preparation (unpublished)
+## OxygenGS fork v1.11.6 — release preparation (unpublished)
+
+Performance, accessibility and localization refinements on top of the published v1.11.5 release:
+- Open artist pages faster when browsing the library: prefetch detail queries on card hover/focus and reuse the existing 10-minute React Query cache; only fall back to external discovery for genuine library 404 responses (PR #91).
+- Fetch independent artist details (discography, popular tracks, hero artwork and similar artists) concurrently instead of one long sequential metadata waterfall, retaining existing API responses, permissions, media playback and provider fallbacks. Add concurrency regression coverage (PR #94).
+- Replace artist-page full-screen loading with an accessible, motion-aware hero/tracks/albums skeleton and polish biography spacing, sort focus, request-album labels and keyboard controls (PRs #92, #94).
+- Finish Dutch translations for empty library tracks and account settings heading (PRs #89, #90).
+- Add a manual, read-only, upstream-tag-specific merge compatibility audit and documented human review process; no automatic upstream merges or publishing (PR #93).
+- No database migrations, persistent-volume changes or installation-specific changes. Verify native AMD64/ARM64 image scans, full CI, and upgrade/rollback rehearsals before publishing.
+
+## OxygenGS fork v1.11.5 — released 2026-10-24
 
 Security follow-up for v1.11.4 (release image publication blocked by Trivy):
 - Update backend multer and Zod to fixed major-compatible dependencies; regenerate pinned lockfiles and resolve both Express 4 and 5 body-parser trees to patched versions.
@@ -10,7 +20,7 @@ Security follow-up for v1.11.4 (release image publication blocked by Trivy):
 - Validate backend schema compatibility, tests, AMD64/ARM64 AIO images, permissions, and EN/NL UI before publishing.
 - Supersedes the failed v1.11.4 Docker image publication; does not change database migrations, volumes, or user data.
 
-## OxygenGS fork v1.11.4 — release preparation (unpublished)
+## OxygenGS fork v1.11.4 — released 2026-10-24
 
 Patch release based on v1.11.3 with the consolidated Dutch interface work from merged PRs #81–#86:
 - Complete the typed EN/NL catalog and localize the home, search, library, artist, album, playlist, metadata editor and error interfaces.
