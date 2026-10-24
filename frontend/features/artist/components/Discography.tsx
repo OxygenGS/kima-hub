@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import { MediaCard } from "@/components/cards/MediaCard";
 import { Disc3, Play } from "lucide-react";
 import { api } from "@/lib/api";
@@ -34,11 +32,12 @@ export function Discography({
                 title={t("Discography")}
                 action={
                     <select
+                        aria-label={t("Sort by")}
                         value={sortBy}
                         onChange={(e) =>
                             onSortChange(e.target.value as "year" | "dateAdded")
                         }
-                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus:border-white/20 [&>option]:bg-[var(--bg-hover)] [&>option]:text-white"
+                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-full text-white text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] focus:border-white/20 [&>option]:bg-[var(--bg-hover)] [&>option]:text-white"
                     >
                         <option value="year">{t("year (newest)")}</option>
                         <option value="dateAdded">{t("date added (recent)")}</option>
