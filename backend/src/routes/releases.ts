@@ -276,7 +276,7 @@ router.post("/download/:albumMbid", requireMusicPermission("canRequestAlbums"), 
         if (!parsed.success) {
             return res.status(400).json({
                 error: "artistName and albumTitle are required to download a release",
-                details: parsed.error.errors,
+                details: parsed.error.issues,
             });
         }
         const { artistName, albumTitle } = parsed.data;
