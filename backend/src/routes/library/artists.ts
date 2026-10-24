@@ -436,441 +436,462 @@ router.get("/artists/:id", async (req, res) => {
       return res.status(404).json({ error: "Artist not found" });
     }
 
-    let albumsWithOwnership = [];
-    const ownedRgMbids = new Set(artist.ownedAlbums.map((o) => o.rgMbid));
-
-    // The id belongs to enrichment; a page view never searches for or stores one.
+    // Keep the local library identity stable; enrichment never changes it on a page visit.
     const effectiveMbid = artist.mbid;
 
-    const dbAlbums = artist.albums.map((album) => ({
-      ...album,
-      tracks: album.tracks.map((t) => ({
-        ...t,
-        audioFeatures: toAudioFeaturesDTO(t),
-      })),
-      owned: true,
-      coverArt: album.coverUrl,
-      source: "database" as const,
-    }));
+    // The album catalog, popularity, artwork and recommendations are independent.
+    // Running them together prevents external MusicBrainz/ListenBrainz/Deezer
+    // calls from blocking each other in a long serial waterfall. Each task
+    // retains its existing fallback and the response contract stays unchanged.
+    const loadAlbums = async () => {
+      let albumsWithOwnership = [];
+      const ownedRgMbids = new Set(artist.ownedAlbums.map((o) => o.rgMbid));
 
-    logger.debug(
-      `[Artist] Found ${dbAlbums.length} albums from database (actual owned files)`,
-    );
 
-    // Inline guard, not a boolean intermediate: the type predicate has to be in
-    // the condition for effectiveMbid to narrow to string inside the block.
-    if (isMbid(effectiveMbid)) {
-      try {
-        const discoCacheKey = `discography:${effectiveMbid}`;
-        let releaseGroups: any[] = [];
+      const dbAlbums = artist.albums.map((album) => ({
+        ...album,
+        tracks: album.tracks.map((t) => ({
+          ...t,
+          audioFeatures: toAudioFeaturesDTO(t),
+        })),
+        owned: true,
+        coverArt: album.coverUrl,
+        source: "database" as const,
+      }));
 
-        const cachedDisco = await redisClient.get(discoCacheKey);
-        if (cachedDisco && cachedDisco !== "NOT_FOUND") {
-          releaseGroups = JSON.parse(cachedDisco);
-          logger.debug(
-            `[Artist] Using cached discography (${releaseGroups.length} albums)`,
-          );
-        } else {
-          logger.debug(`[Artist] Fetching discography from MusicBrainz...`);
-          const fetched = await musicBrainzService.getReleaseGroups(
-            effectiveMbid,
-            ["album", "ep"],
-            100,
-            { interactive: true },
-          );
-          if (fetched.kind === "answered") {
-            releaseGroups = fetched.value;
-            await redisClient.setex(
-              discoCacheKey,
-              24 * 60 * 60,
-              JSON.stringify(releaseGroups),
-            );
-          } else if (fetched.kind === "absent") {
-            logger.debug(
-              `[Artist] MusicBrainz has no release-groups for ${effectiveMbid}`,
-            );
-          } else {
-            // A failed question is not "no discography" — the catch
-            // below serves database albums and logs the real cause.
-            throw new Error(
-              `Discography lookup ${fetched.kind}: ${failureCause(fetched)}`,
-            );
-          }
-        }
-
-        logger.debug(
-          `  Got ${releaseGroups.length} albums from MusicBrainz (before filtering)`,
-        );
-
-        const excludedSecondaryTypes = [
-          "Live",
-          "Compilation",
-          "Soundtrack",
-          "Remix",
-          "DJ-mix",
-          "Mixtape/Street",
-          "Demo",
-          "Interview",
-          "Audio drama",
-          "Audiobook",
-          "Spokenword",
-        ];
-
-        const filteredReleaseGroups = releaseGroups.filter((rg: any) => {
-          if (!rg["secondary-types"] || rg["secondary-types"].length === 0) {
-            return true;
-          }
-          return !rg["secondary-types"].some((type: string) =>
-            excludedSecondaryTypes.includes(type),
-          );
-        });
-
-        logger.debug(
-          `  Filtered to ${filteredReleaseGroups.length} studio albums/EPs`,
-        );
-
-        const mbAlbums = filteredReleaseGroups.map((rg: any) => ({
-          id: rg.id,
-          rgMbid: rg.id,
-          title: rg.title,
-          year: rg["first-release-date"]
-            ? parseInt(rg["first-release-date"].substring(0, 4))
-            : null,
-          type: rg["primary-type"],
-          coverUrl: null as string | null,
-          coverArt: null as string | null,
-          artistId: artist.id,
-          owned: ownedRgMbids.has(rg.id),
-          trackCount: 0,
-          tracks: [],
-          source: "musicbrainz" as const,
-        }));
-
-        const inLibrary = new Set(dbAlbums.map((a) => a.rgMbid).filter(Boolean));
-        const inLibraryTitles = new Set(dbAlbums.map((a) => editionlessKey(a.title)));
-        const mbAlbumsFiltered = await withAlbumArtwork(
-          mbAlbums.filter((a) => !inLibrary.has(a.rgMbid) && !inLibraryTitles.has(editionlessKey(a.title))),
-          (album) => ({ rgMbid: album.rgMbid, artistName: artist.name, albumTitle: album.title }),
-          (album, coverUrl) => ({ ...album, coverUrl, coverArt: coverUrl }),
-        );
-
-        albumsWithOwnership = [...dbAlbums, ...mbAlbumsFiltered];
-
-        logger.debug(
-          `  Total albums: ${albumsWithOwnership.length} (${dbAlbums.length} owned from database, ${mbAlbumsFiltered.length} from MusicBrainz)`,
-        );
-        logger.debug(
-          `  Owned: ${
-            albumsWithOwnership.filter((a) => a.owned).length
-          }, Available: ${albumsWithOwnership.filter((a) => !a.owned).length}`,
-        );
-      } catch (error) {
-        logger.error(`Failed to fetch MusicBrainz discography:`, error);
-        albumsWithOwnership = dbAlbums;
-      }
-    } else {
       logger.debug(
-        `[Artist] No valid MBID, using ${dbAlbums.length} albums from database`,
+        `[Artist] Found ${dbAlbums.length} albums from database (actual owned files)`,
       );
-      albumsWithOwnership = dbAlbums;
-    }
 
-    const allTracks = artist.albums.flatMap((a) => a.tracks);
-    let topTracks: any[];
-
-    const userId = req.user!.id;
-
-    // Popular tracks: real global popularity, not an echo of the user's own
-    // listens. ListenBrainz sitewide top recordings first (needs the user's
-    // scrobble token), Deezer's artist-top as the no-token fallback; both are
-    // joined against the owned library so owned rows play and unowned rows
-    // preview. When both sources are unavailable the local floor applies:
-    // the user's most played by this artist, then MB first-release date.
-    let popularitySource = "local";
-    {
-      const ownedByMbid = new Map<string, any>();
-      const ownedByTitle = new Map<string, any>();
-      for (const t of allTracks) {
-        if (t.recordingMbid) ownedByMbid.set(t.recordingMbid, t);
-        const bare = t.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase();
-        if (bare && !ownedByTitle.has(bare)) ownedByTitle.set(bare, t);
-      }
-      const joinOwned = (
-        rows: Array<{
-          key: string;
-          title: string;
-          albumName?: string | null;
-          coverUrl?: string | null;
-          previewUrl?: string | null;
-          durationMs?: number;
-          listeners: number;
-          playCount: number;
-        }>
-      ): any[] => {
-        const seen = new Set<string>();
-        const joined: any[] = [];
-        for (const r of rows) {
-          const owned =
-            ownedByMbid.get(r.key) ||
-            ownedByTitle.get(r.title.toLowerCase()) ||
-            ownedByTitle.get(
-              r.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase()
-            );
-          // Two global rows can join to the same owned track (the Radio Edit
-          // and the album cut of one song): keep the first, higher-ranked one.
-          const dedupeKey = owned ? owned.id : `dz:${r.key}`;
-          if (seen.has(dedupeKey)) continue;
-          seen.add(dedupeKey);
-          if (owned) {
-            joined.push({
-              ...owned,
-              playCount: r.playCount,
-              listeners: r.listeners,
-              userPlayCount: owned.playCount ?? 0,
-              popularitySource: "global",
-              album: { ...owned.album, coverArt: owned.album?.coverUrl },
-            });
-          } else {
-            joined.push({
-              id: `dz:${r.key}`,
-              title: r.title,
-              duration: Math.round((r.durationMs || 0) / 1000) || 0,
-              playCount: r.playCount,
-              listeners: r.listeners,
-              userPlayCount: 0,
-              popularitySource: "global",
-              previewUrl: r.previewUrl || null,
-              album: {
-                id: null,
-                title: r.albumName || "Unknown Album",
-                coverUrl: r.coverUrl || null,
-                coverArt: r.coverUrl || null,
-              },
-            });
-          }
-        }
-        return joined;
-      };
-
-      let global: any[] = [];
+      // Inline guard, not a boolean intermediate: the type predicate has to be in
+      // the condition for effectiveMbid to narrow to string inside the block.
       if (isMbid(effectiveMbid)) {
         try {
-          const lb = await listenBrainzService.getTopRecordingsForArtist(effectiveMbid, userId, 10);
-          if (lb.length > 0) {
-            global = joinOwned(
-              lb.map((r) => ({
-                key: r.recordingMbid,
-                title: r.title,
-                albumName: r.releaseName,
-                durationMs: r.lengthMs,
-                listeners: r.listeners,
-                playCount: r.playCount,
-              }))
+          const discoCacheKey = `discography:${effectiveMbid}`;
+          let releaseGroups: any[] = [];
+
+          const cachedDisco = await redisClient.get(discoCacheKey);
+          if (cachedDisco && cachedDisco !== "NOT_FOUND") {
+            releaseGroups = JSON.parse(cachedDisco);
+            logger.debug(
+              `[Artist] Using cached discography (${releaseGroups.length} albums)`,
             );
-            popularitySource = "listenbrainz";
-          }
-        } catch (lbError) {
-          logger.warn(
-            `[Artist] ListenBrainz top recordings failed for ${artist.name}:`,
-            lbError
-          );
-        }
-      }
-      if (global.length === 0) {
-        try {
-          const dz = await deezerService.getArtistTopTracks(artist.name, 10);
-          if (dz.length > 0) {
-            global = joinOwned(
-              dz.map((r) => ({
-                key: r.title.toLowerCase(),
-                title: r.title,
-                albumName: r.album,
-                coverUrl: r.coverUrl,
-                previewUrl: r.previewUrl,
-                durationMs: r.durationMs,
-                listeners: 0,
-                playCount: r.rank,
-              }))
+          } else {
+            logger.debug(`[Artist] Fetching discography from MusicBrainz...`);
+            const fetched = await musicBrainzService.getReleaseGroups(
+              effectiveMbid,
+              ["album", "ep"],
+              100,
+              { interactive: true },
             );
-            popularitySource = "deezer";
-          }
-        } catch (dzError) {
-          logger.warn(
-            `[Artist] Deezer top tracks failed for ${artist.name}:`,
-            dzError
-          );
-        }
-      }
-      topTracks = global;
-      logger.debug(
-        `[Artist] Popular tracks from ${popularitySource} (${global.length})`,
-      );
-    }
-    if (topTracks.length === 0) {
-      const played = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          title: string;
-          duration: number;
-          albumId: string;
-          albumTitle: string;
-          albumCoverUrl: string | null;
-          artistId: string;
-          artistName: string;
-          playCount: bigint;
-        }>
-      >`
-        SELECT t.id, t.title, t.duration,
-               t."albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
-               a."artistId", ar.name AS "artistName",
-               COUNT(p.id)::bigint AS "playCount"
-        FROM "Track" t
-        JOIN "Album" a ON a.id = t."albumId"
-        JOIN "Artist" ar ON ar.id = a."artistId"
-        JOIN "Play" p ON p."trackId" = t.id AND p."userId" = ${userId}
-        WHERE a."artistId" = ${artist.id}
-        GROUP BY t.id, t.title, t.duration, t."albumId", a.title, a."coverUrl", a."artistId", ar.name
-        HAVING COUNT(p.id) > 0
-        ORDER BY COUNT(p.id) DESC, MAX(p."playedAt") DESC
-        LIMIT 10
-      `;
-      if (played.length > 0) {
-        topTracks = played.map((t) => ({
-          ...t,
-          playCount: Number(t.playCount),
-          listeners: 0,
-          userPlayCount: Number(t.playCount),
-          album: {
-            id: t.albumId,
-            title: t.albumTitle,
-            artistId: t.artistId,
-            coverUrl: t.albumCoverUrl,
-            artist: { id: t.artistId, name: t.artistName, mbid: "" },
-            coverArt: t.albumCoverUrl,
-          },
-        }));
-        logger.debug(
-          `[Artist] Top tracks from local listens (${played.length})`,
-        );
-      } else {
-        // Cold start: earliest-released tracks per MusicBrainz, falling back
-        // to the plain first-10 slice when MB has nothing.
-        try {
-          const fetched = isMbid(effectiveMbid)
-            ? await musicBrainzService.getReleaseGroups(effectiveMbid, ["album"], 50)
-            : null;
-          const rgs = fetched?.kind === "answered" ? fetched.value : [];
-          const releaseDateByRg = new Map<string, string>();
-          for (const rg of rgs as Array<{
-            id: string;
-            "first-release-date"?: string;
-          }>) {
-            if (rg["first-release-date"]) {
-              releaseDateByRg.set(rg.id, rg["first-release-date"]);
+            if (fetched.kind === "answered") {
+              releaseGroups = fetched.value;
+              await redisClient.setex(
+                discoCacheKey,
+                24 * 60 * 60,
+                JSON.stringify(releaseGroups),
+              );
+            } else if (fetched.kind === "absent") {
+              logger.debug(
+                `[Artist] MusicBrainz has no release-groups for ${effectiveMbid}`,
+              );
+            } else {
+              // A failed question is not "no discography" — the catch
+              // below serves database albums and logs the real cause.
+              throw new Error(
+                `Discography lookup ${fetched.kind}: ${failureCause(fetched)}`,
+              );
             }
           }
-          const dated = allTracks
-            .map((t) => {
-              const album = artist.albums.find((a) => a.id === t.albumId);
-              const date =
-                (album && releaseDateByRg.get(album.rgMbid)) ||
-                (album?.year ? `${album.year}-01-01` : "9999");
-              return { t, date: String(date) };
-            })
-            .sort((a, b) => a.date.localeCompare(b.date))
-            .slice(0, 10)
-            .map(({ t, date }) => ({
+
+          logger.debug(
+            `  Got ${releaseGroups.length} albums from MusicBrainz (before filtering)`,
+          );
+
+          const excludedSecondaryTypes = [
+            "Live",
+            "Compilation",
+            "Soundtrack",
+            "Remix",
+            "DJ-mix",
+            "Mixtape/Street",
+            "Demo",
+            "Interview",
+            "Audio drama",
+            "Audiobook",
+            "Spokenword",
+          ];
+
+          const filteredReleaseGroups = releaseGroups.filter((rg: any) => {
+            if (!rg["secondary-types"] || rg["secondary-types"].length === 0) {
+              return true;
+            }
+            return !rg["secondary-types"].some((type: string) =>
+              excludedSecondaryTypes.includes(type),
+            );
+          });
+
+          logger.debug(
+            `  Filtered to ${filteredReleaseGroups.length} studio albums/EPs`,
+          );
+
+          const mbAlbums = filteredReleaseGroups.map((rg: any) => ({
+            id: rg.id,
+            rgMbid: rg.id,
+            title: rg.title,
+            year: rg["first-release-date"]
+              ? parseInt(rg["first-release-date"].substring(0, 4))
+              : null,
+            type: rg["primary-type"],
+            coverUrl: null as string | null,
+            coverArt: null as string | null,
+            artistId: artist.id,
+            owned: ownedRgMbids.has(rg.id),
+            trackCount: 0,
+            tracks: [],
+            source: "musicbrainz" as const,
+          }));
+
+          const inLibrary = new Set(dbAlbums.map((a) => a.rgMbid).filter(Boolean));
+          const inLibraryTitles = new Set(dbAlbums.map((a) => editionlessKey(a.title)));
+          const mbAlbumsFiltered = await withAlbumArtwork(
+            mbAlbums.filter((a) => !inLibrary.has(a.rgMbid) && !inLibraryTitles.has(editionlessKey(a.title))),
+            (album) => ({ rgMbid: album.rgMbid, artistName: artist.name, albumTitle: album.title }),
+            (album, coverUrl) => ({ ...album, coverUrl, coverArt: coverUrl }),
+          );
+
+          albumsWithOwnership = [...dbAlbums, ...mbAlbumsFiltered];
+
+          logger.debug(
+            `  Total albums: ${albumsWithOwnership.length} (${dbAlbums.length} owned from database, ${mbAlbumsFiltered.length} from MusicBrainz)`,
+          );
+          logger.debug(
+            `  Owned: ${
+              albumsWithOwnership.filter((a) => a.owned).length
+            }, Available: ${albumsWithOwnership.filter((a) => !a.owned).length}`,
+          );
+        } catch (error) {
+          logger.error(`Failed to fetch MusicBrainz discography:`, error);
+          albumsWithOwnership = dbAlbums;
+        }
+      } else {
+        logger.debug(
+          `[Artist] No valid MBID, using ${dbAlbums.length} albums from database`,
+        );
+        albumsWithOwnership = dbAlbums;
+      }
+
+
+      return albumsWithOwnership;
+    };
+
+    const loadTopTracks = async () => {
+      const allTracks = artist.albums.flatMap((a) => a.tracks);
+      let topTracks: any[];
+
+      const userId = req.user!.id;
+
+      // Popular tracks: real global popularity, not an echo of the user's own
+      // listens. ListenBrainz sitewide top recordings first (needs the user's
+      // scrobble token), Deezer's artist-top as the no-token fallback; both are
+      // joined against the owned library so owned rows play and unowned rows
+      // preview. When both sources are unavailable the local floor applies:
+      // the user's most played by this artist, then MB first-release date.
+      let popularitySource = "local";
+      {
+        const ownedByMbid = new Map<string, any>();
+        const ownedByTitle = new Map<string, any>();
+        for (const t of allTracks) {
+          if (t.recordingMbid) ownedByMbid.set(t.recordingMbid, t);
+          const bare = t.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase();
+          if (bare && !ownedByTitle.has(bare)) ownedByTitle.set(bare, t);
+        }
+        const joinOwned = (
+          rows: Array<{
+            key: string;
+            title: string;
+            albumName?: string | null;
+            coverUrl?: string | null;
+            previewUrl?: string | null;
+            durationMs?: number;
+            listeners: number;
+            playCount: number;
+          }>
+        ): any[] => {
+          const seen = new Set<string>();
+          const joined: any[] = [];
+          for (const r of rows) {
+            const owned =
+              ownedByMbid.get(r.key) ||
+              ownedByTitle.get(r.title.toLowerCase()) ||
+              ownedByTitle.get(
+                r.title.replace(/\s*[-–(].*$/, "").trim().toLowerCase()
+              );
+            // Two global rows can join to the same owned track (the Radio Edit
+            // and the album cut of one song): keep the first, higher-ranked one.
+            const dedupeKey = owned ? owned.id : `dz:${r.key}`;
+            if (seen.has(dedupeKey)) continue;
+            seen.add(dedupeKey);
+            if (owned) {
+              joined.push({
+                ...owned,
+                playCount: r.playCount,
+                listeners: r.listeners,
+                userPlayCount: owned.playCount ?? 0,
+                popularitySource: "global",
+                album: { ...owned.album, coverArt: owned.album?.coverUrl },
+              });
+            } else {
+              joined.push({
+                id: `dz:${r.key}`,
+                title: r.title,
+                duration: Math.round((r.durationMs || 0) / 1000) || 0,
+                playCount: r.playCount,
+                listeners: r.listeners,
+                userPlayCount: 0,
+                popularitySource: "global",
+                previewUrl: r.previewUrl || null,
+                album: {
+                  id: null,
+                  title: r.albumName || "Unknown Album",
+                  coverUrl: r.coverUrl || null,
+                  coverArt: r.coverUrl || null,
+                },
+              });
+            }
+          }
+          return joined;
+        };
+
+        let global: any[] = [];
+        if (isMbid(effectiveMbid)) {
+          try {
+            const lb = await listenBrainzService.getTopRecordingsForArtist(effectiveMbid, userId, 10);
+            if (lb.length > 0) {
+              global = joinOwned(
+                lb.map((r) => ({
+                  key: r.recordingMbid,
+                  title: r.title,
+                  albumName: r.releaseName,
+                  durationMs: r.lengthMs,
+                  listeners: r.listeners,
+                  playCount: r.playCount,
+                }))
+              );
+              popularitySource = "listenbrainz";
+            }
+          } catch (lbError) {
+            logger.warn(
+              `[Artist] ListenBrainz top recordings failed for ${artist.name}:`,
+              lbError
+            );
+          }
+        }
+        if (global.length === 0) {
+          try {
+            const dz = await deezerService.getArtistTopTracks(artist.name, 10);
+            if (dz.length > 0) {
+              global = joinOwned(
+                dz.map((r) => ({
+                  key: r.title.toLowerCase(),
+                  title: r.title,
+                  albumName: r.album,
+                  coverUrl: r.coverUrl,
+                  previewUrl: r.previewUrl,
+                  durationMs: r.durationMs,
+                  listeners: 0,
+                  playCount: r.rank,
+                }))
+              );
+              popularitySource = "deezer";
+            }
+          } catch (dzError) {
+            logger.warn(
+              `[Artist] Deezer top tracks failed for ${artist.name}:`,
+              dzError
+            );
+          }
+        }
+        topTracks = global;
+        logger.debug(
+          `[Artist] Popular tracks from ${popularitySource} (${global.length})`,
+        );
+      }
+      if (topTracks.length === 0) {
+        const played = await prisma.$queryRaw<
+          Array<{
+            id: string;
+            title: string;
+            duration: number;
+            albumId: string;
+            albumTitle: string;
+            albumCoverUrl: string | null;
+            artistId: string;
+            artistName: string;
+            playCount: bigint;
+          }>
+        >`
+          SELECT t.id, t.title, t.duration,
+                 t."albumId", a.title AS "albumTitle", a."coverUrl" AS "albumCoverUrl",
+                 a."artistId", ar.name AS "artistName",
+                 COUNT(p.id)::bigint AS "playCount"
+          FROM "Track" t
+          JOIN "Album" a ON a.id = t."albumId"
+          JOIN "Artist" ar ON ar.id = a."artistId"
+          JOIN "Play" p ON p."trackId" = t.id AND p."userId" = ${userId}
+          WHERE a."artistId" = ${artist.id}
+          GROUP BY t.id, t.title, t.duration, t."albumId", a.title, a."coverUrl", a."artistId", ar.name
+          HAVING COUNT(p.id) > 0
+          ORDER BY COUNT(p.id) DESC, MAX(p."playedAt") DESC
+          LIMIT 10
+        `;
+        if (played.length > 0) {
+          topTracks = played.map((t) => ({
+            ...t,
+            playCount: Number(t.playCount),
+            listeners: 0,
+            userPlayCount: Number(t.playCount),
+            album: {
+              id: t.albumId,
+              title: t.albumTitle,
+              artistId: t.artistId,
+              coverUrl: t.albumCoverUrl,
+              artist: { id: t.artistId, name: t.artistName, mbid: "" },
+              coverArt: t.albumCoverUrl,
+            },
+          }));
+          logger.debug(
+            `[Artist] Top tracks from local listens (${played.length})`,
+          );
+        } else {
+          // Cold start: earliest-released tracks per MusicBrainz, falling back
+          // to the plain first-10 slice when MB has nothing.
+          try {
+            const fetched = isMbid(effectiveMbid)
+              ? await musicBrainzService.getReleaseGroups(effectiveMbid, ["album"], 50)
+              : null;
+            const rgs = fetched?.kind === "answered" ? fetched.value : [];
+            const releaseDateByRg = new Map<string, string>();
+            for (const rg of rgs as Array<{
+              id: string;
+              "first-release-date"?: string;
+            }>) {
+              if (rg["first-release-date"]) {
+                releaseDateByRg.set(rg.id, rg["first-release-date"]);
+              }
+            }
+            const dated = allTracks
+              .map((t) => {
+                const album = artist.albums.find((a) => a.id === t.albumId);
+                const date =
+                  (album && releaseDateByRg.get(album.rgMbid)) ||
+                  (album?.year ? `${album.year}-01-01` : "9999");
+                return { t, date: String(date) };
+              })
+              .sort((a, b) => a.date.localeCompare(b.date))
+              .slice(0, 10)
+              .map(({ t, date }) => ({
+                ...t,
+                playCount: 0,
+                listeners: 0,
+                userPlayCount: 0,
+                releaseDate: date === "9999" ? null : date,
+                album: {
+                  ...t.album,
+                  coverArt: t.album.coverUrl,
+                },
+              }));
+            topTracks = dated;
+            logger.debug(
+              `[Artist] No local plays; top tracks by MB first-release-date (${dated.length})`,
+            );
+          } catch (mbError) {
+            logger.warn(
+              `[Artist] MB first-release fallback failed for ${artist.name}:`,
+              mbError,
+            );
+            topTracks = allTracks.slice(0, 10).map((t) => ({
               ...t,
               playCount: 0,
               listeners: 0,
               userPlayCount: 0,
-              releaseDate: date === "9999" ? null : date,
               album: {
                 ...t.album,
                 coverArt: t.album.coverUrl,
               },
             }));
-          topTracks = dated;
-          logger.debug(
-            `[Artist] No local plays; top tracks by MB first-release-date (${dated.length})`,
-          );
-        } catch (mbError) {
-          logger.warn(
-            `[Artist] MB first-release fallback failed for ${artist.name}:`,
-            mbError,
-          );
-          topTracks = allTracks.slice(0, 10).map((t) => ({
-            ...t,
-            playCount: 0,
-            listeners: 0,
-            userPlayCount: 0,
-            album: {
-              ...t.album,
-              coverArt: t.album.coverUrl,
-            },
-          }));
+          }
         }
       }
-    }
 
-    const heroUrl = await dataCacheService.getArtistImage(
-      artist.id,
-      artist.name,
-      effectiveMbid,
-    );
 
-    let similarArtists: any[] = [];
-    const similarCacheKey = `similar-artists:${artist.id}`;
+      return topTracks;
+    };
 
-    const enrichedSimilar = artist.similarArtistsJson as Array<{
-      name: string;
-      mbid: string | null;
-      match: number;
-    }> | null;
+    const loadSimilarArtists = async () => {
+      let similarArtists: any[] = [];
+      const similarCacheKey = `similar-artists:${artist.id}`;
 
-    if (enrichedSimilar && enrichedSimilar.length > 0) {
-      logger.debug(
-        `[Artist] Using ${enrichedSimilar.length} similar artists from enriched JSON`,
-      );
+      const enrichedSimilar = artist.similarArtistsJson as Array<{
+        name: string;
+        mbid: string | null;
+        match: number;
+      }> | null;
 
-      similarArtists = await resolveSimilarArtists(enrichedSimilar.slice(0, 10));
-    } else {
-      const cachedSimilar = await redisClient.get(similarCacheKey);
-      if (cachedSimilar && cachedSimilar !== "NOT_FOUND") {
-        similarArtists = JSON.parse(cachedSimilar);
+      if (enrichedSimilar && enrichedSimilar.length > 0) {
         logger.debug(
-          `[Artist] Using cached similar artists (${similarArtists.length})`,
+          `[Artist] Using ${enrichedSimilar.length} similar artists from enriched JSON`,
         );
+
+        similarArtists = await resolveSimilarArtists(enrichedSimilar.slice(0, 10));
       } else {
-        logger.debug(`[Artist] Fetching similar artists (ListenBrainz, then Deezer)...`);
-
-        try {
-          const validMbid =
-            isMbid(effectiveMbid)
-              ? effectiveMbid
-              : "";
-          const similar = await getSimilarArtists(
-            validMbid,
-            artist.name,
-            10,
-          );
-
-          similarArtists = await resolveSimilarArtists(similar);
-
-          await redisClient.setex(
-            similarCacheKey,
-            24 * 60 * 60,
-            JSON.stringify(similarArtists),
-          );
+        const cachedSimilar = await redisClient.get(similarCacheKey);
+        if (cachedSimilar && cachedSimilar !== "NOT_FOUND") {
+          similarArtists = JSON.parse(cachedSimilar);
           logger.debug(
-            `[Artist] Cached ${similarArtists.length} similar artists`,
+            `[Artist] Using cached similar artists (${similarArtists.length})`,
           );
-        } catch (error) {
-          logger.error(`[Artist] Failed to fetch similar artists:`, error);
-          similarArtists = [];
+        } else {
+          logger.debug(`[Artist] Fetching similar artists (ListenBrainz, then Deezer)...`);
+
+          try {
+            const validMbid =
+              isMbid(effectiveMbid)
+                ? effectiveMbid
+                : "";
+            const similar = await getSimilarArtists(
+              validMbid,
+              artist.name,
+              10,
+            );
+
+            similarArtists = await resolveSimilarArtists(similar);
+
+            await redisClient.setex(
+              similarCacheKey,
+              24 * 60 * 60,
+              JSON.stringify(similarArtists),
+            );
+            logger.debug(
+              `[Artist] Cached ${similarArtists.length} similar artists`,
+            );
+          } catch (error) {
+            logger.error(`[Artist] Failed to fetch similar artists:`, error);
+            similarArtists = [];
+          }
         }
       }
-    }
+
+
+      return similarArtists;
+    };
+
+    const [albumsWithOwnership, topTracks, heroUrl, similarArtists] = await Promise.all([
+      loadAlbums(),
+      loadTopTracks(),
+      dataCacheService.getArtistImage(artist.id, artist.name, effectiveMbid),
+      loadSimilarArtists(),
+    ]);
 
     // Both album sections on the artist page are year-ordered. The array above is assembled
     // database-first then MusicBrainz, so its raw order is acquisition order: an artist's

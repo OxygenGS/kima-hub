@@ -90,11 +90,12 @@ jest.mock("../../../services/deezer", () => ({
     },
 }));
 
+const mockGetReleaseGroups = jest.fn();
 jest.mock("../../../services/musicbrainz", () => ({
     musicBrainzService: {
         getArtist: jest.fn().mockResolvedValue(null),
         searchArtist: jest.fn().mockResolvedValue([]),
-        getReleaseGroups: jest.fn().mockResolvedValue([]),
+        getReleaseGroups: (...args: any[]) => mockGetReleaseGroups(...args),
     },
 }));
 
@@ -156,6 +157,36 @@ describe("the similar-artists strip and where its pictures come from", () => {
         mockGetSimilarArtists.mockResolvedValue([]);
         mockGlobalTopRecordings.mockResolvedValue([]);
         mockDeezerTopTracks.mockResolvedValue([]);
+        mockGetReleaseGroups.mockReset().mockResolvedValue({ kind: "absent" });
+    });
+
+    it("requests independent enrichments while a MusicBrainz discography is still pending", async () => {
+        mockArtistFindUnique.mockResolvedValue(subject(null));
+
+        // Hold the discography open to detect accidental serial waterfalls.
+        let finishDiscography!: (result: { kind: "absent" }) => void;
+        mockGetReleaseGroups.mockReturnValue(new Promise((resolve) => {
+            finishDiscography = resolve;
+        }));
+
+        const responsePromise = request(makeApp()).get("/library/artists/art-1").then((response) => response);
+        try {
+            for (let n = 0; n < 30 && mockGetReleaseGroups.mock.calls.length === 0; n++) {
+                await new Promise<void>((resolve) => setImmediate(resolve));
+            }
+
+            expect(mockGetReleaseGroups).toHaveBeenCalled();
+            // Neither top-track provider nor similar artists should wait
+            // for the slower release-group request to resolve.
+            expect(mockGlobalTopRecordings).toHaveBeenCalled();
+            expect(mockGetSimilarArtists).toHaveBeenCalled();
+        } finally {
+            finishDiscography({ kind: "absent" });
+        }
+
+        const response = await responsePromise;
+        expect(response.status).toBe(200);
+        expect(response.body.albums).toEqual([]);
     });
 
     describe("built from the artist's own enriched data", () => {
