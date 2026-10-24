@@ -222,8 +222,8 @@ export function TracksList({
         return (
             <EmptyState
                 icon={<AudioLines className="w-12 h-12" />}
-                title="No songs yet"
-                description="Your library is empty. Sync your music to get started."
+                title={translate(locale, "No songs yet")}
+                description={translate(locale, "Your library is empty. Sync your music to get started.")}
             />
         );
     }
