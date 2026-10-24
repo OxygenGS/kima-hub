@@ -1,4 +1,10 @@
+"use client";
+
 import { memo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/hooks/useQueries";
+import { fetchAlbumDetails } from "@/features/album/hooks/useAlbumData";
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Album } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
@@ -33,16 +39,26 @@ const AlbumCardItem = memo(
         onDelete,
         moodKey,
     }: AlbumCardItemProps) {
+        const queryClient = useQueryClient();
+        const { t } = useLanguage();
+        const prefetchAlbum = () => {
+            void queryClient.prefetchQuery({
+                queryKey: queryKeys.album(album.id),
+                queryFn: () => fetchAlbumDetails(album.id),
+                staleTime: 10 * 60 * 1000,
+            });
+        };
         return (
             <MediaCard
                 href={`/album/${album.id}`}
+                onPrefetch={prefetchAlbum}
                 title={album.title}
                 subtitle={album.artist?.name}
                 imageUrl={album.coverArt ? api.getCoverArtUrl(album.coverArt, 200) : null}
                 fallbackIcon={Disc3}
                 type="album"
                 index={index}
-                action={{ icon: Play, label: "Play", onClick: () => onPlay(album.id) }}
+                action={{ icon: Play, label: t("Play"), onClick: () => onPlay(album.id) }}
                 moodKey={moodKey}
                 onDelete={() => onDelete(album.id, album.title)}
             />
@@ -53,6 +69,11 @@ const AlbumCardItem = memo(
         return prevProps.album.id === nextProps.album.id && prevProps.moodKey === nextProps.moodKey;
     },
 );
+
+function AlbumsEmptyState() {
+    const { t } = useLanguage();
+    return <EmptyState icon={<Disc3 className="w-12 h-12" />} title={t("No albums yet")} description={t("Your library is empty. Sync your music to get started.")} />;
+}
 
 const AlbumsGrid = memo(function AlbumsGrid({
     albums,
@@ -71,14 +92,9 @@ const AlbumsGrid = memo(function AlbumsGrid({
     }
 
     if (albums.length === 0) {
-        return (
-            <EmptyState
-                icon={<Disc3 className="w-12 h-12" />}
-                title="No albums yet"
-                description="Your library is empty. Sync your music to get started."
-            />
-        );
+        return <AlbumsEmptyState />;
     }
+
 
     return (
         <div

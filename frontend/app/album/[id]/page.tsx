@@ -3,7 +3,7 @@ import { useLanguage } from "@/lib/i18n/language-context";
 
 import { use, useMemo, useState } from "react";
 import { useAudioState, useAudioPlayback, useAudioControls } from "@/lib/audio-context";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { AlbumPageSkeleton } from "@/features/album/components/AlbumPageSkeleton";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
 import { useAddToPlaylistMutation } from "@/hooks/useQueries";
@@ -122,7 +122,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     const { colors } = useImageColor(colorExtractionUrl);
 
     if (loading) {
-        return <LoadingScreen />;
+        return <AlbumPageSkeleton />;
     }
 
     if (failed && !notFound) {
