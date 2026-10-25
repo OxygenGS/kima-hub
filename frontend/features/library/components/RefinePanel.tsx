@@ -127,7 +127,7 @@ export function RefinePanel({
                 className={cn(
                     // Matches the segmented control beside it: sentence case,
                     // medium weight, a hairline border.
-                    "relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors min-h-[44px] select-none",
+                    "relative flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors min-h-[44px] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                     open
                         ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand)]"
                         : hasRefinements
@@ -182,7 +182,7 @@ export function RefinePanel({
                                         aria-pressed={isActive}
                                         onClick={() => onFilterChange(opt.value)}
                                         className={cn(
-                                            "flex flex-col items-start px-3 py-2.5 rounded-lg border text-left transition-colors",
+                                            "flex flex-col items-start px-3 py-2.5 rounded-lg border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                                             isActive
                                                 ? "border-[var(--color-brand)]/50 bg-[var(--color-brand)]/10"
                                                 : "border-white/5 bg-white/3 hover:bg-white/8 hover:border-white/15",
@@ -215,7 +215,7 @@ export function RefinePanel({
                                     aria-pressed={sortBy === opt.value}
                                     onClick={() => onSortChange(opt.value)}
                                     className={cn(
-                                        "px-3 py-2 min-h-[44px] text-sm font-medium rounded-lg border transition-colors",
+                                        "px-3 py-2 min-h-[44px] text-sm font-medium rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                                         sortBy === opt.value
                                             ? "border-[var(--color-brand)]/50 bg-[var(--color-brand)]/10 text-[var(--color-brand)]"
                                             : "border-white/5 bg-white/3 text-[var(--text-secondary)] hover:bg-white/8 hover:border-white/15 hover:text-white",
