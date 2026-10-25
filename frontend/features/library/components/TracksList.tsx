@@ -30,7 +30,8 @@ interface TrackRowProps {
     track: Track;
     index: number;
     isCurrentlyPlaying: boolean;
-    onPlayTrack: () => void;
+    onPlay: TracksListProps["onPlay"];
+    tracks: Track[];
     onAddToQueue: (track: Track) => void;
     onShowAddToPlaylist: (trackId: string) => void;
     onDelete: (trackId: string, trackTitle: string) => void;
@@ -41,12 +42,14 @@ const TrackRow = memo(
         track,
         index,
         isCurrentlyPlaying,
-        onPlayTrack,
+        onPlay,
+        tracks,
         onAddToQueue,
         onShowAddToPlaylist,
         onDelete,
     }: TrackRowProps) {
         const { locale } = useLanguage();
+        const onPlayTrack = useCallback(() => onPlay(tracks, index), [onPlay, tracks, index]);
         const doubleTapProps = useDoubleTap(onPlayTrack);
         const displayTrackNumber =
             typeof track.trackNumber === "number"
@@ -187,7 +190,8 @@ const TrackRow = memo(
             prevProps.track.album?.artist?.name === nextProps.track.album?.artist?.name &&
             prevProps.isCurrentlyPlaying === nextProps.isCurrentlyPlaying &&
             prevProps.index === nextProps.index &&
-            prevProps.onPlayTrack === nextProps.onPlayTrack &&
+            prevProps.onPlay === nextProps.onPlay &&
+            prevProps.tracks === nextProps.tracks &&
             prevProps.onAddToQueue === nextProps.onAddToQueue &&
             prevProps.onShowAddToPlaylist === nextProps.onShowAddToPlaylist &&
             prevProps.onDelete === nextProps.onDelete
@@ -261,7 +265,8 @@ export function TracksList({
                             track={track}
                             index={index}
                             isCurrentlyPlaying={isCurrentlyPlaying}
-                            onPlayTrack={() => onPlay(tracks, index)}
+                            onPlay={onPlay}
+                            tracks={tracks}
                             onAddToQueue={onAddToQueue}
                             onShowAddToPlaylist={handleShowAddToPlaylist}
                             onDelete={onDelete}
