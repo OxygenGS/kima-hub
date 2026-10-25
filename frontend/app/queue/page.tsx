@@ -179,7 +179,7 @@ export default function QueuePage() {
                                         return (
                                             <div
                                                 key={`${track.id}-${queueIndex}`}
-                                                className="flex items-center gap-4 p-4 hover:bg-[var(--bg-hover)] transition-colors group"
+                                                className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-[var(--bg-hover)] focus-within:bg-[var(--bg-hover)] transition-colors group"
                                             >
                                                 <QueueCover track={track} />
 
@@ -197,7 +197,7 @@ export default function QueuePage() {
                                                     {track.duration ? formatTime(track.duration) : ""}
                                                 </div>
 
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 touch-reveal transition-opacity">
+                                                <div className="flex items-center gap-1 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                                                     <button
                                                         onClick={() =>
                                                             handleMoveUp(queueIndex)
@@ -206,7 +206,7 @@ export default function QueuePage() {
                                                             queueIndex <=
                                                             currentIndex + 1
                                                         }
-                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
                                                         aria-label={`${t("Move up")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <ChevronUp className="w-4 h-4" />
@@ -221,7 +221,7 @@ export default function QueuePage() {
                                                             queueIndex >=
                                                             queue.length - 1
                                                         }
-                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
                                                         aria-label={`${t("Move down")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <ChevronDown className="w-4 h-4" />
@@ -232,7 +232,7 @@ export default function QueuePage() {
                                                                 queueIndex
                                                             )
                                                         }
-                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors flex items-center justify-center"
+                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-[var(--bg-primary)] rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand flex items-center justify-center"
                                                         aria-label={`${t("Play")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <Play className="w-4 h-4" />
@@ -243,7 +243,7 @@ export default function QueuePage() {
                                                                 queueIndex
                                                             )
                                                         }
-                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-danger/10 rounded-md transition-colors text-danger-light flex items-center justify-center"
+                                                        className="p-2.5 min-h-[44px] min-w-[44px] hover:bg-danger/10 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger text-danger-light flex items-center justify-center"
                                                         aria-label={`${t("Remove from queue")}: ${track.displayTitle ?? track.title}`}
                                                     >
                                                         <X className="w-4 h-4" />
