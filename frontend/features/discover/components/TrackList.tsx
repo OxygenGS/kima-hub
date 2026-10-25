@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Heart, Music } from "lucide-react";
+import { Play, Pause, Heart, Music } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DiscoverTrack } from "../types";
 import { api } from "@/lib/api";
@@ -85,7 +85,11 @@ export function TrackList({
                                             index + 1
                                         )}
                                     </span>
-                                    <Play className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
+                                    {isTrackPlaying && isPlaying ? (
+                                        <Pause aria-hidden="true" className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
+                                    ) : (
+                                        <Play aria-hidden="true" className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
+                                    )}
                                 </button>
                             </div>
 
