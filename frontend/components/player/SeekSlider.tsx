@@ -47,7 +47,7 @@ export function SeekSlider({
         if (!sliderRef.current) return 0;
         const rect = sliderRef.current.getBoundingClientRect();
         const x = clientX - rect.left;
-        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+        const percentage = rect.width > 0 ? Math.max(0, Math.min(100, (x / rect.width) * 100)) : 0;
         return percentage;
     }, []);
 
@@ -271,7 +271,7 @@ export function SeekSlider({
             tabIndex={isActive && safeDuration > 0 ? 0 : -1}
             onKeyDown={handleKeyDown}
             className={cn(
-                "relative rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--bg-primary)]",
+                "relative rounded-full transition-all motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--bg-primary)]",
                 styles.container,
                 styles.track,
                 isActive ? "cursor-pointer group" : "cursor-not-allowed",
@@ -288,7 +288,7 @@ export function SeekSlider({
             <div
                 className={cn(
                     "h-full rounded-full relative",
-                    !isDragging && "transition-[width] duration-150",
+                    !isDragging && "transition-[width] duration-150 motion-reduce:transition-none",
                     styles.progress
                 )}
                 style={{ width: `${displayProgress}%` }}
@@ -307,7 +307,7 @@ export function SeekSlider({
 
             {isDragging && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap">
-                    {Math.floor((displayProgress / 100) * duration)}s
+                    {formatTime((displayProgress / 100) * safeDuration)}
                 </div>
             )}
         </div>
