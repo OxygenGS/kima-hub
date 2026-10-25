@@ -1,0 +1,56 @@
+name: Audit Docker Image Size
+
+# Manual, read-only audit of the already published version. No builds or pushes.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Immutable published image tag (e.g. v1.11.7)"
+        required: true
+        default: "v1.11.7"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Image size - ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate immutable version tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]] || { echo "Only stable version tags are accepted" >&2; exit 1; }
+      - name: Inspect published native image without running or publishing
+        shell: bash
+        env:
+          TAG: ${{ inputs.image_tag }}
+          ARCH: ${{ matrix.arch }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${OWNER,,}/kima-hub:$TAG"
+          docker pull --platform "linux/$ARCH" "$image"
+          test "$(docker image inspect "$image" --format '{{.Architecture}}')" = "$ARCH"
+          python3 .github/ci/report-image-size.py "$image" | tee image-size-report.txt
+          {
+            echo "### $ARCH: $image"
+            echo '#### Read-only Docker image size report'
+            echo '~~~'
+            cat image-size-report.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
