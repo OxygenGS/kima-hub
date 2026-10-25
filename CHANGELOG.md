@@ -10,6 +10,11 @@ Performance, accessibility and localization refinements on top of the published 
 - Replace artist-page full-screen loading with an accessible, motion-aware hero/tracks/albums skeleton and polish biography spacing, sort focus, request-album labels and keyboard controls (PRs #92, #94).
 - Finish Dutch translations for empty library tracks and account settings heading (PRs #89, #90).
 - Add a manual, read-only, upstream-tag-specific merge compatibility audit and documented human review process; no automatic upstream merges or publishing (PR #93).
+- Polish album navigation with detail prefetching, accessible loading skeletons and translated empty states (PR #96).
+- Improve library reliability and speed: refresh artist/album cards and track rows when metadata changes, reduce unnecessary track-row renders and strengthen keyboard focus (PRs #101-104).
+- Refine queue/player accessibility, mobile actions, seek previews and reduced-motion behavior (PRs #97-100).
+- Polish Discover Weekly mobile controls, localized match tiers and play/pause feedback with regression coverage (PRs #105-108).
+- Avoid repeated artist album sorting on unrelated renders (PR #109).
 - No database migrations, persistent-volume changes or installation-specific changes. Verify native AMD64/ARM64 image scans, full CI, and upgrade/rollback rehearsals before publishing.
 
 ## OxygenGS fork v1.11.5 — released 2026-10-24
