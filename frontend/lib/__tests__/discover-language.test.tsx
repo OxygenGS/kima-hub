@@ -146,6 +146,23 @@ describe("Discover Weekly EN/NL interface", () => {
         expect(button?.querySelector("svg.lucide-pause")).not.toBeNull();
     });
 
+    it("keeps play and pause glyphs visible on touch screens while preserving actions", async () => {
+        const onPlayTrack = vi.fn(), onTogglePlay = vi.fn(), onLike = vi.fn();
+        await render(<TrackList tracks={[track]} currentTrack={null} isPlaying={false}
+            onPlayTrack={onPlayTrack} onTogglePlay={onTogglePlay} onLike={onLike} />);
+        const playButton = find('button[aria-label="Play"]') as HTMLButtonElement;
+        expect(playButton.querySelector("svg.lucide-play")?.classList.contains("sm:hidden")).toBe(true);
+        await click(playButton);
+        expect(onPlayTrack).toHaveBeenCalledWith(0);
+        await render(<TrackList tracks={[track]} currentTrack={{ id: track.id }} isPlaying={true}
+            onPlayTrack={onPlayTrack} onTogglePlay={onTogglePlay} onLike={onLike} />);
+        const pauseButton = find('button[aria-label="Pause"]') as HTMLButtonElement;
+        expect(pauseButton.querySelector("svg.lucide-pause")?.classList.contains("sm:hidden")).toBe(true);
+        await click(pauseButton);
+        expect(onTogglePlay).toHaveBeenCalledOnce();
+        expect(onLike).not.toHaveBeenCalled();
+    });
+
     it("labels unavailable album preview controls in Dutch while keeping the original preview callback", async () => {
         localStorage.setItem("kima-hub-language", "nl");
         const onTogglePreview = vi.fn(), onRetryAll = vi.fn();
