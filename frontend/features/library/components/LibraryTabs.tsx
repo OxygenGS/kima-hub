@@ -33,7 +33,7 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
             onClick={() => onTabChange(tab.id)}
             className={cn(
               // min-h meets the 44px touch target; the pill rounds fully.
-              "min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150",
+              "min-h-[44px] rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
               isActive
                 ? "text-brand bg-brand/10"
                 : "text-[var(--text-muted)] hover:text-white hover:bg-white/5",
