@@ -124,9 +124,9 @@ export function TrackList({
                                     </p>
                                     <span
                                         className={cn("md:hidden inline-block mt-1 text-[11px] font-medium", tierColors[track.tier])}
-                                        aria-label={t(tierLabels[track.tier] ?? "Explore")}
+                                        aria-label={translate(locale, tierLabels[track.tier] ?? "Explore")}
                                     >
-                                        {t(tierLabels[track.tier] ?? "Explore")}
+                                        {translate(locale, tierLabels[track.tier] ?? "Explore")}
                                     </span>
                                 </div>
                             </div>
@@ -141,8 +141,8 @@ export function TrackList({
                                         "px-2 py-0.5 rounded-full text-xs font-medium bg-white/5",
                                         tierColors[track.tier]
                                     )}
-                                    title={t(tierLabels[track.tier] ?? "Explore")}
-                                    aria-label={t(tierLabels[track.tier] ?? "Explore")}
+                                    title={translate(locale, tierLabels[track.tier] ?? "Explore")}
+                                    aria-label={translate(locale, tierLabels[track.tier] ?? "Explore")}
                                 >
                                     {translate(locale, tierLabels[track.tier] ?? "Explore")?.split(" ")[0]}
                                 </span>
