@@ -117,6 +117,35 @@ describe("Discover Weekly EN/NL interface", () => {
         expect(track.tier).toBe("high");
     });
 
+    it("shows translated match tiers in both desktop and mobile displays without changing ranking", async () => {
+        localStorage.setItem("kima-hub-language", "nl");
+        const tiers = ["high", "medium", "explore", "wildcard"] as const;
+        const tracks = tiers.map((tier, index) => ({
+            ...track, id: `match-${index}`, title: `Match test ${index}`, tier,
+        }));
+        const onPlayTrack = vi.fn(), onTogglePlay = vi.fn(), onLike = vi.fn();
+        await render(<TrackList tracks={tracks} currentTrack={null} isPlaying={false}
+            onPlayTrack={onPlayTrack} onTogglePlay={onTogglePlay} onLike={onLike} />);
+        expect(host.querySelectorAll(".md\\:hidden[aria-label]").length).toBe(4);
+        const dutchLabels = [...host.querySelectorAll(".md\\:hidden[aria-label]")].map((el) => el.getAttribute("aria-label"));
+        expect(dutchLabels.every(Boolean)).toBe(true);
+        expect(new Set(dutchLabels).size).toBe(4);
+        await selectLanguage("en");
+        expect([...host.querySelectorAll(".md\\:hidden[aria-label]")].map((el) => el.getAttribute("aria-label")))
+            .toEqual(["High Match", "Medium Match", "Explore", "Wild Card"]);
+        expect(tracks.map((item) => item.tier)).toEqual(tiers);
+        expect(onPlayTrack).not.toHaveBeenCalled();
+        expect(onLike).not.toHaveBeenCalled();
+    });
+
+    it("shows the pause control for an actively playing recommendation", async () => {
+        await render(<TrackList tracks={[track]} currentTrack={{ id: track.id }} isPlaying={true}
+            onPlayTrack={vi.fn()} onTogglePlay={vi.fn()} onLike={vi.fn()} />);
+        const button = find('button[aria-label="Pause"]');
+        expect(button).not.toBeNull();
+        expect(button?.querySelector("svg.lucide-pause")).not.toBeNull();
+    });
+
     it("labels unavailable album preview controls in Dutch while keeping the original preview callback", async () => {
         localStorage.setItem("kima-hub-language", "nl");
         const onTogglePreview = vi.fn(), onRetryAll = vi.fn();
