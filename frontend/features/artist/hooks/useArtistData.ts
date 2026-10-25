@@ -64,8 +64,9 @@ export function useArtistData() {
 
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
 
-    // Sort albums by year or dateAdded (auto-memoized by React Compiler)
-    const albums = !artist?.albums
+    // Preserve album-array identity across playback and download-status renders.
+    // Sorting only needs to run when the fetched albums or sort selection changes.
+    const albums = useMemo(() => !artist?.albums
         ? []
         : [...artist.albums].sort((a, b) => {
               if (sortBy === "dateAdded") {
@@ -82,7 +83,7 @@ export function useArtistData() {
                   if (b.year == null) return -1;
                   return b.year - a.year;
               }
-          });
+          }), [artist?.albums, sortBy]);
 
     return {
         artist,
