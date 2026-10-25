@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useAudioState, useAudioControls } from "@/lib/audio-context";
+import { useAudioState, useAudioControls, useAudioPlayback } from "@/lib/audio-context";
 import type { Track } from "@/lib/audio-state-context";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import {
     Music,
     Play,
+    Pause,
     X,
     Trash2,
     ListMusic,
@@ -62,6 +63,7 @@ export default function QueuePage() {
     const { isAuthenticated } = useAuth();
     const { queue, currentTrack, currentIndex, setQueue } = useAudioState();
     const { playTracks, removeFromQueue, clearQueue } = useAudioControls();
+    const { isPlaying } = useAudioPlayback();
     const [confirmClear, setConfirmClear] = useState(false);
 
     useEffect(() => {
@@ -143,8 +145,16 @@ export default function QueuePage() {
                             <Card>
                                 <div className="flex items-center gap-4 p-4 bg-[var(--bg-hover)] border-l-2 border-brand">
                                     <QueueCover track={currentTrack} large>
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <Play className="w-6 h-6 text-brand fill-brand animate-pulse" />
+                                        <div
+                                            className="absolute inset-0 flex items-center justify-center"
+                                            role="img"
+                                            aria-label={isPlaying ? t("Pause") : t("Play")}
+                                        >
+                                            {isPlaying ? (
+                                                <Pause aria-hidden="true" className="w-6 h-6 text-brand fill-brand motion-safe:animate-pulse" />
+                                            ) : (
+                                                <Play aria-hidden="true" className="w-6 h-6 text-brand fill-brand" />
+                                            )}
                                         </div>
                                     </QueueCover>
                                     <div className="flex-1 min-w-0">
