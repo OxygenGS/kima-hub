@@ -247,11 +247,11 @@ COPY --from=clap-onnx-builder /build/hf_audio.onnx /app/audio-analyzer-clap/mode
 #   clap_mel.ClapMelExtractor (reads the laion preprocessor_config.json only)
 #   RobertaTokenizer.from_pretrained('roberta-base')  (text tokenizer)
 # Without a baked cache the first embedding requires huggingface.co to be up.
-# Pin the exact revisions; sha-gate every file.
+# Pin the exact revisions; sha-gate every file. Store the cache directly at\n# its final non-root-readable path to avoid copying it into an additional layer.
 RUN LAION='https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a' \
     && ROB='https://huggingface.co/roberta-base/resolve/e2da8e2f811d1448a5b465c236feacd80ffbac7b' \
-    && LDIR='/root/.cache/huggingface/hub/models--laion--clap-htsat-unfused' \
-    && RDIR='/root/.cache/huggingface/hub/models--roberta-base' \
+    && LDIR='/app/nonroot-hf/hub/models--laion--clap-htsat-unfused' \
+    && RDIR='/app/nonroot-hf/hub/models--roberta-base' \
     && mkdir -p "$LDIR/snapshots/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a" "$LDIR/refs" \
               "$RDIR/snapshots/e2da8e2f811d1448a5b465c236feacd80ffbac7b" "$RDIR/refs" \
     && printf '%s' '8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a' > "$LDIR/refs/main" \
@@ -276,7 +276,7 @@ RUN LAION='https://huggingface.co/laion/clap-htsat-unfused/resolve/8fa0f1c6d0433
 # VALIDATED pipeline. Any preprocessing/toolchain drift fails the build.
 # Also exercises the text encoder end to end.
 RUN cd /app/audio-analyzer-clap \
-    && HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 verify_runtime.py
+    && HF_HOME=/app/nonroot-hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 verify_runtime.py
 
 # Create database readiness check script
 RUN cat > /app/wait-for-db.sh << 'EOF'
@@ -413,9 +413,8 @@ RUN groupadd --system kimabackend \
     && groupadd --system kimaruntime \
     && usermod -a -G kimaruntime kimabackend \
     && usermod -a -G kimaruntime kimaaudio \
-    && mkdir -p /app/nonroot-hf /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
-    && cp -a /root/.cache/huggingface/hub /app/nonroot-hf/hub \
-    && chown -R root:root /app/nonroot-hf \
+    && mkdir -p /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
+        && chown -R root:root /app/nonroot-hf \
     && chmod -R a+rX,go-w /app/nonroot-hf \
     && chown -R kimaaudio:kimaaudio /home/kimaaudio \
     && chown -R kimabackend:kimabackend /home/kimabackend \
