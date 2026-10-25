@@ -141,6 +141,7 @@ const TrackRow = memo(
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
                         title={translate(locale, "Add to queue")}
+                        aria-label={translate(locale, "Add to queue")}
                     >
                         <ListPlus className="w-4 h-4" />
                     </button>
@@ -151,6 +152,7 @@ const TrackRow = memo(
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
                         title={translate(locale, "Add to playlist")}
+                        aria-label={translate(locale, "Add to playlist")}
                     >
                         <Plus className="w-4 h-4" />
                     </button>
@@ -161,6 +163,7 @@ const TrackRow = memo(
                         }}
                         className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-danger/30"
                         title={translate(locale, "Delete Track")}
+                        aria-label={translate(locale, "Delete Track")}
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -174,8 +177,20 @@ const TrackRow = memo(
     (prevProps, nextProps) => {
         return (
             prevProps.track.id === nextProps.track.id &&
+            prevProps.track.title === nextProps.track.title &&
+            prevProps.track.displayTitle === nextProps.track.displayTitle &&
+            prevProps.track.duration === nextProps.track.duration &&
+            prevProps.track.trackNumber === nextProps.track.trackNumber &&
+            prevProps.track.discNumber === nextProps.track.discNumber &&
+            prevProps.track.album?.title === nextProps.track.album?.title &&
+            prevProps.track.album?.coverArt === nextProps.track.album?.coverArt &&
+            prevProps.track.album?.artist?.name === nextProps.track.album?.artist?.name &&
             prevProps.isCurrentlyPlaying === nextProps.isCurrentlyPlaying &&
-            prevProps.index === nextProps.index
+            prevProps.index === nextProps.index &&
+            prevProps.onPlayTrack === nextProps.onPlayTrack &&
+            prevProps.onAddToQueue === nextProps.onAddToQueue &&
+            prevProps.onShowAddToPlaylist === nextProps.onShowAddToPlaylist &&
+            prevProps.onDelete === nextProps.onDelete
         );
     },
 );
