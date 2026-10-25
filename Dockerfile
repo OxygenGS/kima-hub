@@ -414,7 +414,7 @@ RUN groupadd --system kimabackend \
     && usermod -a -G kimaruntime kimabackend \
     && usermod -a -G kimaruntime kimaaudio \
     && mkdir -p /home/kimaaudio/.cache/numba /home/kimabackend/.cache/numba \
-        && chown -R root:root /app/nonroot-hf \
+    && chown -R root:root /app/nonroot-hf \
     && chmod -R a+rX,go-w /app/nonroot-hf \
     && chown -R kimaaudio:kimaaudio /home/kimaaudio \
     && chown -R kimabackend:kimabackend /home/kimabackend \
