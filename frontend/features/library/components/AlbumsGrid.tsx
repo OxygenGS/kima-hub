@@ -64,10 +64,15 @@ const AlbumCardItem = memo(
             />
         );
     },
-    (prevProps, nextProps) => {
-        // The mood arrives later than the album; a same-id card must still update for it.
-        return prevProps.album.id === nextProps.album.id && prevProps.moodKey === nextProps.moodKey;
-    },
+    (prevProps, nextProps) =>
+        prevProps.album.id === nextProps.album.id &&
+        prevProps.album.title === nextProps.album.title &&
+        prevProps.album.artist?.name === nextProps.album.artist?.name &&
+        prevProps.album.coverArt === nextProps.album.coverArt &&
+        prevProps.moodKey === nextProps.moodKey &&
+        prevProps.index === nextProps.index &&
+        prevProps.onPlay === nextProps.onPlay &&
+        prevProps.onDelete === nextProps.onDelete,
 );
 
 function AlbumsEmptyState() {
