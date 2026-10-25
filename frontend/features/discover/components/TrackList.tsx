@@ -73,7 +73,7 @@ export function TrackList({
                                 >
                                     <span
                                         className={cn(
-                                            "group-hover:hidden group-focus-visible/play:hidden text-sm",
+                                            "hidden sm:block sm:group-hover:hidden sm:group-focus-visible/play:hidden text-sm",
                                             isTrackPlaying
                                                 ? "text-brand"
                                                 : "text-[var(--text-secondary)]"
@@ -86,9 +86,9 @@ export function TrackList({
                                         )}
                                     </span>
                                     {isTrackPlaying && isPlaying ? (
-                                        <Pause aria-hidden="true" className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
+                                        <Pause aria-hidden="true" className="w-4 h-4 text-white sm:hidden sm:group-hover:block sm:group-focus-visible/play:block" />
                                     ) : (
-                                        <Play aria-hidden="true" className="w-4 h-4 text-white hidden group-hover:block group-focus-visible/play:block" />
+                                        <Play aria-hidden="true" className="w-4 h-4 text-white sm:hidden sm:group-hover:block sm:group-focus-visible/play:block" />
                                     )}
                                 </button>
                             </div>
