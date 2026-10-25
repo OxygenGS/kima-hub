@@ -65,11 +65,21 @@ const ArtistCardItem = memo(
             />
         );
     },
-    (prevProps, nextProps) => {
-        // The mood arrives later than the artist; a same-id card must still update for it.
-        return prevProps.artist.id === nextProps.artist.id && prevProps.moodKey === nextProps.moodKey;
-    },
+    (prevProps, nextProps) =>
+        prevProps.artist.id === nextProps.artist.id &&
+        prevProps.artist.name === nextProps.artist.name &&
+        prevProps.artist.albumCount === nextProps.artist.albumCount &&
+        prevProps.artist.coverArt === nextProps.artist.coverArt &&
+        prevProps.moodKey === nextProps.moodKey &&
+        prevProps.index === nextProps.index &&
+        prevProps.onPlay === nextProps.onPlay &&
+        prevProps.onDelete === nextProps.onDelete,
 );
+
+function ArtistsEmptyState() {
+    const { t } = useLanguage();
+    return <EmptyState icon={<Music className="w-12 h-12" />} title={t("No artists yet")} description={t("Your library is empty. Sync your music to get started.")} />;
+}
 
 const ArtistsGrid = memo(function ArtistsGrid({
     artists,
@@ -88,13 +98,7 @@ const ArtistsGrid = memo(function ArtistsGrid({
     }
 
     if (artists.length === 0) {
-        return (
-            <EmptyState
-                icon={<Music className="w-12 h-12" />}
-                title="No artists yet"
-                description="Your library is empty. Sync your music to get started."
-            />
-        );
+        return <ArtistsEmptyState />;
     }
 
     return (
