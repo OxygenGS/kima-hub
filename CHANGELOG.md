@@ -2,9 +2,9 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
-## OxygenGS fork v1.11.6 — release preparation (unpublished)
+## OxygenGS fork v1.11.7 — release preparation (unpublished)
 
-Performance, accessibility and localization refinements on top of the published v1.11.5 release:
+Performance, accessibility and localization refinements following the v1.11.5 published baseline (v1.11.6 was a development version, not confirmed as published):
 - Open artist pages faster when browsing the library: prefetch detail queries on card hover/focus and reuse the existing 10-minute React Query cache; only fall back to external discovery for genuine library 404 responses (PR #91).
 - Fetch independent artist details (discography, popular tracks, hero artwork and similar artists) concurrently instead of one long sequential metadata waterfall, retaining existing API responses, permissions, media playback and provider fallbacks. Add concurrency regression coverage (PR #94).
 - Replace artist-page full-screen loading with an accessible, motion-aware hero/tracks/albums skeleton and polish biography spacing, sort focus, request-album labels and keyboard controls (PRs #92, #94).
@@ -16,6 +16,10 @@ Performance, accessibility and localization refinements on top of the published 
 - Polish Discover Weekly mobile controls, localized match tiers and play/pause feedback with regression coverage (PRs #105-108).
 - Avoid repeated artist album sorting on unrelated renders (PR #109).
 - No database migrations, persistent-volume changes or installation-specific changes. Verify native AMD64/ARM64 image scans, full CI, and upgrade/rollback rehearsals before publishing.
+
+## OxygenGS fork v1.11.6 — release preparation (unpublished)
+
+Development version superseded by v1.11.7 release preparation; no separate stable v1.11.6 publication is claimed here.
 
 ## OxygenGS fork v1.11.5 — released 2026-10-24
 
