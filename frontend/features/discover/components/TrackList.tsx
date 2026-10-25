@@ -58,7 +58,7 @@ export function TrackList({
                             onDoubleClick={() => activate(index)}
                             onTouchEnd={onTouchEnd}
                             className={cn(
-                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-4 px-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
+                                "grid grid-cols-[40px_minmax(0,1fr)_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(100px,2fr)_80px_80px] gap-2 sm:gap-4 px-2 sm:px-4 py-2 rounded-md hover:bg-white/5 focus-within:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
                                 isTrackPlaying && "bg-white/10"
                             )}
                         >
@@ -68,7 +68,7 @@ export function TrackList({
                                         e.stopPropagation();
                                         activate(index);
                                     }}
-                                    className="group/play w-8 h-8 flex items-center justify-center"
+                                    className="group/play w-11 h-11 flex items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                                     aria-label={t(isTrackPlaying && isPlaying ? "Pause" : "Play")}
                                 >
                                     <span
@@ -80,7 +80,7 @@ export function TrackList({
                                         )}
                                     >
                                         {isTrackPlaying && isPlaying ? (
-                                            <Music className="w-4 h-4 text-brand animate-pulse" />
+                                            <Music className="w-4 h-4 text-brand motion-safe:animate-pulse" />
                                         ) : (
                                             index + 1
                                         )}
@@ -149,7 +149,7 @@ export function TrackList({
                                     aria-label={`${t(track.isLiked ? "unlike" : "like")} ${track.title}`}
                                     aria-pressed={track.isLiked}
                                     className={cn(
-                                        "p-1.5 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all",
+                                        "p-2.5 min-w-[44px] min-h-[44px] rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand transition-all",
                                         track.isLiked
                                             ? "text-brand hover:text-brand-light"
                                             : "text-[var(--text-secondary)] hover:text-white"
