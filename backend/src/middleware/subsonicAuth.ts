@@ -26,10 +26,11 @@ export async function subsonicAuth(
     const tokenMd5 = req.query.t as string | undefined;
 
     // OpenSubsonic API-key authentication identifies the user through the key.
-    // Clients MUST NOT send u= alongside apiKey=. Reject mixed methods instead
-    // of quietly ignoring credentials, which would make auth ambiguous.
+    // Modern clients omit u=; older clients may also send their username.
+    // Verify it matches the key owner when provided. Reject combined p=/t=/s=
+    // authentication, but not endpoint-specific fields such as password=.
     if (apiKey !== undefined) {
-        if (username !== undefined || password !== undefined || tokenMd5 !== undefined || req.query.s !== undefined) {
+        if (tokenMd5 !== undefined || req.query.s !== undefined || req.query.p !== undefined) {
             subsonicError(req, res, 43, "Multiple conflicting authentication mechanisms provided");
             return;
         }
@@ -39,7 +40,7 @@ export async function subsonicAuth(
         }
         try {
             const keyUser = await findApiKeyUser(apiKey);
-            if (!keyUser) {
+            if (!keyUser || (username !== undefined && keyUser.username !== username)) {
                 subsonicError(req, res, SubsonicError.INVALID_API_KEY, "Invalid API key");
                 return;
             }
