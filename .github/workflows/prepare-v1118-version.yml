@@ -1,8 +1,6 @@
 name: Prepare release version metadata
 on:
-  push:
-    branches:
-      - chore/v1.11.8-version
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: chore/v1.11.8-version
           persist-credentials: true
       - name: Generate consistent release version metadata
         run: |
