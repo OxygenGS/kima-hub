@@ -9,7 +9,7 @@ Docker image size optimization work since v1.11.7:
 - Remove redundant Hugging Face offline model-cache duplication while retaining model checksums and offline verification (PR #113).
 - Keep frontend development dependencies out of earlier final-image layers (PR #114).
 - Consolidate backend npm installation, Prisma generation, build and pruning into one Docker layer (PR #115).
-- Automatically compare native main builds to the v1.11.7 baseline (PR #116). Actual measured savings are not yet recorded here.
+- Automatically compare native main builds to the v1.11.7 baseline (PR #116). Native uncompressed image measurements versus v1.11.7: AMD64 1.729 GiB to 1.650 GiB (81.0 MiB, 4.57% smaller); ARM64 4.102 GiB to 3.843 GiB (265.3 MiB, 6.32% smaller). These are local image sizes, not compressed registry download sizes.
 - No database migrations, removed audio functionality, or production deployment changes.
 
 ## OxygenGS fork v1.11.7 — release preparation (unpublished)
