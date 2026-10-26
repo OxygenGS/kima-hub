@@ -21,7 +21,7 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
     const songOffset   = Math.max(0, parseIntParam(req.query.songOffset   as string | undefined, 0));
 
     const isSearch3 = req.path.startsWith("/search3");
-    const isLegacySearch = req.path.startsWith("/search.") || req.path.startsWith("/search/") || req.path.startsWith("/search");
+    const isLegacySearch = req.path === "/search.view";
     const responseKey = isSearch3 ? "searchResult3" : isLegacySearch ? "searchResult" : "searchResult2";
 
     if (!query.trim()) {
