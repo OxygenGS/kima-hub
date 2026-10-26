@@ -339,19 +339,18 @@ RUN chmod +x /app/wait-for-db.sh && \
 # ============================================
 WORKDIR /app/backend
 
-# Copy backend package files and install dependencies
+# Install, generate Prisma client, build and prune in one layer. Otherwise
+# development dependencies remain in earlier layers after npm prune.
 COPY backend/package*.json ./
 COPY backend/prisma ./prisma/
-RUN echo "=== Migrations copied ===" && ls -la prisma/migrations/ && echo "=== End migrations ==="
-RUN npm ci && npm cache clean --force
-RUN npx prisma generate
-
-# Copy backend source and build
 COPY backend/src ./src
 COPY backend/tsconfig.json ./
-RUN npm run build && \
-    npm prune --production && \
-    rm -rf src tests __tests__ tsconfig*.json
+RUN npm ci \
+    && npx prisma generate \
+    && npm run build \
+    && npm prune --production \
+    && npm cache clean --force \
+    && rm -rf src tests __tests__ tsconfig*.json
 
 COPY backend/docker-entrypoint.sh ./
 
