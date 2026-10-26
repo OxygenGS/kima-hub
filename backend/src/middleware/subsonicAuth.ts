@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import { prisma } from "../utils/db";
 import { subsonicError, SubsonicError } from "../utils/subsonicResponse";
-import { findApiKeyUser } from "../services/users/apiKeyStore";
+import { findApiKeyUser, findApiKeyUserBySaltedToken } from "../services/users/apiKeyStore";
 
 declare global {
     // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -59,11 +59,29 @@ export async function subsonicAuth(
     }
 
     try {
-        // MD5 salted token auth would require storing recoverable secrets; Kima
-        // deliberately only stores bcrypt passwords and hashed API keys.
+        // Standard Subsonic token authentication used by Symfonium/Feishin
+        // when their "legacy authentication" toggle is OFF. The secret is an
+        // independently revocable app key, never the user's account password.
         if (tokenMd5 !== undefined || req.query.s !== undefined) {
-            subsonicError(req, res, SubsonicError.TOKEN_AUTH_NOT_SUPPORTED,
-                "Token authentication is not supported. Use an API key or the password field.");
+            if (password !== undefined) {
+                subsonicError(req, res, 43, "Multiple conflicting authentication mechanisms provided");
+                return;
+            }
+            const salt = req.query.s;
+            if (typeof tokenMd5 !== "string" || !/^[a-f0-9]{32}$/i.test(tokenMd5) ||
+                typeof salt !== "string" || salt.length < 6 || salt.length > 256) {
+                subsonicError(req, res, SubsonicError.WRONG_CREDENTIALS, "Invalid Subsonic token or salt");
+                return;
+            }
+            const keyUser = await findApiKeyUserBySaltedToken(username, tokenMd5, salt);
+            if (!keyUser) {
+                subsonicError(req, res, SubsonicError.WRONG_CREDENTIALS,
+                    "Invalid token. Use a newly generated Kima Native Apps key for token authentication.");
+                return;
+            }
+            req.user = keyUser;
+            req.subsonicAuthMethod = "apiKey";
+            next();
             return;
         }
 
