@@ -45,7 +45,7 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
                     artistId: true, artist: { select: { name: true, displayName: true } } },
             }) : Promise.resolve([]),
             songCount ? prisma.track.findMany({
-                where: { album: { location: LIBRARY_LOCATION }, filePath: { not: null }, corrupt: false, missingSince: null },
+                where: { album: { location: LIBRARY_LOCATION }, corrupt: false, missingSince: null },
                 orderBy: [{ title: "asc" }, { id: "asc" }],
                 skip: songOffset, take: songCount,
                 select: { id: true, title: true, displayTitle: true, duration: true, mime: true,

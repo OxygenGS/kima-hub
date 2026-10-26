@@ -60,8 +60,7 @@ describe("OpenSubsonic search3 empty-query fast synchronization", () => {
         );
         expect(prisma.track.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ take: 1, skip: 12, where: {
-                album: { location: "LIBRARY" }, filePath: { not: null },
-                corrupt: false, missingSince: null,
+                album: { location: "LIBRARY" }, corrupt: false, missingSince: null,
             } }),
         );
     });
