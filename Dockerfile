@@ -365,7 +365,6 @@ WORKDIR /app/frontend
 
 # Copy frontend package files and install dependencies
 COPY frontend/package*.json ./
-RUN npm ci && npm cache clean --force
 
 # Copy frontend source and build
 COPY frontend/ ./
@@ -383,7 +382,11 @@ ENV NEXT_PUBLIC_BUILD_TYPE=${NEXT_PUBLIC_BUILD_TYPE}
 
 # Drop dev dependencies after the build: the runtime needs only next + react,
 # and the dev tree ships advisories the app never executes (the braces chain).
-RUN MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build \
+# Install, build and prune in a single layer so build-only npm packages
+# never persist in an earlier layer of the final all-in-one image.
+# This intentionally trades some Docker dependency-cache reuse for smaller images.
+RUN npm ci \
+    && MALLOC_ARENA_MAX=1 NODE_OPTIONS="--max-old-space-size=2048" npm run build \
     && npm prune --omit=dev && npm cache clean --force \
     && chown -R kimaweb:kimaweb /app/frontend/.next
 
