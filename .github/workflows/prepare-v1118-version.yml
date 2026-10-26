@@ -1,0 +1,29 @@
+name: Prepare release version metadata
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    if: github.repository == 'OxygenGS/kima-hub'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Generate consistent release version metadata
+        run: |
+          set -euo pipefail
+          git switch -c chore/v1.11.8-version-metadata
+          python3 .github/ci/bump-fork-version.py 1.11.8
+          python3 .github/ci/check-release-metadata.py --candidate
+      - name: Commit only four manifest and lock files
+        run: |
+          set -euo pipefail
+          git add frontend/package.json frontend/package-lock.json backend/package.json backend/package-lock.json
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore(release): align all version metadata with v1.11.8'
+          git push origin HEAD:chore/v1.11.8-version-metadata
