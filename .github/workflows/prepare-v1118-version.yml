@@ -19,11 +19,22 @@ jobs:
           set -euo pipefail
           git switch -c chore/v1.11.8-version-metadata
           python3 .github/ci/bump-fork-version.py 1.11.8
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("CHANGELOG.md")
+          old = "## OxygenGS fork v1.11.8 — planned (not released)"
+          new = "## OxygenGS fork v1.11.8 — release preparation (unpublished)"
+          content = path.read_text(encoding="utf-8")
+          if old in content:
+              path.write_text(content.replace(old, new, 1), encoding="utf-8")
+          elif new not in content:
+              raise SystemExit("Expected v1.11.8 changelog heading not found")
+          PY
           python3 .github/ci/check-release-metadata.py --candidate
-      - name: Commit only four manifest and lock files
+      - name: Commit aligned manifests, lockfiles and changelog
         run: |
           set -euo pipefail
-          git add frontend/package.json frontend/package-lock.json backend/package.json backend/package-lock.json
+          git add frontend/package.json frontend/package-lock.json backend/package.json backend/package-lock.json CHANGELOG.md
           if git diff --cached --quiet; then exit 0; fi
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore(release): align all version metadata with v1.11.8'
           git push origin HEAD:chore/v1.11.8-version-metadata
