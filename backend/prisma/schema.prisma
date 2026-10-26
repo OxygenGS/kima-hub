@@ -49,6 +49,8 @@ model ApiKey {
   /// hash (not bcrypt) is the right primitive for a high-entropy generated
   /// token, and for the ONE place the plaintext value is ever handed back.
   keyHash   String   @unique
+  /// Encrypted optional copy for Subsonic salted-token auth; legacy keys stay hash-only.
+  tokenSecretEncrypted String?
   name      String
   lastUsed  DateTime @default(now())
   createdAt DateTime @default(now())

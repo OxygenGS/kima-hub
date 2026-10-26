@@ -23,7 +23,9 @@ Kima accepts, in this order:
 1. An API key, sent as `apiKey=` without needing a `u=` username parameter (modern OpenSubsonic authentication); a matching `u=` is accepted for compatibility.
 2. The password field (`p=`). Kima first checks whether the value is one of your tokens, then checks it against your account password.
 
-Kima does not support the older token scheme in which the client sends a hash of the password and a salt (`t=` and `s=`). That scheme needs the server to keep the secret in plain text, and Kima stores tokens hashed. A client that can only use that scheme will not sign in; most clients fall back to sending the password.
+For **newly generated Native Apps keys**, Kima also supports Subsonic's standard salted-token authentication (`t=md5(appKey + salt)`, `s=salt`). This lets Symfonium and Feishin connect with **Legacy Authentication disabled** while keeping your account password out of those apps. New keys retain their SHA-256 digest for regular API-key lookup and an authenticated-encrypted copy for salted-token verification, protected by the existing settings encryption key. No raw key is returned again after creation.
+
+**Important upgrade note:** Keys created before this release remain SHA-256-only. They continue to work in the password field with Legacy Authentication enabled, or with OpenSubsonic `apiKey=`, but cannot use salted-token authentication. Generate a new Native Apps key after upgrading and replace the saved key in each client to disable Legacy Authentication. Revoke the old key when you confirm the new one works.
 
 If you turn on two-factor authentication for your account, your account password stops working in Subsonic clients, because the protocol has no way to ask for a code. Use a token instead.
 

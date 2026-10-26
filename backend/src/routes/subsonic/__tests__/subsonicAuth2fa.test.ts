@@ -6,6 +6,7 @@
 import express from "express";
 import request from "supertest";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { prisma } from "../../../utils/db";
 import { createApiKey } from "../../../services/users/apiKeyStore";
 
@@ -162,6 +163,55 @@ describe("subsonicAuth: 2FA on the password path", () => {
 
         expect(resPlain.body["subsonic-response"].error.code).toBe(40);
         expect(res2fa.body["subsonic-response"].error.code).toBe(40);
+    });
+});
+
+describe("Subsonic salted app-key token authentication", () => {
+    const salt = "clientSalt123";
+    const hash = (key: string) => crypto.createHash("md5").update(key + salt, "utf8").digest("hex");
+
+    it("logs in without legacy auth using a newly issued app key, including for 2FA users", async () => {
+        const user = await mkUser("salted2fa", { twoFactorEnabled: true });
+        const { key } = await createApiKey(user.id, "Symfonium");
+        const result = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, t: hash(key), s: salt, f: "json", v: "1.16.1", c: "Symfonium" });
+        expect(result.body["subsonic-response"].status).toBe("ok");
+    });
+
+    it("rejects wrong salts, wrong users and revoked app keys", async () => {
+        const user = await mkUser("saltedRevoke");
+        const other = await mkUser("saltedOther");
+        const { key, id } = await createApiKey(user.id, "Feishin");
+        const invalidSalt = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, t: hash(key), s: "anotherSalt999", f: "json" });
+        expect(invalidSalt.body["subsonic-response"].error.code).toBe(40);
+        const otherUser = await request(app).get("/rest/ping.view")
+            .query({ u: other.username, t: hash(key), s: salt, f: "json" });
+        expect(otherUser.body["subsonic-response"].error.code).toBe(40);
+        await prisma.apiKey.delete({ where: { id } });
+        const revoked = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, t: hash(key), s: salt, f: "json" });
+        expect(revoked.body["subsonic-response"].error.code).toBe(40);
+    });
+
+    it("keeps existing hash-only keys usable as p= but not as salted tokens", async () => {
+        const user = await mkUser("preUpgrade");
+        const { key, id } = await createApiKey(user.id, "legacy device");
+        await prisma.apiKey.update({ where: { id }, data: { tokenSecretEncrypted: null } });
+        const modern = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, t: hash(key), s: salt, f: "json" });
+        expect(modern.body["subsonic-response"].error.code).toBe(40);
+        const legacy = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, p: key, f: "json" });
+        expect(legacy.body["subsonic-response"].status).toBe("ok");
+    });
+
+    it("rejects mixed p= and t/s authentication", async () => {
+        const user = await mkUser("mixedSalted");
+        const { key } = await createApiKey(user.id, "test");
+        const result = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, p: key, t: hash(key), s: salt, f: "json" });
+        expect(result.body["subsonic-response"].error.code).toBe(43);
     });
 });
 

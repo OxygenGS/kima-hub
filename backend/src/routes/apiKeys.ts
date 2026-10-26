@@ -18,8 +18,9 @@ router.post("/", async (req, res) => {
         const userId = req.user!.id;
 
         // The plaintext key is returned once, in the response below, and is
-        // never stored -- the row keeps only a SHA-256 digest. createApiKey owns
-        // both halves so the hashing cannot be forgotten at a call site.
+        // never returned again -- the row keeps a SHA-256 digest and an
+        // authenticated-encrypted copy for standard salted-token clients.
+        // createApiKey owns both so no endpoint handles raw storage.
         const apiKey = await createApiKey(userId, deviceName.trim());
 
         logger.debug(`API key created for user ${userId}: ${deviceName}`);
