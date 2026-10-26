@@ -79,7 +79,7 @@ describe("API key auth, hashed at rest", () => {
         expect(res.body.id).toBe(user.id);
     });
 
-    it("a valid key authenticates via OpenSubsonic apiKey=, an invalid one gets WRONG_CREDENTIALS -- not a crash", async () => {
+    it("a valid key authenticates via OpenSubsonic apiKey=, an invalid one gets INVALID_API_KEY -- not a crash", async () => {
         const user = await mkUser("subsonic");
         const created = await createApiKey(user.id, "subsonic client");
 
@@ -93,7 +93,7 @@ describe("API key auth, hashed at rest", () => {
             `/rest/ping.view?u=${user.username}&apiKey=not-a-real-key&v=1.16.1&c=test&f=json`,
         );
         expect(bad.body["subsonic-response"].status).toBe("failed");
-        expect(bad.body["subsonic-response"].error.code).toBe(40); // WRONG_CREDENTIALS
+        expect(bad.body["subsonic-response"].error.code).toBe(44); // INVALID_API_KEY
     });
 
     it("tokenInfo.view resolves a valid key to the right username", async () => {
