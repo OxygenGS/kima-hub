@@ -14,13 +14,13 @@ Kima speaks the [OpenSubsonic](https://opensubsonic.netlify.app/) API at `/rest`
 
 Give each client its own token. The same page lists your tokens, and revoking one disconnects only that client.
 
-Clients that have a separate "API key" field can use the token there.
+Clients that have a separate "API key" field can use the token there. Modern clients may omit `u=`. Older clients that include a username are still supported as long as it belongs to the API-key owner. Do not combine `apiKey=` with a Subsonic `p=`, `t=` or `s=` credential. For clients without separate API-key support, enter the app token as the password and keep the username.
 
 ## How sign-in works
 
 Kima accepts, in this order:
 
-1. An API key, sent as `apiKey=`.
+1. An API key, sent as `apiKey=` without needing a `u=` username parameter (modern OpenSubsonic authentication); a matching `u=` is accepted for compatibility.
 2. The password field (`p=`). Kima first checks whether the value is one of your tokens, then checks it against your account password.
 
 Kima does not support the older token scheme in which the client sends a hash of the password and a salt (`t=` and `s=`). That scheme needs the server to keep the secret in plain text, and Kima stores tokens hashed. A client that can only use that scheme will not sign in; most clients fall back to sending the password.

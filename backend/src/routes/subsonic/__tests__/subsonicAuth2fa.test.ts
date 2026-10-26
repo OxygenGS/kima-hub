@@ -93,9 +93,23 @@ describe("subsonicAuth: 2FA on the password path", () => {
 
         const res = await request(app)
             .get("/rest/ping.view")
-            .query({ u: user.username, apiKey: key, f: "json", v: "1.16.1", c: "test" });
+            .query({ apiKey: key, f: "json", v: "1.16.1", c: "test" });
 
         expect(res.body["subsonic-response"].status).toBe("ok");
+    });
+
+    it("accepts matching legacy u= with apiKey for existing clients", async () => {
+        const user = await mkUser("mixedApiKey");
+        const { key } = await createApiKey(user.id, "test device");
+        const res = await request(app).get("/rest/ping.view")
+            .query({ u: user.username, apiKey: key, f: "json" });
+        expect(res.body["subsonic-response"].status).toBe("ok");
+    });
+
+    it("rejects invalid standalone apiKey", async () => {
+        const res = await request(app).get("/rest/ping.view")
+            .query({ apiKey: "invalid-key", f: "json" });
+        expect(res.body["subsonic-response"].error.code).toBe(44);
     });
 
     // Native clients are told to paste their API key into the password field.
@@ -189,7 +203,7 @@ describe("changePassword.view with an API key", () => {
 
         const res = await request(app)
             .get("/rest/changePassword.view")
-            .query({ u: user.username, apiKey: key, username: user.username, password: "new-password", f: "json", v: "1.16.1", c: "test" });
+            .query({ apiKey: key, username: user.username, password: "new-password", f: "json", v: "1.16.1", c: "test" });
 
         const body = res.body["subsonic-response"];
         expect(body.status).toBe("failed");

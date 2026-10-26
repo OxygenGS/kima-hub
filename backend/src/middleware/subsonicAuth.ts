@@ -25,41 +25,45 @@ export async function subsonicAuth(
     const password = req.query.p as string | undefined;
     const tokenMd5 = req.query.t as string | undefined;
 
-    if (!username) {
+    // OpenSubsonic API-key authentication identifies the user through the key.
+    // Modern clients omit u=; older clients may also send their username.
+    // Verify it matches the key owner when provided. Reject combined p=/t=/s=
+    // authentication, but not endpoint-specific fields such as password=.
+    if (apiKey !== undefined) {
+        if (tokenMd5 !== undefined || req.query.s !== undefined || req.query.p !== undefined) {
+            subsonicError(req, res, 43, "Multiple conflicting authentication mechanisms provided");
+            return;
+        }
+        if (!apiKey || typeof apiKey !== "string") {
+            subsonicError(req, res, SubsonicError.INVALID_API_KEY, "Invalid API key");
+            return;
+        }
+        try {
+            const keyUser = await findApiKeyUser(apiKey);
+            if (!keyUser || (username !== undefined && keyUser.username !== username)) {
+                subsonicError(req, res, SubsonicError.INVALID_API_KEY, "Invalid API key");
+                return;
+            }
+            req.user = keyUser;
+            req.subsonicAuthMethod = "apiKey";
+            next();
+        } catch (_err) {
+            subsonicError(req, res, SubsonicError.GENERIC, "Authentication error");
+        }
+        return;
+    }
+
+    if (!username || typeof username !== "string") {
         subsonicError(req, res, SubsonicError.MISSING_PARAM, "Required parameter is missing: u");
         return;
     }
 
     try {
-        // MD5 token auth (t=, s=) needs the plaintext secret on the server. API keys
-        // are stored as SHA-256 digests and passwords as bcrypt, so it cannot be
-        // answered; clients get the protocol's TOKEN_AUTH_NOT_SUPPORTED (41) and use
-        // apiKey= or the password field instead.
-        if (tokenMd5) {
-            subsonicError(
-                req,
-                res,
-                SubsonicError.TOKEN_AUTH_NOT_SUPPORTED,
-                "Token authentication is not supported. Use an API key (apiKey=) or your account password.",
-            );
-            return;
-        }
-
-        // OpenSubsonic API key auth (preferred)
-        if (apiKey) {
-            const keyUser = await findApiKeyUser(apiKey);
-            if (!keyUser || keyUser.username !== username) {
-                subsonicError(req, res, SubsonicError.WRONG_CREDENTIALS, "Wrong username or password");
-                return;
-            }
-
-            req.user = keyUser;
-            // A provisioned app credential, not the account password -- see
-            // the 2FA note on the password branch below for why this
-            // distinction has to survive past this middleware, not just gate
-            // entry here.
-            req.subsonicAuthMethod = "apiKey";
-            next();
+        // MD5 salted token auth would require storing recoverable secrets; Kima
+        // deliberately only stores bcrypt passwords and hashed API keys.
+        if (tokenMd5 !== undefined || req.query.s !== undefined) {
+            subsonicError(req, res, SubsonicError.TOKEN_AUTH_NOT_SUPPORTED,
+                "Token authentication is not supported. Use an API key or the password field.");
             return;
         }
 
