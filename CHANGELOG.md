@@ -2,7 +2,7 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
-## OxygenGS fork v1.11.8 — planned (not released)
+## OxygenGS fork v1.11.8 — release preparation (unpublished)
 
 Docker image size optimization work since v1.11.7:
 - Read-only image size auditing and largest-layer ranking for AMD64 and ARM64 (PRs #111-112).
