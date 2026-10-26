@@ -2,6 +2,8 @@
  * API keys: minting, listing, revoking and resolving them. The settings screen
  * (routes/apiKeys.ts) calls a row a key; the TV/mobile pairing flow
  * (routes/deviceLink.ts) calls the same row a device.
+ * New keys also store an AEAD-encrypted copy for salted Subsonic login;
+ * older keys stay valid through the original hash lookup.
  */
 
 import crypto from "crypto";
