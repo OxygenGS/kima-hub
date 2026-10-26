@@ -45,11 +45,12 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
                     artistId: true, artist: { select: { name: true, displayName: true } } },
             }) : Promise.resolve([]),
             songCount ? prisma.track.findMany({
-                where: { album: { location: LIBRARY_LOCATION }, corrupt: false, missingSince: null },
+                where: { album: { location: LIBRARY_LOCATION }, filePath: { not: null }, corrupt: false, missingSince: null },
                 orderBy: [{ title: "asc" }, { id: "asc" }],
                 skip: songOffset, take: songCount,
                 select: { id: true, title: true, displayTitle: true, duration: true, mime: true,
-                    albumId: true, album: { select: { title: true, displayTitle: true,
+                    trackNo: true, discNumber: true, fileSize: true,
+                    albumId: true, album: { select: { title: true, displayTitle: true, year: true,
                         artistId: true, artist: { select: { name: true, displayName: true } } } } },
             }) : Promise.resolve([]),
         ]);
@@ -62,15 +63,14 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
                 "@_artist": a.artist.displayName || a.artist.name, "@_artistId": a.artistId,
                 "@_coverArt": a.id, "@_year": a.year || undefined,
             })) } : {}),
-            ...(tracks.length ? { song: tracks.map(t => ({
-                "@_id": t.id, "@_title": t.displayTitle || t.title,
-                "@_album": t.album.displayTitle || t.album.title,
-                "@_albumId": t.albumId,
-                "@_artist": t.album.artist.displayName || t.album.artist.name,
-                "@_artistId": t.album.artistId, "@_coverArt": t.albumId,
-                "@_duration": t.duration, "@_contentType": t.mime || "audio/mpeg",
-                "@_type": "music",
-            })) } : {}),
+            ...(tracks.length ? { song: tracks.map(t => mapSong(
+                { id: t.id, title: t.displayTitle || t.title, trackNo: t.trackNo,
+                  discNumber: t.discNumber, duration: t.duration, filePath: null,
+                  mime: t.mime, fileSize: t.fileSize },
+                { id: t.albumId, title: t.album.title, displayTitle: t.album.displayTitle,
+                  year: t.album.year },
+                t.album.artist.displayName || t.album.artist.name, t.album.artistId,
+            )) } : {}),
         } });
     }
 

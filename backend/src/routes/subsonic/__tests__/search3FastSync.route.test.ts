@@ -35,8 +35,9 @@ describe("OpenSubsonic search3 empty-query fast synchronization", () => {
               artistId: "a-1", artist: { name: "Artist", displayName: null } },
         ]);
         (prisma.track.findMany as jest.Mock).mockResolvedValue([
-            { id: "t-1", title: "Song", displayTitle: null, duration: 120, mime: "audio/flac",
-              albumId: "al-1", album: { title: "Album", displayTitle: null,
+            { id: "t-1", title: "Song", displayTitle: null, duration: 120.7, mime: "FLAC",
+              fileSize: 123456, trackNo: 3, discNumber: 2,
+              albumId: "al-1", album: { title: "Album", displayTitle: null, year: 2025,
                   artistId: "a-1", artist: { name: "Artist", displayName: null } } },
         ]);
         const response = await request(app).get("/rest/search3.view")
@@ -46,7 +47,11 @@ describe("OpenSubsonic search3 empty-query fast synchronization", () => {
         expect(response.body["subsonic-response"].status).toBe("ok");
         expect(result.artist[0].id).toBe("a-1");
         expect(result.album[0].id).toBe("al-1");
-        expect(result.song[0].id).toBe("t-1");
+        expect(result.song[0]).toEqual(expect.objectContaining({
+            id: "t-1", parent: "al-1", suffix: "flac", contentType: "audio/flac",
+            duration: 121, size: 123456, track: 3, discNumber: 2, year: 2025,
+            isDir: false,
+        }));
         expect(prisma.artist.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ take: 1, skip: 4 }),
         );
@@ -55,7 +60,8 @@ describe("OpenSubsonic search3 empty-query fast synchronization", () => {
         );
         expect(prisma.track.findMany).toHaveBeenCalledWith(
             expect.objectContaining({ take: 1, skip: 12, where: {
-                album: { location: "LIBRARY" }, corrupt: false, missingSince: null,
+                album: { location: "LIBRARY" }, filePath: { not: null },
+                corrupt: false, missingSince: null,
             } }),
         );
     });
