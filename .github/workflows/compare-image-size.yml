@@ -1,0 +1,94 @@
+name: Compare Docker Image Size
+
+# Runs automatically when this workflow lands on main, and can be repeated
+# after Dockerfile changes. Does not publish or run the application.
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .github/workflows/compare-image-size.yml
+      - .github/ci/report-image-size.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  compare:
+    name: Compare native ${{ matrix.arch }} to v1.11.7
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk for audio and ML image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Pull published baseline
+        env:
+          ARCH: ${{ matrix.arch }}
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull --platform "linux/$ARCH" "ghcr.io/${OWNER,,}/kima-hub:v1.11.7"
+      - name: Build current main natively, never push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          tags: kima:main-size-comparison
+          load: true
+          push: false
+          cache-from: type=gha,scope=compare-size-${{ matrix.arch }}
+      - name: Report both images and size reduction
+        env:
+          OWNER: ${{ github.repository_owner }}
+          ARCH: ${{ matrix.arch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="ghcr.io/${OWNER,,}/kima-hub:v1.11.7"
+          current="kima:main-size-comparison"
+          test "$(docker image inspect "$current" --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect "$baseline" --format '{{.Architecture}}')" = "$ARCH"
+          old="$(docker image inspect "$baseline" --format '{{.Size}}')"
+          new="$(docker image inspect "$current" --format '{{.Size}}')"
+          python3 - "$old" "$new" "$ARCH" <<'PY'
+          import sys
+          old, new = map(int, sys.argv[1:3])
+          arch = sys.argv[3]
+          delta = old - new
+          pct = (100 * delta / old) if old else 0
+          with open("comparison.md", "w") as f:
+              f.write(f"### Native {arch} image size comparison\n")
+              f.write("| Version | Local uncompressed image size |\n|---|---:|\n")
+              f.write(f"| v1.11.7 | {old / 1024**3:.3f} GiB |\n")
+              f.write(f"| main | {new / 1024**3:.3f} GiB |\n")
+              f.write(f"\n**Difference:** {delta / 1024**2:+.1f} MiB ({pct:+.2f}% smaller)\n\n")
+              f.write("These values are uncompressed local image sizes, **not registry download sizes**.\n")
+          PY
+          cat comparison.md >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/ci/report-image-size.py "$current" > layer-history.txt
+          cat comparison.md
+          head -n 8 layer-history.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-size-${{ matrix.arch }}
+          path: |
+            comparison.md
+            layer-history.txt
+          retention-days: 14
