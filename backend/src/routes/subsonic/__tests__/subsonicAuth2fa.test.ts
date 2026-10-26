@@ -98,13 +98,12 @@ describe("subsonicAuth: 2FA on the password path", () => {
         expect(res.body["subsonic-response"].status).toBe("ok");
     });
 
-    it("rejects combining apiKey with u=, as required by OpenSubsonic", async () => {
+    it("accepts matching legacy u= with apiKey for existing clients", async () => {
         const user = await mkUser("mixedApiKey");
         const { key } = await createApiKey(user.id, "test device");
         const res = await request(app).get("/rest/ping.view")
             .query({ u: user.username, apiKey: key, f: "json" });
-        expect(res.body["subsonic-response"].status).toBe("failed");
-        expect(res.body["subsonic-response"].error.code).toBe(43);
+        expect(res.body["subsonic-response"].status).toBe("ok");
     });
 
     it("rejects invalid standalone apiKey", async () => {
