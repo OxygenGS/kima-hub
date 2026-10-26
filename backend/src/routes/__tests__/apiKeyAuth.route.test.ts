@@ -1,7 +1,7 @@
 /**
  * API keys are stored as SHA-256 hashes. Through the real app and database: a
  * key works as `X-API-Key` and OpenSubsonic `apiKey=`, and the MD5 `t=`/`s=`
- * path is refused.
+ * path works for newly issued independently revocable app keys.
  */
 import express from "express";
 import request from "supertest";
@@ -104,9 +104,9 @@ describe("API key auth, hashed at rest", () => {
         expect(res.body["subsonic-response"].tokenInfo.username).toBe(user.username);
     });
 
-    it("legacy t=/s= MD5-token auth is explicitly rejected with TOKEN_AUTH_NOT_SUPPORTED (41) -- not silently mistaken for a wrong password", async () => {
-        // MD5 token auth needs the plaintext key, which is not stored. A
-        // correctly computed token is still refused, so the refusal is deliberate.
+    it("standard t=/s= salted-token authentication accepts a newly created app key", async () => {
+        // The app key is high-entropy and kept at rest using authenticated
+        // encryption (the user account password is never recovered).
         const user = await mkUser("md5legacy");
         const created = await createApiKey(user.id, "legacy client");
         const salt = "abc123";
@@ -115,8 +115,7 @@ describe("API key auth, hashed at rest", () => {
         const res = await request(app).get(
             `/rest/ping.view?u=${user.username}&t=${correctToken}&s=${salt}&v=1.16.1&c=test&f=json`,
         );
-        expect(res.body["subsonic-response"].status).toBe("failed");
-        expect(res.body["subsonic-response"].error.code).toBe(41); // TOKEN_AUTH_NOT_SUPPORTED
+        expect(res.body["subsonic-response"].status).toBe("ok");
     });
 
     it("the stored value is the SHA-256 digest of the plaintext, not the plaintext itself -- read directly off the row, not through the service layer", async () => {
