@@ -2,6 +2,16 @@
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
+## OxygenGS fork v1.11.8 — planned (not released)
+
+Docker image size optimization work since v1.11.7:
+- Read-only image size auditing and largest-layer ranking for AMD64 and ARM64 (PRs #111-112).
+- Remove redundant Hugging Face offline model-cache duplication while retaining model checksums and offline verification (PR #113).
+- Keep frontend development dependencies out of earlier final-image layers (PR #114).
+- Consolidate backend npm installation, Prisma generation, build and pruning into one Docker layer (PR #115).
+- Automatically compare native main builds to the v1.11.7 baseline (PR #116). Actual measured savings are not yet recorded here.
+- No database migrations, removed audio functionality, or production deployment changes.
+
 ## OxygenGS fork v1.11.7 — release preparation (unpublished)
 
 Performance, accessibility and localization refinements following the v1.11.5 published baseline (v1.11.6 was a development version, not confirmed as published):
