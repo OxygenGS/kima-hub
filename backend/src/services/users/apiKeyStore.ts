@@ -7,6 +7,7 @@
 import crypto from "crypto";
 
 import { prisma } from "../../utils/db";
+import { encrypt, decrypt } from "../../utils/encryption";
 
 /** Fields safe to hand back for an existing key -- never `key` itself. */
 const PUBLIC_FIELDS = {
@@ -30,7 +31,7 @@ export function hashApiKey(key: string): string {
     return crypto.createHash("sha256").update(key).digest("hex");
 }
 
-/** A newly minted key; `key` is the plaintext, returned once and never stored. */
+/** A newly minted key; plaintext is returned only once. The database stores a SHA-256 digest and an encrypted copy for salted-token authentication. */
 export interface CreatedApiKey {
     id: string;
     userId: string;
@@ -40,7 +41,7 @@ export interface CreatedApiKey {
     key: string;
 }
 
-/** Mint a key for a user; only its hash is stored. */
+/** Mint an independently revocable key; use the existing at-rest AEAD cipher for token-based clients. */
 export async function createApiKey(userId: string, name: string): Promise<CreatedApiKey> {
     const key = generateApiKeyValue();
     const row = await prisma.apiKey.create({
@@ -48,6 +49,7 @@ export async function createApiKey(userId: string, name: string): Promise<Create
             userId,
             name,
             keyHash: hashApiKey(key),
+            tokenSecretEncrypted: encrypt(key),
         },
     });
     return { id: row.id, userId: row.userId, name: row.name, lastUsed: row.lastUsed, createdAt: row.createdAt, key };
@@ -92,4 +94,37 @@ export async function findApiKeyUser(
     if (!row) return null;
     touchApiKey(row.id);
     return row.user;
+}
+
+/**
+ * Verify standard Subsonic t=md5(appKey + salt), s=salt, without storing
+ * the account password or exposing an app key in a response. Only keys issued
+ * after the migration have an encrypted copy: old hash-only keys still work
+ * with p= and apiKey=, but require reissuance for salted authentication.
+ *
+ * Validation is scoped to one indexed username and a bounded number of keys.
+ * MD5 is dictated by the Subsonic protocol; app keys are 256-bit random values,
+ * not reusable human passwords. The per-request salt prevents static hashes.
+ */
+export async function findApiKeyUserBySaltedToken(
+    username: string,
+    token: string,
+    salt: string,
+): Promise<{ id: string; username: string; role: string } | null> {
+    const rows = await prisma.apiKey.findMany({
+        where: { user: { username }, tokenSecretEncrypted: { not: null } },
+        select: { id: true, tokenSecretEncrypted: true, user: { select: { id: true, username: true, role: true } } },
+        take: 128,
+    });
+    const supplied = Buffer.from(token, "hex");
+    let matched: (typeof rows)[number] | undefined;
+    for (const row of rows) {
+        // Decryption errors must fail closed: never fall back to weaker auth.
+        const secret = decrypt(row.tokenSecretEncrypted!);
+        const calculated = crypto.createHash("md5").update(secret + salt, "utf8").digest();
+        if (crypto.timingSafeEqual(calculated, supplied)) matched = row;
+    }
+    if (!matched) return null;
+    touchApiKey(matched.id);
+    return matched.user;
 }
