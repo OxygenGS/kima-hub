@@ -191,6 +191,25 @@ jobs:
               # Keep the same functional suite and per-worker test isolation.
               run: npm test -- --maxWorkers=4 --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
 
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
+            - name: Install exact CLAP Python BullMQ and msgpack pins
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  # Do not install large ONNX/ML dependencies just to test queue
+                  # interoperability; use the same pinned pair as our images.
+                  mapfile -t pins < <(grep -E '^(bullmq|msgpack)==[0-9.]+' services/audio-analyzer-clap/requirements.txt)
+                  test "${#pins[@]}" -eq 2
+                  python -m pip install --disable-pip-version-check --no-cache-dir "${pins[@]}"
+
+            - name: Process a synthetic CLAP BullMQ job on disposable Redis
+              shell: bash
+              timeout-minutes: 2
+              run: python services/audio-analyzer-clap/test_bullmq_worker_integration.py
+
     build-docker:
         name: Docker Build Check
         runs-on: ubuntu-24.04
