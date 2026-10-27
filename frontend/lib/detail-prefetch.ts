@@ -27,6 +27,19 @@ export function prefetchAlbumDetail(client: QueryClient, id: string): Promise<vo
     });
 }
 
+/**
+ * Reuse the same prefetched album data for Play actions and page navigation.
+ * fetchQuery waits for an in-flight prefetch rather than starting a second GET.
+ */
+export function getCachedAlbumDetails(client: QueryClient, id: string) {
+    if (!id) return Promise.reject(new Error("Album ID is required"));
+    return client.fetchQuery({
+        queryKey: queryKeys.album(id),
+        queryFn: () => fetchAlbumDetails(id),
+        staleTime: DETAIL_STALE_MS,
+    });
+}
+
 /** Shared artist/album navigation prefetch used by home, library and detail screens. */
 export function useDetailPrefetch() {
     const client = useQueryClient();
