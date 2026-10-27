@@ -23,16 +23,17 @@ vi.mock("@/components/cards/MediaCard", () => ({
 
 import { api } from "@/lib/api";
 import { AvailableAlbums } from "./AvailableAlbums";
+import type { Album } from "../types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MBID = "11111111-2222-3333-4444-555555555555";
-const album = { id: "disc-one", title: "Unowned Album", type: "Album", rgMbid: MBID, owned: false };
+const album: Album = { id: "disc-one", title: "Unowned Album", type: "Album", rgMbid: MBID, owned: false };
 let host: HTMLDivElement;
 let root: Root;
 let callbacks: IntersectionObserverCallback[];
 
-async function renderAlbums(albums = [album]) {
+async function renderAlbums(albums: Album[] = [album]) {
     await act(async () => root.render(
         <AvailableAlbums
             albums={albums}
