@@ -21,11 +21,57 @@ searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async 
     const songOffset   = Math.max(0, parseIntParam(req.query.songOffset   as string | undefined, 0));
 
     const isSearch3 = req.path.startsWith("/search3");
-    const isLegacySearch = req.path.startsWith("/search.") || req.path.startsWith("/search/") || req.path.startsWith("/search");
+    const isLegacySearch = req.path === "/search.view";
     const responseKey = isSearch3 ? "searchResult3" : isLegacySearch ? "searchResult" : "searchResult2";
 
     if (!query.trim()) {
-        return subsonicOk(req, res, { [responseKey]: {} });
+        // Symfonium uses empty search3 queries to page through the entire music
+        // library. Returning an empty object forces its compatibility mode.
+        // Fetch each category independently with bounded offsets and ensure
+        // DISCOVER-only albums are never exposed as library music.
+        if (!isSearch3) return subsonicOk(req, res, { [responseKey]: {} });
+        const [artists, albums, tracks] = await Promise.all([
+            artistCount ? prisma.artist.findMany({
+                where: { albums: { some: { location: LIBRARY_LOCATION } } },
+                orderBy: [{ sortName: "asc" }, { id: "asc" }],
+                skip: artistOffset, take: artistCount,
+                select: { id: true, name: true, displayName: true },
+            }) : Promise.resolve([]),
+            albumCount ? prisma.album.findMany({
+                where: { location: LIBRARY_LOCATION },
+                orderBy: [{ sortName: "asc" }, { id: "asc" }],
+                skip: albumOffset, take: albumCount,
+                select: { id: true, title: true, displayTitle: true, year: true,
+                    artistId: true, artist: { select: { name: true, displayName: true } } },
+            }) : Promise.resolve([]),
+            songCount ? prisma.track.findMany({
+                where: { album: { location: LIBRARY_LOCATION }, corrupt: false, missingSince: null },
+                orderBy: [{ title: "asc" }, { id: "asc" }],
+                skip: songOffset, take: songCount,
+                select: { id: true, title: true, displayTitle: true, duration: true, mime: true,
+                    trackNo: true, discNumber: true, fileSize: true,
+                    albumId: true, album: { select: { title: true, displayTitle: true, year: true,
+                        artistId: true, artist: { select: { name: true, displayName: true } } } } },
+            }) : Promise.resolve([]),
+        ]);
+        return subsonicOk(req, res, { searchResult3: {
+            ...(artists.length ? { artist: artists.map(a => ({
+                "@_id": a.id, "@_name": a.displayName || a.name, "@_coverArt": `ar-${a.id}`,
+            })) } : {}),
+            ...(albums.length ? { album: albums.map(a => ({
+                "@_id": a.id, "@_name": a.displayTitle || a.title,
+                "@_artist": a.artist.displayName || a.artist.name, "@_artistId": a.artistId,
+                "@_coverArt": a.id, "@_year": a.year || undefined,
+            })) } : {}),
+            ...(tracks.length ? { song: tracks.map(t => mapSong(
+                { id: t.id, title: t.displayTitle || t.title, trackNo: t.trackNo,
+                  discNumber: t.discNumber, duration: t.duration, filePath: null,
+                  mime: t.mime, fileSize: t.fileSize },
+                { id: t.albumId, title: t.album.title, displayTitle: t.album.displayTitle,
+                  year: t.album.year },
+                t.album.artist.displayName || t.album.artist.name, t.album.artistId,
+            )) } : {}),
+        } });
     }
 
     const [artists, rawAlbums, tracks] = await Promise.all([
