@@ -57,7 +57,8 @@ describe("artist Play All / Shuffle track loading", () => {
         const tracks = await loadAllOwnedTracks(artist, albums);
         expect(tracks.map((track) => track.id)).toEqual(["cached-track", "fetched-track"]);
         expect(tracks[1].trackNumber).toBe(4);
-        expect(getAlbum).toHaveBeenCalledExactlyOnceWith("missing");
+        expect(getAlbum).toHaveBeenCalledTimes(1);
+        expect(getAlbum).toHaveBeenCalledWith("missing");
     });
 
     it("returns no tracks or requests when the artist owns no albums", async () => {
