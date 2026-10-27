@@ -39,6 +39,9 @@ export interface Album {
     availability?: string;
     genres?: string[];
     lastSynced?: string;
+    // Library artist details already include playable album tracks. Reuse
+    // these for Play All / Shuffle rather than fetching every album again.
+    tracks?: Track[];
     // User overrides (non-destructive edits)
     displayTitle?: string | null;
     displayYear?: number | null;
@@ -60,6 +63,7 @@ export interface Track {
         coverArt?: string;
     };
     trackNo?: number;
+    trackNumber?: number;
     discNumber?: number | null;
     discSubtitle?: string | null;
     // User overrides (non-destructive edits)

@@ -136,14 +136,21 @@ router.get("/albums/:id", async (req, res) => {
       return res.status(404).json({ error: "Album not found" });
     }
 
-    const owned = await prisma.ownedAlbum.findUnique({
-      where: {
-        artistId_rgMbid: {
-          artistId: album.artistId,
-          rgMbid: album.rgMbid,
+    // Ownership and Lidarr missing-track discovery do not depend on each
+    // other: overlap their latency instead of waiting for two serial calls.
+    const [owned, lidarrMissingTracks] = await Promise.all([
+      prisma.ownedAlbum.findUnique({
+        where: {
+          artistId_rgMbid: {
+            artistId: album.artistId,
+            rgMbid: album.rgMbid,
+          },
         },
-      },
-    });
+      }),
+      album.rgMbid
+        ? lidarrService.getMissingTracksByAlbumMbid(album.rgMbid)
+        : Promise.resolve([]),
+    ]);
     const isOwned = !!owned;
 
     const artistData = album.artist;
@@ -155,10 +162,6 @@ router.get("/albums/:id", async (req, res) => {
     }> = [];
 
     if (album.rgMbid) {
-      const lidarrMissingTracks = await lidarrService.getMissingTracksByAlbumMbid(
-        album.rgMbid
-      );
-
       if (lidarrMissingTracks.length > 0) {
         const previewLimit = pLimit(3);
         missingTracks = await Promise.all(

@@ -14,7 +14,7 @@ interface FormattedTrack {
   duration: number;
 }
 
-async function loadAllOwnedTracks(artist: Artist, albums: Album[]) {
+export async function loadAllOwnedTracks(artist: Artist, albums: Album[]) {
   const ownedAlbums = albums
     .filter((album) => album.owned)
     .sort((a, b) => (b.year || 0) - (a.year || 0));
@@ -24,7 +24,12 @@ async function loadAllOwnedTracks(artist: Artist, albums: Album[]) {
   }
 
   const albumDataPromises = ownedAlbums.map((album) =>
-    api.getAlbum(album.id).catch(() => null)
+    // Artist details already contain tracks for owned library albums. This
+    // avoids N repeat album requests (and their Lidarr/preview lookups) on play.
+    // Keep the old fetch fallback for discovery/partial cached artist objects.
+    album.tracks?.length
+      ? Promise.resolve({ tracks: album.tracks })
+      : api.getAlbum(album.id).catch(() => null)
   );
 
   const albumsData = await Promise.all(albumDataPromises);
@@ -36,10 +41,10 @@ async function loadAllOwnedTracks(artist: Artist, albums: Album[]) {
     if (!albumData || !albumData.tracks) return;
 
     const album = ownedAlbums[index];
-    const formattedTracks = albumData.tracks.map((track: Record<string, unknown>) => ({
+    const formattedTracks: FormattedTrack[] = (albumData.tracks as Track[]).map((track) => ({
       id: track.id,
       title: track.title,
-      trackNumber: Number(track.trackNumber ?? 0),
+      trackNumber: Number(track.trackNumber ?? track.trackNo ?? 0),
       discNumber: Number(track.discNumber ?? 1),
       artist: { name: artist.name, id: artist.id },
       album: {
