@@ -98,9 +98,9 @@ describe("Project Turbo album-track interactions", () => {
         const track: Track = { id: "song-one", title: "Palette song", duration: 80 };
         renderAlbumTrack(track, vi.fn(), "#ff0000");
         const row = host.querySelector("[data-track-row]") as HTMLElement;
-        expect(row.style.borderLeftColor).toBe("rgb(255, 0, 0)");
+        expect(row.style.borderLeftColor).toBe("#ff0000");
         renderAlbumTrack(track, vi.fn(), "#00ff00");
-        expect((host.querySelector("[data-track-row]") as HTMLElement).style.borderLeftColor).toBe("rgb(0, 255, 0)");
+        expect((host.querySelector("[data-track-row]") as HTMLElement).style.borderLeftColor).toBe("#00ff00");
     });
 });
 
