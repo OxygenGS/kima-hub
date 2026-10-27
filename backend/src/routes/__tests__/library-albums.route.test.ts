@@ -81,6 +81,7 @@ import request from 'supertest';
 import albumRoutes from '../../routes/library/albums';
 import { prisma } from '../../utils/db';
 import fs from 'fs';
+import { lidarrService } from '../../services/lidarr';
 
 function makeApp() {
     const app = express();
@@ -219,6 +220,23 @@ describe('GET /albums/:id -- album detail', () => {
         expect(res.body.title).toBe('OK Computer');
         expect(res.body.tracks).toHaveLength(1);
         expect(res.body.artist.name).toBe('Radiohead');
+    });
+
+    it('overlaps the ownership lookup with missing-track discovery', async () => {
+        (prisma.album.findFirst as jest.Mock).mockResolvedValue({ ...BASE_ALBUM, tracks: [] });
+        let lidarrStartedDuringOwnership = false;
+        (prisma.ownedAlbum.findUnique as jest.Mock).mockImplementation(() =>
+            new Promise((resolve) => setTimeout(() => {
+                lidarrStartedDuringOwnership =
+                    (lidarrService.getMissingTracksByAlbumMbid as jest.Mock).mock.calls.length > 0;
+                resolve(null);
+            }, 0))
+        );
+
+        const res = await request(app).get('/albums/album-1');
+        expect(res.status).toBe(200);
+        expect(lidarrStartedDuringOwnership).toBe(true);
+        expect(res.body.missingTracks).toEqual([]);
     });
 
     it('includes owned flag from OwnedAlbum table', async () => {
