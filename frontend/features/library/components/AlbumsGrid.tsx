@@ -7,7 +7,7 @@ import { fetchAlbumDetails } from "@/features/album/hooks/useAlbumData";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Album } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { CollectionGridSkeleton } from "@/features/library/components/CollectionGridSkeleton";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { Disc3, Play } from "lucide-react";
 import { api } from "@/lib/api";
@@ -89,11 +89,7 @@ const AlbumsGrid = memo(function AlbumsGrid({
     gridKey,
 }: AlbumsGridProps) {
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <CollectionGridSkeleton />;
     }
 
     if (albums.length === 0) {
