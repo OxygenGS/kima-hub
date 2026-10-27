@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import type { Album } from "../types";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { albumDetailQueryOptions } from "@/features/album/hooks/useAlbumData";
 
 interface DiscographyProps {
     albums: Album[];
@@ -21,6 +23,7 @@ export function Discography({
     onSortChange,
 }: DiscographyProps) {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
     if (!albums || albums.length === 0) {
         return null;
     }
@@ -60,6 +63,9 @@ export function Discography({
                         <MediaCard
                             key={album.id}
                             href={`/album/${album.id}`}
+                            onPrefetch={() => {
+                                void queryClient.prefetchQuery(albumDetailQueryOptions(album.id));
+                            }}
                             imageUrl={album.coverArt ? api.getCoverArtUrl(album.coverArt, 300) : null}
                             title={album.title}
                             subtitle={subtitle}
