@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.11.10 — Symfonium native sync patch
+## OxygenGS fork v1.11.10 — release preparation (unpublished)
 
 - Normalize the quoted-empty `query=""` used by Symfonium native fast synchronization to the existing paginated empty-search3 library enumeration path (PR #127).
 - Add regression coverage for 500-song sync batches at an offset of 500. Preserve ordinary non-empty searches, app-key authentication, and existing client compatibility.
