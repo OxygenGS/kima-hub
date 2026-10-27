@@ -21,6 +21,7 @@ import { CollectionMasthead } from "@/features/library/components/CollectionMast
 import { useLibraryVibe } from "@/features/library/useLibraryVibe";
 import { useShelfSummary } from "@/features/library/useShelfSummary";
 import { LibraryTabs } from "@/features/library/components/LibraryTabs";
+import { prefetchLibraryPage } from "@/features/library/prefetchLibraryPage";
 import { LibraryToolbar } from "@/features/library/components/LibraryToolbar";
 import { ArtistsGrid } from "@/features/library/components/ArtistsGrid";
 import { AlbumsGrid } from "@/features/library/components/AlbumsGrid";
@@ -248,6 +249,26 @@ export default function LibraryPage() {
     const totalItems = pagination.total;
     const totalPages = pagination.totalPages;
 
+    // Fetch only when navigation is likely. Prefetching all pages would waste
+    // bandwidth and amplify backend load for large music libraries.
+    const prefetchTab = useCallback((tab: Tab) => {
+        if (tab === activeTab) return;
+        const nextFilter = tab === "tracks" ? DEFAULT_VIEW.filter : filter;
+        const nextSort = sortOptionsFor(tab).some((option) => option.value === sortBy)
+            ? sortBy : DEFAULT_VIEW.sortBy;
+        void prefetchLibraryPage(queryClient, {
+            tab, page: 1, filter: nextFilter, sortBy: nextSort, limit: itemsPerPage,
+        });
+    }, [activeTab, filter, sortBy, itemsPerPage, queryClient]);
+
+    const prefetchNextPage = useCallback(() => {
+        if (!pageDataReady || activeQuery.isError || currentPage >= totalPages) return;
+        void prefetchLibraryPage(queryClient, {
+            tab: activeTab, page: currentPage + 1, filter, sortBy, limit: itemsPerPage,
+        });
+    }, [pageDataReady, activeQuery.isError, currentPage, totalPages, queryClient,
+        activeTab, filter, sortBy, itemsPerPage]);
+
     const [deleteConfirm, setDeleteConfirm] = useState<DeleteDialogState>({
         isOpen: false,
         type: "track",
@@ -387,6 +408,7 @@ export default function LibraryPage() {
                     <LibraryTabs
                         activeTab={activeTab}
                         onTabChange={changeTab}
+                        onTabIntent={prefetchTab}
                     />
                 </div>
 
@@ -468,6 +490,7 @@ export default function LibraryPage() {
                     currentPage={currentPage}
                     totalPages={totalPages}
                     onPageChange={updatePage}
+                    onNextPageIntent={prefetchNextPage}
                     disabled={isLoading}
                     label={
                         activeTab === "artists" ? "Artists"

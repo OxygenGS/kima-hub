@@ -65,25 +65,31 @@ const TrackRow = memo(
             <div
                 key={track.id}
                 {...doubleTapProps}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter" && event.target === event.currentTarget) {
+                        event.preventDefault();
+                        onPlayTrack();
+                    }
+                }}
                 data-tv-card
                 data-tv-card-index={index}
                 tabIndex={0}
                 style={{ "--i": index } as React.CSSProperties}
                 className={cn(
-                    "grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 rounded-lg border-2 transition-all duration-200 group cursor-pointer touch-manipulation",
+                    "grid grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 rounded-lg border-2 transition-colors duration-200 group cursor-pointer touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70",
                     isCurrentlyPlaying
                         ? "bg-brand/10 border-brand/30 "
                         : "bg-[var(--bg-primary)] border-white/5 hover:border-brand/30 hover:bg-brand/5",
                     "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]",
                 )}
             >
-                <div className="w-8 flex items-center justify-center">
+                <div className="w-11 flex items-center justify-center">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             onPlayTrack();
                         }}
-                        className="group/play w-10 h-10 flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                        className="group/play w-11 h-11 flex items-center justify-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                         aria-label={translate(locale, isCurrentlyPlaying ? "Pause" : "Play")}
                     >
                         <span
@@ -136,13 +142,13 @@ const TrackRow = memo(
                     </p>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-0.5 sm:gap-1">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             onAddToQueue(track);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 transition-colors duration-150 border border-transparent hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                         title={translate(locale, "Add to queue")}
                         aria-label={translate(locale, "Add to queue")}
                     >
@@ -153,7 +159,7 @@ const TrackRow = memo(
                             e.stopPropagation();
                             onShowAddToPlaylist(track.id);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-white/20"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-white hover:bg-white/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 transition-colors duration-150 border border-transparent hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                         title={translate(locale, "Add to playlist")}
                         aria-label={translate(locale, "Add to playlist")}
                     >
@@ -164,7 +170,7 @@ const TrackRow = memo(
                             e.stopPropagation();
                             onDelete(track.id, track.title);
                         }}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all duration-150 border border-transparent hover:border-danger/30"
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-danger hover:bg-danger/10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 focus-visible:opacity-100 transition-colors duration-150 border border-transparent hover:border-danger/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/70"
                         title={translate(locale, "Delete Track")}
                         aria-label={translate(locale, "Delete Track")}
                     >
@@ -249,11 +255,11 @@ export function TracksList({
 
     return (
         <>
-            <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[auto_1fr_1fr_auto] items-center gap-3 px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
-                <div className="w-8 text-center text-xs font-semibold text-[var(--text-muted)]">#</div>
+            <div className="grid grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3 px-2 sm:px-4 py-3 bg-[var(--bg-primary)] border-2 border-white/10 rounded-lg mb-2">
+                <div className="w-11 text-center text-xs font-semibold text-[var(--text-muted)]">#</div>
                 <div className="text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Title")}</div>
                 <div className="hidden md:block text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Album")}</div>
-                <div className="w-[140px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Duration")}</div>
+                <div className="hidden sm:block min-w-[180px] text-right pr-2 text-xs font-semibold text-[var(--text-muted)]">{translate(locale, "Duration")}</div>
             </div>
 
             <div key={gridKey} data-tv-section="library-tracks" className="space-y-1" style={cascadeStyle(tracks.length)}>

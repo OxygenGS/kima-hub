@@ -6,6 +6,8 @@ import { translate } from "@/lib/i18n/translations";
 interface LibraryTabsProps {
   activeTab: Tab;
   onTabChange: (tab: Tab) => void;
+  /** Warm this tab's first page only when the user shows navigation intent. */
+  onTabIntent?: (tab: Tab) => void;
 }
 
 // No per-tab colour: only the active segment carries the app accent.
@@ -15,7 +17,7 @@ const tabs = [
   { id: "tracks" as Tab, label: "Tracks" },
 ];
 
-export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
+export function LibraryTabs({ activeTab, onTabChange, onTabIntent }: LibraryTabsProps) {
   const { locale } = useLanguage();
   return (
     // Soft pills: the chosen one is amber text on a faint amber tint, the rest quiet.
@@ -30,6 +32,10 @@ export function LibraryTabs({ activeTab, onTabChange }: LibraryTabsProps) {
             data-tv-card-index={index}
             tabIndex={0}
             aria-pressed={isActive}
+            type="button"
+            onMouseEnter={() => { if (!isActive) onTabIntent?.(tab.id); }}
+            onFocus={() => { if (!isActive) onTabIntent?.(tab.id); }}
+            onTouchStart={() => { if (!isActive) onTabIntent?.(tab.id); }}
             onClick={() => onTabChange(tab.id)}
             className={cn(
               // min-h meets the 44px touch target; the pill rounds fully.

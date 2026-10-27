@@ -9,6 +9,8 @@ interface PaginationProps {
     currentPage: number;
     totalPages: number;
     onPageChange: (page: number) => void;
+    /** Warm the next page when the user hovers/focuses its control. */
+    onNextPageIntent?: () => void;
     /** Disables every control, e.g. while the next page is still loading. */
     disabled?: boolean;
     /** What is paged, e.g. "Artists"; read aloud as "Artists pagination". */
@@ -32,6 +34,7 @@ export function Pagination({
     currentPage,
     totalPages,
     onPageChange,
+    onNextPageIntent,
     disabled = false,
     label,
     className,
@@ -84,6 +87,9 @@ export function Pagination({
             <button
                 type="button"
                 onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                onMouseEnter={!disabled && !atLast ? onNextPageIntent : undefined}
+                onFocus={!disabled && !atLast ? onNextPageIntent : undefined}
+                onTouchStart={!disabled && !atLast ? onNextPageIntent : undefined}
                 disabled={disabled || atLast}
                 aria-label={t("Next page")}
                 className={CONTROL}
