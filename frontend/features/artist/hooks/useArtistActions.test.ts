@@ -8,8 +8,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { api } from "@/lib/api";
-import { loadAllOwnedTracks } from "../useArtistActions";
-import type { Artist, Album } from "../../types";
+import { loadAllOwnedTracks } from "./useArtistActions";
+import type { Artist, Album } from "../types";
 
 const artist: Artist = { id: "artist-1", name: "Band" };
 const getAlbum = vi.mocked(api.getAlbum);
