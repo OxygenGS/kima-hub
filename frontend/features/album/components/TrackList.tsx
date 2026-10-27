@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { Play, Pause, Volume2, ListPlus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useLanguage } from "@/lib/i18n/language-context";
@@ -95,7 +95,7 @@ const TrackRow = memo(
                 data-track-index={index}
                 tabIndex={0}
                 className={cn(
-                    "group grid grid-cols-[40px_minmax(0,1fr)_auto_auto] md:grid-cols-[40px_minmax(0,2fr)_96px_136px_100px] gap-2 md:gap-4 px-4 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 transition-colors cursor-pointer touch-manipulation",
+                    "group grid grid-cols-[40px_minmax(0,1fr)_auto_auto] md:grid-cols-[40px_minmax(0,2fr)_96px_136px_100px] gap-1 sm:gap-2 md:gap-4 px-2 sm:px-4 py-2 rounded-lg hover:bg-[var(--bg-tertiary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2 transition-colors cursor-pointer touch-manipulation",
                     isPlaying && "bg-[var(--bg-hover)] border-l-2",
                     isPreviewOnly && "opacity-70 hover:opacity-90",
                     "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]"
@@ -186,12 +186,12 @@ const TrackRow = memo(
                     )}
 
                 {/* Column 4: Row actions (Add to queue, Add to playlist) */}
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-0.5 sm:gap-2 justify-end">
                     {isOwned && !isMissingTrack ? (
                         <>
                             <button
                                 onClick={handleAddToQueue}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
+                                className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-[var(--text-secondary)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                                 aria-label={t("Add to queue")}
                                 title={t("Add to queue")}
                             >
@@ -199,7 +199,7 @@ const TrackRow = memo(
                             </button>
                             <button
                                 onClick={handleAddToPlaylist}
-                                className="p-1.5 rounded-lg hover:bg-white/10 transition-all text-[var(--text-secondary)] hover:text-white"
+                                className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors text-[var(--text-secondary)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                                 aria-label={t("Add to playlist")}
                                 title={t("Add to playlist")}
                             >
@@ -210,7 +210,7 @@ const TrackRow = memo(
                     {isPreviewOnly ? (
                         <button
                             onClick={handlePreview}
-                            className="p-1.5 rounded-lg bg-[var(--bg-hover)] hover:bg-white/10 transition-colors text-white"
+                            className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg bg-[var(--bg-hover)] hover:bg-white/10 transition-colors text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                             aria-label={
                                 t(isPreviewPlaying ? "Pause preview" : "Play preview")
                             }
@@ -235,11 +235,19 @@ const TrackRow = memo(
     },
     (prevProps, nextProps) => {
         return (
-            prevProps.track.id === nextProps.track.id &&
+            // Cached rows normally keep the same track object. When metadata
+            // refreshes, do not freeze titles, play counts, badges or actions.
+            prevProps.track === nextProps.track &&
             prevProps.isPlaying === nextProps.isPlaying &&
             prevProps.isPreviewPlaying === nextProps.isPreviewPlaying &&
             prevProps.index === nextProps.index &&
-            prevProps.isOwned === nextProps.isOwned
+            prevProps.isOwned === nextProps.isOwned &&
+            prevProps.album.artist?.name === nextProps.album.artist?.name &&
+            (!prevProps.isPlaying || prevProps.colors?.vibrant === nextProps.colors?.vibrant) &&
+            prevProps.onPlayTrack === nextProps.onPlayTrack &&
+            prevProps.onAddToQueue === nextProps.onAddToQueue &&
+            prevProps.onAddToPlaylist === nextProps.onAddToPlaylist &&
+            prevProps.onPreview === nextProps.onPreview
         );
     }
 );
@@ -259,6 +267,27 @@ export const TrackList = memo(function TrackList({
 }: TrackListProps) {
     const { t } = useLanguage();
     const isOwned = source === "library";
+
+    // A playback-state change should update only the previously/currently
+    // playing rows. Route clicks through stable functions so all other rows
+    // avoid re-rendering without keeping stale album/playlist callbacks.
+    const latestActions = useRef({ onPlayTrack, onAddToQueue, onAddToPlaylist, onPreview });
+    useLayoutEffect(() => {
+        latestActions.current = { onPlayTrack, onAddToQueue, onAddToPlaylist, onPreview };
+    }, [onPlayTrack, onAddToQueue, onAddToPlaylist, onPreview]);
+    const playTrack = useCallback((track: Track, index: number) => {
+        latestActions.current.onPlayTrack(track, index);
+    }, []);
+    const addToQueue = useCallback((track: Track) => {
+        latestActions.current.onAddToQueue(track);
+    }, []);
+    const addToPlaylist = useCallback((trackId: string) => {
+        latestActions.current.onAddToPlaylist(trackId);
+    }, []);
+    const previewTrackAction = useCallback((track: Track) => {
+        latestActions.current.onPreview(track);
+    }, []);
+
     const discNumbers = useMemo(
         () => Array.from(new Set(tracks.map((track) => track.discNumber).filter((disc) => disc != null))),
         [tracks]
@@ -299,10 +328,10 @@ export const TrackList = memo(function TrackList({
                                 isPlaying={isPlaying}
                                 isPreviewPlaying={isPreviewPlaying}
                                 colors={colors}
-                                onPlayTrack={onPlayTrack}
-                                onAddToQueue={onAddToQueue}
-                                onAddToPlaylist={onAddToPlaylist}
-                                onPreview={onPreview}
+                                onPlayTrack={playTrack}
+                                onAddToQueue={addToQueue}
+                                onAddToPlaylist={addToPlaylist}
+                                onPreview={previewTrackAction}
                             />
                         </React.Fragment>
                     );
