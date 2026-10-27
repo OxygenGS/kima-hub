@@ -37,8 +37,15 @@ for doc in docs/install.md docs/gpu.md; do
         echo "FORK DOCUMENT CHECK FAILED: upstream installation image in $doc" >&2
         exit 1
     fi
-    grep -Fq 'ghcr.io/oxygengs/kima-hub:v1.10.0' "$doc" || {
-        echo "FORK DOCUMENT CHECK FAILED: published stable fork image missing in $doc" >&2
+    # The install guide follows the currently published release; the GPU guide
+    # may still show the older pinned stable image as a reference.
+    if [[ "$doc" == "docs/install.md" ]]; then
+        expected_image="ghcr.io/oxygengs/kima-hub:v1.11.10"
+    else
+        expected_image="ghcr.io/oxygengs/kima-hub:v1.10.0"
+    fi
+    grep -Fq "$expected_image" "$doc" || {
+        echo "FORK DOCUMENT CHECK FAILED: expected fork image $expected_image missing in $doc" >&2
         exit 1
     }
 done

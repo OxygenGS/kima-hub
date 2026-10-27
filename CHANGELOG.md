@@ -1,13 +1,13 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.11.10 — release preparation (unpublished)
+## OxygenGS fork v1.11.10 — released 2026-10-27
 
 - Normalize the quoted-empty `query=""` used by Symfonium native fast synchronization to the existing paginated empty-search3 library enumeration path (PR #127).
 - Add regression coverage for 500-song sync batches at an offset of 500. Preserve ordinary non-empty searches, app-key authentication, and existing client compatibility.
-- No new database migrations or installation-specific settings. Verify with Symfonium Compatibility Mode disabled after publishing.
+- No new database migrations or installation-specific settings. Symfonium native sync without Compatibility Mode was confirmed after publishing.
 
 
-## OxygenGS fork v1.11.9 — release preparation (unpublished)
+## OxygenGS fork v1.11.9 — released 2026-10-27
 
 Native Subsonic/OpenSubsonic interoperability for music clients:
 - Support paginated empty-query `search3.view` for Symfonium library fast-sync, with stable artist/album/song ordering and bounded query sizes (PR #124).
@@ -15,7 +15,7 @@ Native Subsonic/OpenSubsonic interoperability for music clients:
 - Accept standard Subsonic salted `t=/s=` token authentication with newly issued high-entropy Native Apps keys so Symfonium and Feishin can connect with Legacy Authentication disabled (PR #125).
 - Continue storing SHA-256 key hashes for lookup, and store an authenticated-encrypted copy for salted-token verification. Preserve key revocation, 2FA restrictions and pre-upgrade key behavior.
 - Add one optional `ApiKey.tokenSecretEncrypted` column through an additive Prisma migration. Existing keys still work with `p=` or `apiKey=` but **must be reissued** to use `t=/s=`; test the new key in each client before revoking the old one.
-- Before stable publishing: pass combined full CI, native AMD64/ARM64 build and security scans, upgrade/rollback checks, and verify Symfonium and Feishin in native mode. No installation-specific or CT101 changes.
+- Native salted-token sign-in was verified in Symfonium and Feishin. The remaining Symfonium fast-sync issue was fixed in v1.11.10. No installation-specific or CT101 changes.
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
