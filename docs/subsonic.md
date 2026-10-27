@@ -29,7 +29,9 @@ For **newly generated Native Apps keys**, Kima also supports Subsonic's standard
 
 If you turn on two-factor authentication for your account, your account password stops working in Subsonic clients, because the protocol has no way to ask for a code. Use a token instead.
 
-## Confirmed native-client interoperability
+## Improved compatibility with existing Subsonic clients
+
+Symfonium and Feishin were already supported by upstream Kima Hub. OxygenGS improves the existing integration rather than introducing client support from scratch.
 
 - **Symfonium:** With a new Native Apps key, salted-token sign-in works with **Legacy Authentication off**. As of v1.11.10, native fast synchronization also works with **Compatibility Mode off**, including the quoted-empty `search3` request form.
 - **Feishin:** With a new Native Apps key, sign-in and library browsing work with **Legacy Authentication off**.
