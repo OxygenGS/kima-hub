@@ -1,5 +1,7 @@
 "use client";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { getCachedAlbumDetails } from "@/lib/detail-prefetch";
 
 import {
     useAudioState,
@@ -29,6 +31,7 @@ import { PageMessage } from "@/components/ui/PageMessage";
 
 export default function ArtistPage() {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
     // Use split hooks to avoid re-renders from currentTime updates
     const { currentTrack } = useAudioState();
     const { isPlaying } = useAudioPlayback();
@@ -72,7 +75,7 @@ export default function ArtistPage() {
 
     async function handlePlayAlbum(albumId: string) {
         try {
-            const albumData = await api.getAlbum(albumId);
+            const albumData = await getCachedAlbumDetails(queryClient, albumId);
             if (albumData.tracks && albumData.tracks.length > 0) {
                 const tracksWithAlbum = albumData.tracks.map((track: Record<string, unknown>) => ({
                     ...track,
