@@ -157,14 +157,21 @@ def check_native_stable(text: str) -> None:
         raise ValueError("Stable tag publications must be serialized and non-cancelling")
     if "docker/setup-qemu-action@" in text or "push: true" in text:
         raise ValueError("QEMU or unscanned direct push in stable publisher")
+    if "    workflow_dispatch:\n        inputs:\n            version_tag:" not in text:
+        raise ValueError("Stable publisher must accept an explicit existing tag on manual dispatch")
+    tag_checkout = "ref: " + "\u0024{{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref }}"
+    if text.count(tag_checkout) != 3:
+        raise ValueError("Validation, both native builds, and release must checkout the exact stable tag")
     validate = stable_job_section(text, "validate-release")
     native = stable_job_section(text, "native-build")
     assemble = stable_job_section(text, "assemble")
     release = stable_job_section(text, "create-release")
     for required in (
         'check-release-metadata.py --tag "$VERSION"',
-        'git merge-base --is-ancestor "$GITHUB_SHA"',
-        'echo "source=$(git rev-parse HEAD)"',
+        'TAG_COMMIT="$(git rev-parse "refs/tags/$VERSION^{commit}")"',
+        'test "$(git rev-parse HEAD)" = "$TAG_COMMIT"',
+        'git merge-base --is-ancestor "$TAG_COMMIT"',
+        'echo "source=$TAG_COMMIT"',
     ):
         if required not in validate:
             raise ValueError(f"Missing stable version/ancestry identity: {required}")
@@ -236,6 +243,8 @@ def stable_self_test() -> None:
         ("needs: [validate-release, native-build]", "needs: [validate-release]"),
         ('docker tag kima:stable-scan "$stage"', 'docker tag unscanned:image "$stage"'),
         ("push: false", "push: true"),
+        ('git merge-base --is-ancestor "$TAG_COMMIT"', 'git merge-base --is-ancestor "$GITHUB_SHA"'),
+        ('test "$(git rev-parse HEAD)" = "$TAG_COMMIT"', 'test "yes" = "yes"'),
     ):
         modified = original.replace(old, new, 1)
         if modified == original:
