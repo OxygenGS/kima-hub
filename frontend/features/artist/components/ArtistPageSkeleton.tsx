@@ -20,10 +20,10 @@ export function ArtistPageSkeleton() {
             <span className="sr-only">{t("Loading artist...")}</span>
             <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none">
                 <div className="relative overflow-hidden bg-gradient-to-b from-white/[0.06] to-transparent">
-                    <div className="page-shell pt-16 pb-6">
-                        <div className="flex items-end gap-6">
-                            <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] shrink-0 rounded-full bg-white/10 ring-1 ring-white/10" />
-                            <div className="flex-1 min-w-0 space-y-3 pb-2">
+                    <div className="page-shell pt-8 sm:pt-16 pb-6">
+                        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-end sm:gap-6">
+                            <div className="w-32 h-32 sm:w-[140px] sm:h-[140px] md:w-[192px] md:h-[192px] shrink-0 rounded-full bg-white/10 ring-1 ring-white/10" />
+                            <div className="w-full flex-1 min-w-0 space-y-3 pb-2">
                                 <div className="h-3 w-20 rounded-full bg-white/10" />
                                 <div className="h-8 md:h-11 w-3/4 max-w-[400px] rounded-lg bg-white/15" />
                                 <div className="h-4 w-2/5 max-w-[220px] rounded bg-white/10" />

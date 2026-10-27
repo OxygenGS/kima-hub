@@ -35,7 +35,7 @@ interface HeroBackdropProps {
 }
 
 /** The blurred artwork and palette gradient behind a detail page's hero. */
-export function HeroBackdrop({ image, alt, colors, tint, fallback }: HeroBackdropProps) {
+export function HeroBackdrop({ image, colors, tint, fallback }: HeroBackdropProps) {
     const t = TINTS[tint];
 
     if (!image) {
@@ -53,16 +53,15 @@ export function HeroBackdrop({ image, alt, colors, tint, fallback }: HeroBackdro
     }
 
     return (
-        <div className="absolute inset-0 overflow-hidden" style={FADE_MASK}>
+        <div className="absolute inset-0 overflow-hidden" aria-hidden="true" style={FADE_MASK}>
             {/* The cover, heavily blurred, under a dark scrim so pale sleeves stay legible. */}
             <div className="absolute inset-0 scale-110 blur-2xl">
                 <CachedImage
                     src={image}
-                    alt={alt}
+                    alt=""
                     fill
-                    sizes="100vw"
+                    sizes="480px"
                     className="object-cover"
-                    priority
                 />
             </div>
             <div className="absolute inset-0 bg-black/50" />

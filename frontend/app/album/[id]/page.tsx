@@ -185,6 +185,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 album={album}
                 source={source || "discovery"}
                 coverUrl={coverUrl}
+                backgroundImage={colorExtractionUrl}
                 colors={colors}
                 onReload={reloadAlbum}
             >

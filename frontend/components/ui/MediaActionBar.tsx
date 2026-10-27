@@ -39,11 +39,12 @@ export const PlayDisc = memo(function PlayDisc({
     const { locale } = useLanguage();
     return (
         <button
+            type="button"
             onClick={onClick}
             disabled={disabled}
             aria-label={translate(locale, label ?? (showPause ? "pause" : "play all"))}
             className={cn(
-                "h-12 w-12 flex items-center justify-center transition-all hover:scale-105 active:scale-95 bg-brand disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                "h-12 w-12 flex items-center justify-center transition-transform motion-reduce:transition-none hover:scale-105 active:scale-95 bg-brand disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
                 shape === "circle" ? "rounded-full" : "rounded-lg",
             )}
         >
@@ -68,7 +69,7 @@ export const MediaActionBar = memo(function MediaActionBar({
 }: MediaActionBarProps) {
     const { t } = useLanguage();
     return (
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
             {showPlay && (
                 <PlayDisc showPause={showPause} onClick={onPlayPause} shape={discShape} />
             )}
@@ -106,12 +107,13 @@ export const MediaActionButton = memo(function MediaActionButton({
     const { locale } = useLanguage();
     return (
         <button
+            type="button"
             onClick={onClick}
             title={translate(locale, label)}
             aria-label={translate(locale, label)}
             disabled={disabled}
             className={cn(
-                "h-8 w-8 hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-all disabled:opacity-50",
+                "min-h-11 min-w-11 hover:bg-white/10 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] disabled:opacity-50",
                 shape === "circle" ? "rounded-full" : "rounded-lg",
             )}
         >

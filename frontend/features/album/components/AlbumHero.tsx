@@ -15,6 +15,8 @@ interface AlbumHeroProps {
     album: Album;
     source: AlbumSource;
     coverUrl: string | null;
+    /** Reuse the low-resolution palette image behind the full-resolution cover. */
+    backgroundImage?: string | null;
     colors: ColorPalette | null;
     onReload: () => void;
     children?: ReactNode;
@@ -24,6 +26,7 @@ export function AlbumHero({
     album,
     source,
     coverUrl,
+    backgroundImage,
     colors,
     onReload,
     children,
@@ -35,7 +38,8 @@ export function AlbumHero({
 
     return (
         <MediaHero
-            image={coverUrl}
+            image={backgroundImage || coverUrl}
+            coverImage={coverUrl}
             alt={album.title}
             colors={colors}
             tint="music"
