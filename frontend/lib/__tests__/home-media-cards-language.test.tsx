@@ -2,6 +2,7 @@
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { LanguageProvider } from "@/lib/i18n/language-context";
 import { MixesGrid } from "@/features/home/components/MixesGrid";
 import { AudiobooksGrid } from "@/features/home/components/AudiobooksGrid";
@@ -20,8 +21,11 @@ vi.mock("@/components/cards/MediaCard", () => ({
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
 let root: Root;
+let queryClient: QueryClient;
 async function render(node: React.ReactNode) {
-    await act(async () => root.render(<LanguageProvider>{node}</LanguageProvider>));
+    await act(async () => root.render(
+        <QueryClientProvider client={queryClient}><LanguageProvider>{node}</LanguageProvider></QueryClientProvider>
+    ));
 }
 async function changeLanguage(locale: "nl" | "en") {
     await act(async () => {
@@ -32,6 +36,7 @@ async function changeLanguage(locale: "nl" | "en") {
 beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem("kima-hub-language");
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -39,6 +44,7 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    queryClient.clear();
 });
 
 describe("remaining homepage media tile translations", () => {
