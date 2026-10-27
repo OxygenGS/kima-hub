@@ -208,10 +208,9 @@ export default function AlbumPage({ params }: AlbumPageProps) {
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
-                        background: `linear-gradient(180deg,
-              ${(colors || {}).vibrant}15 0%,
-              ${(colors || {}).darkVibrant}08 50%,
-              transparent 100%)`,
+                        background: colors
+                            ? `linear-gradient(180deg, ${colors.vibrant}15 0%, ${colors.darkVibrant}08 50%, transparent 100%)`
+                            : "transparent",
                     }}
                 />
 
