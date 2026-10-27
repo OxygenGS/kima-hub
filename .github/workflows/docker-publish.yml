@@ -57,6 +57,10 @@ jobs:
                   fi
                   # A tag on an unmerged feature branch must never ship as stable.
                   TAG_COMMIT="$(git rev-parse "refs/tags/$VERSION^{commit}")"
+                  test "$(git rev-parse HEAD)" = "$TAG_COMMIT" || {
+                      echo "Checked out source does not match stable tag commit" >&2
+                      exit 1
+                  }
                   if ! git merge-base --is-ancestor "$TAG_COMMIT" "refs/remotes/origin/$DEFAULT_BRANCH"; then
                       echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
                       exit 1
