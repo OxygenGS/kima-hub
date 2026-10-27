@@ -161,7 +161,7 @@ export const MediaCard = memo(function MediaCard({
                             className={cn(
                                 "absolute bottom-3 right-3 w-11 h-11 rounded-full border border-white/15 bg-black/55 backdrop-blur-[2px]",
                                 "flex items-center justify-center transition-[transform,background-color] duration-150",
-                                "hover:bg-black/75 hover:scale-105 active:scale-95",
+                                "hover:bg-black/75 hover:scale-105 active:scale-95 motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white",
                             )}
                         >
                             <ActionIcon
@@ -177,7 +177,7 @@ export const MediaCard = memo(function MediaCard({
                         onClick={stop(onDelete)}
                         aria-label={`${translate(locale, "Delete")} ${title}`}
                         title={`${translate(locale, "Delete")} ${title}`}
-                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/80 border border-white/20 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-danger/90 transition-opacity duration-150"
+                        className="absolute top-2 right-2 w-11 h-11 rounded-full bg-black/80 border border-white/20 hidden md:flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-danger/90 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     >
                         <Trash2 className="w-4 h-4 text-white" />
                     </button>
@@ -212,7 +212,7 @@ export const MediaCard = memo(function MediaCard({
         "data-tv-card": true,
         "data-tv-card-index": index,
         style: { "--i": index } as CSSProperties,
-        className: cn("group block animate-rise [animation-delay:calc(var(--i)*var(--stagger))]", className),
+        className: cn("group block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] animate-rise motion-reduce:animate-none [animation-delay:calc(var(--i)*var(--stagger))]", className),
     };
 
     return href ? (
