@@ -40,6 +40,8 @@ export function ArtistActionBar({
     const showDownloadAll = canRequestAlbums && (source === "discovery" || availableAlbums.length > 0);
     const showPause = isPlaying && isPlayingThisArtist;
     const showRadio = source === "library";
+    // Discovery-only artists have nothing playable: do not show an inert action.
+    const hasPlayableAlbums = albums.some((album) => album.owned);
 
     const handlePlayPauseClick = () => {
         if (showPause) {
@@ -51,6 +53,7 @@ export function ArtistActionBar({
 
     return (
         <MediaActionBar
+            showPlay={hasPlayableAlbums}
             showPause={showPause}
             onPlayPause={handlePlayPauseClick}
             onShuffle={onShuffle}
