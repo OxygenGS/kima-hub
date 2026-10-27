@@ -9,7 +9,7 @@
 <p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
 
 <p>
-  The Kima Hub v1.11 experience, refined with native Symfonium and Feishin support,
+  The Kima Hub v1.11 experience, refined with modern, legacy-free authentication for existing Symfonium and Feishin support,
   English/Dutch language settings, user permissions, performance polish and security improvements.
 </p>
 
@@ -47,7 +47,7 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 
 ### What makes the OxygenGS fork different
 
-- **Modern music clients:** Connect **Symfonium** and **Feishin** with newly generated Native Apps API keys. Native Subsonic salted-token authentication works without Legacy Authentication; Symfonium library sync works without Compatibility Mode (verified on v1.11.10).
+- **Legacy-free client compatibility:** Kima already supported **Symfonium** and **Feishin**. The OxygenGS fork improves that existing integration: newly generated Native Apps API keys enable sign-in **without Legacy Authentication**, and Symfonium syncs **without Compatibility Mode** (verified on v1.11.10).
 - **English + Dutch:** Switch the signed-in interface language in Settings. The login screen follows your browser preference but does not offer its own language selector. Music metadata stays untouched.
 - **Permissions that really apply:** Admins can choose who may request albums or download tracks. The backend enforces these rights; hiding a button is never the only protection.
 - **Your identity:** Administrators can customize the app name, tagline, accent color, logo and favicon.
@@ -56,7 +56,7 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 - **Hardened services:** Tighter internal network and credential boundaries, non-root backend/audio service processes and improved audio-processing safeguards.
 - **The full v1.11 experience:** Upstream [Kima Hub v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) features and library improvements are integrated into **one** OxygenGS app.
 
-### Native apps: Symfonium and Feishin
+### Improved Symfonium and Feishin compatibility
 
 1. Update to a [verified published image](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10).
 2. In **Settings → Native Apps**, generate a **new API key** for each client. Keys made before v1.11.9 do not support salted-token login.
