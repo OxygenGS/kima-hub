@@ -65,6 +65,24 @@ describe("OpenSubsonic search3 empty-query fast synchronization", () => {
         );
     });
 
+    it('treats Symfonium query="" as an empty fast-sync request', async () => {
+        (prisma.track.findMany as jest.Mock).mockResolvedValue([
+            { id: "song-1", title: "Track", displayTitle: null, duration: 187,
+              mime: "FLAC", fileSize: 1234, trackNo: 1, discNumber: 1,
+              albumId: "album-1", album: { title: "Album", displayTitle: null,
+                  year: 2026, artistId: "artist-1",
+                  artist: { name: "Artist", displayName: null } } },
+        ]);
+        const response = await request(app).get("/rest/search3.view")
+            .query({ query: '""', artistCount: 0, albumCount: 0,
+                songCount: 500, songOffset: 500, f: "json" });
+        expect(response.body["subsonic-response"].status).toBe("ok");
+        expect(response.body["subsonic-response"].searchResult3.song[0].id).toBe("song-1");
+        expect(prisma.track.findMany).toHaveBeenCalledWith(
+            expect.objectContaining({ take: 500, skip: 500 }),
+        );
+    });
+
     it("returns empty lists for zero category limits without querying the database", async () => {
         const response = await request(app).get("/rest/search3.view")
             .query({ query: "", artistCount: 0, albumCount: 0, songCount: 0, f: "json" });

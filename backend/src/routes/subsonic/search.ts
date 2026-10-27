@@ -11,7 +11,11 @@ export const searchRouter = Router();
 // ===================== SEARCH =====================
 
 searchRouter.all(["/search3.view", "/search2.view", "/search.view"], wrap(async (req, res) => {
-    const query = (req.query.query as string | undefined) ?? "";
+    const rawQuery = (req.query.query as string | undefined) ?? "";
+    // Symfonium sends query="" (literal quote characters) for fast library sync.
+    // OpenSubsonic requires treating it like an empty query, not searching for
+    // two quote characters. Keep non-empty quoted search phrases unchanged.
+    const query = rawQuery.trim() === '""' ? "" : rawQuery;
 
     const artistCount = clamp(parseIntParam(req.query.artistCount as string | undefined, 20), 0, 500);
     const albumCount  = clamp(parseIntParam(req.query.albumCount  as string | undefined, 20), 0, 500);
