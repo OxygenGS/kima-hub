@@ -1,5 +1,6 @@
 "use client";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useMemo } from "react";
 
 import {
     useAudioState,
@@ -50,8 +51,9 @@ export default function ArtistPage() {
     const { downloadArtist, downloadAlbum } = useDownloadActions();
     const preview = usePreview();
 
-    const ownedAlbums = albums.filter((a) => a.owned);
-    const availableAlbums = albums.filter((a) => !a.owned);
+    // Keep the discography arrays stable when playback state changes.
+    const ownedAlbums = useMemo(() => albums.filter((a) => a.owned), [albums]);
+    const availableAlbums = useMemo(() => albums.filter((a) => !a.owned), [albums]);
 
     // Get image URLs for display and color extraction
     const rawImageUrl =

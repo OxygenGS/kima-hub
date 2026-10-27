@@ -29,10 +29,12 @@ function extractColorsFromImage(imageUrl: string): Promise<ColorPalette> {
                     throw new Error("Could not get canvas context");
                 }
 
-                // Scale down for performance
-                const scaleFactor = 0.1;
-                canvas.width = img.width * scaleFactor;
-                canvas.height = img.height * scaleFactor;
+                // Palette extraction only needs a small thumbnail. Bounding both
+                // axes also caps canvas allocation for unusually large artwork.
+                const maxDimension = 64;
+                const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight, 1));
+                canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
 
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
