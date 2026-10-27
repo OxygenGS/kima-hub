@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current fork release:** [v1.11.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.0) — based on upstream Kima Hub v1.11.0, with OxygenGS branding, per-user music permissions, extra security controls and English/Dutch interface selection.
+**Current fork release:** [v1.11.10](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10) — based on upstream Kima Hub v1.11.0, with OxygenGS branding, modern Symfonium/Feishin authentication, native Symfonium synchronization, user permissions, security hardening and an English/Dutch interface.
 
 Use the versioned **OxygenGS** image, not the upstream `chevron7locked/kima` image. The GitHub release entry and the container publication are separate steps: confirm that the [Docker publish workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) has succeeded before pulling a newly released tag. Never assume an image exists just because the release page exists.
 
@@ -15,7 +15,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.11.0
+  ghcr.io/oxygengs/kima-hub:v1.11.10
 ```
 
 Open [http://localhost:3030](http://localhost:3030), complete onboarding and create your administrator account.
@@ -26,10 +26,10 @@ Open [http://localhost:3030](http://localhost:3030), complete onboarding and cre
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Both let you select the desired **published** release with `VERSION=v1.11.0`.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Both let you select the desired **published** release with `VERSION=v1.11.10`.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.11.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.11.10 docker compose -f docker-compose.prod.yml up -d
 ```
 
 A minimal standalone Compose configuration:
@@ -37,7 +37,7 @@ A minimal standalone Compose configuration:
 ```yaml
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:v1.11.0
+    image: ghcr.io/oxygengs/kima-hub:v1.11.10
     ports:
       - "3030:3030"
     volumes:
@@ -67,8 +67,8 @@ Follow the full [safe AIO update and rollback guide](safe-aio-updates.md). Never
 
 | Channel | Docker image | Usage |
 | --- | --- | --- |
-| Stable | `ghcr.io/oxygengs/kima-hub:v1.11.0` | Current versioned OxygenGS release; verify GHCR publishing first |
-| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.10.0` | Older release for **unmodified, original** v1.10 data only |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.11.10` | Current versioned OxygenGS release; verify GHCR publishing first |
+| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.11.9` | Previous patch release; use only with a compatible data backup |
 | Pre-release | A specific published `prerelease-...` tag/digest | Testing only, not a production upgrade path |
 | `:latest` | Not automatically promoted | Avoid for controlled upgrades |
 
