@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current fork release:** [v1.11.10](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10) — based on upstream Kima Hub v1.11.0, with OxygenGS branding, modern Symfonium/Feishin authentication, native Symfonium synchronization, user permissions, security hardening and an English/Dutch interface.
+**Current fork release:** [v1.11.10](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10) — based on upstream Kima Hub v1.11.0, with OxygenGS branding, legacy-free authentication for existing Symfonium/Feishin integrations and compatibility-mode-free Symfonium synchronization, user permissions, security hardening and an English/Dutch interface.
 
 Use the versioned **OxygenGS** image, not the upstream `chevron7locked/kima` image. The GitHub release entry and the container publication are separate steps: confirm that the [Docker publish workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) has succeeded before pulling a newly released tag. Never assume an image exists just because the release page exists.
 
