@@ -7,6 +7,7 @@ import { Music, Library } from "lucide-react";
 import { api } from "@/lib/api";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { MediaCard } from "@/components/cards/MediaCard";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 
 interface SimilarArtistsProps {
     similarArtists: SimilarArtist[];
@@ -14,6 +15,7 @@ interface SimilarArtistsProps {
 
 export function SimilarArtists({ similarArtists }: SimilarArtistsProps) {
     const { t } = useLanguage();
+    const { prefetchArtist } = useDetailPrefetch();
     if (!similarArtists || similarArtists.length === 0) {
         return null;
     }
@@ -47,6 +49,7 @@ export function SimilarArtists({ similarArtists }: SimilarArtistsProps) {
                         <MediaCard
                             key={artist.id || artist.name}
                             href={`/artist/${navigationId}`}
+                            onPrefetch={artist.inLibrary ? () => prefetchArtist(navigationId) : undefined}
                             title={artist.name}
                             subtitle={matchPercentage !== null ? `${libraryLine} · ${matchPercentage}% ${t("match")}` : libraryLine}
                             imageUrl={imageUrl}
