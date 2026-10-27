@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/hooks/useQueries";
-import { prefetchAlbumDetail, prefetchArtistDetail } from "@/lib/detail-prefetch";
+import { getCachedAlbumDetails, prefetchAlbumDetail, prefetchArtistDetail } from "@/lib/detail-prefetch";
 
 vi.mock("@/lib/api", () => ({
     api: {
@@ -37,6 +37,8 @@ describe("Project Turbo: intent prefetch", () => {
         const qc = client();
         await Promise.all([prefetchAlbumDetail(qc, "album-1"), prefetchAlbumDetail(qc, "album-1")]);
         await prefetchAlbumDetail(qc, "album-1");
+        const album = await getCachedAlbumDetails(qc, "album-1");
+        expect(album).toMatchObject({ title: "Album" });
         expect(api.getAlbum).toHaveBeenCalledTimes(1);
         expect(qc.getQueryData(queryKeys.album("album-1"))).toMatchObject({ title: "Album" });
         qc.clear();
