@@ -125,12 +125,14 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     psycopg2-binary \
     'pgvector>=0.2.0' \
     'requests>=2.31.0' \
-    # 2.26.0 is the latest 2.x binding (Worker API the analyzer imports); its
-    # msgpack==1.2.1 pin is the GHSA-6v7p-g79w-8964 fixed release.
-    'bullmq==2.26.0' \
+    # BullMQ 3.2.8 pins patched msgpack 1.2.3 (CVE-2026-114613).
+    # Keep this aligned with the standalone CLAP service requirements.
+    'bullmq==3.2.8' \
     'yt-dlp>=2024.12.0' \
-    # Floor the transitive msgpack: <1.2.1 carries GHSA-6v7p-g79w-8964.
-    'msgpack>=1.2.1'
+    'msgpack==1.2.3'
+
+# Check both pins and the Worker import before shipping either architecture.
+RUN python3 -c "import importlib.metadata as m; from bullmq import Worker; assert m.version('msgpack') == '1.2.3'"
 
 # ML dependencies -- ONNX Runtime for CLAP (audio + text) and MusiCNN.
 # Exact versions: the sound vectors and the MusiCNN parity were validated on these, and a
