@@ -68,6 +68,8 @@ WORKDIR /app
 # Torch-free: requirements.txt carries the ONNX stack only, pinned.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# Validate that the patched queue client still exposes our worker entry point.
+RUN python -c "import importlib.metadata as m; from bullmq import Worker; assert m.version('msgpack') == '1.2.3'"
 
 # Application code -- ALL of the runtime modules. analyzer.py imports
 # onnx_backend at module load, which imports clap_mel. verify_runtime.py and

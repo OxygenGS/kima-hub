@@ -17,6 +17,15 @@ export async function fetchAlbumDetails(id: string) {
     }
 }
 
+/** Shared cache contract for album navigation, prefetch and detail screens. */
+export function albumDetailQueryOptions(id: string) {
+    return {
+        queryKey: queryKeys.album(id),
+        queryFn: () => fetchAlbumDetails(id),
+        staleTime: 10 * 60 * 1000,
+    };
+}
+
 export function useAlbumData(albumId?: string) {
     const params = useParams();
     const id = albumId || (params.id as string);
@@ -27,10 +36,8 @@ export function useAlbumData(albumId?: string) {
         error,
         refetch,
     } = useQuery({
-        queryKey: queryKeys.album(id || ""),
-        queryFn: () => fetchAlbumDetails(id),
+        ...albumDetailQueryOptions(id || ""),
         enabled: !!id,
-        staleTime: 10 * 60 * 1000,
         retry: 1,
     });
 

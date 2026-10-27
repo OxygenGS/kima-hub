@@ -16,9 +16,10 @@ tokenizers==0.22.1
 redis>=4.5.0
 psycopg2-binary>=2.9.0
 pgvector>=0.2.0
-# 2.26.0 pins msgpack 1.2.1, the fixed release for GHSA-6v7p-g79w-8964.
-bullmq==2.26.0
-msgpack==1.2.1
+# BullMQ 2.26.0 pins msgpack 1.2.1 (affected by CVE-2026-114613).
+# BullMQ 3.2.8 requires the patched msgpack 1.2.3; keep both pins aligned.
+bullmq==3.2.8
+msgpack==1.2.3
 
 # Utilities
 # The all-in-one image's numpy, which the sound-vector parity was measured on.
