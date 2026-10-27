@@ -6,7 +6,7 @@ import { translate } from "@/lib/i18n/translations";
 import { Track } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlaylistSelector } from "@/components/ui/PlaylistSelector";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { CollectionTracksSkeleton } from "./CollectionGridSkeleton";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { AudioLines, ListPlus, Plus, Trash2, Play } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -231,9 +231,7 @@ export function TracksList({
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <GradientSpinner size="md" />
-            </div>
+            <CollectionTracksSkeleton />
         );
     }
 
