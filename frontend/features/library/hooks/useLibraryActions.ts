@@ -1,4 +1,6 @@
 import { useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getCachedAlbumDetails } from "@/lib/detail-prefetch";
 import { api } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAddToPlaylistMutation } from "@/hooks/useQueries";
@@ -21,6 +23,7 @@ const formatTrackForAudio = (track: Track) => ({
 
 export function useLibraryActions() {
     const { playTracks, addToQueue } = useAudioControls();
+    const queryClient = useQueryClient();
     const { mutateAsync: addToPlaylist } = useAddToPlaylistMutation();
 
     const playArtist = useCallback(async (artistId: string) => {
@@ -30,7 +33,7 @@ export function useLibraryActions() {
                 return;
             }
 
-            const firstAlbum = await api.getAlbum(albumsData.albums[0].id);
+            const firstAlbum = await getCachedAlbumDetails(queryClient, albumsData.albums[0].id);
             if (
                 !firstAlbum ||
                 !firstAlbum.tracks ||
@@ -56,11 +59,11 @@ export function useLibraryActions() {
         } catch (error) {
             console.error("Error playing artist:", error);
         }
-    }, [playTracks]);
+    }, [playTracks, queryClient]);
 
     const playAlbum = useCallback(async (albumId: string) => {
         try {
-            const album = await api.getAlbum(albumId);
+            const album = await getCachedAlbumDetails(queryClient, albumId);
             if (!album || !album.tracks || album.tracks.length === 0) {
                 return;
             }
@@ -82,7 +85,7 @@ export function useLibraryActions() {
         } catch (error) {
             console.error("Error playing album:", error);
         }
-    }, [playTracks]);
+    }, [playTracks, queryClient]);
 
     const addTrackToQueue = useCallback((track: Track) => {
         addToQueue(formatTrackForAudio(track));
