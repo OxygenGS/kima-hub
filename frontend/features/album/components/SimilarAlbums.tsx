@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { SimilarAlbum } from "../types";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 
 interface SimilarAlbumsProps {
     similarAlbums: SimilarAlbum[];
@@ -11,6 +12,7 @@ interface SimilarAlbumsProps {
 
 export function SimilarAlbums({ similarAlbums }: SimilarAlbumsProps) {
     const { t } = useLanguage();
+    const { prefetchAlbum } = useDetailPrefetch();
     return (
         <section>
             <SectionHeader type="album" title={t("More Like This")} />
@@ -19,6 +21,7 @@ export function SimilarAlbums({ similarAlbums }: SimilarAlbumsProps) {
                     <MediaCard
                         key={album.id}
                         href={`/album/${album.id}`}
+                        onPrefetch={album.owned ? () => prefetchAlbum(album.id) : undefined}
                         imageUrl={album.coverArt ? api.getCoverArtUrl(album.coverArt, 300) : album.coverUrl}
                         title={album.title}
                         subtitle={album.artist?.name}
