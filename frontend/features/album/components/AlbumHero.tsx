@@ -10,6 +10,7 @@ import { getAlbumDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatDuration, plural } from "@/lib/format";
 import { MediaHero } from "@/components/ui/MediaHero";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 
 interface AlbumHeroProps {
     album: Album;
@@ -29,6 +30,7 @@ export function AlbumHero({
     children,
 }: AlbumHeroProps) {
     const { t } = useLanguage();
+    const { prefetchArtist } = useDetailPrefetch();
     const displayData = getAlbumDisplayData(album);
 
     const totalDuration = album.duration ? formatDuration(album.duration) : "";
@@ -73,7 +75,10 @@ export function AlbumHero({
                     {album.artist && (
                         <Link
                             href={`/artist/${album.artist.id}`}
-                            className="font-medium text-white hover:underline"
+                            onMouseEnter={source === "library" ? () => prefetchArtist(album.artist!.id) : undefined}
+                            onFocus={source === "library" ? () => prefetchArtist(album.artist!.id) : undefined}
+                            onTouchStart={source === "library" ? () => prefetchArtist(album.artist!.id) : undefined}
+                            className="font-medium text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded"
                         >
                             {album.artist.name}
                         </Link>
