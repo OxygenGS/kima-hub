@@ -8,6 +8,7 @@ import { cascadeStyle } from "@/lib/motion";
 import { MediaCard } from "@/components/cards/MediaCard";
 import type { Artist, PopularArtist } from "../types";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 
 interface ArtistTile {
     key: string;
@@ -15,15 +16,18 @@ interface ArtistTile {
     href: string;
     coverArt?: string;
     subtitle: string;
+    prefetchId?: string;
 }
 
 function ArtistTileGrid({ tiles }: { tiles: ArtistTile[] }) {
+    const { prefetchArtist } = useDetailPrefetch();
     return (
         <HorizontalCarousel style={cascadeStyle(tiles.length)}>
             {tiles.map((tile, index) => (
                 <CarouselItem key={tile.key}>
                     <MediaCard
                         href={tile.href}
+                        onPrefetch={tile.prefetchId ? () => prefetchArtist(tile.prefetchId!) : undefined}
                         title={tile.name}
                         subtitle={tile.subtitle}
                         imageUrl={tile.coverArt ? api.getCoverArtUrl(tile.coverArt, 300) : null}
@@ -47,6 +51,7 @@ export const ArtistsGrid = memo(function ArtistsGrid({ artists }: { artists: Art
                 key: a.id,
                 name: a.name,
                 href: `/artist/${a.id}`,
+                prefetchId: a.id,
                 coverArt: a.coverArt,
                 subtitle: t("Artist"),
             }))}
