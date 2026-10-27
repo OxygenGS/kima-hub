@@ -9,8 +9,8 @@
 <p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
 
 <p>
-  The Kima Hub v1.11 experience, refined with OxygenGS branding, English/Dutch language settings,
-  stronger user permissions and thoughtful security improvements.
+  The Kima Hub v1.11 experience, refined with native Symfonium and Feishin support,
+  English/Dutch language settings, user permissions, performance polish and security improvements.
 </p>
 
 <p>
@@ -47,11 +47,23 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 
 ### What makes the OxygenGS fork different
 
-- **English + Dutch:** Switch the interface language from login, onboarding or Settings. Your song titles and stored library data stay untouched.
+- **Modern music clients:** Connect **Symfonium** and **Feishin** with newly generated Native Apps API keys. Native Subsonic salted-token authentication works without Legacy Authentication; Symfonium library sync works without Compatibility Mode (verified on v1.11.10).
+- **English + Dutch:** Switch the signed-in interface language in Settings. The login screen follows your browser preference but does not offer its own language selector. Music metadata stays untouched.
 - **Permissions that really apply:** Admins can choose who may request albums or download tracks. The backend enforces these rights; hiding a button is never the only protection.
 - **Your identity:** Administrators can customize the app name, tagline, accent color, logo and favicon.
+- **Faster and smoother navigation:** Artist/album prefetching, concurrent artist detail loading, responsive loading skeletons, refined player/queue interactions and accessibility improvements.
+- **Smaller Docker images:** Reduced redundant model-cache and frontend development layers for AMD64 and ARM64.
 - **Hardened services:** Tighter internal network and credential boundaries, non-root backend/audio service processes and improved audio-processing safeguards.
 - **The full v1.11 experience:** Upstream [Kima Hub v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) features and library improvements are integrated into **one** OxygenGS app.
+
+### Native apps: Symfonium and Feishin
+
+1. Update to a [verified published image](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10).
+2. In **Settings → Native Apps**, generate a **new API key** for each client. Keys made before v1.11.9 do not support salted-token login.
+3. Add your Kima server in Symfonium or Feishin. Use the new key as the password; where supported, an API key can identify the account without a username.
+4. Keep **Legacy Authentication off**. In Symfonium you can also leave **Compatibility Mode off**.
+
+For details, see [OpenSubsonic client setup and authentication](docs/subsonic.md).
 
 ## A look inside
 
@@ -91,7 +103,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.11.0
+  ghcr.io/oxygengs/kima-hub:v1.11.10
 ```
 
 Then visit **http://localhost:3030** to create your administrator account.
@@ -100,7 +112,7 @@ Then visit **http://localhost:3030** to create your administrator account.
 - **`/data`** — your database, credentials, generated secrets and caches. **Preserve and back up this entire volume.**
 - **`3030`** — the web interface. Internal application services do not require separate exposed ports.
 
-Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml) (set `VERSION=v1.11.0` for this release).
+Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml) (set `VERSION=v1.11.10` for this release).
 
 ### Updating an existing installation?
 
