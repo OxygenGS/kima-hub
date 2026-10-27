@@ -1,8 +1,18 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.11.9 — release preparation (unpublished)
+
+Native Subsonic/OpenSubsonic interoperability for music clients:
+- Support paginated empty-query `search3.view` for Symfonium library fast-sync, with stable artist/album/song ordering and bounded query sizes (PR #124).
+- Include complete playable song metadata using the existing Subsonic mapper. Exclude DISCOVER-only albums and missing/corrupt tracks, and preserve the old `search.view` and `search2.view` behavior (PR #124).
+- Accept standard Subsonic salted `t=/s=` token authentication with newly issued high-entropy Native Apps keys so Symfonium and Feishin can connect with Legacy Authentication disabled (PR #125).
+- Continue storing SHA-256 key hashes for lookup, and store an authenticated-encrypted copy for salted-token verification. Preserve key revocation, 2FA restrictions and pre-upgrade key behavior.
+- Add one optional `ApiKey.tokenSecretEncrypted` column through an additive Prisma migration. Existing keys still work with `p=` or `apiKey=` but **must be reissued** to use `t=/s=`; test the new key in each client before revoking the old one.
+- Before stable publishing: pass combined full CI, native AMD64/ARM64 build and security scans, upgrade/rollback checks, and verify Symfonium and Feishin in native mode. No installation-specific or CT101 changes.
+
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
-## OxygenGS fork v1.11.8 — release preparation (unpublished)
+## OxygenGS fork v1.11.8 — released 2026-10-26
 
 Docker image size optimization work since v1.11.7:
 - Read-only image size auditing and largest-layer ranking for AMD64 and ARM64 (PRs #111-112).
