@@ -36,6 +36,19 @@ jobs:
               );
               core.setOutput('fast_ui', String(fast));
               core.info(fast ? 'Frontend-only UI: skip costly image jobs.' : 'Run full image validation.');
+    release-metadata:
+        name: Release version and changelog consistency
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+            - name: Validate version metadata and guard regressions
+              run: |
+                  set -euo pipefail
+                  python3 .github/ci/check-release-metadata.py --self-test
+                  python3 .github/ci/check-release-metadata.py --candidate
+
     naming-audit:
         name: No Legacy Project Naming
         runs-on: ubuntu-24.04
