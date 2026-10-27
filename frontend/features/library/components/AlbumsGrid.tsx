@@ -1,13 +1,11 @@
 "use client";
 
 import { memo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/hooks/useQueries";
-import { fetchAlbumDetails } from "@/features/album/hooks/useAlbumData";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Album } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { CollectionGridSkeleton } from "./CollectionGridSkeleton";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { Disc3, Play } from "lucide-react";
 import { api } from "@/lib/api";
@@ -39,19 +37,13 @@ const AlbumCardItem = memo(
         onDelete,
         moodKey,
     }: AlbumCardItemProps) {
-        const queryClient = useQueryClient();
+        const { prefetchAlbum } = useDetailPrefetch();
         const { t } = useLanguage();
-        const prefetchAlbum = () => {
-            void queryClient.prefetchQuery({
-                queryKey: queryKeys.album(album.id),
-                queryFn: () => fetchAlbumDetails(album.id),
-                staleTime: 10 * 60 * 1000,
-            });
-        };
+
         return (
             <MediaCard
                 href={`/album/${album.id}`}
-                onPrefetch={prefetchAlbum}
+                onPrefetch={() => prefetchAlbum(album.id)}
                 title={album.title}
                 subtitle={album.artist?.name}
                 imageUrl={album.coverArt ? api.getCoverArtUrl(album.coverArt, 200) : null}
@@ -90,9 +82,7 @@ const AlbumsGrid = memo(function AlbumsGrid({
 }: AlbumsGridProps) {
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <GradientSpinner size="md" />
-            </div>
+            <CollectionGridSkeleton />
         );
     }
 
