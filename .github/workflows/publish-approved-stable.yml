@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: Stable tag to publish (v1.11.8)
+        description: Stable tag to publish after all release gates pass
         required: true
-        default: v1.11.8
+        default: v1.12.0
         type: string
 
 permissions:
