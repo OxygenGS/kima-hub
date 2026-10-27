@@ -1,15 +1,13 @@
 "use client";
 
 import { memo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/hooks/useQueries";
-import { fetchArtistDetails } from "@/features/artist/hooks/useArtistData";
+import { useDetailPrefetch } from "@/lib/detail-prefetch";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Music, Play } from "lucide-react";
 import { Artist } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/lib/api";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { CollectionGridSkeleton } from "./CollectionGridSkeleton";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { cascadeStyle } from "@/lib/motion";
 import { plural } from "@/lib/format";
@@ -40,19 +38,13 @@ const ArtistCardItem = memo(
         onDelete,
         moodKey,
     }: ArtistCardItemProps) {
-        const queryClient = useQueryClient();
+        const { prefetchArtist } = useDetailPrefetch();
         const { t } = useLanguage();
-        const prefetchArtist = () => {
-            void queryClient.prefetchQuery({
-                queryKey: queryKeys.artist(artist.id),
-                queryFn: () => fetchArtistDetails(artist.id),
-                staleTime: 10 * 60 * 1000,
-            });
-        };
+
         return (
             <MediaCard
                 href={`/artist/${artist.id}`}
-                onPrefetch={prefetchArtist}
+                onPrefetch={() => prefetchArtist(artist.id)}
                 title={artist.name}
                 subtitle={plural(artist.albumCount || 0, "album")}
                 imageUrl={artist.coverArt ? api.getCoverArtUrl(artist.coverArt, 200) : null}
@@ -91,9 +83,7 @@ const ArtistsGrid = memo(function ArtistsGrid({
 }: ArtistsGridProps) {
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <GradientSpinner size="md" />
-            </div>
+            <CollectionGridSkeleton />
         );
     }
 
