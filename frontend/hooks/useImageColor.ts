@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export interface ColorPalette {
     vibrant: string;
@@ -278,7 +278,8 @@ function resolveSync(url: string | null | undefined): { colors: ColorPalette | n
 }
 
 export function useImageColor(imageUrl: string | null | undefined) {
-    const initial = resolveSync(imageUrl);
+    // Playback/state renders do not need to re-read and parse the palette cache.
+    const initial = useMemo(() => resolveSync(imageUrl), [imageUrl]);
     const [colors, setColors] = useState<ColorPalette | null>(initial.colors);
     const [isLoading, setIsLoading] = useState(initial.needsAsync);
 
