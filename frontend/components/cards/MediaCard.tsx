@@ -151,7 +151,7 @@ export const MediaCard = memo(function MediaCard({
 
                 {action && ActionIcon && (
                     <>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 pointer-events-none" />
                         <button
                             type="button"
                             onClick={stop(action.onClick)}
@@ -161,7 +161,7 @@ export const MediaCard = memo(function MediaCard({
                             className={cn(
                                 "absolute bottom-3 right-3 w-11 h-11 rounded-full border border-white/15 bg-black/55 backdrop-blur-[2px]",
                                 "flex items-center justify-center transition-[transform,background-color] duration-150",
-                                "hover:bg-black/75 hover:scale-105 active:scale-95",
+                                "hover:bg-black/75 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                             )}
                         >
                             <ActionIcon
@@ -212,11 +212,16 @@ export const MediaCard = memo(function MediaCard({
         "data-tv-card": true,
         "data-tv-card-index": index,
         style: { "--i": index } as CSSProperties,
-        className: cn("group block animate-rise [animation-delay:calc(var(--i)*var(--stagger))]", className),
+        className: cn("group block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--bg-primary)] animate-rise [animation-delay:calc(var(--i)*var(--stagger))]", className),
     };
 
     return href ? (
-        <Link href={href} {...rootProps} onMouseEnter={onPrefetch} onFocus={onPrefetch}>
+        <Link href={href} {...rootProps} onMouseEnter={onPrefetch} onFocus={onPrefetch}
+            onTouchStart={onPrefetch ? (event) => {
+                // A nested play/delete control is not a detail navigation intent.
+                if ((event.target as HTMLElement).closest?.("button")) return;
+                onPrefetch();
+            } : undefined}>
             {body}
         </Link>
     ) : (
