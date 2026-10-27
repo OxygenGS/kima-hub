@@ -66,13 +66,19 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                             data-track-index={index}
                             tabIndex={0}
                             className={cn(
-                                "grid grid-cols-[40px_1fr_auto] md:grid-cols-[40px_minmax(200px,4fr)_minmax(80px,1fr)_80px] gap-4 py-2 rounded-md hover:bg-white/5 transition-colors group cursor-pointer touch-manipulation",
+                                "grid grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(200px,4fr)_minmax(80px,1fr)_80px] gap-2 sm:gap-4 px-1 sm:px-3 py-2 rounded-lg hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 transition-colors group cursor-pointer touch-manipulation",
                                 isPlaying && "bg-white/10",
-                                "animate-rise [animation-delay:calc(var(--i)*var(--stagger))]",
+                                "animate-rise motion-reduce:animate-none [animation-delay:calc(var(--i)*var(--stagger))]",
                             )}
                             style={{ "--i": index } as unknown as React.CSSProperties}
                             onDoubleClick={() => activate(track)}
                             onTouchEnd={onTouchEnd}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter" && event.target === event.currentTarget) {
+                                    event.preventDefault();
+                                    activate(track);
+                                }
+                            }}
                         >
                             <div className="flex items-center justify-center">
                                 <button
@@ -80,7 +86,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                         e.stopPropagation();
                                         activate(track);
                                     }}
-                                    className="group/play w-8 h-8 flex items-center justify-center"
+                                    className="group/play w-11 h-11 flex items-center justify-center rounded-lg hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                                     aria-label={t(isPlaying ? "Pause" : "Play")}
                                 >
                                     <span
@@ -159,7 +165,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
                                             onPreview(track);
                                         }}
                                         aria-label={isPreviewPlaying ? `${t("Pause preview")}: ${track.title}` : `${t("Play preview")}: ${track.title}`}
-                                        className="p-1.5 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-hover:translate-y-0 focus-visible:translate-y-0 translate-y-1 transition-[opacity,transform] duration-150 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white"
+                                        className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70"
                                     >
                                         {isPreviewPlaying ? (
                                             <Pause className="w-4 h-4" />
