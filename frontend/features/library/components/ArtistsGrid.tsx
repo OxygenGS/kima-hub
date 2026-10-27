@@ -9,7 +9,7 @@ import { Music, Play } from "lucide-react";
 import { Artist } from "../types";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/lib/api";
-import { GradientSpinner } from "@/components/ui/GradientSpinner";
+import { CollectionGridSkeleton } from "@/features/library/components/CollectionGridSkeleton";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { cascadeStyle } from "@/lib/motion";
 import { plural } from "@/lib/format";
@@ -90,11 +90,7 @@ const ArtistsGrid = memo(function ArtistsGrid({
     gridKey,
 }: ArtistsGridProps) {
     if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <GradientSpinner size="md" />
-            </div>
-        );
+        return <CollectionGridSkeleton />;
     }
 
     if (artists.length === 0) {
