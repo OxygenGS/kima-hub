@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Album, ArtistSource } from "../types";
 import { MediaCard } from "@/components/cards/MediaCard";
 import { Disc3, Download } from "lucide-react";
@@ -15,6 +15,37 @@ interface AvailableAlbumsProps {
     source: ArtistSource | null;
     onDownloadAlbum: (album: Album) => void;
     isPendingDownload: (mbid: string) => boolean;
+}
+
+/**
+ * Only resolve uncached covers near the viewport. The backend may have to
+ * consult external artwork services, so eager requests for every discography
+ * card add unnecessary work to the slowest artist pages.
+ * Browsers without IntersectionObserver retain the previous eager behavior.
+ */
+function useNearViewport(enabled: boolean) {
+    const targetRef = useRef<HTMLDivElement>(null);
+    const [nearViewport, setNearViewport] = useState(false);
+
+    useEffect(() => {
+        if (!enabled || nearViewport) return;
+        const target = targetRef.current;
+        if (!target || typeof IntersectionObserver === "undefined") {
+            setNearViewport(true);
+            return;
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                setNearViewport(true);
+                observer.disconnect();
+            }
+        }, { rootMargin: "300px 0px" });
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [enabled, nearViewport]);
+
+    return { targetRef, nearViewport };
 }
 
 // Component to handle lazy-loading cover art for albums without cached covers
@@ -43,12 +74,11 @@ function LazyAlbumCard({
         return null;
     });
     const [fetchAttempted, setFetchAttempted] = useState(false);
+    const mbid = [album.rgMbid, album.mbid].find(isMbid);
+    const { targetRef, nearViewport } = useNearViewport(!coverArt && !fetchAttempted && !!mbid);
 
     useEffect(() => {
-        if (coverArt || fetchAttempted) return;
-
-        const mbid = [album.rgMbid, album.mbid].find(isMbid);
-        if (!mbid) return;
+        if (coverArt || fetchAttempted || !mbid || !nearViewport) return;
 
         // Fetch cover art from our backend (which caches it)
         const fetchCover = async () => {
@@ -66,10 +96,11 @@ function LazyAlbumCard({
             }
         };
 
-        // Delay fetch slightly to avoid thundering herd on page load
-        const timeoutId = setTimeout(fetchCover, index * 100);
+        // Only nearby covers request artwork. Cap staggering so album #200
+        // is not delayed by 20 seconds when a user scrolls straight there.
+        const timeoutId = setTimeout(fetchCover, (index % 6) * 100);
         return () => clearTimeout(timeoutId);
-    }, [album, coverArt, fetchAttempted, index]);
+    }, [mbid, coverArt, fetchAttempted, nearViewport, index]);
 
     const albumMbid = album.rgMbid || album.mbid || "";
 
@@ -79,6 +110,7 @@ function LazyAlbumCard({
     const subtitle = subtitleParts.join(" • ");
 
     return (
+        <div ref={targetRef} className="min-w-0">
         <MediaCard
             href={`/album/${album.id}`}
             imageUrl={coverArt}
@@ -94,6 +126,7 @@ function LazyAlbumCard({
                 busy: isPendingDownload(albumMbid),
             } : undefined}
         />
+        </div>
     );
 }
 
