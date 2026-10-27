@@ -4,6 +4,12 @@ on:
     push:
         tags:
             - "v*"
+    workflow_dispatch:
+        inputs:
+            version_tag:
+                description: Existing stable tag to publish
+                required: true
+                type: string
 
 # Only explicitly created stable version tags trigger publishing; protect tags in repo settings.
 # Build on native runners; never use QEMU. Do not automatically update :latest.
@@ -25,18 +31,19 @@ jobs:
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+                  ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref }}
 
             - name: Require stable SemVer and trusted release context
               id: version
               shell: bash
               env:
                   EVENT_NAME: ${{ github.event_name }}
-                  REF_NAME: ${{ github.ref_name }}
-                  REF_TYPE: ${{ github.ref_type }}
+                  REF_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref_name }}
+                  REF_TYPE: ${{ github.event_name == 'workflow_dispatch' && 'tag' || github.ref_type }}
                   DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
               run: |
                   set -euo pipefail
-                  if [ "$EVENT_NAME" != "push" ] || [ "$REF_TYPE" != "tag" ]; then
+                  if { [ "$EVENT_NAME" != "push" ] && [ "$EVENT_NAME" != "workflow_dispatch" ]; } || [ "$REF_TYPE" != "tag" ]; then
                       echo "Stable publishing only runs on an explicitly created tag." >&2
                       exit 1
                   fi
@@ -49,13 +56,18 @@ jobs:
                       exit 1
                   fi
                   # A tag on an unmerged feature branch must never ship as stable.
-                  if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT_BRANCH"; then
+                  TAG_COMMIT="$(git rev-parse "refs/tags/$VERSION^{commit}")"
+                  test "$(git rev-parse HEAD)" = "$TAG_COMMIT" || {
+                      echo "Checked out source does not match stable tag commit" >&2
+                      exit 1
+                  }
+                  if ! git merge-base --is-ancestor "$TAG_COMMIT" "refs/remotes/origin/$DEFAULT_BRANCH"; then
                       echo "Stable release tags must reference a commit on $DEFAULT_BRANCH." >&2
                       exit 1
                   fi
                   python3 .github/ci/check-release-metadata.py --tag "$VERSION"
                   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-                  echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  echo "source=$TAG_COMMIT" >> "$GITHUB_OUTPUT"
 
     native-build:
         name: Native ${{ matrix.arch }} - build, scan and stage stable image
@@ -75,6 +87,8 @@ jobs:
             packages: write
         steps:
             - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref }}
             - name: Free runner disk space
               shell: bash
               run: |
@@ -212,6 +226,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref }}
 
             - name: Create Release
               uses: softprops/action-gh-release@v2

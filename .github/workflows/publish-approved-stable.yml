@@ -1,0 +1,49 @@
+name: Publish approved stable release
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: Stable tag to publish after all release gates pass
+        required: true
+        default: v1.12.0
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: approve-stable-release
+  cancel-in-progress: false
+
+jobs:
+  create-tag-and-dispatch:
+    runs-on: ubuntu-latest
+    if: github.repository == 'OxygenGS/kima-hub' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact release commit and version
+        env:
+          VERSION: ${{ inputs.version_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 .github/ci/check-release-metadata.py --tag "$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "Refusing to recreate existing release tag: $VERSION" >&2
+            exit 1
+          fi
+      - name: Create immutable stable tag and explicitly dispatch the publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version_tag }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/git/refs" -X POST -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA"
+          gh api "repos/$GH_REPO/actions/workflows/docker-publish.yml/dispatches" -X POST -f "ref=main" -f "inputs[version_tag]=$VERSION"
+          echo "Created $VERSION at $GITHUB_SHA and started stable publisher" >> "$GITHUB_STEP_SUMMARY"
