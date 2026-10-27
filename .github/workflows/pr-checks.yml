@@ -211,8 +211,12 @@ jobs:
                   context: .
                   push: false
                   tags: kima:pr-check
+                  # Reuse a warm cache if available, but never export the very
+                  # large ML/image layers from a PR dry-build: a cache blob
+                  # upload failure must not obscure a successful Docker build.
+                  # Native AMD64/ARM64 and stable publish jobs keep their own
+                  # independent build/scan gates.
                   cache-from: type=gha
-                  cache-to: type=gha,mode=max
 
     aio-smoke:
         name: All-in-One Fresh-Install Smoke Test
