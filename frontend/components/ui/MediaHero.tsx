@@ -25,7 +25,7 @@ export const HeroCover = memo(function HeroCover({
     return (
         <div
             className={cn(
-                "w-[140px] h-[140px] md:w-[192px] md:h-[192px] shrink-0 overflow-hidden relative ring-1 ring-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.45)]",
+                "w-32 h-32 sm:w-[140px] sm:h-[140px] md:w-[192px] md:h-[192px] shrink-0 overflow-hidden relative ring-1 ring-white/15 shadow-[0_12px_36px_rgba(0,0,0,0.45)]",
                 shape === "circle" ? "rounded-full" : "rounded-[14px]",
                 bgClass,
             )}
@@ -35,7 +35,7 @@ export const HeroCover = memo(function HeroCover({
                     src={image}
                     alt={alt}
                     fill
-                    sizes="(max-width: 768px) 140px, 192px"
+                    sizes="(max-width: 639px) 128px, (max-width: 767px) 140px, 192px"
                     className="object-cover"
                     priority
                 />
@@ -95,8 +95,8 @@ export function MediaHero({
         <div className="relative animate-rise">
             <HeroBackdrop image={image} alt={alt} colors={colors} tint={tint} fallback={fallback} />
 
-            <div className="relative page-shell pt-16 pb-6">
-                <div className="flex items-end gap-6">
+            <div className="relative page-shell pt-8 sm:pt-16 pb-6">
+                <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-end sm:gap-6">
                     <HeroCover
                         image={coverImage ?? image}
                         alt={alt}
@@ -104,16 +104,16 @@ export function MediaHero({
                         fallbackIcon={fallbackIcon}
                     />
 
-                    <div className="flex-1 min-w-0 pb-1">
+                    <div className="w-full flex-1 min-w-0 pb-1">
                         <div className="flex items-center gap-2 mb-1">
                             <div className={cn("w-1.5 h-1.5 rounded-full", eyebrowDotClass)} />
                             <span className="t-eyebrow">{eyebrowLabel}</span>
                         </div>
-                        <div className={cn("flex items-center group mb-2", titleGap)}>
-                            <h1 className="text-2xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight line-clamp-2">
+                        <div className={cn("flex items-start sm:items-center group mb-2", titleGap)}>
+                            <h1 className="min-w-0 text-3xl sm:text-2xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight break-words line-clamp-3 sm:line-clamp-2">
                                 {title}
                             </h1>
-                            {titleExtra}
+                            {titleExtra && <div className="shrink-0 pt-1 sm:pt-0">{titleExtra}</div>}
                         </div>
                         <div className="flex flex-wrap items-center gap-1 text-sm text-[var(--text-secondary)] mb-1">
                             {meta}
