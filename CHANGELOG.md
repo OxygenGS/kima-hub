@@ -1,5 +1,21 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.12.0 — release preparation (unpublished)
+
+**Project Turbo + UI 2.0:** performance, responsive polish and client security hardening since published v1.11.10.
+
+- Avoid excessively large image-palette canvases, stabilize artist discography rendering and avoid invalid album gradient placeholders (PR #131).
+- Reuse already loaded artist album tracks for Play All/Shuffle instead of re-requesting every album; overlap independent album-detail lookup work (PR #132).
+- Make artist and album heroes more responsive on narrow screens, improve action touch/focus targets and reduce blurred album backdrop image work (PR #133).
+- Preserve refreshed titles and album palette colors in memoized track rows; improve keyboard, mobile track controls and media-card focus (PR #134).
+- Prefetch the next library page and alternate tabs only on hover/focus/touch intent; improve mobile library track controls (PR #135).
+- Reuse cached/in-flight album detail data for discography navigation and playback. Defer uncached offscreen album cover lookups until near the viewport (PR #136).
+- Patch CLAP analyzer Python msgpack CVE-2026-114613 in both standalone and AIO dependency paths: upgrade BullMQ and require msgpack 1.2.3; retain strict dependency and container vulnerability checks (PR #136).
+- No *new* database migrations, API-key format changes or user permission changes from these Turbo/UI batches. The existing v1.11.9 Native Apps key encryption migration still applies when upgrading from older releases.
+
+**Release gate:** This is source-level preparation, **not** a published v1.12.0 image. Confirm frontend/backend tests, EN/NL browser regressions, native AMD64/ARM64 image builds and vulnerability scans, a disposable AIO upgrade/rollback rehearsal, and real desktop/mobile interaction checks before explicitly creating a stable tag. No measured performance percentage is claimed.
+
+
 ## OxygenGS fork v1.11.10 — released 2026-10-27
 
 - Normalize the quoted-empty `query=""` used by Symfonium native fast synchronization to the existing paginated empty-search3 library enumeration path (PR #127).
