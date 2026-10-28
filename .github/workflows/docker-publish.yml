@@ -229,30 +229,21 @@ jobs:
               with:
                   ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version_tag || github.ref }}
 
+            - name: Generate release notes from this version's changelog
+              shell: bash
+              env:
+                  VERSION: ${{ needs.validate-release.outputs.version }}
+              run: |
+                  set -euo pipefail
+                  python3 .github/ci/build-release-notes.py --self-test
+                  python3 .github/ci/build-release-notes.py --tag "$VERSION" --output "$RUNNER_TEMP/kima-release-notes.md"
+                  test -s "$RUNNER_TEMP/kima-release-notes.md"
             - name: Create Release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ needs.validate-release.outputs.version }}
                   name: Kima ${{ needs.validate-release.outputs.version }}
-                  body: |
-                      ## Quick Start
-
-                      ```bash
-                      docker run -d \
-                        --name kima \
-                        -p 3030:3030 \
-                        -v /path/to/your/music:/music \
-                        -v kima_data:/data \
-                        ghcr.io/oxygengs/kima-hub:${{ needs.validate-release.outputs.version }}
-                      ```
-
-                      Then open http://localhost:3030 and create your account!
-
-                      The :latest alias remains unchanged pending separate approval.
-
-                      ## Documentation
-
-                      See the [README](https://github.com/${{ github.repository }}#readme) for full documentation.
+                  body_path: ${{ runner.temp }}/kima-release-notes.md
                   draft: false
                   prerelease: false
-                  generate_release_notes: true
+                  generate_release_notes: false
