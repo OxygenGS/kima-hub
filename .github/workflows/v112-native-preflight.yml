@@ -1,7 +1,13 @@
-name: v1.12.0 Native Release Preflight
+name: v1.12 Native Release Preflight
 
 on:
   workflow_dispatch:
+    inputs:
+      version_tag:
+        description: Candidate version matching package metadata (v1.12.x)
+        required: true
+        default: v1.12.1
+        type: string
 
 # This is a build-only gate. Never create tags, releases, or registry images.
 permissions:
@@ -19,14 +25,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Require main and v1.12.0 release metadata
+      - name: Require main and v1.12.x release metadata
         shell: bash
+        env:
+          VERSION: ${{ inputs.version_tag }}
         run: |
           set -euo pipefail
           test "${GITHUB_REF}" = "refs/heads/main"
+          [[ "$VERSION" =~ ^v1\.12\.[0-9]+$ ]]
           python3 .github/ci/check-release-metadata.py --self-test
           python3 .github/ci/check-release-metadata.py --candidate
-          python3 .github/ci/check-release-metadata.py --tag v1.12.0
+          python3 .github/ci/check-release-metadata.py --tag "$VERSION"
           echo "Preflight source: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
   native-build:
@@ -72,18 +81,19 @@ jobs:
             NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=v1.12.0
+            org.opencontainers.image.version=${{ inputs.version_tag }}
           cache-from: type=gha,scope=stable-${{ matrix.arch }}
       - name: Verify image architecture and source
         shell: bash
         env:
           ARCH: ${{ matrix.arch }}
           SOURCE: ${{ github.sha }}
+          VERSION: ${{ inputs.version_tag }}
         run: |
           set -euo pipefail
           test "$(docker image inspect kima:preflight-scan --format '{{.Architecture}}')" = "$ARCH"
           test "$(docker image inspect kima:preflight-scan --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE"
-          test "$(docker image inspect kima:preflight-scan --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "v1.12.0"
+          test "$(docker image inspect kima:preflight-scan --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "$VERSION"
       - name: Install pinned Trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:

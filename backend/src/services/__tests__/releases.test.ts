@@ -210,7 +210,7 @@ describe("pendingReleases — the 1.11 mood-mix items", () => {
     describe("after 1.11 was closed", () => {
         beforeEach(() => {
             prisma.releaseAcknowledgement.findMany.mockResolvedValue(
-                ["1.10.1", "1.11.0", "1.12.0"].map((version) => ({ version })),
+                ["1.10.1", "1.11.0", "1.12.0", "1.12.1"].map((version) => ({ version })),
             );
         });
 

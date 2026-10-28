@@ -1,6 +1,19 @@
-# v1.11.0 image security and residual risks
+# OxygenGS image security and residual risks
 
 This is an overview of **known scanner findings**, not a certification, an exploit demonstration or a claim that the final published registry image has been independently audited. The original source and full GitHub Actions reports remain accessible through Git history and the linked runs.
+
+## Native v1.12.0 source-built image preflight
+
+The v1.12.0 native preflight built and scanned the exact source commit `400058238dcf826bd50faaf2b1b59cb425e944be` on AMD64 and ARM64 runners without publishing images. The subsequent stable Docker publisher completed successfully. These scan counts describe the **preflight images**, not a separate verification of the published registry digest.
+
+| Native preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed fixed versions |
+| --- | ---: | ---: | ---: |
+| AMD64 | 288 | 8 | 0 |
+| ARM64 | 287 | 8 | 0 |
+
+The critical advisories reported for both architectures were CVE-2023-45853 (zlib1g), CVE-2023-6879 (libaom3), CVE-2025-47917, CVE-2026-34873 and CVE-2026-34875 (libmbedcrypto7), CVE-2025-7458 (libsqlite3-0), CVE-2026-58016 (libglib2.0-0), and CVE-2026-6653 (libxml2).
+
+The prior v1.11.0 report also listed eight critical findings across the same package families. This is **not** proof that every CVE identifier was unchanged or that the affected code is exploitable in Kima. The scanner blocks findings that report a fixed package version, and reports the others for explicit assessment; passing it is **not** a zero-risk certification. Bookworm security-tracker statuses and residual-risk review are recorded in [release PR #141](https://github.com/OxygenGS/kima-hub/pull/141).
 
 ## Native v1.11.0 source-built image audit
 

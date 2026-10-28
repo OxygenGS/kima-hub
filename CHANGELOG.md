@@ -1,6 +1,16 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.12.0 — release preparation (unpublished)
+## OxygenGS fork v1.12.1 — release preparation (unpublished)
+
+Maintenance patch for the already-published v1.12.0 release:
+
+- Restore missing **in-app What's New** entries for Project Turbo + UI 2.0 (v1.12.0). The backend release catalog previously stopped at upstream v1.11.0, independently of GitHub Releases.
+- Include an in-app entry for this patch, plus English and Dutch editorial copy. Existing release acknowledgement and consent behavior is preserved; no new choices or destructive actions.
+- Refresh the fork README, release history and image-security documentation to reflect the published v1.12.0 release.
+- No new database migration, music processing change, permissions change, or CT 101/production deployment. The published immutable v1.12.0 Docker tag is not rebuilt or overwritten.
+- **Release gate:** tests, native AMD64/ARM64 builds and scans, disposable AIO checks, and explicit stable release approval remain required before publishing v1.12.1.
+
+## OxygenGS fork v1.12.0 — released 2026-10-28
 
 **Project Turbo + UI 2.0:** performance, responsive polish and client security hardening since published v1.11.10.
 
@@ -13,7 +23,7 @@
 - Patch CLAP analyzer Python msgpack CVE-2026-114613 in both standalone and AIO dependency paths: upgrade BullMQ and require msgpack 1.2.3; retain strict dependency and container vulnerability checks (PR #136).
 - No *new* database migrations, API-key format changes or user permission changes from these Turbo/UI batches. The existing v1.11.9 Native Apps key encryption migration still applies when upgrading from older releases.
 
-**Release gate:** This is source-level preparation, **not** a published v1.12.0 image. Confirm frontend/backend tests, EN/NL browser regressions, native AMD64/ARM64 image builds and vulnerability scans, a disposable AIO upgrade/rollback rehearsal, and real desktop/mobile interaction checks before explicitly creating a stable tag. No measured performance percentage is claimed.
+**Release verification:** The stable v1.12.0 GitHub Actions publisher completed after the native AMD64/ARM64 preflight, with automated tests and image security checks. Residual Debian dependency advisories remain documented in [image security](docs/image-security.md); no measured performance percentage is claimed. **Known documentation bug:** the shipped v1.12.0 image did not include this version in the in-app What's New catalog; the correction is prepared in v1.12.1.
 
 
 ## OxygenGS fork v1.11.10 — released 2026-10-27

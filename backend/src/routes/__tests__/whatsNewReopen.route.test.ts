@@ -50,15 +50,19 @@ it("reads the closed current release again, with only this user's items", async 
     expect(again.body.release.items.some((i: { requires?: string }) => i.requires === "admin")).toBe(false);
 });
 
-it("gives an admin the admin items, with the GPU answer as the setting stands", async () => {
+it("keeps the latest maintenance release informational and the older GPU consent accessible", async () => {
     await prisma.systemSettings.upsert({ where: { id: "default" }, create: { id: "default", gpuOnnxEnabled: true }, update: { gpuOnnxEnabled: true } });
     invalidateSystemSettingsCache();
 
     const again = await request(app()).get("/whats-new/current").set("Authorization", as(ADMIN, "admin"));
 
     expect(again.status).toBe(200);
-    expect(again.body.release.items.some((i: { key: string }) => i.key === GPU_CHOICE_KEY)).toBe(true);
-    expect(again.body.answers[GPU_CHOICE_KEY]).toBe(true);
+    expect(again.body.release.version).toBe(newest.version);
+    expect(again.body.release.items.some((i: { key: string }) => i.key === GPU_CHOICE_KEY)).toBe(false);
+    const pending = await request(app()).get("/whats-new/pending").set("Authorization", as(ADMIN, "admin"));
+    expect(pending.status).toBe(200);
+    const oldRelease = pending.body.releases.find((r: { version: string }) => r.version === "1.11.0");
+    expect(oldRelease?.items.some((i: { key: string }) => i.key === GPU_CHOICE_KEY)).toBe(true);
 });
 
 it("needs a signed-in user", async () => {

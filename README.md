@@ -9,8 +9,8 @@
 <p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
 
 <p>
-  The Kima Hub v1.12 experience, refined with modern, legacy-free authentication for existing Symfonium and Feishin support,
-  English/Dutch language settings, user permissions, Project Turbo performance improvements, UI 2.0 polish and security improvements.
+  OxygenGS fork v1.12.0 builds on upstream Kima Hub v1.11.0, with Project Turbo performance improvements, UI 2.0 refinements,
+  English/Dutch settings, user permissions, and legacy-free authentication for existing Symfonium and Feishin integrations.
 </p>
 
 <p>
@@ -51,7 +51,7 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 - **English + Dutch:** Switch the signed-in interface language in Settings. The login screen follows your browser preference but does not offer its own language selector. Music metadata stays untouched.
 - **Permissions that really apply:** Admins can choose who may request albums or download tracks. The backend enforces these rights; hiding a button is never the only protection.
 - **Your identity:** Administrators can customize the app name, tagline, accent color, logo and favicon.
-- **Faster and smoother navigation:** Artist/album prefetching, concurrent artist detail loading, responsive loading skeletons, refined player/queue interactions and accessibility improvements.
+- **Project Turbo + UI 2.0:** Cached artist/album navigation, fewer redundant requests, stable loading skeletons, responsive layouts, refined player/queue interactions and accessibility improvements.
 - **Smaller Docker images:** Reduced redundant model-cache and frontend development layers for AMD64 and ARM64.
 - **Hardened services:** Tighter internal network and credential boundaries, non-root backend/audio service processes and improved audio-processing safeguards.
 - **The full v1.11 experience:** Upstream [Kima Hub v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) features and library improvements are integrated into **one** OxygenGS app.
@@ -64,6 +64,19 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 4. Keep **Legacy Authentication off**. In Symfonium you can also leave **Compatibility Mode off**.
 
 For details, see [OpenSubsonic client setup and authentication](docs/subsonic.md).
+
+## What's new in v1.12.0 — Project Turbo + UI 2.0
+
+**Released October 28, 2026.** This is a performance and usability refinement, not a full visual redesign. The [v1.12.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.12.0) and [changelog](CHANGELOG.md) cover the implementation.
+
+| Project Turbo | UI 2.0 | Release reliability |
+| :--- | :--- | :--- |
+| Reuse cached artist/album requests; fetch independent artist details in parallel; reuse tracks for Play All and Shuffle. | Layout-stable artist/album/track skeletons; responsive headers; improved keyboard focus, mobile controls and artwork transitions. | Python BullMQ/Redis job-processing regression test, native AMD64/ARM64 Docker builds and vulnerability/secret gates. |
+
+- **Performance without invented claims:** Album covers outside the viewport load only when needed; library pages prefetch on hover, focus or touch intent. No unmeasured percentage improvements are advertised.
+- **Existing clients, improved in earlier releases:** Symfonium and Feishin integration was already available upstream. The fork's v1.11.9/v1.11.10 improvements allow modern Native Apps keys without Legacy Authentication, plus native Symfonium sync without Compatibility Mode.
+- **What's New in the app:** The published v1.12.0 image still contains the older in-app v1.11 release catalog, which is independent of GitHub Releases. This is a known oversight; the missing English/Dutch in-app notes are prepared in the **unpublished v1.12.1 maintenance patch**. Until that patch is published and installed, consult the GitHub release notes.
+- **Security transparency:** Both native images passed the configured release scanners, which still report existing Debian package advisories without scanner-listed fixes. See [image security](docs/image-security.md) for details.
 
 ## A look inside
 
@@ -112,7 +125,7 @@ Then visit **http://localhost:3030** to create your administrator account.
 - **`/data`** — your database, credentials, generated secrets and caches. **Preserve and back up this entire volume.**
 - **`3030`** — the web interface. Internal application services do not require separate exposed ports.
 
-Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml) (set `VERSION=v1.12.0` for this release).
+Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml). **Set `VERSION=v1.12.0` explicitly**: the Compose file retains a conservative older default and will not select this release on its own.
 
 ### Updating an existing installation?
 
