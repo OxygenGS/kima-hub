@@ -4,6 +4,7 @@ import { apiLimiter } from "../../middleware/rateLimiter";
 
 import scanRouter from "./scan";
 import artistsRouter from "./artists";
+import artistOverviewRouter from "./artistOverview";
 import albumsRouter from "./albums";
 import tracksRouter from "./tracks";
 import streamingRouter from "./streaming";
@@ -29,6 +30,7 @@ router.use((req, res, next) => {
 });
 
 router.use(scanRouter);
+router.use(artistOverviewRouter);
 router.use(artistsRouter);
 router.use(albumsRouter);
 router.use(tracksRouter);
