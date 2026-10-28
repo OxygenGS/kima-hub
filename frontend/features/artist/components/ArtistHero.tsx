@@ -8,7 +8,7 @@ import { getArtistDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { formatStatsCount } from "@/features/stats/locale-format";
-import { MediaHero } from "@/components/ui/MediaHero";
+import { MusicDetailHero } from "@/components/ui/MusicDetailHero";
 
 interface ArtistHeroProps {
     artist: Artist;
@@ -22,25 +22,16 @@ interface ArtistHeroProps {
 }
 
 export function ArtistHero({
-    artist,
-    source,
-    albums,
-    heroImage,
-    backgroundImage,
-    colors,
-    onReload,
-    children,
+    artist, source, albums, heroImage, backgroundImage, colors, onReload, children,
 }: ArtistHeroProps) {
     const { locale, t } = useLanguage();
     const displayData = getArtistDisplayData(artist);
     const ownedAlbums = albums.filter((a) => a.owned);
 
-    // Use background image if provided, otherwise fall back to hero image
-    const bgImage = backgroundImage || heroImage;
-
     return (
-        <MediaHero
-            image={bgImage}
+        <MusicDetailHero
+            libraryHref="/collection?tab=artists"
+            image={backgroundImage || heroImage}
             coverImage={heroImage}
             alt={displayData.name}
             colors={colors}
@@ -49,7 +40,7 @@ export function ArtistHero({
             shape="circle"
             fallbackIcon={<Music className="w-16 h-16 text-[var(--text-muted)]" />}
             eyebrowDotClass="bg-type-artist"
-            eyebrowLabel="Artist"
+            eyebrowLabel={t("Artist")}
             title={displayData.name}
             titleGap="gap-3"
             titleExtra={
@@ -70,25 +61,21 @@ export function ArtistHero({
                         _originalHeroUrl: artist.heroUrl ?? artist.image,
                         _hasUserOverrides: displayData.hasUserOverrides,
                     }}
-                    onSave={async () => {
-                        await onReload();
-                    }}
+                    onSave={async () => { await onReload(); }}
                 />
             }
             meta={
                 <>
-                    {artist.listeners && artist.listeners > 0 && (
-                        <>
-                            <span>{formatStatsCount(artist.listeners, locale)} {t("listeners")}</span>
-                            <span className="mx-1">•</span>
-                        </>
+                    {artist.listeners != null && artist.listeners > 0 && (
+                        <span>{formatStatsCount(artist.listeners, locale)} {t("listeners")}</span>
                     )}
                     {albums.length > 0 && (
                         <>
+                            {artist.listeners != null && artist.listeners > 0 && <span aria-hidden="true">{"\u2022"}</span>}
                             <span>{formatStatsCount(albums.length, locale)} {t(albums.length === 1 ? "album" : "albums")}</span>
                             {ownedAlbums.length > 0 && (
                                 <>
-                                    <span className="mx-1">•</span>
+                                    <span aria-hidden="true">{"\u2022"}</span>
                                     <span className="text-brand">{formatStatsCount(ownedAlbums.length, locale)} {t("owned")}</span>
                                 </>
                             )}
@@ -98,6 +85,6 @@ export function ArtistHero({
             }
         >
             {children}
-        </MediaHero>
+        </MusicDetailHero>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
-import { useLanguage } from "@/lib/i18n/language-context";
 
+import { useLanguage } from "@/lib/i18n/language-context";
 import { Disc3 } from "lucide-react";
 import Link from "next/link";
 import { Album, AlbumSource } from "../types";
@@ -8,8 +8,8 @@ import { ReactNode } from "react";
 import { MetadataEditControls } from "@/components/MetadataEditControls";
 import { getAlbumDisplayData } from "@/hooks/useMetadataDisplay";
 import type { ColorPalette } from "@/hooks/useImageColor";
-import { formatDuration, plural } from "@/lib/format";
-import { MediaHero } from "@/components/ui/MediaHero";
+import { formatDuration } from "@/lib/format";
+import { MusicDetailHero } from "@/components/ui/MusicDetailHero";
 
 interface AlbumHeroProps {
     album: Album;
@@ -23,24 +23,20 @@ interface AlbumHeroProps {
 }
 
 export function AlbumHero({
-    album,
-    source,
-    coverUrl,
-    backgroundImage,
-    colors,
-    onReload,
-    children,
+    album, source, coverUrl, backgroundImage, colors, onReload, children,
 }: AlbumHeroProps) {
     const { t } = useLanguage();
     const displayData = getAlbumDisplayData(album);
-
     const totalDuration = album.duration ? formatDuration(album.duration) : "";
+    const hasYear = displayData.year != null && displayData.year !== 0;
+    const hasTracks = album.trackCount != null && album.trackCount > 0;
 
     return (
-        <MediaHero
+        <MusicDetailHero
+            libraryHref="/collection?tab=albums"
             image={backgroundImage || coverUrl}
             coverImage={coverUrl}
-            alt={album.title}
+            alt={displayData.title}
             colors={colors}
             tint="music"
             fallback={["#3d2a1e", "#1a1a1a"]}
@@ -67,45 +63,43 @@ export function AlbumHero({
                         _originalCoverUrl: album.coverUrl,
                         _hasUserOverrides: displayData.hasUserOverrides,
                     }}
-                    onSave={async () => {
-                        await onReload();
-                    }}
+                    onSave={async () => { await onReload(); }}
                 />
             }
             meta={
                 <>
                     {album.artist && (
-                        <Link
-                            href={`/artist/${album.artist.id}`}
-                            className="font-medium text-white hover:underline"
-                        >
+                        <Link href={`/artist/${album.artist.id}`} className="font-medium text-white hover:underline">
                             {album.artist.name}
                         </Link>
                     )}
-                    {displayData.year && (
+                    {hasYear && (
                         <>
-                            <span className="mx-1">•</span>
+                            {album.artist && <span aria-hidden="true">{"\u2022"}</span>}
                             <span>{displayData.year}</span>
                         </>
                     )}
-                    {album.trackCount && album.trackCount > 0 && (
+                    {hasTracks && (
                         <>
-                            <span className="mx-1">•</span>
-                            <span>{`${album.trackCount} ${album.trackCount === 1 ? t("song") : t("songs")}`}</span>
+                            {(album.artist || hasYear) && <span aria-hidden="true">{"\u2022"}</span>}
+                            <span>{album.trackCount} {t(album.trackCount === 1 ? "song" : "songs")}</span>
                         </>
                     )}
-                    {totalDuration && <span>, {totalDuration}</span>}
+                    {totalDuration && (
+                        <>
+                            {(album.artist || hasYear || hasTracks) && <span aria-hidden="true">{"\u2022"}</span>}
+                            <span>{totalDuration}</span>
+                        </>
+                    )}
                 </>
             }
-            metaExtra={
-                album.genre ? (
-                    <span className="inline-block px-2 py-0.5 bg-white/10 rounded-full text-xs text-[var(--text-secondary)]">
-                        {album.genre}
-                    </span>
-                ) : undefined
-            }
+            metaExtra={album.genre ? (
+                <span className="inline-block px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-[var(--text-secondary)]">
+                    {album.genre}
+                </span>
+            ) : undefined}
         >
             {children}
-        </MediaHero>
+        </MusicDetailHero>
     );
 }
