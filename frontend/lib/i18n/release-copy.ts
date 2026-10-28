@@ -49,6 +49,56 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    "1.12.1": {
+        titles: {
+            "Kima Hub 1.12.1 — Release Notes Update": "Kima Hub 1.12.1 — Release notes bijgewerkt",
+        },
+        summaries: {
+            "The in-app release history now includes Project Turbo + UI 2.0 and the latest fork improvements.":
+                "De releasegeschiedenis in de app bevat nu Project Turbo + UI 2.0 en de nieuwste verbeteringen van de fork.",
+        },
+        items: {
+            "fork.1121.release-history": {
+                title: "Releasegeschiedenis bijgewerkt",
+                summary: "Het venster Wat is er nieuw bevat nu de ontbrekende release notes van 1.12.0.",
+                body: "De Docker-release van 1.12.0 bevatte nog de oorspronkelijke releasecatalogus van 1.11. Daarom zag je in de app verouderde release notes. Met deze patch is de geschiedenis aangevuld met de verbeteringen van OxygenGS 1.12.0. Je muziek, instellingen en rechten blijven ongewijzigd.\n\nKlik op het versienummer naast het logo om de nieuwste release notes opnieuw te lezen.",
+            },
+        },
+    },
+    "1.12.0": {
+        titles: {
+            "Kima Hub 1.12.0 — Project Turbo + UI 2.0": "Kima Hub 1.12.0 — Project Turbo + UI 2.0",
+        },
+        summaries: {
+            "Faster artist and album browsing, less waiting, and smoother controls on desktop and mobile.":
+                "Sneller door artiesten en albums bladeren, minder wachttijd en soepelere bediening op desktop en mobiel.",
+        },
+        items: {
+            "fork.1120.turbo": {
+                title: "Project Turbo: sneller door je muziek bladeren",
+                summary: "Eerder geladen artiest- en albumgegevens opnieuw gebruiken in plaats van opnieuw opvragen.",
+                body: "Artiestpagina's laden onafhankelijke gegevens gelijktijdig en gebruiken eerder opgehaalde informatie opnieuw. Bij het openen en afspelen van albums worden gegevens uit de cache gedeeld. Alles afspelen en Shuffle gebruiken beschikbare albumnummers zonder de volledige discografie opnieuw op te halen.\n\nBibliotheekpagina's laden gericht vooraf en albumhoezen buiten beeld worden pas opgehaald als ze nodig zijn. We claimen geen ongemeten snelheidswinst.",
+                links: { "/collection": "Open je bibliotheek" },
+            },
+            "fork.1120.ui": {
+                title: "UI 2.0: een soepelere interface",
+                summary: "Stabiele laadweergaven, vernieuwde artiest- en albumpagina's en betere mobiele bediening.",
+                body: "Laadspinners in de bibliotheek zijn vervangen door skeletweergaven die de lay-out stabiel houden. Artiest- en albumkoppen passen zich beter aan kleine schermen aan. Nummerregels, speleracties, afbeeldingen, toetsenbordfocus en aanraakvlakken zijn verder verfijnd.",
+                links: { "/collection": "Open je bibliotheek" },
+            },
+            "fork.1120.clients": {
+                title: "Je bestaande muziekapps blijven werken",
+                summary: "Bestaande ondersteuning voor Symfonium en Feishin zonder verouderde aanmelding blijft behouden.",
+                body: "De OxygenGS-fork behoudt de verbeteringen uit 1.11.9 en 1.11.10: nieuw gemaakte Native Apps-API-sleutels werken met Symfonium en Feishin zonder Legacy Authentication. Symfonium synchroniseert zonder Compatibility Mode.\n\nGebruik je nog een sleutel van vóór 1.11.9? Maak dan een nieuwe in Instellingen → Native Apps. Dit is geen nieuw toegevoegde integratie.",
+                links: { "/settings#subsonic": "Open Native Apps-instellingen" },
+            },
+            "fork.1120.security": {
+                title: "Verbeteringen voor betrouwbaarheid en beveiliging",
+                summary: "Bijgewerkte CLAP-worker en uitgebreidere controles voor native Docker-releases.",
+                body: "De CLAP Python-worker gebruikt bijgewerkte BullMQ- en msgpack-afhankelijkheden, met een integratietest voor verwerking van Redis-taken. Native AMD64- en ARM64-builds worden vóór publicatie gecontroleerd op kwetsbaarheden en geheimen. Bestaande beveiligingsmeldingen over afhankelijkheden blijven gedocumenteerd; geslaagde controles betekenen niet dat elk risico is uitgesloten.",
+            },
+        },
+    },
     "1.11.0": {
         titles: {
             "One thing left from 1.11": "Nog één punt uit 1.11",
