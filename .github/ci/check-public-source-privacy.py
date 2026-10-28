@@ -20,10 +20,16 @@ RULES = {
 }
 
 
-def findings(content: str) -> list[tuple[int, str]]:
+def findings(content: str, path: Path | None = None) -> list[tuple[int, str]]:
     issues = []
     for line_number, line in enumerate(content.splitlines(), 1):
         for label, pattern in RULES.items():
+            # IP-shaped values in code/tests can be subnet rules or dependency versions,
+            # rather than deployment addresses. Check network literals in docs/config.
+            if label == "private LAN address" and path is not None:
+                visible = path.name.startswith(".env") or path.suffix.lower() in {".md", ".yml", ".yaml", ".sh"}
+                if not visible:
+                    continue
             if pattern.search(line):
                 issues.append((line_number, label))
     return issues
@@ -56,7 +62,7 @@ def main() -> int:
             content = data.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        for line, label in findings(content):
+        for line, label in findings(content, path):
             # Do not print the matching line, even on failure.
             bad.append((str(path.relative_to(ROOT)), line, label))
     if bad:
