@@ -1,0 +1,68 @@
+{
+  "release": "v1.13.0",
+  "release_commit": "03bed37c1e129c21eca95a9aed86e7ff28f6d88b",
+  "source_commit": "63ecef07247173f102a787276d1dc364c1495b8a",
+  "source_tree": "ed8e1596bf38dab3ff5e1cc31322c34bf896748c",
+  "workflow_run": 40768222515,
+  "artifact": 12852945217,
+  "archive_sha256": "dde1cdbebd4e614026168e289750204ddad5403a42ad7a0b05083ec6f3f75579",
+  "notice": "Real application browser captures with synthetic audio/library data. CI build label retained. Text/EXIF/time PNG metadata removed; pixels unchanged.",
+  "screenshots": [
+    {
+      "file": "desktop-home.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-desktop/home.png",
+      "width": 1440,
+      "height": 960,
+      "sha256": "bcf9bcdc8ac05f29c4dbb5ca44b69e0d34b1038bd569a175ca8154ab4c7fbcb6"
+    },
+    {
+      "file": "desktop-album.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-desktop/album.png",
+      "width": 1440,
+      "height": 960,
+      "sha256": "1ea2cfe2754a1b674119cab67b8a8af62fd5461bca571fcbc92dcba0a58128d2"
+    },
+    {
+      "file": "desktop-overlay.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-desktop/overlay.png",
+      "width": 1440,
+      "height": 960,
+      "sha256": "c8ec0efaa280aa3664686e9c00d80b712b541825b55753370a3169fb8c827dff"
+    },
+    {
+      "file": "desktop-queue.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-desktop/queue.png",
+      "width": 1440,
+      "height": 960,
+      "sha256": "0664ead2cf3535f9c38b69d83fa7c2da267eb2d584c88902c69cd885a9c0729f"
+    },
+    {
+      "file": "mobile-home.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-mobile/home.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "2775d42deeea0d678429830eebfcf5f15c2eab65cddcbe1faa643bd7dee53df1"
+    },
+    {
+      "file": "mobile-album.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-mobile/album.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "f4712af876d68139c3e2e081c13d23649f4af8634bb4cc5e614c84e72ab16a65"
+    },
+    {
+      "file": "mobile-overlay.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-mobile/overlay.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "8d394a677a122c0e7f7ebc8cad5d1a5cc48f9baa40dec17057f136dfe048e335"
+    },
+    {
+      "file": "mobile-queue.png",
+      "archive_member": "listener/application-integrated-en--47580-playback-and-queue-behavior-mobile/queue.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "b25dfed4419d9af696bff7b6296d1cf2c7b008368537e6a5bbb693687eaaf2bf"
+    }
+  ]
+}

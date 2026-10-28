@@ -1,6 +1,6 @@
 # v1.13.0 release validation
 
-Status: **unpublished source candidate**. This document is a checklist, not a claim that every gate has already passed. The public product remains Kima Hub — Oxygen's Fork.
+Status: **published 2026-10-28** at commit `03bed37`. Final PR validation: run `40768222515`; exact-source native preflight: `40773886516`; successful stable publication: `40776257407`, attempt 2. The checks below record the publication requirements. The public product remains Kima Hub — Oxygen's Fork.
 
 ## Scope
 
@@ -18,7 +18,7 @@ The candidate combines the home/navigation/media-card refresh, artist and album 
 
 ## Documentation at publication
 
-Candidate preparation writes matching npm root versions, changelog and English/Dutch in-app notes. README and install examples continue to point to the currently published v1.12.1 until v1.13.0 publication is verified. After publication, mark its changelog heading released, promote the documented stable version and replace outdated screenshots with actual synthetic-data application captures. A documentation-only update does not require rebuilding the immutable release image.
+The published release includes matching package versions, changelog and English/Dutch in-app notes. README and installation guidance now select verified v1.13.0. Current screenshots come from the successful application validation run using synthetic data; their source tree matches the published tag. A documentation-only update does not rebuild the immutable release image.
 
 ## Installation boundary
 
