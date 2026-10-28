@@ -1,0 +1,39 @@
+.shell { flex-shrink: 0; padding: 8px 12px 10px; background: var(--bg-primary); text-transform: none; }
+.dock { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(330px, 1.65fr) minmax(172px, .75fr); align-items: center; gap: 20px; padding: 12px 18px; border: 1px solid var(--border-interactive); border-radius: 20px; background: var(--bg-secondary); box-shadow: 0 -4px 24px rgb(0 0 0 / .12); }
+.media { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cover { width: 60px; height: 60px; flex-shrink: 0; border-radius: 12px; overflow: hidden; }
+.metadata { flex: 1; min-width: 0; }
+.status { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+.status span { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: var(--text-muted); }
+.status[data-playing="true"] span { background: var(--color-brand); }
+.title, .subtitle { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; margin: 0; }
+.title { color: var(--text-primary); font-size: 13px; font-weight: 650; line-height: 1.6; }
+.subtitle { color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+a.title:hover, a.subtitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.playCount { margin-top: 2px; }
+.match { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); }
+.transport { min-width: 0; display: grid; gap: 3px; }
+.controls { display: flex; justify-content: center; align-items: center; gap: 5px; }
+.button { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; padding: 0; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--text-secondary); text-decoration: none; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
+.button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.button[aria-pressed="true"] { color: var(--color-brand); background: color-mix(in srgb, var(--color-brand) 8%, transparent); }
+.button:disabled { opacity: .35; cursor: not-allowed; }
+.button.play { width: 46px; height: 46px; border-radius: 15px; background: var(--color-brand); color: var(--color-on-brand); margin-inline: 3px; box-shadow: 0 4px 14px rgb(0 0 0 / .2); }
+.button.play:hover:not(:disabled) { background: var(--color-brand-hover); color: var(--color-on-brand); }
+.button.error, .button.error:hover:not(:disabled) { background: var(--color-danger); color: white; }
+.skipCount { position: absolute; font-size: 9px; font-weight: 700; transform: translateY(1px); }
+.spinner { animation: spin 1s linear infinite; }
+.timeline { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.timeline > span { flex-shrink: 0; font-size: 11px; line-height: 1.5; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.seek { min-width: 0; flex: 1; }
+.tools { display: grid; gap: 1px; min-width: 0; }
+.toolRow, .volumeRow { display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+.volume { min-width: 32px; width: 100%; max-width: 100px; height: 4px; border-radius: 8px; appearance: none; cursor: pointer; accent-color: var(--color-brand); }
+.volume::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; background: var(--color-brand); border-radius: 50%; }
+.volume::-moz-range-thumb { width: 12px; height: 12px; border: 0; background: var(--color-brand); border-radius: 50%; }
+.shell :is(button, a, input):focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 1150px) { .dock { gap: 10px; padding-inline: 12px; grid-template-columns: minmax(140px, 1fr) minmax(320px, 1.5fr) 172px; } .cover { width: 50px; height: 50px; } }
+@media (max-width: 820px) { .dock { grid-template-columns: minmax(0, 1fr); gap: 10px; } .tools { grid-template-columns: 1fr 1fr; } .toolRow { justify-content: flex-start; } .media { min-width: 0; } }
+@media (max-width: 420px) { .shell { padding: 6px; } .dock { padding: 12px 8px; } .controls { gap: 0; } .button { width: 36px; } .tools { grid-template-columns: 1fr; } .toolRow { justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .shell *, .shell *::before, .shell *::after { animation: none !important; transition: none !important; } }
