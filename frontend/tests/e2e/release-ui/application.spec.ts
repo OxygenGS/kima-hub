@@ -45,6 +45,19 @@ async function closeFixtureNotices(page: Page) {
     }
 }
 
+async function verifyOwnedFixture(page: Page) {
+    const token = await getAuthToken(page);
+    const response = await page.request.get("/api/library/albums/ci-ui-album", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.ok(), "The generated library album must exist before UI acceptance").toBe(true);
+    const album = await response.json() as { owned: boolean; tracks: { id: string }[] };
+    expect(album.owned, "The generated album needs its real OwnedAlbum relation, not preview status").toBe(true);
+    expect(album.tracks.map((track) => track.id)).toEqual([
+        "ci-ui-track-one", "ci-ui-track-two", "ci-ui-track-three",
+    ]);
+}
+
 for (const locale of ["en", "nl"] as const) {
     test(`integrated ${locale} interface retains real playback and queue behavior`, async ({ page, isMobile }, testInfo) => {
         const t = (key: string) => translate(locale, key);
@@ -52,6 +65,7 @@ for (const locale of ["en", "nl"] as const) {
         page.on("pageerror", (error) => uncaught.push(error.message));
         await loginAsTestUser(page);
         await closeFixtureNotices(page);
+        await verifyOwnedFixture(page);
         await page.goto("/settings#language");
         await page.locator("#language-select").selectOption(locale);
         await expect(page.locator("html")).toHaveAttribute("lang", locale);
