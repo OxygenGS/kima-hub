@@ -21,7 +21,7 @@ test.beforeAll(async () => {
     ]);
     const outDir = resolve(root, "test-results/player-ui-bundle");
     await build({
-        configFile: false, root, logLevel: "error",
+        configFile: false, root, publicDir: false, logLevel: "error",
         define: { "process.env.NODE_ENV": JSON.stringify("production") },
         css: { postcss: { plugins: [] } },
         plugins: [{
@@ -47,8 +47,10 @@ test.beforeAll(async () => {
     writeFileSync(join(outDir, "README.txt"), "Isolated component fixture: installed project React/CSS/icons, mocked framework and services, synthetic metadata/artwork. Not the complete application or real audio.\n");
 });
 
-type Patch = Record<string, string | boolean | null | number>;
+type Patch = Partial<Record<string, string | boolean | null | number>>;
 async function mount(page: Page, kind: "mobile" | "overlay", patch: Patch = {}) {
+    // A new document isolates effects and focus listeners from the previous case.
+    await page.goto("about:blank");
     await page.setContent('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"/></head><body><div id="fixture-chrome"><button id="behind">Library fixture</button><h1>Kima Hub</h1><p>Synthetic component preview. Navigation, library and audio are not connected.</p><div class="fixture-card"></div></div><div id="player-root"></div></body></html>');
     await page.addStyleTag({ content: css });
     await page.addScriptTag({ content: js });
