@@ -1,42 +1,46 @@
-name: v1.12 Native Release Preflight
+name: Native Release Preflight
 
 on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: Candidate version matching package metadata (v1.12.x)
+        description: Candidate stable version matching package metadata
         required: true
-        default: v1.12.1
+        default: v1.13.0
         type: string
 
-# This is a build-only gate. Never create tags, releases, or registry images.
+# Build-only gate. Never create tags, releases, or registry images.
 permissions:
   contents: read
-
 concurrency:
-  group: v112-native-release-preflight
+  group: native-release-preflight
   cancel-in-progress: false
 
 jobs:
   validate:
     name: Verify release candidate source
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    outputs:
+      source: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
-      - name: Require main and v1.12.x release metadata
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Require main and exact stable release metadata
+        id: source
         shell: bash
         env:
           VERSION: ${{ inputs.version_tag }}
         run: |
           set -euo pipefail
-          test "${GITHUB_REF}" = "refs/heads/main"
-          [[ "$VERSION" =~ ^v1\.12\.[0-9]+$ ]]
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 .github/ci/check-release-metadata.py --self-test
-          python3 .github/ci/check-release-metadata.py --candidate
           python3 .github/ci/check-release-metadata.py --tag "$VERSION"
-          echo "Preflight source: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/ci/build-release-notes.py --tag "$VERSION" --output "$RUNNER_TEMP/release-notes.md"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "Preflight source: $GITHUB_SHA; version: $VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   native-build:
     name: Native ${{ matrix.arch }} build and security scan (no push)
@@ -46,22 +50,24 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
-      - name: Record exact source SHA
+          ref: ${{ needs.validate.outputs.source }}
+          persist-credentials: false
+      - name: Record and verify exact source SHA
         shell: bash
+        env:
+          SOURCE: ${{ needs.validate.outputs.source }}
         run: |
           set -euo pipefail
-          echo "Native ${{ matrix.arch }} source SHA: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          test "$(git rev-parse HEAD)" = "$SOURCE"
+          echo "Native ${{ matrix.arch }} source SHA: $SOURCE" >> "$GITHUB_STEP_SUMMARY"
       - name: Free runner disk space
         shell: bash
         run: |
@@ -80,14 +86,14 @@ jobs:
           build-args: |
             NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.validate.outputs.source }}
             org.opencontainers.image.version=${{ inputs.version_tag }}
           cache-from: type=gha,scope=stable-${{ matrix.arch }}
       - name: Verify image architecture and source
         shell: bash
         env:
           ARCH: ${{ matrix.arch }}
-          SOURCE: ${{ github.sha }}
+          SOURCE: ${{ needs.validate.outputs.source }}
           VERSION: ${{ inputs.version_tag }}
         run: |
           set -euo pipefail
@@ -116,7 +122,15 @@ jobs:
           trivy image --scanners secret --ignorefile .trivyignore \
             --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
             --exit-code 1 --format table kima:preflight-scan
+      - name: Retain architecture-specific vulnerability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-preflight-${{ matrix.arch }}
+          path: ${{ runner.temp }}/preflight-vulnerabilities.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Record verified native image
         shell: bash
         run: |
-          echo "Native ${{ matrix.arch }}: build, source validation, vulnerability gate and secret gate PASS. No image published." >> "$GITHUB_STEP_SUMMARY"
+          echo "Native ${{ matrix.arch }}: exact-source build, vulnerability and secret gates PASS. Review residual advisories before publication. No image published." >> "$GITHUB_STEP_SUMMARY"
