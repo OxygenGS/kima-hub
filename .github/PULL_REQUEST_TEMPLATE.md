@@ -35,3 +35,4 @@ Fixes #
 -   [ ] I have updated documentation if needed
 -   [ ] My changes don't introduce new warnings
 -   [ ] This PR targets the `main` branch
+-   [ ] I removed all local server identifiers, private network details, personal paths, credentials, and installation-specific data from code, docs, PR description, comments and screenshots

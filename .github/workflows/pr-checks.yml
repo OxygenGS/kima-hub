@@ -53,6 +53,16 @@ jobs:
                   python3 .github/ci/build-release-notes.py --tag "$VERSION" --output /tmp/ci-release-notes.md
                   test -s /tmp/ci-release-notes.md
 
+    public-privacy-audit:
+        name: Block local installation details in public source
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+            - name: Check all tracked public files without leaking matching values
+              run: python3 .github/ci/check-public-source-privacy.py
+
     naming-audit:
         name: No Legacy Project Naming
         runs-on: ubuntu-24.04

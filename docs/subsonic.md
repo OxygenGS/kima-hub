@@ -8,7 +8,7 @@ Kima speaks the [OpenSubsonic](https://opensubsonic.netlify.app/) API at `/rest`
 2. Type a name for the client, such as "Phone", and choose **Generate Token**.
 3. Copy the token. It is shown once.
 4. In the client, enter:
-   - **Server address:** where you open Kima, such as `http://192.168.1.10:3030`
+   - **Server address:** where you open Kima, such as `http://YOUR_KIMA_SERVER_IP:3030`
    - **Username:** your Kima username
    - **Password:** the token
 

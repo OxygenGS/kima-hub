@@ -28,7 +28,7 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-}
       # Lidarr webhook callback URL - how Lidarr reaches Kima when downloads complete
       # Default uses host.docker.internal which works on most setups with extra_hosts below
-      # Override if using custom Docker networks: e.g., http://192.168.0.20:3030
+      # Override if using custom Docker networks: e.g., http://YOUR_KIMA_SERVER_IP:3030
       - KIMA_CALLBACK_URL=${KIMA_CALLBACK_URL:-http://host.docker.internal:3030}
       - DISABLE_CLAP=${DISABLE_CLAP:-}
     # Makes host.docker.internal work on Linux (already works on Docker Desktop)
