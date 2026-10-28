@@ -92,10 +92,9 @@ for (const locale of ["en", "nl"] as const) {
         const overlay = page.locator("[data-overlay-player]");
         const smallPlayer = page.locator(isMobile ? "[data-mobile-player]" : "[data-player-dock]");
 
-        if (isMobile) {
-            await expect(overlay).toBeVisible();
-            await overlay.getByRole("button", { name: t("close"), exact: true }).click();
-        }
+        // Starting an album shows the normal player on both screen sizes.
+        // The full-screen overlay is intentionally opened only by the user.
+        await expect(overlay).toHaveCount(0);
         await expect(smallPlayer).toBeVisible();
         await smallPlayer.getByRole("button", { name: t("Pause"), exact: true }).click();
         await expect.poll(async () => (await readPlayer(page)).paused).toBe(true);
@@ -111,6 +110,21 @@ for (const locale of ["en", "nl"] as const) {
         await expect(overlay.locator("h1")).toHaveText("CI Interface Track One");
         await checkBounds(page, overlay);
         await advance(page);
+        expect((await readPlayer(page)).src).toBe(source);
+        expect(await audio!.evaluate((node) => node.isConnected)).toBe(true);
+        // Closing and explicitly reopening must not restart or replace audio.
+        await overlay.getByRole("button", { name: t("close"), exact: true }).click();
+        await expect(overlay).toHaveCount(0);
+        await expect(smallPlayer).toBeVisible();
+        await advance(page);
+        expect((await readPlayer(page)).src).toBe(source);
+        expect(await audio!.evaluate((node) => node.isConnected)).toBe(true);
+        await smallPlayer.getByRole("button", { name: t("Expand player"), exact: true }).click();
+        await expect(overlay).toBeVisible();
+        await expect(overlay.locator("h1")).toHaveText("CI Interface Track One");
+        await advance(page);
+        expect((await readPlayer(page)).src).toBe(source);
+        expect(await audio!.evaluate((node) => node.isConnected)).toBe(true);
         await page.screenshot({ path: testInfo.outputPath("overlay.png"), fullPage: true });
         if (isMobile) {
             await page.setViewportSize({ width: 844, height: 390 });
