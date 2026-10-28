@@ -21,29 +21,17 @@ interface AlbumActionBarProps {
 }
 
 export function AlbumActionBar({
-    album,
-    source,
-    onPlayAll,
-    onShuffle,
-    onDownloadAlbum,
-    onAddToPlaylist,
-    isPendingDownload,
-    isPlaying,
-    isPlayingThisAlbum,
-    onPause,
+    album, source, onPlayAll, onShuffle, onDownloadAlbum, onAddToPlaylist,
+    isPendingDownload, isPlaying, isPlayingThisAlbum, onPause,
 }: AlbumActionBarProps) {
     const { canRequestAlbums } = useMusicPermissions();
     const { t } = useLanguage();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
     const showDownload = canRequestAlbums && !isOwned && (album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
-
     const handlePlayPauseClick = () => {
-        if (showPause) {
-            onPause();
-        } else {
-            onPlayAll();
-        }
+        if (showPause) onPause();
+        else onPlayAll();
     };
 
     return (
@@ -53,31 +41,30 @@ export function AlbumActionBar({
             onPlayPause={handlePlayPauseClick}
             onShuffle={onShuffle}
             secondaryShape="square"
+            showLabels
         >
             {isOwned && (
                 <MediaActionButton
                     shape="square"
-                    icon={<ListPlus className="w-5 h-5" />}
+                    icon={<ListPlus className="w-5 h-5 shrink-0" aria-hidden="true" />}
                     label={t("add to playlist")}
                     onClick={onAddToPlaylist}
+                    showLabel
                 />
             )}
-
             {showDownload && (
                 <button
+                    type="button"
                     onClick={onDownloadAlbum}
                     disabled={isPendingDownload}
+                    aria-busy={isPendingDownload}
                     className={cn(
-                        "flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all",
-                        isPendingDownload
-                            ? "bg-white/5 text-[var(--text-secondary)] cursor-not-allowed"
-                            : "bg-brand hover:bg-brand-hover text-black hover:scale-105"
+                        "min-h-11 min-w-11 max-w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold normal-case transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]",
+                        isPendingDownload ? "bg-white/5 text-[var(--text-secondary)] cursor-not-allowed" : "bg-brand hover:bg-brand-hover text-[var(--color-on-brand)]",
                     )}
                 >
-                    <Download className="w-4 h-4" />
-                    <span>
-                        {isPendingDownload ? t("Requesting...") : t("Request album")}
-                    </span>
+                    <Download className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>{isPendingDownload ? t("Requesting...") : t("Request album")}</span>
                 </button>
             )}
         </MediaActionBar>
