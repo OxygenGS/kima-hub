@@ -43,6 +43,23 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
         run: npx playwright test --config playwright.public-locale.config.ts
 
+      - name: Test responsive player components with the installed project React
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npx playwright test --config playwright.player-ui.config.ts
+
+      - name: Preserve synthetic player browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: player-browser-evidence
+          path: |
+            frontend/test-results/player-ui/
+            frontend/test-results/player-ui-bundle/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
