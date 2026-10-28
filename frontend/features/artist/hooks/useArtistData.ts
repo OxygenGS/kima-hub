@@ -77,7 +77,8 @@ export function useArtistData() {
         return artist.id && !artist.id.includes("-") ? "library" : "discovery";
     }, [artist, overview.data]);
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
-    const albums = useMemo(() => !artist?.albums ? [] : [...artist.albums].sort((a, b) => {
+    const artistAlbums = artist?.albums;
+    const albums = useMemo(() => !artistAlbums ? [] : [...artistAlbums].sort((a, b) => {
         if (sortBy === "dateAdded") {
             if (!a.lastSynced && !b.lastSynced) return 0;
             if (!a.lastSynced) return 1;
@@ -88,7 +89,7 @@ export function useArtistData() {
         if (a.year == null) return 1;
         if (b.year == null) return -1;
         return b.year - a.year;
-    }), [artist?.albums, sortBy]);
+    }), [artistAlbums, sortBy]);
 
     return {
         artist, albums,

@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,11 @@ let root: Root;
 let container: HTMLDivElement;
 let client: QueryClient;
 let state: ReturnType<typeof useArtistData> | undefined;
-function Probe() { state = useArtistData(); return <span>{state.artist?.name}</span>; }
+function Probe() {
+    const value = useArtistData();
+    useEffect(() => { state = value; }, [value]);
+    return <span>{value.artist?.name}</span>;
+}
 async function render() {
     await act(async () => { root.render(<QueryClientProvider client={client}><Probe /></QueryClientProvider>); });
 }
