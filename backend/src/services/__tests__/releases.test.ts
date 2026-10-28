@@ -210,7 +210,7 @@ describe("pendingReleases — the 1.11 mood-mix items", () => {
     describe("after 1.11 was closed", () => {
         beforeEach(() => {
             prisma.releaseAcknowledgement.findMany.mockResolvedValue(
-                ["1.10.1", "1.11.0", "1.12.0", "1.12.1"].map((version) => ({ version })),
+                catalog.RELEASES.map(({ version }) => ({ version })),
             );
         });
 
@@ -277,7 +277,7 @@ describe("catalog", () => {
         for (const item of catalog.RELEASES.flatMap((r) => r.items)) {
             expect(item.summary.length).toBeGreaterThan(0);
             expect(item.summary).not.toMatch(/\n/);
-            for (const link of item.links ?? []) expect(link.href).toMatch(/^\/[a-z]/);
+            for (const link of item.links ?? []) expect(link.href).toMatch(/^\/(?:[a-z]|$)/);
         }
     });
 

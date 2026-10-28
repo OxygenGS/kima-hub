@@ -1,6 +1,27 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.12.1 — release preparation (unpublished)
+## OxygenGS fork v1.13.0 — release preparation (unpublished)
+
+A visible interface refresh across the home screen, desktop navigation, music detail pages, playback surfaces and queue. The public application name remains Kima Hub — Oxygen's Fork.
+
+### Interface
+
+- New home presentation using existing collection artwork, grouped icon navigation and consistent media cards. No invented listening counters or extra recommendation endpoints.
+- Larger artist/album artwork, wrapping titles, collection breadcrumbs, labelled actions and matching loading placeholders.
+- Redesigned desktop player dock, mobile mini player and full-screen listening view; existing seek, lyrics, sleep timer, Vibe and media controls retained.
+- Responsive queue with a selected-track panel, upcoming/history sections, persistent edit controls and explicit clear confirmation.
+- English/Dutch copy, visible keyboard focus, reduced-motion support and touch/landscape handling across the refreshed surfaces.
+
+### Compatibility and upgrade
+
+- No new database migration, audio engine, authentication protocol or media-processing dependency. Existing modern Symfonium/Feishin support and music permissions remain in place.
+- Include these notes in the application's own release catalog in English and Dutch. No new consent choices or enrichment reset are introduced.
+- Back up the complete persistent `/data` volume before updating. For rollback, restore an independent pre-upgrade backup rather than reusing a migrated database.
+- Existing dependency security advisories remain subject to image scanning and review; this release does not claim zero vulnerabilities.
+
+- **Release gate:** Candidate only. Require full repository CI, actual disposable AIO browser/audio acceptance, exact-source native AMD64/ARM64 preflight and explicit stable publication approval. No image or release is published by source preparation.
+
+## OxygenGS fork v1.12.1 — released 2026-10-28
 
 Maintenance patch for the already-published v1.12.0 release:
 
