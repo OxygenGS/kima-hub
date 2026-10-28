@@ -84,6 +84,8 @@ jobs:
           python3 .github/ci/check-release-metadata.py --self-test
           python3 .github/ci/check-release-metadata.py --candidate
           python3 .github/ci/check-publisher-guards.py
+          python3 .github/ci/prepare-release-candidate.py --self-test
+          python3 .github/ci/check-approved-preflight.py --self-test
 
   frontend:
     name: Updated v1.11 frontend typecheck lint and unit tests
@@ -285,6 +287,14 @@ jobs:
         shell: bash
         timeout-minutes: 35
         run: AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Retain actual application browser evidence (synthetic data only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v113-application-browser-amd64
+          path: frontend/test-results/release-ui/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Original v1.10 AIO image upgrade and independent rollback (disposable)
         shell: bash
         timeout-minutes: 35
@@ -379,6 +389,14 @@ jobs:
         run: |
           test "$(docker image inspect kima-hub:aio-ci-smoke --format '{{.Architecture}}')" = arm64
           AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
+      - name: Retain actual application browser evidence (synthetic data only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v113-application-browser-arm64
+          path: frontend/test-results/release-ui/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Install pinned Trivy for assembled arm64 AIO inspection
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
