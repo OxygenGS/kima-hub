@@ -242,7 +242,7 @@ jobs:
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ needs.validate-release.outputs.version }}
-                  name: Kima ${{ needs.validate-release.outputs.version }}
+                  name: Kima Hub ${{ needs.validate-release.outputs.version }}
                   body_path: ${{ runner.temp }}/kima-release-notes.md
                   draft: false
                   prerelease: false
