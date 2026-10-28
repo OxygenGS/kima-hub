@@ -48,6 +48,10 @@ jobs:
                   set -euo pipefail
                   python3 .github/ci/check-release-metadata.py --self-test
                   python3 .github/ci/check-release-metadata.py --candidate
+                  python3 .github/ci/build-release-notes.py --self-test
+                  VERSION="v$(python3 -c 'import json; print(json.load(open("backend/package.json"))["version"])')"
+                  python3 .github/ci/build-release-notes.py --tag "$VERSION" --output /tmp/ci-release-notes.md
+                  test -s /tmp/ci-release-notes.md
 
     naming-audit:
         name: No Legacy Project Naming
