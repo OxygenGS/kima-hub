@@ -21,7 +21,7 @@ The webhook only works if Lidarr can open an address that leads to Kima. By defa
 
 - Docker Desktop provides the name.
 - On Linux, add this to the Lidarr container: `extra_hosts: ["host.docker.internal:host-gateway"]`.
-- Or set `KIMA_CALLBACK_URL` on Kima to an address Lidarr can reach, such as `http://192.168.0.20:3030`, restart Kima and save the Lidarr settings again.
+- Or set `KIMA_CALLBACK_URL` on Kima to an address Lidarr can reach, such as `http://YOUR_KIMA_SERVER_IP:3030`, restart Kima and save the Lidarr settings again.
 
 When you save, Lidarr sends a test event. If it cannot reach Kima, admins get a notification called "Lidarr cannot reach Kima" that names the address and the error. Until it is fixed, Kima still notices finished downloads, but only on a check every two minutes.
 
