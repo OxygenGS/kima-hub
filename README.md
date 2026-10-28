@@ -1,119 +1,105 @@
 <div align="center">
 
-<img src="frontend/public/assets/icons/icon-192.webp" width="82" height="82" alt="Kima Hub application icon used by Oxygen's Fork" />
+<img src="assets/readme-header.svg" width="100%" alt="Kima Hub - Oxygen's Fork. Your music. Your space." />
 
-<h1>Kima Hub · Oxygen's Fork</h1>
+# Kima Hub - Oxygen's Fork
 
-<img src="assets/readme-hero.svg" width="100%" alt="Kima Hub — Oxygen's Fork: Your library. Your rules. Your vibe. A gradient audio-wave banner." />
+**A self-hosted home for your music, with a redesigned listening experience.**
 
-<p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
+Stream the albums you own. Rediscover forgotten favorites. Keep your library, accounts and settings on your own server.
 
-<p>
-  The published OxygenGS fork v1.12.1 builds on upstream Kima Hub v1.11.0, with Project Turbo performance improvements, UI 2.0 refinements,
-  English/Dutch settings, user permissions, and legacy-free authentication for existing Symfonium and Feishin integrations.
-</p>
+[![Release](https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=stable&style=flat-square&color=ffb000)](https://github.com/OxygenGS/kima-hub/releases)
+[![Docker](https://img.shields.io/badge/Docker-GHCR-2779bd?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
+[![Languages](https://img.shields.io/badge/Interface-English%20%2B%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
+[![License](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-<p>
-  <a href="https://github.com/OxygenGS/kima-hub/releases"><img src="https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=Release&style=flat-square&color=9167db" alt="Latest GitHub release" /></a>
-  <a href="https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub"><img src="https://img.shields.io/badge/Docker-GHCR-3778ce?style=flat-square&logo=docker&logoColor=white" alt="Docker on GHCR" /></a>
-  <a href="docs/internationalization.md"><img src="https://img.shields.io/badge/Interface-EN%20%2B%20NL-c770d8?style=flat-square" alt="English and Dutch interface" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-55526b?style=flat-square" alt="GPLv3" /></a>
-</p>
-
-<p>
-  <a href="#quick-start"><b>Quick start</b></a> &nbsp;·&nbsp;
-  <a href="#what-you-get"><b>Features</b></a> &nbsp;·&nbsp;
-  <a href="#a-look-inside"><b>Screenshots</b></a> &nbsp;·&nbsp;
-  <a href="#documentation"><b>Documentation</b></a>
-</p>
+[**What's new**](#new-in-v1130) &nbsp; / &nbsp; [**Screenshots**](#see-the-interface) &nbsp; / &nbsp; [**Install**](#quick-start) &nbsp; / &nbsp; [**Documentation**](#documentation)
 
 </div>
 
----
+## New in v1.13.0
 
-## Music, on your terms
+**v1.13.0 is released.** This is the visible interface refresh: a new Home, clearer navigation, larger artist and album headers, redesigned players and a responsive queue. English and Dutch release notes are included **inside the app**, as well as on [GitHub](https://github.com/OxygenGS/kima-hub/releases/tag/v1.13.0).
 
-Host your music library, rediscover favorite tracks and find what to play next. Streaming, discovery, smart playlists, audio analysis, podcasts and audiobooks — all in one interface.
+| Browse | Listen | Make it yours |
+| :--- | :--- | :--- |
+| A welcoming Home, grouped icon navigation, refreshed music cards and clearer artist/album pages. | A new desktop dock, mobile mini player, full-screen listening view and editable queue. | English or Dutch, your preferred accent color, custom branding and keyboard-friendly controls. |
+
+This release keeps the existing audio engine, library, playlists, permissions and native-client integrations. It adds no new database migration or dependency upgrade as part of the interface refresh. See the [changelog](CHANGELOG.md) and [release validation record](docs/release-v1.13.md).
+
+## See the interface
 
 <p align="center">
-  <img src="assets/screenshots/desktop-home.png" width="920" alt="Kima Hub desktop home with music discovery, listening and library sections" />
-</p>
-
-## What you get
-
-| Your music, organized | Discovery that feels personal | A home for every device |
-| :--- | :--- | :--- |
-| Stream your own albums and playlists. Browse artists, queue tracks and adjust playback quality. | Rediscover favorites with **Discover Weekly**, **Stats**, **Mood Mixer** and the **Vibe Map**. | A responsive web app and installable PWA for desktop, mobile and supported TV layouts. |
-
-### What makes the OxygenGS fork different
-
-- **Legacy-free client compatibility:** Kima already supported **Symfonium** and **Feishin**. The OxygenGS fork improves that existing integration: newly generated Native Apps API keys enable sign-in **without Legacy Authentication**, and Symfonium syncs **without Compatibility Mode** (verified on v1.11.10).
-- **English + Dutch:** Switch the signed-in interface language in Settings. The login screen follows your browser preference but does not offer its own language selector. Music metadata stays untouched.
-- **Permissions that really apply:** Admins can choose who may request albums or download tracks. The backend enforces these rights; hiding a button is never the only protection.
-- **Your identity:** Administrators can customize the app name, tagline, accent color, logo and favicon.
-- **Project Turbo + UI 2.0:** Cached artist/album navigation, fewer redundant requests, stable loading skeletons, responsive layouts, refined player/queue interactions and accessibility improvements.
-- **Smaller Docker images:** Reduced redundant model-cache and frontend development layers for AMD64 and ARM64.
-- **Hardened services:** Tighter internal network and credential boundaries, non-root backend/audio service processes and improved audio-processing safeguards.
-- **The full v1.11 experience:** Upstream [Kima Hub v1.11.0](https://github.com/Chevron7Locked/kima-hub/releases/tag/v1.11.0) features and library improvements are integrated into **one** OxygenGS app.
-
-### Improved Symfonium and Feishin compatibility
-
-1. Update to a [verified published image](https://github.com/OxygenGS/kima-hub/releases/tag/v1.12.1).
-2. In **Settings → Native Apps**, generate a **new API key** for each client. Keys made before v1.11.9 do not support salted-token login.
-3. Add your Kima server in Symfonium or Feishin. Use the new key as the password; where supported, an API key can identify the account without a username.
-4. Keep **Legacy Authentication off**. In Symfonium you can also leave **Compatibility Mode off**.
-
-For details, see [OpenSubsonic client setup and authentication](docs/subsonic.md).
-
-## In development — v1.13.0
-
-The current source contains a visible redesign of Home, grouped desktop navigation, music cards, artist/album headers, desktop/mobile/full-screen players and the queue. Existing playback, permissions and music-client integrations remain in place. English and Dutch in-app release notes are included in the candidate.
-
-**This is an unpublished release candidate, not an available stable Docker update.** The installation examples below remain on the verified v1.12.1 release until v1.13.0 passes its integrated application and native image gates and is explicitly published. Existing screenshots illustrate earlier released screens, not the complete new design. See [the candidate changelog](CHANGELOG.md) for scope and [release validation](docs/release-v1.13.md) for the remaining gates.
-
-## What's new in v1.12.0 — Project Turbo + UI 2.0
-
-**Released October 28, 2026.** This is a performance and usability refinement, not a full visual redesign. The [v1.12.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.12.0) and [changelog](CHANGELOG.md) cover the implementation.
-
-| Project Turbo | UI 2.0 | Release reliability |
-| :--- | :--- | :--- |
-| Reuse cached artist/album requests; fetch independent artist details in parallel; reuse tracks for Play All and Shuffle. | Layout-stable artist/album/track skeletons; responsive headers; improved keyboard focus, mobile controls and artwork transitions. | Python BullMQ/Redis job-processing regression test, native AMD64/ARM64 Docker builds and vulnerability/secret gates. |
-
-- **Performance without invented claims:** Album covers outside the viewport load only when needed; library pages prefetch on hover, focus or touch intent. No unmeasured percentage improvements are advertised.
-- **Existing clients, improved in earlier releases:** Symfonium and Feishin integration was already available upstream. The fork's v1.11.9/v1.11.10 improvements allow modern Native Apps keys without Legacy Authentication, plus native Symfonium sync without Compatibility Mode.
-- **What's New in the app:** The published v1.12.1 maintenance release corrects the missing v1.12.0 in-app notes, in English and Dutch. The in-app catalog remains separate from the GitHub release description; candidate preparation now updates both languages together.
-- **Security transparency:** Both native images passed the configured release scanners, which still report existing Debian package advisories without scanner-listed fixes. See [image security](docs/image-security.md) for details.
-
-## A look inside
-
-<p align="center">
-  <img src="assets/screenshots/vibe-map.png" width="820" alt="Kima Hub Vibe Map showing your library organized by musical similarity" />
-  <br /><sub><b>Vibe Map</b> · Explore songs by how they sound and feel</sub>
+  <img src="assets/screenshots/v1.13/desktop-home.png" width="1100" alt="Kima Hub v1.13 Home with grouped navigation, library shortcuts and the desktop player" />
+  <br /><sub><b>A new home for your collection.</b> Browse, discover and keep listening from one place.</sub>
 </p>
 
 <table>
   <tr>
-    <td align="center" width="50%">
-      <img src="assets/screenshots/desktop-stats.png" width="430" alt="Kima Hub listening statistics" />
-      <br /><sub><b>Listening Stats</b> · Discover your favorites</sub>
+    <td width="50%" valign="top">
+      <img src="assets/screenshots/v1.13/desktop-album.png" width="550" alt="Album page with a larger artwork area and clearly labelled playback controls" />
+      <br /><b>Music takes the lead</b><br />Larger detail headers, wrapping titles and direct playback actions.
     </td>
-    <td align="center" width="50%">
-      <img src="assets/screenshots/mood-mixer.png" width="430" alt="Kima Hub Mood Mixer" />
-      <br /><sub><b>Mood Mixer</b> · Find the right sound</sub>
+    <td width="50%" valign="top">
+      <img src="assets/screenshots/v1.13/desktop-queue.png" width="550" alt="Desktop queue with the selected song, upcoming tracks and persistent editing controls" />
+      <br /><b>A queue you can control</b><br />Move or remove upcoming tracks without restarting the current song.
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="assets/screenshots/mobile-vibe.png" width="220" alt="Vibe browsing on mobile in Kima Hub" />
-  <br /><sub><b>On the go</b> · Your library, wherever you listen</sub>
+  <img src="assets/screenshots/v1.13/desktop-overlay.png" width="950" alt="Full-screen Kima player with artwork, track information and playback controls" />
+  <br /><sub><b>Room to listen.</b> Open the full-screen player without interrupting playback.</sub>
 </p>
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="assets/screenshots/v1.13/mobile-home.png" width="240" alt="Responsive Home on a mobile screen" /><br /><b>Browse on mobile</b></td>
+    <td align="center" width="33%"><img src="assets/screenshots/v1.13/mobile-overlay.png" width="240" alt="Mobile full-screen player with touch-friendly controls" /><br /><b>Focus on the music</b></td>
+    <td align="center" width="33%"><img src="assets/screenshots/v1.13/mobile-queue.png" width="240" alt="Mobile queue with editing buttons below each track" /><br /><b>Edit your next tracks</b></td>
+  </tr>
+</table>
+
+**About these screenshots:** real browser captures from the successful v1.13.0 release-validation build, using generated audio and a fictional test library. The source tree matches the published tag. The visible `ci-smoke` build label and placeholder artwork are intentional; these are not photographs of a private installation or generated UI mockups. [Capture provenance](assets/screenshots/v1.13/provenance.json).
+
+## More than a music player
+
+**Your collection.** Browse artists and albums, build playlists, manage the play queue and stream your own files. Lyrics, seek controls, shuffle, repeat and the sleep timer remain part of the listening experience.
+
+**Discovery from your library.** Explore Discover Weekly, Mood Mixer, the Vibe Map, artist radio and listening statistics. Audio analysis and enrichment power the discovery features; availability depends on your library, completed analysis and configured services.
+
+**Beyond albums.** Podcasts and the existing Audiobookshelf integration remain available. Optional integrations are configured separately; they are not required simply to browse and play a local music collection.
+
+**Across devices.** Use the responsive web app or install it as a PWA in a supporting browser. Desktop, narrow screens and landscape players use the same underlying playback state.
+
+### What this fork adds
+
+- **English and Dutch:** change the signed-in interface language in Settings. The login page follows browser language preferences; music metadata is not translated.
+- **Modern client authentication:** improvements to the existing Symfonium and Feishin integrations, without Legacy Authentication. Symfonium can synchronize without Compatibility Mode.
+- **Enforced user permissions:** administrators control who can request albums and download tracks, with checks on the backend as well as in the interface.
+- **Instance branding:** customize the app name, tagline, accent, logo and favicon without editing source code.
+- **Navigation improvements:** cached artist/album data, intent-based prefetching, fewer repeated album-track requests and stable loading placeholders. First-time external metadata lookups can still take longer than cached visits.
+- **Release safeguards:** native AMD64/ARM64 builds, automated application/audio checks, upgrade/independent-restore tests, image vulnerability scans and secret detection.
+
+The fork builds on upstream Kima Hub v1.11.0 and retains its features. Fork version numbers describe this project's releases, not an upstream v1.13 release.
+
+## Symfonium and Feishin
+
+Support for these clients already existed upstream. The fork improves authentication and synchronization; it does not claim to have introduced the integrations.
+
+1. In **Settings > Native Apps**, create a separate API key for each client. Keys created before v1.11.9 must be replaced to use salted-token authentication.
+2. Connect the client to your Kima server and use the new API key as its password. Supply the account username where the client asks for it.
+3. Leave **Legacy Authentication disabled**. In Symfonium, leave **Compatibility Mode disabled** as well.
+
+See [OpenSubsonic setup and authentication](docs/subsonic.md) for supported methods, account handling and troubleshooting. Keep API keys private.
 
 ## Quick start
 
-> **Before pulling a newly released image:** confirm that the [stable image publisher](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) completed successfully. A GitHub release page can appear before GHCR finishes building its Docker images.
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.13.0`  
+**Architectures:** `linux/amd64` and `linux/arm64`  
+**Interface:** port `3030`
 
-You need Docker, an existing folder with music, and storage for the persistent app data.
+You need Docker, a music folder and persistent storage for application data. This is the all-in-one image; internal services do not need additional exposed ports.
 
 ```bash
 docker run -d \
@@ -122,47 +108,55 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.12.1
+  ghcr.io/oxygengs/kima-hub:v1.13.0
 ```
 
-Then visit **http://localhost:3030** to create your administrator account.
+Replace the example music path, then open **http://localhost:3030** on the server, or use your server address, and create the administrator account.
 
-- **`/music`** — your library, mounted from the host.
-- **`/data`** — your database, credentials, generated secrets and caches. **Preserve and back up this entire volume.**
-- **`3030`** — the web interface. Internal application services do not require separate exposed ports.
+| Setting | Purpose |
+| :--- | :--- |
+| `/music` | Your existing music library. Preserve the correct host path when updating. |
+| `/data` | Database, accounts, generated secrets, configuration and caches. Persist and back up the entire volume. |
+| `3030` | Web interface and client API. Apply appropriate network access controls. |
 
-Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml). **Set `VERSION=v1.12.1` explicitly**: the Compose file retains a conservative older default and will not select this release on its own.
+### Compose or Dockge
 
-### Updating an existing installation?
+Use the [production Compose example](docker-compose.prod.yml) and [installation guide](docs/install.md). **Set `VERSION=v1.13.0` explicitly.** The checked-in Compose file retains an older conservative fallback; leaving the version unset does not select the release shown here.
 
-**Back up before upgrading.** Kima can migrate the database when it starts; switching back to an older image will **not** reverse that migration. For rollback, use an independent copy of the **original pre-upgrade** data volume.
+Use explicit version tags. The `:latest` alias is **not automatically advanced** by the stable publisher.
 
-Read the [safe update and restore guide](docs/safe-aio-updates.md) before changing any existing instance. The public fork release is separate from upgrades of individually managed installations.
+### Upgrade safely
+
+Back up the complete persistent `/data` volume and your deployment configuration **before** upgrading. Preserve music mounts, data mounts and existing environment settings; change the image version rather than creating a fresh empty data volume.
+
+Older releases may not understand a newer database. Roll back using an independent **pre-upgrade** data backup, not by pointing an older image at data already upgraded by a newer version. Follow the [safe upgrade and restore guide](docs/safe-aio-updates.md).
+
+A published release does not automatically update any running installation. For future releases, verify that the [stable image publisher](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) completed, not merely that a Git tag exists.
+
+## Security and privacy
+
+Image scans still report residual dependency advisories. Passing the configured release checks is **not a claim of zero vulnerabilities**. Review [image security and residual risks](docs/image-security.md), apply host updates and use appropriate network protection and HTTPS when exposing a service.
+
+Never publish API keys, passwords, local hostnames, personal paths or private installation screenshots in issues or pull requests. Use neutral placeholders and synthetic examples. See [Privacy](PRIVACY.md) and [responsible disclosure](SECURITY.md).
 
 ## Documentation
 
-| Get started | Manage and personalize | Explore and develop |
+| Get started | Administer | Explore and contribute |
 | :--- | :--- | :--- |
-| [Install Kima](docs/install.md) | [Server configuration](docs/configuration.md) | [Using Kima](docs/using-kima.md) |
-| [Safe upgrades & rollback](docs/safe-aio-updates.md) | [Administration](docs/administration.md) | [Integrations](docs/integrations.md) |
+| [Installation](docs/install.md) | [Configuration](docs/configuration.md) | [Using Kima](docs/using-kima.md) |
+| [Safe upgrades and rollback](docs/safe-aio-updates.md) | [Administration](docs/administration.md) | [Integrations](docs/integrations.md) |
 | [Security](docs/security.md) | [User permissions](docs/user-permissions.md) | [GPU acceleration](docs/gpu.md) |
-| [Image security reports](docs/image-security.md) | [Instance branding](docs/instance-branding.md) | [Subsonic clients](docs/subsonic.md) |
-| [Release notes](CHANGELOG.md) | [Language settings](docs/internationalization.md) | [Contributing](CONTRIBUTING.md) / [Upstream compatibility](docs/upstream-compatibility.md) |
+| [Release history](CHANGELOG.md) | [Custom branding](docs/instance-branding.md) | [Subsonic clients](docs/subsonic.md) |
+| [v1.13 validation](docs/release-v1.13.md) | [Language settings](docs/internationalization.md) | [Upstream compatibility](docs/upstream-compatibility.md) |
 
-**Other:** [Privacy](PRIVACY.md) · [Responsible disclosure](SECURITY.md) · [GitHub releases](https://github.com/OxygenGS/kima-hub/releases) · [Issues](https://github.com/OxygenGS/kima-hub/issues)
+[Report a bug](https://github.com/OxygenGS/kima-hub/issues) or read [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change. Include the version and reproducible steps, not private installation details.
 
-## Acknowledgements and licensing
+## Upstream credit and licensing
 
-OxygenGS Kima Hub is an independently maintained fork of [**Kima Hub by Chevron7Locked**](https://github.com/Chevron7Locked/kima-hub). Credit for the original project, features, community contributions and upstream development belongs to Chevron7Locked and upstream contributors. This is **not** an official upstream release.
+**Kima Hub - Oxygen's Fork** is independently maintained by OxygenGS and builds on [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub). Credit for the original application, its features and upstream contributions belongs to the original developers and contributors. This is not an official upstream release.
 
-The application remains under the [GNU GPL v3.0](LICENSE). Included third-party libraries and machine-learning models retain their own applicable terms and attribution notices, including the original [UPF model notice](services/audio-analyzer/models/LICENSE-upf-models).
+The application remains licensed under [GNU GPL v3.0](LICENSE). Third-party libraries and machine-learning models retain their own terms and attribution notices, including the [UPF model notice](services/audio-analyzer/models/LICENSE-upf-models).
 
 ---
 
-<div align="center">
-
-**Built for music lovers who prefer owning their library.**
-
-[OxygenGS](https://github.com/OxygenGS) · [Original Kima Hub](https://github.com/Chevron7Locked/kima-hub)
-
-</div>
+<p align="center"><b>Your library. Your server. Your way to listen.</b></p>
