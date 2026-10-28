@@ -1,0 +1,112 @@
+name: v1.12.0 Native Release Preflight
+
+on:
+  workflow_dispatch:
+
+# This is a build-only gate. Never create tags, releases, or registry images.
+permissions:
+  contents: read
+
+concurrency:
+  group: v112-native-release-preflight
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Verify release candidate source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Require main and v1.12.0 release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF}" = "refs/heads/main"
+          python3 .github/ci/check-release-metadata.py --self-test
+          python3 .github/ci/check-release-metadata.py --candidate
+          python3 .github/ci/check-release-metadata.py --tag v1.12.0
+          echo "Preflight source: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+  native-build:
+    name: Native ${{ matrix.arch }} build and security scan (no push)
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Record exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Native ${{ matrix.arch }} source SHA: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
+          df -h /
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and load exact native image (never publish)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: kima:preflight-scan
+          build-args: |
+            NEXT_PUBLIC_BUILD_TYPE=oxygen-fork
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=v1.12.0
+          cache-from: type=gha,scope=stable-${{ matrix.arch }}
+      - name: Verify image architecture and source
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          SOURCE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect kima:preflight-scan --format '{{.Architecture}}')" = "$ARCH"
+          test "$(docker image inspect kima:preflight-scan --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$SOURCE"
+          test "$(docker image inspect kima:preflight-scan --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')" = "v1.12.0"
+      - name: Install pinned Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.74.0
+          cache: true
+      - name: Block fixable HIGH and CRITICAL image vulnerabilities
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 \
+            --format json --output "$RUNNER_TEMP/preflight-vulnerabilities.json" kima:preflight-scan
+          python3 .github/ci/evaluate-image-vulnerabilities.py --self-test
+          python3 .github/ci/evaluate-image-vulnerabilities.py "$RUNNER_TEMP/preflight-vulnerabilities.json" "$ARCH"
+      - name: Block embedded image secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          trivy image --scanners secret --ignorefile .trivyignore \
+            --skip-files '/etc/ssl/private/ssl-cert-snakeoil.key' \
+            --exit-code 1 --format table kima:preflight-scan
+      - name: Record verified native image
+        shell: bash
+        run: |
+          echo "Native ${{ matrix.arch }}: build, source validation, vulnerability gate and secret gate PASS. No image published." >> "$GITHUB_STEP_SUMMARY"
