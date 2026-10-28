@@ -46,9 +46,9 @@ VALUES ('ci-ui-artist','ci-ui-fixture-artist','CI Interface Artist','ci-ui-artis
 INSERT INTO "Album" ("id","rgMbid","artistId","title","primaryType","identityKey","year")
 VALUES ('ci-ui-album','ci-ui-fixture-album','ci-ui-artist','CI Interface Album','Album','ci-ui-album',2026);
 -- The real album API derives owned status from this relation, not track count.
--- Without it the application correctly renders a preview rather than Play all.
-INSERT INTO "OwnedAlbum" ("id","rgMbid","artistId","albumId","source","updatedAt")
-VALUES ('ci-ui-owned-album','ci-ui-fixture-album','ci-ui-artist','ci-ui-album','import',NOW());
+-- OwnedAlbum has a composite artistId/rgMbid key, not id or albumId columns.
+INSERT INTO "OwnedAlbum" ("artistId","rgMbid","source")
+VALUES ('ci-ui-artist','ci-ui-fixture-album','import');
 INSERT INTO "Track" ("id","albumId","title","trackNo","duration","filePath","fileModified","fileSize","updatedAt","moodTags","essentiaGenres") VALUES
 ('ci-ui-track-one','ci-ui-album','CI Interface Track One',1,120,'ci-release-ui/one.wav',NOW(),$size,NOW(),ARRAY[]::text[],ARRAY[]::text[]),
 ('ci-ui-track-two','ci-ui-album','CI Interface Track Two',2,120,'ci-release-ui/two.wav',NOW(),$size,NOW(),ARRAY[]::text[],ARRAY[]::text[]),

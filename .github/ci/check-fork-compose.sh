@@ -3,6 +3,9 @@
 # The real AIO runtime/upgrade check runs separately in pr-checks.yml.
 set -euo pipefail
 
+# Fail on release-fixture column drift before either architecture builds an image.
+python3 .github/ci/check-release-ui-fixture.py --self-test
+
 for file in docker-compose.prod.yml docker-compose.server.yml; do
     echo "Checking $file for safe fork image, data mounts and kernel settings..."
     # Blank VERSION exercises the pinned stable fallback, not :latest.
