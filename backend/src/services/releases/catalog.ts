@@ -102,6 +102,60 @@ const KEVIN_1_11 = [
 
 export const RELEASES: Release[] = [
     {
+        version: "1.12.1",
+        title: "Kima Hub 1.12.1 — Release Notes Update",
+        summary: "The in-app release history now includes Project Turbo + UI 2.0 and the latest fork improvements.",
+        date: "2026-10-28",
+        items: [
+            {
+                kind: "note",
+                key: "fork.1121.release-history",
+                title: "Release history, brought up to date",
+                summary: "The What's New window now includes the missing 1.12.0 release notes.",
+                body: "The 1.12.0 Docker release shipped with the upstream 1.11 release catalog, so this window continued to show older notes. This patch adds the OxygenGS 1.12.0 notes to the in-app history. It does not change your music, settings, or permissions.\n\nOpen the version label beside the logo to read the latest notes again.",
+            },
+        ],
+    },
+    {
+        version: "1.12.0",
+        title: "Kima Hub 1.12.0 — Project Turbo + UI 2.0",
+        summary: "Faster artist and album browsing, less waiting, and smoother controls on desktop and mobile.",
+        date: "2026-10-28",
+        items: [
+            {
+                kind: "note",
+                key: "fork.1120.turbo",
+                title: "Project Turbo: faster music browsing",
+                summary: "Reuse cached artist and album information instead of requesting it again.",
+                body: "Artist pages load independent detail requests concurrently and reuse already fetched information. Album navigation and playback share cached detail data, while Play All and Shuffle reuse available album tracks rather than loading entire discographies again.\n\nLibrary pages prefetch on browsing intent, and missing offscreen artwork waits until it is needed. No specific speed-up percentage is claimed.",
+                links: [{ label: "Browse your collection", href: "/collection" }],
+            },
+            {
+                kind: "note",
+                key: "fork.1120.ui",
+                title: "UI 2.0: a smoother experience",
+                summary: "Stable loading skeletons, refined artist and album pages, and improved mobile controls.",
+                body: "Collection loading indicators now use layout-stable skeletons. Artist and album headers adapt better to narrow screens. Track rows, player actions, artwork, keyboard focus and touch targets have received usability and accessibility refinements.",
+                links: [{ label: "Open your collection", href: "/collection" }],
+            },
+            {
+                kind: "note",
+                key: "fork.1120.clients",
+                title: "Your native music apps still work",
+                summary: "Existing Symfonium and Feishin support is preserved without legacy sign-in.",
+                body: "The OxygenGS fork retains the earlier Native Apps improvements introduced in 1.11.9 and 1.11.10: newly generated API keys work with Symfonium and Feishin without Legacy Authentication. Symfonium library sync works without Compatibility Mode.\n\nIf you still use a key issued before 1.11.9, generate a new one in Settings → Native Apps. This is not a newly introduced integration.",
+                links: [{ label: "Open Native Apps settings", href: "/settings#subsonic" }],
+            },
+            {
+                kind: "note",
+                key: "fork.1120.security",
+                title: "Reliability and security updates",
+                summary: "Updated CLAP worker dependencies and stronger native Docker release verification.",
+                body: "The CLAP Python worker now uses patched BullMQ and msgpack dependencies, with a Redis job-processing integration test. Native AMD64 and ARM64 builds are checked by vulnerability and secret scans before publication. Existing image dependency advisories remain documented; passing these checks does not mean zero security risk.",
+            },
+        ],
+    },
+    {
         version: "1.11.0",
         title: "Kima 1.11",
         summary:
