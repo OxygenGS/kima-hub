@@ -47,7 +47,7 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 
 ### What makes the OxygenGS fork different
 
-- **Legacy-free client compatibility:** Kima already supported **Symfonium** and **Feishin**. The OxygenGS fork improves that existing integration: newly generated Native Apps API keys enable sign-in **without Legacy Authentication**, and Symfonium syncs **without Compatibility Mode** (verified on v1.12.0).
+- **Legacy-free client compatibility:** Kima already supported **Symfonium** and **Feishin**. The OxygenGS fork improves that existing integration: newly generated Native Apps API keys enable sign-in **without Legacy Authentication**, and Symfonium syncs **without Compatibility Mode** (verified on v1.11.10).
 - **English + Dutch:** Switch the signed-in interface language in Settings. The login screen follows your browser preference but does not offer its own language selector. Music metadata stays untouched.
 - **Permissions that really apply:** Admins can choose who may request albums or download tracks. The backend enforces these rights; hiding a button is never the only protection.
 - **Your identity:** Administrators can customize the app name, tagline, accent color, logo and favicon.
