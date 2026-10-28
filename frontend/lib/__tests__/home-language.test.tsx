@@ -15,10 +15,6 @@ vi.mock("@/components/cards/MediaCard", () => ({
     MediaCard: ({ title, subtitle, href }: { title: string; subtitle: string; href: string }) =>
         <article data-href={href}><h3>{title}</h3><p>{subtitle}</p></article>,
 }));
-vi.mock("@/components/layout/PageHeader", () => ({
-    PageHeader: ({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) =>
-        <header><span>{eyebrow}</span><h1>{title}</h1><p>{description}</p></header>,
-}));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLDivElement;
@@ -51,10 +47,16 @@ describe("home-page presentation-only localization", () => {
             localStorage.setItem("kima-hub-language", "nl");
             await render(<HomeHero />);
             expect(host.textContent).toContain("Goedemorgen");
-            expect(host.textContent).toContain("Je bibliotheek in één oogopslag");
+            expect(host.querySelector("h1")?.textContent).toBe("Tijd voor iets goeds.");
+            expect(host.textContent).toContain("Herontdek een favoriet, vind iets nieuws of luister verder waar je gebleven was.");
+            const collectionLink = host.querySelector('a[href="/collection"]');
+            expect(collectionLink?.textContent).toContain("Open bibliotheek");
             await changeLanguage("en");
             expect(host.textContent).toContain("Good morning");
-            expect(host.textContent).toContain("Your library at a glance");
+            expect(host.querySelector("h1")?.textContent).toBe("Make room for a good listen.");
+            expect(host.textContent).toContain("Rediscover a favourite, find a new direction, or pick up where you left off.");
+            expect(host.querySelector('a[href="/collection"]')).toBe(collectionLink);
+            expect(collectionLink?.textContent).toContain("Open collection");
         } finally { hours.mockRestore(); }
     });
 

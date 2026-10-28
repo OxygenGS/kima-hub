@@ -44,7 +44,7 @@ export default function HomePage() {
     return (
         <div className="min-h-screen">
             <div className="relative">
-                <HomeHero />
+                <HomeHero artists={recentlyAdded} />
 
                 <div className="section-stack relative page-shell pb-32 pt-2">
                 {/* Sections rise in staggered order on mount. Only the first 8 visible sections animate;
