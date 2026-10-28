@@ -9,8 +9,8 @@
 <p><strong>All the music you own. One beautifully self-hosted home.</strong></p>
 
 <p>
-  The Kima Hub v1.11 experience, refined with modern, legacy-free authentication for existing Symfonium and Feishin support,
-  English/Dutch language settings, user permissions, performance polish and security improvements.
+  The Kima Hub v1.12 experience, refined with modern, legacy-free authentication for existing Symfonium and Feishin support,
+  English/Dutch language settings, user permissions, Project Turbo performance improvements, UI 2.0 polish and security improvements.
 </p>
 
 <p>
@@ -58,7 +58,7 @@ Host your music library, rediscover favorite tracks and find what to play next. 
 
 ### Improved Symfonium and Feishin compatibility
 
-1. Update to a [verified published image](https://github.com/OxygenGS/kima-hub/releases/tag/v1.11.10).
+1. Update to a [verified published image](https://github.com/OxygenGS/kima-hub/releases/tag/v1.12.0).
 2. In **Settings → Native Apps**, generate a **new API key** for each client. Keys made before v1.11.9 do not support salted-token login.
 3. Add your Kima server in Symfonium or Feishin. Use the new key as the password; where supported, an API key can identify the account without a username.
 4. Keep **Legacy Authentication off**. In Symfonium you can also leave **Compatibility Mode off**.
@@ -103,7 +103,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.11.10
+  ghcr.io/oxygengs/kima-hub:v1.12.0
 ```
 
 Then visit **http://localhost:3030** to create your administrator account.
@@ -112,7 +112,7 @@ Then visit **http://localhost:3030** to create your administrator account.
 - **`/data`** — your database, credentials, generated secrets and caches. **Preserve and back up this entire volume.**
 - **`3030`** — the web interface. Internal application services do not require separate exposed ports.
 
-Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml) (set `VERSION=v1.11.10` for this release).
+Prefer Compose or Dockge? See the [installation guide](docs/install.md) and [production Compose example](docker-compose.prod.yml) (set `VERSION=v1.12.0` for this release).
 
 ### Updating an existing installation?
 
