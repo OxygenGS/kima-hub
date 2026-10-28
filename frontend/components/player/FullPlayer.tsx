@@ -104,7 +104,7 @@ export function FullPlayer() {
                             disabled={!hasMedia || playbackType !== "track"}>
                             <SkipBack size={21} aria-hidden="true" />
                         </DockButton>
-                        <DockButton onClick={isPlaying ? pause : resumeWithGesture} label={playLabel} title={playHint}
+                        <DockButton onClick={audioError ? resumeWithGesture : isPlaying ? pause : resumeWithGesture} label={playLabel} title={playHint}
                             disabled={!hasMedia} className={cn(styles.play, audioError && styles.error)}>
                             {audioError ? <RefreshCw size={21} aria-hidden="true" />
                                 : isBuffering ? <Loader2 size={21} className={styles.spinner} aria-hidden="true" />

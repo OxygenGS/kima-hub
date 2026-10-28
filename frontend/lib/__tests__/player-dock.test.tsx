@@ -56,10 +56,11 @@ describe("desktop dock preserves playback contracts", () => {
         state.isPlaying = true; render(); act(() => button("Pause").click());
         expect(state.pause).toHaveBeenCalledOnce();
     });
-    it("preserves buffering and recovery states without silently disabling the control", () => {
+    it("preserves buffering and retries even when the playing flag is stale", () => {
         state.isBuffering = true; render(); expect(button("Buffering...").disabled).toBe(false);
-        state.isBuffering = false; state.audioError = true; render(); act(() => button("Retry playback").click());
-        expect(state.resume).toHaveBeenCalledOnce();
+        state.isBuffering = false; state.audioError = true; state.isPlaying = true;
+        render(); act(() => button("Retry playback").click());
+        expect(state.resume).toHaveBeenCalledOnce(); expect(state.pause).not.toHaveBeenCalled();
     });
     it("keeps spoken-media skipping but disables track-only next, repeat, shuffle and lyrics", () => {
         state.playbackType = "podcast"; render();
