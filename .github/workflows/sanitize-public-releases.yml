@@ -1,0 +1,24 @@
+name: Sanitize public release descriptions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - .github/workflows/sanitize-public-releases.yml
+      - .github/ci/scrub-published-release-metadata.py
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    if: github.repository == 'OxygenGS/kima-hub'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove public local-host references from release descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 .github/ci/scrub-published-release-metadata.py
