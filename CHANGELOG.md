@@ -7,7 +7,7 @@ Maintenance patch for the already-published v1.12.0 release:
 - Restore missing **in-app What's New** entries for Project Turbo + UI 2.0 (v1.12.0). The backend release catalog previously stopped at upstream v1.11.0, independently of GitHub Releases.
 - Include an in-app entry for this patch, plus English and Dutch editorial copy. Existing release acknowledgement and consent behavior is preserved; no new choices or destructive actions.
 - Refresh the fork README, release history and image-security documentation to reflect the published v1.12.0 release.
-- No new database migration, music processing change, permissions change, or CT 101/production deployment. The published immutable v1.12.0 Docker tag is not rebuilt or overwritten.
+- No new database migration, music processing change, permissions change, or deployment change. The published immutable v1.12.0 Docker tag is not rebuilt or overwritten.
 - **Release gate:** tests, native AMD64/ARM64 builds and scans, disposable AIO checks, and explicit stable release approval remain required before publishing v1.12.1.
 
 ## OxygenGS fork v1.12.0 — released 2026-10-28
@@ -41,7 +41,7 @@ Native Subsonic/OpenSubsonic interoperability for music clients:
 - Accept standard Subsonic salted `t=/s=` token authentication with newly issued high-entropy Native Apps keys so Symfonium and Feishin can connect with Legacy Authentication disabled (PR #125).
 - Continue storing SHA-256 key hashes for lookup, and store an authenticated-encrypted copy for salted-token verification. Preserve key revocation, 2FA restrictions and pre-upgrade key behavior.
 - Add one optional `ApiKey.tokenSecretEncrypted` column through an additive Prisma migration. Existing keys still work with `p=` or `apiKey=` but **must be reissued** to use `t=/s=`; test the new key in each client before revoking the old one.
-- Native salted-token sign-in was verified in Symfonium and Feishin. The remaining Symfonium fast-sync issue was fixed in v1.11.10. No installation-specific or CT101 changes.
+- Native salted-token sign-in was verified in Symfonium and Feishin. The remaining Symfonium fast-sync issue was fixed in v1.11.10. No installation-specific changes.
 
 This file tracks changes to the [OxygenGS fork](https://github.com/OxygenGS/kima-hub), not the full history of the original Kima Hub. For previous releases and all original contributors, read [upstream's changelog](https://github.com/Chevron7Locked/kima-hub/blob/v1.11.0/CHANGELOG.md). Older fork development notes remain accessible through Git history.
 
