@@ -3,6 +3,9 @@
 # The real AIO runtime/upgrade check runs separately in pr-checks.yml.
 set -euo pipefail
 
+# Fail on release-fixture column drift before either architecture builds an image.
+python3 .github/ci/check-release-ui-fixture.py --self-test
+
 for file in docker-compose.prod.yml docker-compose.server.yml; do
     echo "Checking $file for safe fork image, data mounts and kernel settings..."
     # Blank VERSION exercises the pinned stable fallback, not :latest.
@@ -40,7 +43,7 @@ for doc in docs/install.md docs/gpu.md; do
     # The install guide follows the currently published release; the GPU guide
     # may still show the older pinned stable image as a reference.
     if [[ "$doc" == "docs/install.md" ]]; then
-        expected_image="ghcr.io/oxygengs/kima-hub:v1.11.10"
+        expected_image="ghcr.io/oxygengs/kima-hub:v1.12.1"
     else
         expected_image="ghcr.io/oxygengs/kima-hub:v1.10.0"
     fi

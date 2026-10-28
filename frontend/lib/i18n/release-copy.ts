@@ -49,6 +49,52 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.13.0
+    "1.13.0": {
+        "titles": {
+            "Kima Hub 1.13.0 \u2014 A New Look for Your Music": "Kima Hub 1.13.0 \u2014 Een nieuwe uitstraling voor je muziek"
+        },
+        "summaries": {
+            "A redesigned home, music pages, players and queue, with the same music library and familiar controls.": "Een vernieuwde startpagina, muziekpagina's, spelers en wachtrij, met dezelfde bibliotheek en vertrouwde bediening."
+        },
+        "items": {
+            "fork.1130.home": {
+                "title": "Een nieuwe start voor je bibliotheek",
+                "summary": "Een nieuw welkomstpaneel, gegroepeerde navigatie en vernieuwde muziekkaarten.",
+                "body": "De startpagina toont afbeeldingen uit je eigen bibliotheek en geeft directe toegang tot albums, nummers, ontdekkingen en radio. De desktopnavigatie heeft groepen, pictogrammen en een duidelijke markering van de geopende pagina. Muziekkaarten hebben een samenhangende afgeronde vormgeving en volgen je accentkleur. Een lege bibliotheek krijgt een passende weergave, zonder verzonnen luisterstatistieken.",
+                "links": {
+                    "/": "Open startpagina",
+                    "/collection": "Open bibliotheek"
+                }
+            },
+            "fork.1130.details": {
+                "title": "Vernieuwde artiest- en albumpagina's",
+                "summary": "Grotere afbeeldingen, volledige titels en duidelijke tekstlabels bij de acties.",
+                "body": "De koppen van artiest- en albumpagina's geven afbeeldingen en gegevens meer ruimte, met afgebakende achtergronden en een directe teruglink naar de bibliotheek. Lange titels lopen door op meerdere regels. Afspelen, Shuffle, radio en afspeellijstacties hebben zichtbare labels. De indeling en laadweergaven passen zich aan de beschikbare ruimte aan, ook met een geopend zijpaneel.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            },
+            "fork.1130.players": {
+                "title": "Een samenhangende speler op elk scherm",
+                "summary": "Een vernieuwde desktopspeler, mobiele minispeler en schermvullende luisterweergave.",
+                "body": "De desktopspeler scheidt muziekgegevens, afspelen en extra functies. De mobiele speler behoudt de veeggebaren voor verkleinen en verbergen en biedt ook expliciete knoppen. De schermvullende speler ondersteunt grotere afbeeldingen, doorlopende titels, songteksten en kleine liggende schermen. Spoelen, volume, sleeptimer, shuffle, herhalen en Vibe gebruiken het bestaande afspeelsysteem. Alleen duidelijke horizontale gebaren wisselen muziek; verticaal scrollen doet dat niet."
+            },
+            "fork.1130.queue": {
+                "title": "Overzicht van wat hierna komt",
+                "summary": "Een paneel voor het geselecteerde nummer, duidelijke gedeelten en zichtbare bewerkingsknoppen.",
+                "body": "De wachtrij scheidt het geselecteerde nummer, komende muziek en eerder afgespeelde nummers. De knoppen voor verplaatsen, afspelen en verwijderen blijven zichtbaar en staan op smalle schermen onder de gegevens. Verplaatsen blijft beperkt tot komende posities, ook bij meerdere exemplaren van hetzelfde nummer. De wachtrij wissen vereist nog steeds bevestiging.",
+                "links": {
+                    "/queue": "Open wachtrij"
+                }
+            },
+            "fork.1130.continuity": {
+                "title": "Je bibliotheek en instellingen blijven behouden",
+                "summary": "Nederlandse en Engelse teksten, toetsenbordbediening en bestaande muziekclients blijven ondersteund.",
+                "body": "Dit is een visuele update, geen nieuwe audiomotor of integratie. Bestaande rechten, branding, afspeellijsten en moderne authenticatie voor Symfonium en Feishin blijven behouden. Deze release notes voegen geen toestemmingskeuzes toe en vragen niet om verrijkingsgegevens opnieuw op te bouwen. Maak voor iedere update een volledige back-up van het gegevensvolume. Teruggaan vereist een afzonderlijke back-up van voor de update."
+            }
+        }
+    },
     "1.12.1": {
         titles: {
             "Kima Hub 1.12.1 — Release Notes Update": "Kima Hub 1.12.1 — Release notes bijgewerkt",

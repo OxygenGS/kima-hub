@@ -101,6 +101,72 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.13.0
+    {
+        "version": "1.13.0",
+        "title": "Kima Hub 1.13.0 \u2014 A New Look for Your Music",
+        "summary": "A redesigned home, music pages, players and queue, with the same music library and familiar controls.",
+        "date": "2026-10-28",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1130.home",
+                "title": "A new home for your collection",
+                "summary": "A new welcome panel, grouped navigation and refreshed music cards.",
+                "body": "The home screen puts artwork from your own collection up front and offers direct routes to albums, tracks, discovery and radio. Desktop navigation is grouped with icons and clear active-page markers. Music cards use a consistent rounded surface and your selected accent color. Empty libraries show an honest empty state, not invented listening statistics.",
+                "links": [
+                    {
+                        "label": "Open Home",
+                        "href": "/"
+                    },
+                    {
+                        "label": "Open collection",
+                        "href": "/collection"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1130.details",
+                "title": "Music detail pages, redesigned",
+                "summary": "Larger artwork, complete titles and clearly labelled actions on artist and album pages.",
+                "body": "Artist and album headers now give artwork and metadata more space, with contained backgrounds and a direct route back to the collection. Long titles wrap instead of disappearing after a few lines. Play, Shuffle, radio and playlist actions have visible labels. Layouts and loading placeholders adapt to the space available, including an open side panel.",
+                "links": [
+                    {
+                        "label": "Browse albums",
+                        "href": "/collection?tab=albums"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1130.players",
+                "title": "A consistent player on every screen",
+                "summary": "A redesigned desktop dock, mobile mini player and full-screen listening view.",
+                "body": "The desktop dock separates music information, playback and extra controls. The mobile player keeps minimize and dismiss gestures and adds explicit options. The full-screen player supports larger artwork, wrapping titles, inline lyrics and small landscape screens. Seek, volume, sleep timer, shuffle, repeat and Vibe continue to use the existing playback system. Clear horizontal gestures are required; vertical scrolling does not skip music."
+            },
+            {
+                "kind": "note",
+                "key": "fork.1130.queue",
+                "title": "See what comes next",
+                "summary": "A selected-track panel, clearer queue sections and visible editing controls.",
+                "body": "The queue separates the selected track, upcoming music and listening history. Move, play and remove controls remain visible and stack below metadata on narrow screens. Reordering stays within upcoming positions, including repeated copies of the same track. Clearing the queue still requires confirmation.",
+                "links": [
+                    {
+                        "label": "Open queue",
+                        "href": "/queue"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1130.continuity",
+                "title": "Your library and settings stay yours",
+                "summary": "English and Dutch copy, keyboard access and existing music-client support are preserved.",
+                "body": "This is a presentation update, not a new audio engine or a new integration. Existing permissions, branding, playlists and modern Symfonium/Feishin authentication remain in place. The release notes introduce no new consent choices and do not request an enrichment reset. Back up the complete persistent data volume before any upgrade; a rollback needs an independent pre-upgrade backup."
+            }
+        ]
+    },
     {
         version: "1.12.1",
         title: "Kima Hub 1.12.1 — Release Notes Update",

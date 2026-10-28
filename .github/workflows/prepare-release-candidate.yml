@@ -1,0 +1,45 @@
+name: Prepare release candidate metadata
+
+on:
+  push:
+    branches: ['release/v*']
+    paths:
+      - '.github/releases/*.json'
+      - '.github/ci/prepare-release-candidate.py'
+      - '.github/workflows/prepare-release-candidate.yml'
+
+permissions:
+  contents: write
+concurrency:
+  group: prepare-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'OxygenGS/kima-hub' && startsWith(github.ref, 'refs/heads/release/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Prepare matching manifests, changelog and bilingual in-app notes
+        env:
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_BRANCH#release/v}"
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          python3 .github/ci/prepare-release-candidate.py --self-test
+          python3 .github/ci/check-approved-preflight.py --self-test
+          python3 .github/ci/prepare-release-candidate.py "$VERSION"
+          python3 .github/ci/check-release-metadata.py --tag "v$VERSION"
+          python3 .github/ci/check-public-source-privacy.py
+          git diff --check
+          git add frontend/package.json frontend/package-lock.json backend/package.json backend/package-lock.json CHANGELOG.md backend/src/services/releases/catalog.ts frontend/lib/i18n/release-copy.ts README.md docs/install.md backend/src/services/__tests__/releases.test.ts
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "chore(release): align v$VERSION source metadata and bilingual notes"
+            git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+          fi
+          echo "Prepared candidate source: $(git rev-parse HEAD). Open/review its PR and run all checks; no tag or image was published." >> "$GITHUB_STEP_SUMMARY"

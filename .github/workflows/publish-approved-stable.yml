@@ -5,34 +5,54 @@ on:
       version_tag:
         description: Stable tag to publish after all release gates pass
         required: true
-        default: v1.12.1
+        default: v1.13.0
         type: string
+      preflight_run_id:
+        description: Successful Native Release Preflight run ID for this exact main commit
+        required: true
+        type: string
+      security_reviewed:
+        description: I reviewed and accepted the remaining native-image security findings
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
   actions: write
-
 concurrency:
   group: approve-stable-release
   cancel-in-progress: false
 
 jobs:
   create-tag-and-dispatch:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.repository == 'OxygenGS/kima-hub' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Validate exact release commit and version
+      - name: Validate exact release commit, reviewed native preflight and version
         env:
           VERSION: ${{ inputs.version_tag }}
+          PREFLIGHT_RUN: ${{ inputs.preflight_run_id }}
+          SECURITY_REVIEWED: ${{ inputs.security_reviewed }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$SECURITY_REVIEWED" = true
+          [[ "$PREFLIGHT_RUN" =~ ^[0-9]+$ ]]
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python3 .github/ci/check-release-metadata.py --tag "$VERSION"
+          python3 .github/ci/build-release-notes.py --tag "$VERSION" --output "$RUNNER_TEMP/release-notes.md"
+          python3 .github/ci/check-approved-preflight.py --self-test
+          gh api "repos/$GH_REPO/actions/runs/$PREFLIGHT_RUN" > "$RUNNER_TEMP/preflight-run.json"
+          gh api "repos/$GH_REPO/actions/runs/$PREFLIGHT_RUN/jobs?per_page=100" > "$RUNNER_TEMP/preflight-jobs.json"
+          python3 .github/ci/check-approved-preflight.py --run "$RUNNER_TEMP/preflight-run.json" --jobs "$RUNNER_TEMP/preflight-jobs.json" --sha "$GITHUB_SHA" --repo "$GH_REPO"
           if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
             echo "Refusing to recreate existing release tag: $VERSION" >&2
             exit 1
@@ -42,8 +62,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ inputs.version_tag }}
+        shell: bash
         run: |
           set -euo pipefail
           gh api "repos/$GH_REPO/git/refs" -X POST -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA"
           gh api "repos/$GH_REPO/actions/workflows/docker-publish.yml/dispatches" -X POST -f "ref=main" -f "inputs[version_tag]=$VERSION"
-          echo "Created $VERSION at $GITHUB_SHA and started stable publisher" >> "$GITHUB_STEP_SUMMARY"
+          echo "Created $VERSION at $GITHUB_SHA and started stable publisher. Publication is complete only when its native images, manifest and release jobs succeed." >> "$GITHUB_STEP_SUMMARY"
