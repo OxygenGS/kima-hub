@@ -2,7 +2,7 @@
 
 import { useAudio } from "@/lib/audio-context";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
-import { MiniPlayer } from "./MiniPlayer";
+import { MobilePlayer } from "./MobilePlayer";
 import { FullPlayer } from "./FullPlayer";
 import { OverlayPlayer } from "./OverlayPlayer";
 import { useEffect, useRef } from "react";
@@ -41,16 +41,12 @@ export function UniversalPlayer() {
 
     return (
         <>
-            {/* Conditional UI rendering based on mode and device */}
-            {/* Note: <audio> element is rendered by ConditionalAudioProvider */}
-            {/* Always show player UI (like Spotify), even when no media is playing */}
+            {/* The audio element is owned by ConditionalAudioProvider, never by a surface. */}
             {playerMode === "overlay" && hasMedia ? (
                 <OverlayPlayer />
             ) : isMobileOrTablet ? (
-                /* On mobile/tablet: only mini player (no full player) */
-                <MiniPlayer />
+                <MobilePlayer />
             ) : (
-                /* Desktop: always show full-width bottom player */
                 <FullPlayer />
             )}
         </>
