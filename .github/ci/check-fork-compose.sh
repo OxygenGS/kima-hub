@@ -45,7 +45,7 @@ from pathlib import Path
 
 readme = Path("README.md").read_text(encoding="utf-8")
 guide = Path("docs/install.md").read_text(encoding="utf-8")
-pattern = r"^\\*\\*Published image:\\*\\* `(ghcr\\.io/oxygengs/kima-hub:(v(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))`[ \\t]*$"
+pattern = r"^\*\*Published image:\*\* `(ghcr\.io/oxygengs/kima-hub:(v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)))`[ \t]*$"
 match = re.search(pattern, readme, re.MULTILINE)
 if not match:
     sys.exit("FORK DOCUMENT CHECK FAILED: README has no explicit stable fork image")
