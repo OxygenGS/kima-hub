@@ -1,0 +1,49 @@
+{
+  "release": {
+    "version": "1.13.1",
+    "title": "Kima Hub 1.13.1 — Faster Artist Pages",
+    "summary": "Open saved artist information and local albums without waiting for external metadata providers.",
+    "date": "2026-10-29",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1131.local-first",
+        "title": "Your local albums first",
+        "summary": "First-time artist visits no longer need to wait for external enrichment before showing local music.",
+        "body": "Artist pages now request a database-only overview separately from the complete enriched details. Saved artist information, artwork and playable local albums can appear as soon as that local response arrives. External discography, popular tracks and recommendations fill in when their own request finishes.\n\nThis removes external-provider waiting from the initial local-library view. It does not make remote services faster or promise a fixed loading time. Artists found only through discovery still require external information.",
+        "links": [{ "label": "Browse artists", "href": "/collection?tab=artists" }]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1131.continuity",
+        "title": "Keep browsing when providers are slow",
+        "summary": "Local artist data remains available when the optional full-detail request fails.",
+        "body": "The local overview has its own cache entry and cannot replace the complete artist cache. Already cached full details retain the existing fast path, and completed downloads refresh the artist data. Play All, Shuffle, album navigation and existing user permissions remain in place.\n\nThis maintenance update adds no database migration, changes no audio engine or native-client authentication, and does not reset music analysis.",
+        "links": [{ "label": "Open collection", "href": "/collection" }]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.13.1 — Faster Artist Pages": "Kima Hub 1.13.1 — Snellere artiestpagina's"
+    },
+    "summaries": {
+      "Open saved artist information and local albums without waiting for external metadata providers.": "Open opgeslagen artiestinformatie en lokale albums zonder op externe metadatadiensten te wachten."
+    },
+    "items": {
+      "fork.1131.local-first": {
+        "title": "Je lokale albums eerst",
+        "summary": "Bij het eerste bezoek aan een artiest hoeft lokale muziek niet meer op externe verrijking te wachten.",
+        "body": "Artiestpagina's vragen nu een overzicht uit de eigen database op, los van de volledige verrijkte gegevens. Opgeslagen artiestinformatie, afbeeldingen en afspeelbare lokale albums kunnen verschijnen zodra dat lokale antwoord binnen is. De externe discografie, populaire nummers en aanbevelingen worden aangevuld wanneer hun eigen aanvraag klaar is.\n\nDaardoor houdt een trage externe dienst de eerste weergave van je lokale bibliotheek niet meer tegen. Externe diensten zelf worden niet sneller en we beloven geen vaste laadtijd. Artiesten die alleen via ontdekken beschikbaar zijn, hebben nog steeds externe informatie nodig.",
+        "links": { "/collection?tab=artists": "Blader door artiesten" }
+      },
+      "fork.1131.continuity": {
+        "title": "Blijf bladeren bij trage externe diensten",
+        "summary": "Lokale artiestgegevens blijven beschikbaar als de aanvullende aanvraag mislukt.",
+        "body": "Het lokale overzicht heeft een eigen cache en overschrijft de volledige artiestgegevens niet. Eerder geladen volledige gegevens blijven direct bruikbaar. Na voltooide downloads worden de artiestgegevens vernieuwd. Alles afspelen, Shuffle, albumnavigatie en bestaande gebruikersrechten blijven behouden.\n\nDeze onderhoudsupdate voegt geen databasemigratie toe, verandert niets aan de audiomotor of aanmelding van externe muziekapps en reset de muziekanalyse niet.",
+        "links": { "/collection": "Open bibliotheek" }
+      }
+    }
+  },
+  "changelog": "Maintenance update following v1.13.0, focused on the first opening of local-library artists.\n\n### Artist loading\n\n- Render saved artist information and playable local albums from a database-only overview, independently of slow external discography, popularity and artwork providers.\n- Continue loading the complete artist details separately; preserve discovery fallback, the existing full-detail cache and warm navigation.\n- Keep the local snapshot available when the optional full-detail request fails. Keep partial and complete cache entries separate and refresh after completed downloads.\n- Preserve Play All, Shuffle, album navigation, user permissions and modern native-client authentication. No database migration, dependency upgrade or audio-engine change.\n- Include matching English and Dutch in-app release notes.\n\n### Documentation and upgrade\n\n- The repository front page now documents the published v1.13 interface with a new header and verified synthetic application screenshots. No private installation data is included.\n- Back up the complete persistent `/data` volume before updating; use an independent pre-upgrade backup for rollback.\n- External services can still be slow, and discovery-only artists still require them. No measured production-latency percentage is claimed. Existing image security advisories still require review.\n\n- **Release gate:** Unpublished candidate. Require final-head CI, actual application/audio checks, native AMD64/ARM64 preflight on the merged source and explicit stable publication approval."
+}
