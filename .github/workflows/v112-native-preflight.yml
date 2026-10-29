@@ -6,7 +6,7 @@ on:
       version_tag:
         description: Candidate stable version matching package metadata
         required: true
-        default: v1.13.0
+        default: v1.13.1
         type: string
 
 # Build-only gate. Never create tags, releases, or registry images.
