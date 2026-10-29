@@ -72,6 +72,8 @@ export function SearchFilters({
                             data-tv-card
                             data-tv-card-index={index}
                             tabIndex={0}
+                            type="button"
+                            aria-pressed={isActive}
                             onClick={() => onFilterChange(filter.id)}
                             className={cn(
                                 "flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 min-h-[44px] text-sm font-medium transition-colors duration-150",
