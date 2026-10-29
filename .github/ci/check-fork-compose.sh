@@ -34,7 +34,33 @@ print("User-selected update version accepted")
 '
 done
 
-# Consumer installation instructions must point to a published fork image.
+# Consumer installation instructions must point to the actual stable version
+# advertised on the public README, not a hard-coded version from a past release.
+# This also keeps a new release's install guide and README aligned without
+# requiring a script edit for every subsequent stable tag.
+published_image="$(python3 - <<'PY'
+import re
+import sys
+from pathlib import Path
+
+readme = Path("README.md").read_text(encoding="utf-8")
+guide = Path("docs/install.md").read_text(encoding="utf-8")
+pattern = r"^\\*\\*Published image:\\*\\* `(ghcr\\.io/oxygengs/kima-hub:(v(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))`[ \\t]*$"
+match = re.search(pattern, readme, re.MULTILINE)
+if not match:
+    sys.exit("FORK DOCUMENT CHECK FAILED: README has no explicit stable fork image")
+image, version = match.groups()
+expected_heading = (
+    f"**Current published fork release:** [{version}]"
+    f"(https://github.com/OxygenGS/kima-hub/releases/tag/{version})"
+)
+if expected_heading not in guide:
+    sys.exit("FORK DOCUMENT CHECK FAILED: install guide stable release differs from README")
+if f"| Stable | `{image}` |" not in guide:
+    sys.exit("FORK DOCUMENT CHECK FAILED: install guide stable image differs from README")
+print(image)
+PY
+)"
 for doc in docs/install.md docs/gpu.md; do
     if grep -Eq 'chevron7locked/kima(:|@)|ghcr[.]io/chevron7locked/kima' "$doc"; then
         echo "FORK DOCUMENT CHECK FAILED: upstream installation image in $doc" >&2
@@ -43,7 +69,7 @@ for doc in docs/install.md docs/gpu.md; do
     # The install guide follows the currently published release; the GPU guide
     # may still show the older pinned stable image as a reference.
     if [[ "$doc" == "docs/install.md" ]]; then
-        expected_image="ghcr.io/oxygengs/kima-hub:v1.13.0"
+        expected_image="$published_image"
     else
         expected_image="ghcr.io/oxygengs/kima-hub:v1.10.0"
     fi
