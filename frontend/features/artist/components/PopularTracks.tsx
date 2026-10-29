@@ -45,7 +45,7 @@ export const PopularTracks: React.FC<PopularTracksProps> = ({
     });
 
     return (
-        <section>
+        <section id="artist-popular" className="scroll-mt-28">
             <SectionHeader type="track" title={t("Popular")} />
             <div data-tv-section="tracks" style={cascadeStyle(Math.min(tracks.length, 10))}>
                 {tracks.slice(0, 10).map((track, index) => {
