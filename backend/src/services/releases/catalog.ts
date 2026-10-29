@@ -101,6 +101,41 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.13.1
+    {
+        "version": "1.13.1",
+        "title": "Kima Hub 1.13.1 \u2014 Faster Artist Pages",
+        "summary": "Open saved artist information and local albums without waiting for external metadata providers.",
+        "date": "2026-10-29",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1131.local-first",
+                "title": "Your local albums first",
+                "summary": "First-time artist visits no longer need to wait for external enrichment before showing local music.",
+                "body": "Artist pages now request a database-only overview separately from the complete enriched details. Saved artist information, artwork and playable local albums can appear as soon as that local response arrives. External discography, popular tracks and recommendations fill in when their own request finishes.\n\nThis removes external-provider waiting from the initial local-library view. It does not make remote services faster or promise a fixed loading time. Artists found only through discovery still require external information.",
+                "links": [
+                    {
+                        "label": "Browse artists",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1131.continuity",
+                "title": "Keep browsing when providers are slow",
+                "summary": "Local artist data remains available when the optional full-detail request fails.",
+                "body": "The local overview has its own cache entry and cannot replace the complete artist cache. Already cached full details retain the existing fast path, and completed downloads refresh the artist data. Play All, Shuffle, album navigation and existing user permissions remain in place.\n\nThis maintenance update adds no database migration, changes no audio engine or native-client authentication, and does not reset music analysis.",
+                "links": [
+                    {
+                        "label": "Open collection",
+                        "href": "/collection"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.13.0
     {
         "version": "1.13.0",

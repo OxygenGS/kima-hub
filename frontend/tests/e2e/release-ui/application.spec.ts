@@ -2,6 +2,7 @@ import { expect, test, type Page, type Locator } from "@playwright/test";
 import { loginAsTestUser, getAuthToken } from "../fixtures/test-helpers";
 import { PLAYER, readPlayer } from "../fixtures/shared";
 import { translate } from "../../../lib/i18n/translations";
+import packageMetadata from "../../../package.json";
 
 // No page.route, provider mocks, synthetic playback state or forced currentTime.
 // All controls below operate on the built application and its real audio element.
@@ -30,9 +31,11 @@ async function closeFixtureNotices(page: Page) {
     const headers = { Authorization: `Bearer ${token}` };
     const current = await page.request.get("/api/whats-new/current", { headers });
     expect(current.ok()).toBe(true);
-    const currentBody = await current.json() as { release: { version: string; items: { kind: string }[] } };
-    expect(currentBody.release.version).toBe("1.13.0");
-    expect(currentBody.release.items).toHaveLength(5);
+    const currentBody = await current.json() as { release: { version: string; items: { kind: string; key: string }[] } };
+    expect(currentBody.release.version).toBe(packageMetadata.version);
+    expect(currentBody.release.items.map((item) => item.key)).toEqual([
+        "fork.1131.local-first", "fork.1131.continuity",
+    ]);
     expect(currentBody.release.items.every((item) => item.kind === "note")).toBe(true);
     const pending = await page.request.get("/api/whats-new/pending", { headers });
     expect(pending.ok()).toBe(true);
@@ -47,15 +50,30 @@ async function closeFixtureNotices(page: Page) {
 
 async function verifyOwnedFixture(page: Page) {
     const token = await getAuthToken(page);
-    const response = await page.request.get("/api/library/albums/ci-ui-album", {
-        headers: { Authorization: `Bearer ${token}` },
-    });
+    const headers = { Authorization: `Bearer ${token}` };
+    const expectedTracks = ["ci-ui-track-one", "ci-ui-track-two", "ci-ui-track-three"];
+    const response = await page.request.get("/api/library/albums/ci-ui-album", { headers });
     expect(response.ok(), "The generated library album must exist before UI acceptance").toBe(true);
     const album = await response.json() as { owned: boolean; tracks: { id: string }[] };
     expect(album.owned, "The generated album needs its real OwnedAlbum relation, not preview status").toBe(true);
-    expect(album.tracks.map((track) => track.id)).toEqual([
-        "ci-ui-track-one", "ci-ui-track-two", "ci-ui-track-three",
-    ]);
+    expect(album.tracks.map((track) => track.id)).toEqual(expectedTracks);
+
+    // Exercise the real database-only endpoint for both CI roles and architectures.
+    const overview = await page.request.get("/api/library/artists/ci-ui-artist/overview", { headers });
+    expect(overview.ok()).toBe(true);
+    const artist = await overview.json() as {
+        id: string;
+        albums: { id: string; owned: boolean; tracks: { id: string; filePath?: string }[] }[];
+        topTracks: unknown[];
+        similarArtists: unknown[];
+    };
+    expect(artist.id).toBe("ci-ui-artist");
+    const localAlbum = artist.albums.find((entry) => entry.id === "ci-ui-album");
+    expect(localAlbum?.owned).toBe(true);
+    expect(localAlbum?.tracks.map((track) => track.id)).toEqual(expectedTracks);
+    expect(localAlbum?.tracks.every((track) => track.filePath === undefined)).toBe(true);
+    expect(artist.topTracks).toEqual([]);
+    expect(artist.similarArtists).toEqual([]);
 }
 
 for (const locale of ["en", "nl"] as const) {
