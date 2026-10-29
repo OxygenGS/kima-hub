@@ -12,13 +12,10 @@ import {
   extractColorsFromImage,
   FALLBACK_PALETTE,
 } from "../../utils/colorExtractor";
-import {
-  resizeImageBuffer,
-  getResizedImagePath,
-} from "../../services/imageStorage";
+import { resizeImageBuffer, getLocalImagePathAsync } from "../../services/imageStorage";
+import { getOrCreateNativeCoverVariant } from "../../services/nativeCoverVariants";
 import crypto from "crypto";
 import path from "path";
-import fs from "fs";
 
 function validateCoverPath(basePath: string, userPath: string): string | null {
   const resolvedBase = path.resolve(basePath);
@@ -45,8 +42,7 @@ const applyCoverArtCorsHeaders = (res: Response, origin?: string) => {
 };
 
 async function serveNativeImage(
-  coverCachePath: string,
-  nativePath: string,
+  canonicalCoverPath: string,
   size: string | undefined,
   req: any,
   res: any,
@@ -65,32 +61,18 @@ async function serveNativeImage(
   }
 
   const width = size ? parseInt(size, 10) : 0;
-
   if (!width || width < 16 || width > 2048) {
-    return res.sendFile(coverCachePath, { headers });
-  }
-
-  const resizedPath = getResizedImagePath(`native:${nativePath}`, width);
-  if (resizedPath && fs.existsSync(resizedPath)) {
-    return res.sendFile(resizedPath, { headers });
+    return res.sendFile(canonicalCoverPath, { headers });
   }
 
   try {
-    const originalBuffer = fs.readFileSync(coverCachePath);
-    const resizedBuffer = await resizeImageBuffer(originalBuffer, width);
-
-    if (resizedPath) {
-      fs.writeFileSync(resizedPath, resizedBuffer);
-      return res.sendFile(resizedPath, { headers });
-    }
-
-    Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
-    return res.send(resizedBuffer);
+    const resizedPath = await getOrCreateNativeCoverVariant(canonicalCoverPath, width);
+    return res.sendFile(resizedPath, { headers });
   } catch (err) {
     logger.warn(
-      `[COVER-ART] Resize failed for ${nativePath}, serving original: ${err instanceof Error ? err.message : String(err)}`,
+      `[COVER-ART] Native resize failed, serving original: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return res.sendFile(coverCachePath, { headers });
+    return res.sendFile(canonicalCoverPath, { headers });
   }
 }
 
@@ -169,14 +151,14 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
           return res.status(400).json({ error: "Invalid cover path" });
         }
 
-        if (!fs.existsSync(coverCachePath)) {
-          logger.error(`[COVER-ART] Native cover not found: ${coverCachePath}`);
+        const canonicalCoverPath = await getLocalImagePathAsync(`native:${nativePath}`);
+        if (!canonicalCoverPath) {
+          logger.error("[COVER-ART] Native cover not found or not accessible");
           return res.status(404).json({ error: "Cover art not found" });
         }
 
         return serveNativeImage(
-          coverCachePath,
-          nativePath,
+          canonicalCoverPath,
           size as string | undefined,
           req,
           res,
@@ -204,10 +186,10 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
           return res.status(400).json({ error: "Invalid cover path" });
         }
 
-        if (fs.existsSync(coverCachePath)) {
+        const canonicalCoverPath = await getLocalImagePathAsync(`native:${nativePath}`);
+        if (canonicalCoverPath) {
           return serveNativeImage(
-            coverCachePath,
-            nativePath,
+            canonicalCoverPath,
             size as string | undefined,
             req,
             res,
