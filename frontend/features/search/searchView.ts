@@ -36,7 +36,7 @@ export function selectSearchView({
 
     const hasResults =
         (showLibrary && hasLibraryMatches) ||
-        (showDiscover && (discoverResults.length > 0 || similarArtists.length > 0)) ||
+        (showDiscover && (!!discoveryArtist || similarArtists.length > 0)) ||
         (showP2PTracks && soulseekResults.length > 0);
 
     return {
