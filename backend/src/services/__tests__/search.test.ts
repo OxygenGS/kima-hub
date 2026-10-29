@@ -93,6 +93,19 @@ describe('SearchService.queryToTsquery', () => {
         });
     });
 
+    describe('Unicode music names', () => {
+        it('preserves accented letters in PostgreSQL search terms', () => {
+            expect(svc.tsquery('Beyoncé')).toBe('Beyoncé:*');
+            expect(svc.tsquery('Sigur Rós')).toBe('Sigur:* & Rós:*');
+        });
+
+        it('normalizes decomposed accents and keeps non-Latin letters', () => {
+            expect(svc.tsquery('Beyonce\u0301')).toBe('Beyoncé:*');
+            expect(svc.tsquery('東京')).toBe('東京:*');
+            expect(svc.tsquery('Björk')).toBe('Björk:*');
+        });
+    });
+
     describe('empty / whitespace / null-like input', () => {
         it('returns empty string for empty string', () => {
             expect(svc.tsquery('')).toBe('');
@@ -105,6 +118,14 @@ describe('SearchService.queryToTsquery', () => {
         it('returns empty string when all chars are non-word', () => {
             // Every character is stripped, leaving no terms
             expect(svc.tsquery('!@#$%^*()')).toBe('');
+        });
+    });
+
+    describe('normalized Unicode cache keys', () => {
+        it('treats composed and decomposed titles identically', () => {
+            const { normalizeCacheQuery } = require('../search');
+            expect(normalizeCacheQuery('  BEYONCE\u0301  ')).toBe('beyoncé');
+            expect(normalizeCacheQuery('Beyoncé')).toBe('beyoncé');
         });
     });
 
@@ -163,5 +184,65 @@ describe('SearchService.searchArtists', () => {
         const result = await svc.searchArtists({ query: 'radiohead' });
         expect(result).toEqual([]);
         expect(prisma.artist.findMany).toHaveBeenCalled();
+    });
+});
+
+
+describe('SearchService indexed typo fallback', () => {
+    const { prisma } = require('../../utils/db');
+
+    beforeEach(() => {
+        (prisma.$queryRaw as jest.Mock).mockReset();
+        (prisma.artist.findMany as jest.Mock).mockReset().mockResolvedValue([]);
+        (prisma.album.findMany as jest.Mock).mockReset().mockResolvedValue([]);
+        (prisma.track.findMany as jest.Mock).mockReset().mockResolvedValue([]);
+    });
+
+    it('returns indexed typo results only after FTS and substring matching are empty', async () => {
+        const match = { id: 'a', name: 'Radiohead', mbid: null, heroUrl: null, rank: 0.6 };
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]).mockResolvedValueOnce([match]);
+        expect(await svc.searchArtists({ query: 'Raidohead' })).toEqual([match]);
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+        const sql = (prisma.$queryRaw as jest.Mock).mock.calls[1][0].join('');
+        expect(sql).toContain('a.name % ');
+        expect(sql).toContain('EXISTS (SELECT 1 FROM "Album"');
+    });
+
+    it('does not run fuzzy search when full-text already has hits', async () => {
+        const exact = { id: 'a', name: 'Radiohead', mbid: null, heroUrl: null, rank: 0.9 };
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([exact]);
+        expect(await svc.searchArtists({ query: 'Radiohead' })).toEqual([exact]);
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+        const sql = (prisma.$queryRaw as jest.Mock).mock.calls[0][0].join('');
+        expect(sql).toContain('CASE WHEN lower(a.name)');
+    });
+
+    it('does not broaden short queries into noisy typo matches', async () => {
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]);
+        expect(await svc.searchArtists({ query: 'AB' })).toEqual([]);
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('supports album-title typos without changing unrelated audiobook search', async () => {
+        const match = { id: 'al', title: 'In Rainbows', artistId: 'a', artistName: 'Radiohead', rank: 0.6 };
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]).mockResolvedValueOnce([match]);
+        expect(await svc.searchAlbums({ query: 'In Rainbws' })).toEqual([match]);
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+        expect((prisma.$queryRaw as jest.Mock).mock.calls[1][0].join('')).toContain('a.title % ');
+    });
+
+    it('never offers missing tracks from the typo fallback', async () => {
+        const match = { id: 't', title: 'Weird Fishes', albumId: 'al', albumTitle: 'In Rainbows', artistId: 'a', artistName: 'Radiohead', duration: 120, rank: 0.7 };
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]).mockResolvedValueOnce([match]);
+        expect(await svc.searchTracks({ query: 'Weird Fshes' })).toEqual([match]);
+        const sql = (prisma.$queryRaw as jest.Mock).mock.calls[1][0].join('');
+        expect(sql).toContain('t.title % ');
+        expect(sql).toContain('t."missingSince" IS NULL');
+    });
+
+    it('fails safely back to an empty result when trigram lookup is unavailable', async () => {
+        (prisma.$queryRaw as jest.Mock).mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('missing extension'));
+        expect(await svc.searchArtists({ query: 'Raidohead' })).toEqual([]);
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
     });
 });
