@@ -358,7 +358,11 @@ export class SearchService {
           ) combined
           ORDER BY id, rank DESC
         ) deduped
-        ORDER BY rank DESC, title ASC
+        ORDER BY
+          CASE WHEN lower(title) = lower(${query.trim()}) THEN 0
+               WHEN left(lower(title), length(${query.trim()})) = lower(${query.trim()}) THEN 1
+               ELSE 2 END,
+          rank DESC, title ASC
         LIMIT ${limit}
         OFFSET ${offset}
       `;
@@ -640,11 +644,7 @@ export class SearchService {
           ts_rank("searchVector", to_tsquery('english', ${tsquery})) AS rank
         FROM "Audiobook"
         WHERE "searchVector" @@ to_tsquery('english', ${tsquery})
-        ORDER BY
-          CASE WHEN lower(title) = lower(${query.trim()}) THEN 0
-               WHEN left(lower(title), length(${query.trim()})) = lower(${query.trim()}) THEN 1
-               ELSE 2 END,
-          rank DESC, title ASC
+        ORDER BY rank DESC, title ASC
         LIMIT ${limit}
         OFFSET ${offset}
       `;
