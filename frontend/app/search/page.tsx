@@ -22,6 +22,7 @@ import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { FilterTab } from "@/features/search/types";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { isSearchViewLoading, selectSearchView } from "@/features/search/searchView";
 
 export default function SearchPage() {
     const { locale } = useLanguage();
@@ -60,24 +61,16 @@ export default function SearchPage() {
         }
     }
 
-    const topArtist = discoverResults.find((r) => r.type === "music");
-    const isLoading =
-        isLibrarySearching ||
-        isDiscoverSearching ||
-        isSoulseekSearching ||
-        isSoulseekPolling;
-    const showLibrary = filterTab === "all" || filterTab === "library";
-    const showDiscover = filterTab === "all" || filterTab === "discover";
-
-    const hasTopResult = libraryResults?.artists?.[0] || topArtist;
-    const hasTracks =
-        (libraryResults?.tracks?.length ?? 0) > 0 || soulseekResults.length > 0;
-    const show2ColumnLayout =
-        hasSearched &&
-        hasTopResult &&
-        hasTracks &&
-        filterTab !== "soulseek" &&
-        (showLibrary || showDiscover);
+    const {
+        showLibrary, showDiscover, libraryArtist, discoveryArtist,
+        hasTopResult, hasTracks, hasResults,
+    } = selectSearchView({
+        filterTab, libraryResults, discoverResults, similarArtists, soulseekResults,
+    });
+    const isLoading = isSearchViewLoading(filterTab, {
+        isLibrarySearching, isDiscoverSearching, isSoulseekSearching, isSoulseekPolling,
+    });
+    const show2ColumnLayout = hasSearched && hasTopResult && hasTracks;
 
     const handleTVSearch = (searchQuery: string) => {
         setQuery(searchQuery);
@@ -86,8 +79,8 @@ export default function SearchPage() {
 
     const topMatch = (
         <TopResult
-            libraryArtist={libraryResults?.artists?.[0]}
-            discoveryArtist={topArtist}
+            libraryArtist={libraryArtist}
+            discoveryArtist={discoveryArtist}
         />
     );
 
@@ -152,7 +145,7 @@ export default function SearchPage() {
                     </div>
                 )}
 
-                {aliasInfo && (
+                {showDiscover && aliasInfo && (
                     <div className="mb-8">
                         <AliasResolutionBanner aliasInfo={aliasInfo} />
                     </div>
@@ -168,11 +161,8 @@ export default function SearchPage() {
 
                 {hasSearched &&
                     filterTab !== "soulseek" &&
-                    (isLibrarySearching ||
-                        isDiscoverSearching ||
-                        isSoulseekSearching) &&
-                    (!libraryResults || !libraryResults.artists?.length) &&
-                    discoverResults.length === 0 && (
+                    isLoading &&
+                    !hasResults && (
                         <div className="flex flex-col items-center justify-center py-24 relative">
                             <div className="relative">
                                 <GradientSpinner size="xl" className="mb-6" />
@@ -278,16 +268,9 @@ export default function SearchPage() {
                 )}
 
                 {hasSearched &&
+                    filterTab !== "soulseek" &&
                     !isLoading &&
-                    !topArtist &&
-                    soulseekResults.length === 0 &&
-                    (!libraryResults ||
-                        (!libraryResults.artists?.length &&
-                            !libraryResults.albums?.length &&
-                            !libraryResults.tracks?.length &&
-                            !libraryResults.podcasts?.length &&
-                            !libraryResults.audiobooks?.length &&
-                            !libraryResults.episodes?.length)) && (
+                    !hasResults && (
                         <EmptyState
                             icon={<SearchIcon className="w-16 h-16" />}
                             title={t("No matches found")}

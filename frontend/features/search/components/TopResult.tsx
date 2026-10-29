@@ -69,7 +69,7 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs font-semibold text-brand">
-                                Artist
+                                {t("Artist")}
                             </span>
                             <span className="w-1 h-1 rounded-full bg-brand/50" />
                             <span className="text-xs text-[var(--text-muted)]">
