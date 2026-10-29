@@ -25,7 +25,7 @@ Performance and search improvements following the published v1.13.1 artist-loadi
 
 - **Release gate:** Unpublished candidate. Require final-head CI, actual AIO audio/browser checks, native AMD64/ARM64 preflight on the merged commit, review of residual image findings and explicit publication approval.
 
-## OxygenGS fork v1.13.1 — release preparation (unpublished)
+## OxygenGS fork v1.13.1 — released 2026-10-29
 
 Maintenance update following v1.13.0, focused on the first opening of local-library artists.
 
@@ -43,7 +43,7 @@ Maintenance update following v1.13.0, focused on the first opening of local-libr
 - Back up the complete persistent `/data` volume before updating; use an independent pre-upgrade backup for rollback.
 - External services can still be slow, and discovery-only artists still require them. No measured production-latency percentage is claimed. Existing image security advisories still require review.
 
-- **Release gate:** Unpublished candidate. Require final-head CI, actual application/audio checks, native AMD64/ARM64 preflight on the merged source and explicit stable publication approval.
+- **Release verification:** The v1.13.1 GitHub Release and native Docker images were published after final-head CI, exact-main native preflight and explicit approval. Existing dependency advisories remain subject to review.
 
 ## OxygenGS fork v1.13.0 — released 2026-10-28
 

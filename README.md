@@ -13,9 +13,13 @@ Stream the albums you own. Rediscover forgotten favorites. Keep your library, ac
 [![Languages](https://img.shields.io/badge/Interface-English%20%2B%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-[**What's new**](#new-in-v1130) &nbsp; / &nbsp; [**Screenshots**](#see-the-interface) &nbsp; / &nbsp; [**Install**](#quick-start) &nbsp; / &nbsp; [**Documentation**](#documentation)
+[**What's new**](#new-in-v1131) &nbsp; / &nbsp; [**Screenshots**](#see-the-interface) &nbsp; / &nbsp; [**Install**](#quick-start) &nbsp; / &nbsp; [**Documentation**](#documentation)
 
 </div>
+
+## New in v1.13.1
+
+**[v1.13.1 is released](https://github.com/OxygenGS/kima-hub/releases/tag/v1.13.1).** Artist pages show locally saved information and playable albums without waiting for external discography or recommendations. External images can still appear later; already cached details remain fast. The existing v1.13 interface, playback and client integrations are preserved.
 
 ## New in v1.13.0
 
@@ -95,7 +99,7 @@ See [OpenSubsonic setup and authentication](docs/subsonic.md) for supported meth
 
 ## Quick start
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.13.0`  
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.13.1`  
 **Architectures:** `linux/amd64` and `linux/arm64`  
 **Interface:** port `3030`
 
@@ -108,7 +112,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.13.0
+  ghcr.io/oxygengs/kima-hub:v1.13.1
 ```
 
 Replace the example music path, then open **http://localhost:3030** on the server, or use your server address, and create the administrator account.
@@ -121,7 +125,7 @@ Replace the example music path, then open **http://localhost:3030** on the serve
 
 ### Compose or Dockge
 
-Use the [production Compose example](docker-compose.prod.yml) and [installation guide](docs/install.md). **Set `VERSION=v1.13.0` explicitly.** The checked-in Compose file retains an older conservative fallback; leaving the version unset does not select the release shown here.
+Use the [production Compose example](docker-compose.prod.yml) and [installation guide](docs/install.md). **Set `VERSION=v1.13.1` explicitly.** The checked-in Compose file retains an older conservative fallback; leaving the version unset does not select the release shown here.
 
 Use explicit version tags. The `:latest` alias is **not automatically advanced** by the stable publisher.
 
