@@ -125,6 +125,30 @@ export function getLocalImagePath(nativePath: string): string | null {
     return fullPath ? getCanonicalCoverFilePath(fullPath) : null;
 }
 
+/**
+ * Non-blocking, canonical native-cover lookup for image-serving requests.
+ * Check real paths (not only lexical paths) so a symlink cannot serve files
+ * from outside the covers directory. Keep the sync helper for legacy callers.
+ */
+export async function getLocalImagePathAsync(nativePath: string): Promise<string | null> {
+    if (!nativePath.startsWith("native:")) return null;
+
+    const candidate = resolveInCoversDir(nativePath.slice("native:".length));
+    if (!candidate) return null;
+
+    try {
+        const [root, actual] = await Promise.all([
+            fs.promises.realpath(getCoversBasePath()),
+            fs.promises.realpath(candidate),
+        ]);
+        if (!actual.startsWith(root + path.sep)) return null;
+        const stats = await fs.promises.stat(actual);
+        return stats.isFile() ? actual : null;
+    } catch {
+        return null;
+    }
+}
+
 /** Whether a native image path points to an existing file on disk. */
 export function nativeFileExists(nativePath: string | null | undefined): boolean {
     return nativePath ? getLocalImagePath(nativePath) !== null : false;

@@ -10,7 +10,7 @@ jest.mock("../../config", () => ({
     USER_AGENT: "Kima/test",
 }));
 
-import { nativeFileExists, getCanonicalCoverFilePath, getLocalImagePath } from "../imageStorage";
+import { nativeFileExists, getCanonicalCoverFilePath, getLocalImagePath, getLocalImagePathAsync } from "../imageStorage";
 
 describe("nativeFileExists", () => {
     const cacheRoot = `/tmp/kima-test-cache-${process.pid}`;
@@ -78,4 +78,24 @@ describe("nativeFileExists", () => {
     it("refuses a directory masquerading as a native cover", () => {
         expect(getLocalImagePath("native:albums")).toBeNull();
     });
+    it("resolves a regular native image asynchronously to its canonical path", async () => {
+        const file = path.join(coversBase, "artists", "async.jpg");
+        fs.writeFileSync(file, "synthetic cover");
+        expect(await getLocalImagePathAsync("native:artists/async.jpg")).toBe(
+            fs.realpathSync(file),
+        );
+    });
+
+    it("rejects missing, traversal, directory, and escaping symlinks asynchronously", async () => {
+        const outside = path.join(cacheRoot, "private-async.jpg");
+        const symlink = path.join(coversBase, "artists", "outside-async.jpg");
+        fs.writeFileSync(outside, "must not serve");
+        fs.symlinkSync(outside, symlink);
+        await expect(getLocalImagePathAsync("native:artists/outside-async.jpg")).resolves.toBeNull();
+        await expect(getLocalImagePathAsync("native:../private-async.jpg")).resolves.toBeNull();
+        await expect(getLocalImagePathAsync("native:artists")).resolves.toBeNull();
+        await expect(getLocalImagePathAsync("native:artists/absent.jpg")).resolves.toBeNull();
+        await expect(getLocalImagePathAsync("https://example.invalid/image")).resolves.toBeNull();
+    });
+
 });
