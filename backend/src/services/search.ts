@@ -4,7 +4,7 @@ import { redisClient } from "../utils/redis";
 import { NOT_MISSING } from "../utils/libraryEligibility";
 
 export function normalizeCacheQuery(query: string): string {
-    return query.trim().toLowerCase().replace(/\s+/g, " ");
+    return query.trim().normalize("NFC").toLowerCase().replace(/\s+/g, " ");
 }
 
 interface SearchOptions {
@@ -104,14 +104,82 @@ export class SearchService {
     private queryToTsquery(query: string): string {
         const terms = query
             .trim()
+            .normalize("NFC")
             .replace(/\s*&\s*/g, " and ")
             .split(/\s+/)
-            .map((term) => term.replace(/[^\w]/g, ""))
+            // Preserve letters and combining marks: older ASCII-only stripping
+            // silently broke searches for many non-English artist names.
+            .map((term) => term.replace(/[^\p{L}\p{M}\p{N}_]/gu, ""))
             .filter((term) => term.length > 0);
 
         if (terms.length === 0) return "";
 
         return terms.map((term) => `${term}:*`).join(" & ");
+    }
+
+    /**
+     * A bounded, indexed typo fallback. Only called when full-text and legacy
+     * substring matching find nothing; familiar searches retain their fast path.
+     * PostgreSQL pg_trgm is installed by the additive migration.
+     */
+    private async fuzzyArtists({ query, limit = 20, offset = 0 }: SearchOptions): Promise<ArtistSearchResult[]> {
+        const term = query.trim().normalize("NFC");
+        if (Array.from(term).length < 3 || term.length > 100) return [];
+        try {
+            return await prisma.$queryRaw<ArtistSearchResult[]>`
+                SELECT a.id, a.name, a.mbid, a."heroUrl", a.summary,
+                       similarity(a.name, ${term})::double precision AS rank
+                FROM "Artist" a
+                WHERE a.name % ${term}
+                  AND EXISTS (SELECT 1 FROM "Album" alb WHERE alb."artistId" = a.id)
+                ORDER BY rank DESC, a.name ASC
+                LIMIT ${limit} OFFSET ${offset}
+            `;
+        } catch (error) {
+            logger.warn("Artist typo fallback unavailable:", error);
+            return [];
+        }
+    }
+
+    private async fuzzyAlbums({ query, limit = 20, offset = 0 }: SearchOptions): Promise<AlbumSearchResult[]> {
+        const term = query.trim().normalize("NFC");
+        if (Array.from(term).length < 3 || term.length > 100) return [];
+        try {
+            return await prisma.$queryRaw<AlbumSearchResult[]>`
+                SELECT a.id, a.title, a."artistId", ar.name AS "artistName",
+                       a.year, a."coverUrl",
+                       similarity(a.title, ${term})::double precision AS rank
+                FROM "Album" a
+                INNER JOIN "Artist" ar ON ar.id = a."artistId"
+                WHERE a.title % ${term}
+                ORDER BY rank DESC, a.title ASC
+                LIMIT ${limit} OFFSET ${offset}
+            `;
+        } catch (error) {
+            logger.warn("Album typo fallback unavailable:", error);
+            return [];
+        }
+    }
+
+    private async fuzzyTracks({ query, limit = 20, offset = 0 }: SearchOptions): Promise<TrackSearchResult[]> {
+        const term = query.trim().normalize("NFC");
+        if (Array.from(term).length < 3 || term.length > 100) return [];
+        try {
+            return await prisma.$queryRaw<TrackSearchResult[]>`
+                SELECT t.id, t.title, t."albumId", t.duration,
+                       a.title AS "albumTitle", a."artistId", ar.name AS "artistName",
+                       similarity(t.title, ${term})::double precision AS rank
+                FROM "Track" t
+                INNER JOIN "Album" a ON a.id = t."albumId"
+                INNER JOIN "Artist" ar ON ar.id = a."artistId"
+                WHERE t.title % ${term} AND t."missingSince" IS NULL
+                ORDER BY rank DESC, t.title ASC
+                LIMIT ${limit} OFFSET ${offset}
+            `;
+        } catch (error) {
+            logger.warn("Track typo fallback unavailable:", error);
+            return [];
+        }
     }
 
     private async searchArtistsFallback({
@@ -171,12 +239,18 @@ export class SearchService {
         FROM "Artist" a
         WHERE a."searchVector" @@ to_tsquery('english', ${tsquery})
           AND EXISTS (SELECT 1 FROM "Album" alb WHERE alb."artistId" = a.id)
-        ORDER BY rank DESC, a.name ASC
+        ORDER BY
+            CASE WHEN lower(a.name) = lower(${query.trim()}) THEN 0
+                 WHEN left(lower(a.name), length(${query.trim()})) = lower(${query.trim()}) THEN 1
+                 ELSE 2 END,
+            rank DESC, a.name ASC
         LIMIT ${limit}
         OFFSET ${offset}
       `;
 
-            return results.length > 0 ? results : this.searchArtistsFallback({ query, limit, offset });
+            if (results.length > 0) return results;
+            const substring = await this.searchArtistsFallback({ query, limit, offset });
+            return substring.length ? substring : this.fuzzyArtists({ query, limit, offset });
         } catch (error) {
             logger.error("Artist search error:", error);
             return this.searchArtistsFallback({ query, limit, offset });
@@ -289,7 +363,9 @@ export class SearchService {
         OFFSET ${offset}
       `;
 
-            return results.length > 0 ? results : this.searchAlbumsFallback({ query, limit, offset });
+            if (results.length > 0) return results;
+            const substring = await this.searchAlbumsFallback({ query, limit, offset });
+            return substring.length ? substring : this.fuzzyAlbums({ query, limit, offset });
         } catch (error) {
             logger.error("Album search error:", error);
             return this.searchAlbumsFallback({ query, limit, offset });
@@ -375,12 +451,18 @@ export class SearchService {
         LEFT JOIN "Artist" ar ON a."artistId" = ar.id
         WHERE t."searchVector" @@ to_tsquery('english', ${tsquery})
         AND t."missingSince" IS NULL
-        ORDER BY rank DESC, t.title ASC
+        ORDER BY
+          CASE WHEN lower(t.title) = lower(${query.trim()}) THEN 0
+               WHEN left(lower(t.title), length(${query.trim()})) = lower(${query.trim()}) THEN 1
+               ELSE 2 END,
+          rank DESC, t.title ASC
         LIMIT ${limit}
         OFFSET ${offset}
       `;
 
-            return results.length > 0 ? results : this.searchTracksFallback({ query, limit, offset });
+            if (results.length > 0) return results;
+            const substring = await this.searchTracksFallback({ query, limit, offset });
+            return substring.length ? substring : this.fuzzyTracks({ query, limit, offset });
         } catch (error) {
             logger.error("Track search error:", error);
             return this.searchTracksFallback({ query, limit, offset });
@@ -558,7 +640,11 @@ export class SearchService {
           ts_rank("searchVector", to_tsquery('english', ${tsquery})) AS rank
         FROM "Audiobook"
         WHERE "searchVector" @@ to_tsquery('english', ${tsquery})
-        ORDER BY rank DESC, title ASC
+        ORDER BY
+          CASE WHEN lower(title) = lower(${query.trim()}) THEN 0
+               WHEN left(lower(title), length(${query.trim()})) = lower(${query.trim()}) THEN 1
+               ELSE 2 END,
+          rank DESC, title ASC
         LIMIT ${limit}
         OFFSET ${offset}
       `;
