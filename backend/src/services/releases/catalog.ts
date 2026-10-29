@@ -101,6 +101,54 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.14.0
+    {
+        "version": "1.14.0",
+        "title": "Kima Hub 1.14.0 \u2014 Smoother Artwork & Smarter Search",
+        "summary": "Less blocking image work and more forgiving local music search, with familiar playback and clients.",
+        "date": "2026-10-29",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1140.artwork",
+                "title": "Artwork without blocking browsing",
+                "summary": "Local artwork requests share work and no longer perform synchronous file reads and writes.",
+                "body": "Cached local cover images are checked using asynchronous file operations. When several screens request the same cold image size, Kima shares one resize instead of duplicating the work; different cold resizes have a small concurrency limit to reduce contention with interactive requests. Resized images are written atomically so incomplete cache files are not served.\n\nExisting path containment protections are maintained, and Kima falls back to the original image if a resize fails. This improves the code's ability to stay responsive under load; exact speed gains depend on storage and library size and have not been measured on your installation.",
+                "links": [
+                    {
+                        "label": "Browse albums",
+                        "href": "/collection?tab=albums"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1140.search",
+                "title": "More forgiving music search",
+                "summary": "Accented names, exact matches and small typos receive more reliable local search results.",
+                "body": "Local searches now preserve Unicode letters and combining marks instead of stripping them out of PostgreSQL search terms. Exact artist, album and song names rank ahead of broader full-text matches. If full-text and ordinary substring search return nothing, PostgreSQL trigram similarity can suggest likely matches for mistyped names.\n\nThe typo fallback is deliberately limited to queries of at least three characters and applies only to existing local library entities; it does not replace external discovery or return tracks marked as missing. Search history and existing caches remain in place.",
+                "links": [
+                    {
+                        "label": "Open music library",
+                        "href": "/collection"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1140.upgrade",
+                "title": "Safe, additive database upgrade",
+                "summary": "Three searchable text indexes are added; audio playback and client authentication stay unchanged.",
+                "body": "The upgrade enables the built-in PostgreSQL pg_trgm extension and creates additional GIN indexes on artist names, album titles and track titles. No music rows or existing search-vector triggers are rewritten. Building indexes can temporarily require extra disk space, CPU and database I/O, particularly with a large library.\n\nBack up the complete persistent /data volume before updating. Returning to a previous version requires restoring an independent backup made before this database migration. The audio engine, existing music analysis, permissions, and modern Symfonium/Feishin authentication are unchanged. Existing image security advisories still require review.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.13.1
     {
         "version": "1.13.1",

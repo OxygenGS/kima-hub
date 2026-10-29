@@ -49,6 +49,41 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.14.0
+    "1.14.0": {
+        "titles": {
+            "Kima Hub 1.14.0 \u2014 Smoother Artwork & Smarter Search": "Kima Hub 1.14.0 \u2014 Soepelere afbeeldingen en slimmer zoeken"
+        },
+        "summaries": {
+            "Less blocking image work and more forgiving local music search, with familiar playback and clients.": "Minder blokkerend afbeeldingswerk en slimmer zoeken in je eigen muziek, met vertrouwde spelers en muziekapps."
+        },
+        "items": {
+            "fork.1140.artwork": {
+                "title": "Blijven bladeren terwijl afbeeldingen laden",
+                "summary": "Lokale afbeeldingen delen bewerkingen en blokkeren geen bestandslezingen en -schrijfacties meer.",
+                "body": "Lokale album- en artiestafbeeldingen worden nu gecontroleerd met asynchrone bestandsbewerkingen. Als meerdere schermen tegelijkertijd hetzelfde nog niet voorbereide afbeeldingsformaat vragen, gebruikt Kima \u00e9\u00e9n verkleining. Verschillende verkleiningen worden begrensd om de actieve bediening minder te belasten. De bestanden worden pas beschikbaar na volledig wegschrijven.\n\nDe bestaande bescherming van bestandspaden blijft behouden. Bij een mislukte verkleining gebruikt Kima de oorspronkelijke afbeelding. De code is hiermee beter voorbereid op belasting; hoeveel sneller dit voor jouw opslag en bibliotheek is, hebben we nog niet gemeten.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            },
+            "fork.1140.search": {
+                "title": "Makkelijker de juiste muziek vinden",
+                "summary": "Namen met accenten, exacte treffers en kleine typefouten worden beter verwerkt.",
+                "body": "Zoeken in de eigen bibliotheek behoudt nu letters en combinatietekens uit verschillende talen. Exacte artiest-, album- en nummertitels komen v\u00f3\u00f3r ruimere tekstovereenkomsten. Als zowel gewone tekstzoekopdrachten als gedeeltelijke overeenkomsten niets vinden, kan PostgreSQL met trigrammen een kleine spelfout opvangen.\n\nDe fouttolerante zoekopdracht wordt alleen gebruikt vanaf drie tekens en voor muziek uit je eigen bibliotheek. Extern ontdekken blijft ongewijzigd en ontbrekende nummers worden niet als afspeelbaar resultaat aangeboden. Bestaande zoekcaches blijven behouden.",
+                "links": {
+                    "/collection": "Open bibliotheek"
+                }
+            },
+            "fork.1140.upgrade": {
+                "title": "Veilig bijwerken zonder nieuwe audiomotor",
+                "summary": "Drie extra zoekindexen worden toegevoegd; je bestaande spelers en muziekclients blijven werken.",
+                "body": "Bij deze update wordt de ingebouwde PostgreSQL-extensie pg_trgm ingeschakeld en worden GIN-indexen toegevoegd voor artiestnamen, albumtitels en nummertitels. Bestaande muziekregels en zoektriggers blijven ongemoeid. Het opbouwen van indexen kan tijdelijk extra opslagruimte, processorkracht en database-I/O gebruiken, vooral bij een grote collectie.\n\nMaak v\u00f3\u00f3r het updaten een volledige back-up van het blijvende /data-volume. Teruggaan naar een vorige versie vereist een onafhankelijke back-up van v\u00f3\u00f3r de databasemigratie. De audiomotor, muziekanalyse, rechten en moderne Symfonium-/Feishin-aanmelding veranderen niet. Bestaande meldingen over imagebeveiliging moeten nog steeds beoordeeld worden.",
+                "links": {
+                    "/settings": "Open instellingen"
+                }
+            }
+        }
+    },
     // release-candidate:1.13.1
     "1.13.1": {
         "titles": {

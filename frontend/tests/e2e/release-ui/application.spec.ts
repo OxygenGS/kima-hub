@@ -34,7 +34,7 @@ async function closeFixtureNotices(page: Page) {
     const currentBody = await current.json() as { release: { version: string; items: { kind: string; key: string }[] } };
     expect(currentBody.release.version).toBe(packageMetadata.version);
     expect(currentBody.release.items.map((item) => item.key)).toEqual([
-        "fork.1131.local-first", "fork.1131.continuity",
+        "fork.1140.artwork", "fork.1140.search", "fork.1140.upgrade",
     ]);
     expect(currentBody.release.items.every((item) => item.kind === "note")).toBe(true);
     const pending = await page.request.get("/api/whats-new/pending", { headers });
@@ -74,6 +74,22 @@ async function verifyOwnedFixture(page: Page) {
     expect(localAlbum?.tracks.every((track) => track.filePath === undefined)).toBe(true);
     expect(artist.topTracks).toEqual([]);
     expect(artist.similarArtists).toEqual([]);
+
+    // The built AIO must exercise PostgreSQL's real typo indexes (not mocked
+    // search responses) for both synthetic roles, both locales and both CPUs.
+    for (const candidate of [
+        { type: "artists", q: "CI Interfce Artist", id: "ci-ui-artist" },
+        { type: "albums", q: "CI Interfce Album", id: "ci-ui-album" },
+        { type: "tracks", q: "CI Interfce Track One", id: "ci-ui-track-one" },
+    ] as const) {
+        const search = await page.request.get("/api/search", {
+            headers,
+            params: { q: candidate.q, type: candidate.type, limit: 20 },
+        });
+        expect(search.ok(), `Indexed ${candidate.type} typo lookup should respond`).toBe(true);
+        const body = await search.json() as Record<string, { id: string }[]>;
+        expect(body[candidate.type].some((entry) => entry.id === candidate.id)).toBe(true);
+    }
 }
 
 for (const locale of ["en", "nl"] as const) {

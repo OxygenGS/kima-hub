@@ -1,0 +1,84 @@
+{
+  "release": {
+    "version": "1.14.0",
+    "title": "Kima Hub 1.14.0 — Smoother Artwork & Smarter Search",
+    "summary": "Less blocking image work and more forgiving local music search, with familiar playback and clients.",
+    "date": "2026-10-29",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1140.artwork",
+        "title": "Artwork without blocking browsing",
+        "summary": "Local artwork requests share work and no longer perform synchronous file reads and writes.",
+        "body": "Cached local cover images are checked using asynchronous file operations. When several screens request the same cold image size, Kima shares one resize instead of duplicating the work; different cold resizes have a small concurrency limit to reduce contention with interactive requests. Resized images are written atomically so incomplete cache files are not served.\n\nExisting path containment protections are maintained, and Kima falls back to the original image if a resize fails. This improves the code's ability to stay responsive under load; exact speed gains depend on storage and library size and have not been measured on your installation.",
+        "links": [
+          {
+            "label": "Browse albums",
+            "href": "/collection?tab=albums"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1140.search",
+        "title": "More forgiving music search",
+        "summary": "Accented names, exact matches and small typos receive more reliable local search results.",
+        "body": "Local searches now preserve Unicode letters and combining marks instead of stripping them out of PostgreSQL search terms. Exact artist, album and song names rank ahead of broader full-text matches. If full-text and ordinary substring search return nothing, PostgreSQL trigram similarity can suggest likely matches for mistyped names.\n\nThe typo fallback is deliberately limited to queries of at least three characters and applies only to existing local library entities; it does not replace external discovery or return tracks marked as missing. Search history and existing caches remain in place.",
+        "links": [
+          {
+            "label": "Open music library",
+            "href": "/collection"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1140.upgrade",
+        "title": "Safe, additive database upgrade",
+        "summary": "Three searchable text indexes are added; audio playback and client authentication stay unchanged.",
+        "body": "The upgrade enables the built-in PostgreSQL pg_trgm extension and creates additional GIN indexes on artist names, album titles and track titles. No music rows or existing search-vector triggers are rewritten. Building indexes can temporarily require extra disk space, CPU and database I/O, particularly with a large library.\n\nBack up the complete persistent /data volume before updating. Returning to a previous version requires restoring an independent backup made before this database migration. The audio engine, existing music analysis, permissions, and modern Symfonium/Feishin authentication are unchanged. Existing image security advisories still require review.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.14.0 — Smoother Artwork & Smarter Search": "Kima Hub 1.14.0 — Soepelere afbeeldingen en slimmer zoeken"
+    },
+    "summaries": {
+      "Less blocking image work and more forgiving local music search, with familiar playback and clients.": "Minder blokkerend afbeeldingswerk en slimmer zoeken in je eigen muziek, met vertrouwde spelers en muziekapps."
+    },
+    "items": {
+      "fork.1140.artwork": {
+        "title": "Blijven bladeren terwijl afbeeldingen laden",
+        "summary": "Lokale afbeeldingen delen bewerkingen en blokkeren geen bestandslezingen en -schrijfacties meer.",
+        "body": "Lokale album- en artiestafbeeldingen worden nu gecontroleerd met asynchrone bestandsbewerkingen. Als meerdere schermen tegelijkertijd hetzelfde nog niet voorbereide afbeeldingsformaat vragen, gebruikt Kima één verkleining. Verschillende verkleiningen worden begrensd om de actieve bediening minder te belasten. De bestanden worden pas beschikbaar na volledig wegschrijven.\n\nDe bestaande bescherming van bestandspaden blijft behouden. Bij een mislukte verkleining gebruikt Kima de oorspronkelijke afbeelding. De code is hiermee beter voorbereid op belasting; hoeveel sneller dit voor jouw opslag en bibliotheek is, hebben we nog niet gemeten.",
+        "links": {
+          "/collection?tab=albums": "Bekijk albums"
+        }
+      },
+      "fork.1140.search": {
+        "title": "Makkelijker de juiste muziek vinden",
+        "summary": "Namen met accenten, exacte treffers en kleine typefouten worden beter verwerkt.",
+        "body": "Zoeken in de eigen bibliotheek behoudt nu letters en combinatietekens uit verschillende talen. Exacte artiest-, album- en nummertitels komen vóór ruimere tekstovereenkomsten. Als zowel gewone tekstzoekopdrachten als gedeeltelijke overeenkomsten niets vinden, kan PostgreSQL met trigrammen een kleine spelfout opvangen.\n\nDe fouttolerante zoekopdracht wordt alleen gebruikt vanaf drie tekens en voor muziek uit je eigen bibliotheek. Extern ontdekken blijft ongewijzigd en ontbrekende nummers worden niet als afspeelbaar resultaat aangeboden. Bestaande zoekcaches blijven behouden.",
+        "links": {
+          "/collection": "Open bibliotheek"
+        }
+      },
+      "fork.1140.upgrade": {
+        "title": "Veilig bijwerken zonder nieuwe audiomotor",
+        "summary": "Drie extra zoekindexen worden toegevoegd; je bestaande spelers en muziekclients blijven werken.",
+        "body": "Bij deze update wordt de ingebouwde PostgreSQL-extensie pg_trgm ingeschakeld en worden GIN-indexen toegevoegd voor artiestnamen, albumtitels en nummertitels. Bestaande muziekregels en zoektriggers blijven ongemoeid. Het opbouwen van indexen kan tijdelijk extra opslagruimte, processorkracht en database-I/O gebruiken, vooral bij een grote collectie.\n\nMaak vóór het updaten een volledige back-up van het blijvende /data-volume. Teruggaan naar een vorige versie vereist een onafhankelijke back-up van vóór de databasemigratie. De audiomotor, muziekanalyse, rechten en moderne Symfonium-/Feishin-aanmelding veranderen niet. Bestaande meldingen over imagebeveiliging moeten nog steeds beoordeeld worden.",
+        "links": {
+          "/settings": "Open instellingen"
+        }
+      }
+    }
+  },
+  "changelog": "Performance and search improvements following the published v1.13.1 artist-loading update. This release improves two independent hot paths without replacing the v1.13 UI or audio engine.\n\n### Artwork and responsiveness\n\n- Native cached covers now use asynchronous canonical path checks, file reads and writes rather than synchronous filesystem calls in the request path.\n- Deduplicate simultaneous requests for the same cold cover variant, bound different concurrent resize jobs and publish completed variants atomically.\n- Preserve existing image-fallback behavior and path/symlink containment checks. No production latency percentage is claimed.\n\n### Local music search\n\n- Preserve accented and non-Latin music names in PostgreSQL full-text query terms; normalize combining marks in search cache keys.\n- Rank exact titles and artist names before prefix and broader full-text matches in local search.\n- Use pg_trgm similarity only after full-text and substring search return no results, with bounded query length and missing tracks excluded.\n- Install the built-in PostgreSQL pg_trgm extension and three new GIN indexes (Artist.name, Album.title, Track.title). A large library may require temporary disk space and I/O during migration; no user music data is rewritten.\n\n### Compatibility, backup and release checks\n\n- Existing player, permissions, music analysis and modern Symfonium/Feishin authentication are retained. No dependency upgrade or audio-engine replacement.\n- Review English/Dutch in-app release notes and real native application/upgrade tests. Do not claim unmeasured speedups or vulnerability-free images.\n- Back up the complete persistent /data volume before upgrading; independent pre-upgrade backup is required for rollback after database migration.\n\n- **Release gate:** Unpublished candidate. Require final-head CI, actual AIO audio/browser checks, native AMD64/ARM64 preflight on the merged commit, review of residual image findings and explicit publication approval."
+}
