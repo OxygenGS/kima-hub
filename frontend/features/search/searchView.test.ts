@@ -112,3 +112,16 @@ describe("search loading source selection", () => {
         })).toBe(true);
     });
 });
+
+describe("unrendered discovery categories", () => {
+    it("shows the empty state instead of a blank Discover page for podcast-only results", () => {
+        const result = selectSearchView({
+            filterTab: "discover", libraryResults: null,
+            discoverResults: [{ type: "podcast", name: "Podcast result" }],
+            similarArtists: [], soulseekResults: [],
+        });
+        expect(result.hasTopResult).toBe(false);
+        expect(result.hasTracks).toBe(false);
+        expect(result.hasResults).toBe(false);
+    });
+});
