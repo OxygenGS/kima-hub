@@ -1,5 +1,30 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.14.0 — release preparation (unpublished)
+
+Performance and search improvements following the published v1.13.1 artist-loading update. This release improves two independent hot paths without replacing the v1.13 UI or audio engine.
+
+### Artwork and responsiveness
+
+- Native cached covers now use asynchronous canonical path checks, file reads and writes rather than synchronous filesystem calls in the request path.
+- Deduplicate simultaneous requests for the same cold cover variant, bound different concurrent resize jobs and publish completed variants atomically.
+- Preserve existing image-fallback behavior and path/symlink containment checks. No production latency percentage is claimed.
+
+### Local music search
+
+- Preserve accented and non-Latin music names in PostgreSQL full-text query terms; normalize combining marks in search cache keys.
+- Rank exact titles and artist names before prefix and broader full-text matches in local search.
+- Use pg_trgm similarity only after full-text and substring search return no results, with bounded query length and missing tracks excluded.
+- Install the built-in PostgreSQL pg_trgm extension and three new GIN indexes (Artist.name, Album.title, Track.title). A large library may require temporary disk space and I/O during migration; no user music data is rewritten.
+
+### Compatibility, backup and release checks
+
+- Existing player, permissions, music analysis and modern Symfonium/Feishin authentication are retained. No dependency upgrade or audio-engine replacement.
+- Review English/Dutch in-app release notes and real native application/upgrade tests. Do not claim unmeasured speedups or vulnerability-free images.
+- Back up the complete persistent /data volume before upgrading; independent pre-upgrade backup is required for rollback after database migration.
+
+- **Release gate:** Unpublished candidate. Require final-head CI, actual AIO audio/browser checks, native AMD64/ARM64 preflight on the merged commit, review of residual image findings and explicit publication approval.
+
 ## OxygenGS fork v1.13.1 — release preparation (unpublished)
 
 Maintenance update following v1.13.0, focused on the first opening of local-library artists.
