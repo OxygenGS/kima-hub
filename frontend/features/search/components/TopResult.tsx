@@ -6,6 +6,8 @@ import { Music, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { Artist, DiscoverResult } from "../types";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { useQueryClient } from "@tanstack/react-query";
+import { artistOverviewQueryOptions } from "@/features/artist/hooks/useArtistData";
 
 interface TopResultProps {
     libraryArtist?: Artist;
@@ -14,6 +16,7 @@ interface TopResultProps {
 
 export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
     if (!libraryArtist && !discoveryArtist) {
         return null;
     }
@@ -27,9 +30,17 @@ export function TopResult({ libraryArtist, discoveryArtist }: TopResultProps) {
         ? libraryArtist?.heroUrl
         : discoveryArtist?.image;
 
+    const prefetchLocalArtist = () => {
+        if (isLibrary && artistId) {
+            void queryClient.prefetchQuery(artistOverviewQueryOptions(artistId));
+        }
+    };
+
     return (
         <Link
             href={`/artist/${artistId}`}
+            onMouseEnter={isLibrary ? prefetchLocalArtist : undefined}
+            onFocus={isLibrary ? prefetchLocalArtist : undefined}
             className="group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] border border-white/5 hover:border-brand/30 transition-colors duration-200"
             data-tv-card
             data-tv-card-index={0}

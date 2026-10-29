@@ -2,8 +2,7 @@
 
 import { memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/hooks/useQueries";
-import { fetchArtistDetails } from "@/features/artist/hooks/useArtistData";
+import { artistOverviewQueryOptions } from "@/features/artist/hooks/useArtistData";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Music, Play } from "lucide-react";
 import { Artist } from "../types";
@@ -43,11 +42,9 @@ const ArtistCardItem = memo(
         const queryClient = useQueryClient();
         const { t } = useLanguage();
         const prefetchArtist = () => {
-            void queryClient.prefetchQuery({
-                queryKey: queryKeys.artist(artist.id),
-                queryFn: () => fetchArtistDetails(artist.id),
-                staleTime: 10 * 60 * 1000,
-            });
+            // Avoid external enrichment on hover/focus. The full request still
+            // starts on navigation; this cheap snapshot can paint immediately.
+            void queryClient.prefetchQuery(artistOverviewQueryOptions(artist.id));
         };
         return (
             <MediaCard

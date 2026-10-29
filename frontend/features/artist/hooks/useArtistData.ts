@@ -35,6 +35,16 @@ export async function fetchArtistOverview(id: string, signal?: AbortSignal) {
     }
 }
 
+/** Shared, local-only first paint for intent prefetch and artist navigation. */
+export function artistOverviewQueryOptions(id: string) {
+    return {
+        queryKey: [...queryKeys.artist(id), "overview"] as const,
+        queryFn: ({ signal }: { signal: AbortSignal }) => fetchArtistOverview(id, signal),
+        staleTime: 10 * 60 * 1000,
+        retry: false,
+    };
+}
+
 export function useArtistData() {
     const params = useParams();
     const id = params.id as string;
@@ -49,13 +59,12 @@ export function useArtistData() {
     });
     const overview = useQuery({
         // Never store the partial snapshot under the complete detail cache key.
-        queryKey: [...queryKeys.artist(id || ""), "overview"],
-        queryFn: ({ signal }) => fetchArtistOverview(id, signal),
+        ...artistOverviewQueryOptions(id || ""),
         enabled: !!id && !full.data,
-        staleTime: 10 * 60 * 1000,
-        retry: false,
     });
     const artist = full.data ?? overview.data;
+    const loadingMore = !!overview.data && !full.data && full.isFetching;
+    const moreDetailsFailed = !!overview.data && !full.data && full.isError;
     const refetchFull = full.refetch;
     const refetchOverview = overview.refetch;
     const reloadArtist = useCallback(
@@ -96,5 +105,6 @@ export function useArtistData() {
         loading: !artist && (full.isLoading || overview.isLoading),
         error: !artist && full.isError && !overview.isLoading,
         source, sortBy, setSortBy, reloadArtist,
+        loadingMore, moreDetailsFailed, retryMoreDetails: refetchFull,
     };
 }
