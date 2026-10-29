@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.13.0 — release preparation (unpublished)
+## OxygenGS fork v1.13.0 — released 2026-10-28
 
 A visible interface refresh across the home screen, desktop navigation, music detail pages, playback surfaces and queue. The public application name remains Kima Hub — Oxygen's Fork.
 
@@ -19,7 +19,7 @@ A visible interface refresh across the home screen, desktop navigation, music de
 - Back up the complete persistent `/data` volume before updating. For rollback, restore an independent pre-upgrade backup rather than reusing a migrated database.
 - Existing dependency security advisories remain subject to image scanning and review; this release does not claim zero vulnerabilities.
 
-- **Release gate:** Candidate only. Require full repository CI, actual disposable AIO browser/audio acceptance, exact-source native AMD64/ARM64 preflight and explicit stable publication approval. No image or release is published by source preparation.
+- **Release verification:** Full PR validation, real AIO browser/audio acceptance and independent upgrade/restore tests passed. Native preflight 40773886516 verified the exact main source; stable publisher 40776257407 completed on its retry. Existing dependency advisories remain documented; passing these checks is not a zero-risk guarantee.
 
 ## OxygenGS fork v1.12.1 — released 2026-10-28
 

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 376" role="img" aria-labelledby="title desc">
+  <title id="title">Kima Hub - Oxygen's Fork</title>
+  <desc id="desc">Your music. Your space. Self-hosted listening, discovery and a new interface.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1"><stop stop-color="#131619"/><stop offset="1" stop-color="#08090c"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#ffaf19" stop-opacity=".19"/><stop offset="1" stop-color="#ffaf19" stop-opacity="0"/></radialGradient>
+    <linearGradient id="mark" x2="0" y2="1"><stop stop-color="#ffe299"/><stop offset=".48" stop-color="#ffb000"/><stop offset="1" stop-color="#ed8428"/></linearGradient>
+    <linearGradient id="edge"><stop stop-color="#ffb000" stop-opacity=".6"/><stop offset="1" stop-color="#ffb000" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="1278" height="374" rx="28" fill="url(#background)" stroke="#303034"/>
+  <ellipse cx="1030" cy="172" rx="420" ry="310" fill="url(#glow)"/>
+  <g fill="none" stroke="#dba855" opacity=".16">
+    <circle cx="1064" cy="182" r="130"/><circle cx="1064" cy="182" r="115"/><circle cx="1064" cy="182" r="100"/>
+    <circle cx="1064" cy="182" r="85"/><circle cx="1064" cy="182" r="70"/><circle cx="1064" cy="182" r="55"/>
+  </g>
+  <circle cx="1064" cy="182" r="30" fill="#ffb000"/>
+  <circle cx="1064" cy="182" r="6" fill="#14120f"/>
+  <path d="M836 293h31l15-35 15 65 15-111 15 137 15-102 15 46h27" fill="none" stroke="url(#edge)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(62 62)">
+    <rect width="100" height="100" rx="24" fill="#211c12" stroke="#655026"/>
+    <g fill="url(#mark)">
+      <rect x="22" y="37" width="8" height="26" rx="4"/><rect x="34" y="23" width="8" height="54" rx="4"/>
+      <rect x="46" y="14" width="8" height="72" rx="4"/><rect x="58" y="29" width="8" height="42" rx="4"/>
+      <rect x="70" y="41" width="8" height="18" rx="4"/>
+    </g>
+  </g>
+  <g font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+    <text x="188" y="111" font-size="49" font-weight="750" letter-spacing="4" fill="#f5f4f1">KIMA HUB</text>
+    <text x="190" y="144" font-size="18" letter-spacing="2.5" fill="#c4b491">OXYGEN'S FORK</text>
+    <text x="62" y="237" font-size="42" font-weight="650" letter-spacing="-.8" fill="#f1f0ec">Your music. Your space.</text>
+    <text x="64" y="276" font-size="19" fill="#a9aaad">Self-hosted listening. Personal discovery. A new look.</text>
+    <rect x="64" y="315" width="9" height="9" rx="4.5" fill="#ffb000"/>
+    <text x="86" y="324" font-size="13" letter-spacing="1.8" fill="#ccbd9d">WEB + MOBILE</text>
+    <text x="246" y="324" font-size="13" letter-spacing="1.8" fill="#ccbd9d">EN / NL</text>
+    <text x="350" y="324" font-size="13" letter-spacing="1.8" fill="#ccbd9d">YOUR OWN LIBRARY</text>
+  </g>
+</svg>
