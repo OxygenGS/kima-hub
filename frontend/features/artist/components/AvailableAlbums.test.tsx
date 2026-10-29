@@ -92,4 +92,17 @@ describe("artist available-album artwork", () => {
         await act(async () => { await vi.runAllTimersAsync(); });
         expect(api.request).not.toHaveBeenCalled();
     });
+
+    it("anchors the first visible available-albums section, including EP-only profiles", async () => {
+        await renderAlbums([{ ...album, type: "EP" }]);
+        expect(host.querySelectorAll("#artist-available")).toHaveLength(1);
+        expect(host.querySelector("#artist-available")?.textContent).toContain("Singles and EPs");
+
+        await renderAlbums([
+            { ...album, id: "studio", type: "Album" },
+            { ...album, id: "single", type: "Single" },
+        ]);
+        expect(host.querySelectorAll("#artist-available")).toHaveLength(1);
+        expect(host.querySelector("#artist-available")?.textContent).toContain("Albums Available");
+    });
 });
