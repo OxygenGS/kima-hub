@@ -173,7 +173,7 @@ export function AvailableAlbums({
     return (
         <>
             {studioAlbums.length > 0 && (
-                <section>
+                <section id="artist-available" className="scroll-mt-28">
                     <SectionHeader type="album" title={t("Albums Available")} />
                     <div data-tv-section="available-albums">
                         <AlbumGrid
@@ -187,7 +187,7 @@ export function AvailableAlbums({
             )}
 
             {epsAndSingles.length > 0 && (
-                <section>
+                <section id={studioAlbums.length === 0 ? "artist-available" : undefined} className="scroll-mt-28">
                     <SectionHeader type="album" title={t("Singles and EPs")} />
                     <div data-tv-section="available-eps-singles">
                         <AlbumGrid
