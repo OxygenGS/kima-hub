@@ -11,6 +11,7 @@ import {
 } from "@/lib/audio-context";
 import { useDownloadContext } from "@/lib/download-context";
 import { ArtistPageSkeleton } from "@/features/artist/components/ArtistPageSkeleton";
+import { ArtistDetailStatus } from "@/features/artist/components/ArtistDetailStatus";
 import { useImageColor } from "@/hooks/useImageColor";
 import { api } from "@/lib/api";
 import { notify } from "@/lib/notify";
@@ -48,6 +49,9 @@ export default function ArtistPage() {
         sortBy,
         setSortBy,
         reloadArtist,
+        loadingMore,
+        moreDetailsFailed,
+        retryMoreDetails,
     } = useArtistData();
 
     const { playAll, shufflePlay } = useArtistActions();
@@ -191,6 +195,12 @@ export default function ArtistPage() {
                     onPause={pause}
                 />
             </ArtistHero>
+
+            <ArtistDetailStatus
+                loadingMore={loadingMore}
+                moreDetailsFailed={moreDetailsFailed}
+                onRetry={() => { void retryMoreDetails(); }}
+            />
 
             <div className="relative min-h-[50vh] flex-1 animate-rise">
                 <div
