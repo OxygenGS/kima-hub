@@ -1,8 +1,8 @@
 # Install OxygenGS Kima Hub
 
-**Current published fork release:** [v1.13.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.13.1). It retains the redesigned v1.13 interface and improves the first opening of local-library artist pages without waiting for external metadata, with English/Dutch in-app release notes and modern Symfonium/Feishin authentication.
+**Current published fork release:** [v1.14.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.14.0). It retains the redesigned v1.13 interface and the fast local-first artist pages, while improving artwork processing and local music search with typo tolerance. English/Dutch release notes and modern Symfonium/Feishin authentication remain available.
 
-**v1.13.1 is published.** Its native AMD64/ARM64 images and GitHub release are available. The examples below select this version explicitly; existing installations still require a verified backup before upgrading.
+**v1.14.0 is published.** Its native AMD64/ARM64 images and GitHub release are available. The examples below select this version explicitly; existing installations still require a verified backup before upgrading.
 
 Use the versioned **OxygenGS** image, not the upstream `chevron7locked/kima` image. Confirm the [Docker publish workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) has succeeded before pulling a newly released tag. The guarded workflow creates its GitHub Release after verifying the multi-architecture image; a Git tag alone is not proof of publication.
 
@@ -17,7 +17,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.13.1
+  ghcr.io/oxygengs/kima-hub:v1.14.0
 ```
 
 Open [http://localhost:3030](http://localhost:3030), complete onboarding and create your administrator account.
@@ -28,10 +28,10 @@ Open [http://localhost:3030](http://localhost:3030), complete onboarding and cre
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Explicitly select the desired **published** release with `VERSION=v1.13.1`; the Compose files retain a conservative older default.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Explicitly select the desired **published** release with `VERSION=v1.14.0`; the Compose files retain a conservative older default.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.13.1 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.14.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
 A minimal standalone Compose configuration:
@@ -39,7 +39,7 @@ A minimal standalone Compose configuration:
 ```yaml
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:v1.13.1
+    image: ghcr.io/oxygengs/kima-hub:v1.14.0
     ports:
       - "3030:3030"
     volumes:
@@ -60,7 +60,7 @@ For development builds, see [development](development.md); `docker-compose.yml` 
 1. Record the current image/tag and actual mounts privately. Do not commit installation-specific information to this public repository.
 2. Stop the existing stack and make a **cold backup of the entire original `/data` volume**, including `/data/secrets`, plus the Compose configuration.
 3. Verify a full restore to a **different volume**. Keep the original snapshot unchanged for rollback.
-4. Choose an explicitly published, verified image digest or versioned tag, then upgrade a nonproduction copy first.
+4. For v1.14.0, plan for PostgreSQL `pg_trgm` and three new GIN indexes to be created on the first migration. Allow extra database disk space and I/O, especially with a large music library. Choose an explicitly published, verified image digest or versioned tag, then upgrade a nonproduction copy first.
 5. On an approved installation update, verify accounts, playlists, audio/seek, downloads, per-user rights and language preferences. For rollback, restore the separate **pre-upgrade** data snapshot before restarting the old image.
 
 Follow the full [safe AIO update and rollback guide](safe-aio-updates.md). Never use `docker compose down -v` to update a database you want to keep.
@@ -69,8 +69,8 @@ Follow the full [safe AIO update and rollback guide](safe-aio-updates.md). Never
 
 | Channel | Docker image | Usage |
 | --- | --- | --- |
-| Stable | `ghcr.io/oxygengs/kima-hub:v1.13.1` | Current versioned OxygenGS release; verify GHCR publishing first |
-| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.13.0` | Previous release; use only with a compatible data backup |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.14.0` | Current versioned OxygenGS release; verify GHCR publishing first |
+| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.13.1` | Previous release; use only with a compatible data backup |
 | Pre-release | A specific published `prerelease-...` tag/digest | Testing only, not a production upgrade path |
 | `:latest` | Not automatically promoted | Avoid for controlled upgrades |
 

@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.14.0 — release preparation (unpublished)
+## OxygenGS fork v1.14.0 — released 2026-10-29
 
 Performance and search improvements following the published v1.13.1 artist-loading update. This release improves two independent hot paths without replacing the v1.13 UI or audio engine.
 
@@ -23,7 +23,7 @@ Performance and search improvements following the published v1.13.1 artist-loadi
 - Review English/Dutch in-app release notes and real native application/upgrade tests. Do not claim unmeasured speedups or vulnerability-free images.
 - Back up the complete persistent /data volume before upgrading; independent pre-upgrade backup is required for rollback after database migration.
 
-- **Release gate:** Unpublished candidate. Require final-head CI, actual AIO audio/browser checks, native AMD64/ARM64 preflight on the merged commit, review of residual image findings and explicit publication approval.
+- **Release verification:** Final-head PR checks, real AIO browser/audio and database upgrade/restore gates passed. Native AMD64/ARM64 preflight [40900664321](https://github.com/OxygenGS/kima-hub/actions/runs/40900664321) verified main commit `e37eb740`; explicit stable approval [40935953707](https://github.com/OxygenGS/kima-hub/actions/runs/40935953707) and Docker publication [40935980117](https://github.com/OxygenGS/kima-hub/actions/runs/40935980117) succeeded, including the multi-architecture manifest and [GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.14.0). Residual image security advisories remain and a passing scan is not a guarantee of zero vulnerabilities.
 
 ## OxygenGS fork v1.13.1 — released 2026-10-29
 
