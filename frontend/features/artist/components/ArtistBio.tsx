@@ -13,7 +13,7 @@ export function ArtistBio({ bio }: ArtistBioProps) {
   if (!bio) return null;
 
   return (
-    <section>
+    <section id="artist-about" className="scroll-mt-28">
       <SectionHeader type="artist" title={t("About")} />
       <div className="bg-[var(--bg-tertiary)] border border-white/5 rounded-lg p-4 sm:p-5">
         <div

@@ -22,7 +22,7 @@ export function SimilarArtists({ similarArtists }: SimilarArtistsProps) {
     }
 
     return (
-        <section>
+        <section id="artist-similar" className="scroll-mt-28">
             <SectionHeader type="artist" title={t("Fans Also Like")} />
             <div
                 data-tv-section="similar-artists"

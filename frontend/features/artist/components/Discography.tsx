@@ -29,7 +29,7 @@ export function Discography({
     }
 
     return (
-        <section>
+        <section id="artist-discography" className="scroll-mt-28">
             <SectionHeader
                 type="album"
                 title={t("Discography")}
