@@ -49,6 +49,33 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.13.1
+    "1.13.1": {
+        "titles": {
+            "Kima Hub 1.13.1 \u2014 Faster Artist Pages": "Kima Hub 1.13.1 \u2014 Snellere artiestpagina's"
+        },
+        "summaries": {
+            "Open saved artist information and local albums without waiting for external metadata providers.": "Open opgeslagen artiestinformatie en lokale albums zonder op externe metadatadiensten te wachten."
+        },
+        "items": {
+            "fork.1131.local-first": {
+                "title": "Je lokale albums eerst",
+                "summary": "Bij het eerste bezoek aan een artiest hoeft lokale muziek niet meer op externe verrijking te wachten.",
+                "body": "Artiestpagina's vragen nu een overzicht uit de eigen database op, los van de volledige verrijkte gegevens. Opgeslagen artiestinformatie, afbeeldingen en afspeelbare lokale albums kunnen verschijnen zodra dat lokale antwoord binnen is. De externe discografie, populaire nummers en aanbevelingen worden aangevuld wanneer hun eigen aanvraag klaar is.\n\nDaardoor houdt een trage externe dienst de eerste weergave van je lokale bibliotheek niet meer tegen. Externe diensten zelf worden niet sneller en we beloven geen vaste laadtijd. Artiesten die alleen via ontdekken beschikbaar zijn, hebben nog steeds externe informatie nodig.",
+                "links": {
+                    "/collection?tab=artists": "Blader door artiesten"
+                }
+            },
+            "fork.1131.continuity": {
+                "title": "Blijf bladeren bij trage externe diensten",
+                "summary": "Lokale artiestgegevens blijven beschikbaar als de aanvullende aanvraag mislukt.",
+                "body": "Het lokale overzicht heeft een eigen cache en overschrijft de volledige artiestgegevens niet. Eerder geladen volledige gegevens blijven direct bruikbaar. Na voltooide downloads worden de artiestgegevens vernieuwd. Alles afspelen, Shuffle, albumnavigatie en bestaande gebruikersrechten blijven behouden.\n\nDeze onderhoudsupdate voegt geen databasemigratie toe, verandert niets aan de audiomotor of aanmelding van externe muziekapps en reset de muziekanalyse niet.",
+                "links": {
+                    "/collection": "Open bibliotheek"
+                }
+            }
+        }
+    },
     // release-candidate:1.13.0
     "1.13.0": {
         "titles": {

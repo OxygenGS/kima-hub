@@ -1,5 +1,25 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.13.1 — release preparation (unpublished)
+
+Maintenance update following v1.13.0, focused on the first opening of local-library artists.
+
+### Artist loading
+
+- Render saved artist information and playable local albums from a database-only overview, independently of slow external discography, popularity and artwork providers.
+- Continue loading the complete artist details separately; preserve discovery fallback, the existing full-detail cache and warm navigation.
+- Keep the local snapshot available when the optional full-detail request fails. Keep partial and complete cache entries separate and refresh after completed downloads.
+- Preserve Play All, Shuffle, album navigation, user permissions and modern native-client authentication. No database migration, dependency upgrade or audio-engine change.
+- Include matching English and Dutch in-app release notes.
+
+### Documentation and upgrade
+
+- The repository front page now documents the published v1.13 interface with a new header and verified synthetic application screenshots. No private installation data is included.
+- Back up the complete persistent `/data` volume before updating; use an independent pre-upgrade backup for rollback.
+- External services can still be slow, and discovery-only artists still require them. No measured production-latency percentage is claimed. Existing image security advisories still require review.
+
+- **Release gate:** Unpublished candidate. Require final-head CI, actual application/audio checks, native AMD64/ARM64 preflight on the merged source and explicit stable publication approval.
+
 ## OxygenGS fork v1.13.0 — released 2026-10-28
 
 A visible interface refresh across the home screen, desktop navigation, music detail pages, playback surfaces and queue. The public application name remains Kima Hub — Oxygen's Fork.
