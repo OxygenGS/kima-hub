@@ -101,6 +101,80 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.15.0
+    {
+        "version": "1.15.0",
+        "title": "Kima Hub 1.15.0 \u2014 Faster Artist Navigation & Clearer Browsing",
+        "summary": "Local-first artist navigation, more consistent search tabs and clearer music browsing without changing playback or native clients.",
+        "date": "2026-10-29",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1150.loading",
+                "title": "Smoother page transitions",
+                "summary": "Album, collection and search routes keep their layout while content loads.",
+                "body": "New page-shaped placeholders retain the album hero and track rows, collection masthead and music grid, and search box and results layout during navigation. Instead of replacing the entire view with one generic loader, Kima shows the structure of the destination while data arrives.\n\nThese changes target perceived responsiveness and layout stability; no specific speed improvement is claimed.",
+                "links": [
+                    {
+                        "label": "Browse your collection",
+                        "href": "/collection"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1150.search",
+                "title": "Search tabs that respect their source",
+                "summary": "Library, Discover and P2P views no longer mix unrelated results or loading states.",
+                "body": "The Library filter shows local music, while Discover shows its own artist results. Empty track headings and irrelevant top matches are hidden, and a background P2P lookup no longer forces a completed Library or Discover view to keep showing a spinner. Accessible selected-filter states and the Dutch artist label are included.\n\nThe existing search services and permissions remain in place; this update corrects frontend presentation, not search storage or authentication.",
+                "links": [
+                    {
+                        "label": "Open search",
+                        "href": "/search"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1150.artist",
+                "title": "Artist pages show local details first",
+                "summary": "Artist-card intent preloads the database overview, with clear progress for optional enrichment.",
+                "body": "Moving the pointer onto or focusing a local artist card now warms the smaller database-only artist overview, instead of starting full external metadata enrichment before the page is opened. The overview and complete result have separate cache keys, so already saved albums can appear while additional artist details are requested.\n\nA visible status explains that extra information is loading. If optional enrichment fails, a retry control is available without hiding the existing local information. Exact loading-time gains depend on cache, network and provider availability and have not been measured.",
+                "links": [
+                    {
+                        "label": "Browse artists",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1150.sections",
+                "title": "Jump straight to artist sections",
+                "summary": "Profiles offer direct links to the populated biography, popular tracks and album sections.",
+                "body": "A compact, horizontally scrollable navigation beneath the artist header links only to sections that exist on that profile: About, Popular, Discography, Available Albums and Fans Also Like. Links work with keyboard and TV focus and point to the correct section even when an artist only has singles or EPs.\n\nThe navigation is omitted when there is fewer than two populated sections, avoiding empty or misleading destinations.",
+                "links": [
+                    {
+                        "label": "View artist collection",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1150.upgrade",
+                "title": "Compatibility and safe updates",
+                "summary": "Playback and client authentication stay unchanged; back up the persistent data volume before any upgrade.",
+                "body": "This release's changes are frontend-only: no new database migration, playback engine replacement, permission model change or new native-client authentication requirement is introduced by the v1.15 update. Existing modern Symfonium and Feishin connections remain supported.\n\nBefore changing a running installation, back up the complete persistent /data volume and verify an independent restore. If updating from a release older than v1.14.0, earlier database migrations may still apply. A rollback must restore the pre-upgrade data backup; reverting only the container image is not a safe database rollback. Security advisories still require review before the stable image is approved.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.14.0
     {
         "version": "1.14.0",

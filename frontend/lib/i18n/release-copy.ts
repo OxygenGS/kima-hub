@@ -49,6 +49,57 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.15.0
+    "1.15.0": {
+        "titles": {
+            "Kima Hub 1.15.0 \u2014 Faster Artist Navigation & Clearer Browsing": "Kima Hub 1.15.0 \u2014 Sneller naar artiesten en duidelijker bladeren"
+        },
+        "summaries": {
+            "Local-first artist navigation, more consistent search tabs and clearer music browsing without changing playback or native clients.": "Sneller naar artiesten vanuit lokale gegevens, betrouwbaardere zoekfilters en duidelijkere navigatie zonder wijzigingen aan afspelen of externe muziekapps."
+        },
+        "items": {
+            "fork.1150.loading": {
+                "title": "Rustigere overgangen tussen pagina's",
+                "summary": "Album-, collectie- en zoekpagina's behouden hun indeling tijdens het laden.",
+                "body": "Nieuwe tijdelijke laadweergaven volgen de vorm van de albumpagina, de collectie met muziektegels en de zoekpagina. In plaats van \u00e9\u00e9n algemeen laadscherm blijft de structuur van de bestemming zichtbaar terwijl de inhoud verschijnt.\n\nDe wijzigingen richten zich op een rustigere, stabielere interface. Er wordt geen gemeten snelheidswinst geclaimd.",
+                "links": {
+                    "/collection": "Bekijk je collectie"
+                }
+            },
+            "fork.1150.search": {
+                "title": "Zoekfilters die de gekozen bron volgen",
+                "summary": "Bibliotheek, Ontdekken en P2P mengen geen ongerelateerde resultaten of laadstatussen meer.",
+                "body": "Het filter Bibliotheek toont lokale muziek en Ontdekken toont de bijbehorende artiestresultaten. Lege kopjes boven nummers en onjuiste hoofdresultaten worden niet meer getoond. Een P2P-zoekactie houdt een al geladen Bibliotheek- of Ontdekken-weergave niet langer in een laadstatus. Ook de geselecteerde filters en het Nederlandse artiestlabel zijn verbeterd.\n\nDe bestaande zoekdiensten en gebruikersrechten blijven behouden. Dit is een aanpassing van de interface, niet van opslag of aanmelding.",
+                "links": {
+                    "/search": "Open zoeken"
+                }
+            },
+            "fork.1150.artist": {
+                "title": "Lokale artiestinformatie eerder in beeld",
+                "summary": "Artiestkaarten bereiden de lokale samenvatting voor en tonen de voortgang van aanvullende gegevens.",
+                "body": "Wanneer je met de muis of het toetsenbord een lokale artiestkaart selecteert, bereidt Kima voortaan eerst de kleinere samenvatting uit de eigen database voor. De volledige externe verrijking start pas bij het openen van de artiestpagina. Beide resultaten gebruiken verschillende cachevermeldingen, zodat opgeslagen albums alvast beschikbaar kunnen zijn.\n\nEen zichtbare melding laat zien dat aanvullende informatie nog laadt. Als die optionele gegevens niet beschikbaar komen, kun je het opnieuw proberen terwijl de lokale gegevens zichtbaar blijven. De daadwerkelijke tijdwinst is niet gemeten en hangt onder meer af van netwerk en caches.",
+                "links": {
+                    "/collection?tab=artists": "Bekijk artiesten"
+                }
+            },
+            "fork.1150.sections": {
+                "title": "Direct naar onderdelen van een artiest",
+                "summary": "Artiestprofielen krijgen snelkoppelingen naar aanwezige biografie\u00ebn, nummers en albums.",
+                "body": "Onder de artiestkop staat een compacte, horizontaal schuifbare navigatie naar onderdelen die echt aanwezig zijn: Over, Populair, Discografie, Beschikbare albums en Vergelijkbare artiesten. De koppelingen werken met toetsenbord en tv-bediening en verwijzen ook bij uitsluitend singles of EP's naar het juiste onderdeel.\n\nAls een artiestprofiel minder dan twee gevulde onderdelen heeft, wordt de navigatie niet getoond.",
+                "links": {
+                    "/collection?tab=artists": "Bekijk de artiestencollectie"
+                }
+            },
+            "fork.1150.upgrade": {
+                "title": "Compatibiliteit en veilig bijwerken",
+                "summary": "Afspeelfuncties en clientaanmelding blijven behouden; maak v\u00f3\u00f3r het bijwerken een volledige gegevensback-up.",
+                "body": "De wijzigingen van v1.15 zijn beperkt tot de frontend. Deze update voegt geen databasemigratie, vervanging van de audiomotor, ander rechtenmodel of nieuwe eis voor clientaanmelding toe. De moderne ondersteuning voor Symfonium en Feishin blijft behouden.\n\nMaak v\u00f3\u00f3r het bijwerken een volledige back-up van het blijvende /data-volume en controleer een afzonderlijke herstelprocedure. Bij een upgrade vanaf een versie ouder dan v1.14.0 kunnen eerdere databasemigraties nog wel worden uitgevoerd. Voor teruggaan naar een oudere versie moet de back-up van v\u00f3\u00f3r de upgrade worden hersteld; alleen de container terugzetten is niet veilig. Eventuele beveiligingsmeldingen moeten v\u00f3\u00f3r goedkeuring van de stabiele image worden beoordeeld.",
+                "links": {
+                    "/settings": "Open instellingen"
+                }
+            }
+        }
+    },
     // release-candidate:1.14.0
     "1.14.0": {
         "titles": {
