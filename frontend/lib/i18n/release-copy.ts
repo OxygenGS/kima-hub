@@ -69,7 +69,7 @@ const dutch: Record<string, VersionCopy> = {
             "fork.1140.search": {
                 "title": "Makkelijker de juiste muziek vinden",
                 "summary": "Namen met accenten, exacte treffers en kleine typefouten worden beter verwerkt.",
-                "body": "Zoeken in de eigen bibliotheek behoudt nu letters en combinatietekens uit verschillende talen. Exacte artiest-, album- en numernamen komen v\u00f3\u00f3r ruimere tekstovereenkomsten. Als zowel gewone tekstzoekopdrachten als gedeeltelijke overeenkomsten niets vinden, kan PostgreSQL met trigrammen een kleine spelfout opvangen.\n\nDe fouttolerante zoekopdracht wordt alleen gebruikt vanaf drie tekens en voor muziek uit je eigen bibliotheek. Extern ontdekken blijft ongewijzigd en ontbrekende nummers worden niet als afspeelbaar resultaat aangeboden. Bestaande zoekcaches blijven behouden.",
+                "body": "Zoeken in de eigen bibliotheek behoudt nu letters en combinatietekens uit verschillende talen. Exacte artiest-, album- en nummertitels komen v\u00f3\u00f3r ruimere tekstovereenkomsten. Als zowel gewone tekstzoekopdrachten als gedeeltelijke overeenkomsten niets vinden, kan PostgreSQL met trigrammen een kleine spelfout opvangen.\n\nDe fouttolerante zoekopdracht wordt alleen gebruikt vanaf drie tekens en voor muziek uit je eigen bibliotheek. Extern ontdekken blijft ongewijzigd en ontbrekende nummers worden niet als afspeelbaar resultaat aangeboden. Bestaande zoekcaches blijven behouden.",
                 "links": {
                     "/collection": "Open bibliotheek"
                 }
