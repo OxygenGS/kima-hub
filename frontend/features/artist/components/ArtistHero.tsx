@@ -9,6 +9,7 @@ import type { ColorPalette } from "@/hooks/useImageColor";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { formatStatsCount } from "@/features/stats/locale-format";
 import { MusicDetailHero } from "@/components/ui/MusicDetailHero";
+import { ArtistSectionNav } from "./ArtistSectionNav";
 
 interface ArtistHeroProps {
     artist: Artist;
@@ -29,6 +30,7 @@ export function ArtistHero({
     const ownedAlbums = albums.filter((a) => a.owned);
 
     return (
+        <>
         <MusicDetailHero
             libraryHref="/collection?tab=artists"
             image={backgroundImage || heroImage}
@@ -86,5 +88,13 @@ export function ArtistHero({
         >
             {children}
         </MusicDetailHero>
+        <ArtistSectionNav
+            hasBio={!!(artist.bio || artist.summary)}
+            hasPopularTracks={(artist.topTracks?.length ?? 0) > 0}
+            hasOwnedAlbums={ownedAlbums.length > 0}
+            hasAvailableAlbums={albums.some((album) => !album.owned)}
+            hasSimilarArtists={(artist.similarArtists?.length ?? 0) > 0}
+        />
+        </>
     );
 }
