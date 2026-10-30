@@ -1710,6 +1710,30 @@ class ApiClient {
         }>("/enrichment/progress");
     }
 
+    async getMissingArtistArtwork() {
+        return this.get<{
+            missingArtists: number;
+            progress: {
+                inProgress: boolean;
+                queued: number;
+                processed: number;
+                recovered: number;
+                missing: number;
+                failed: number;
+                startedAt: string | null;
+                finishedAt: string | null;
+            };
+        }>("/enrichment/artwork/missing");
+    }
+
+    async retryMissingArtistArtwork() {
+        return this.request<{ message: string; progress: {
+            inProgress: boolean; queued: number; processed: number;
+            recovered: number; missing: number; failed: number;
+            startedAt: string | null; finishedAt: string | null;
+        } }>("/enrichment/artwork/retry-missing", { method: "POST" });
+    }
+
     async retryFailedAndBlocked() {
         return this.request<{
             message: string;
