@@ -1,0 +1,87 @@
+[
+  {
+    "path": "README.md",
+    "before": "## Latest stable release: v1.16.0\n\n**Artwork Recovery** is available now. The current stable release adds local album-cover discovery and dedicated tools to repair missing covers and artist photos in libraries that have already been indexed.\n\n[See what's new in v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0)",
+    "after": "## Latest stable release: v1.16.1\n\n**Soulseek downloads fixed.** The current release restores P2P downloads in the all-in-one installation using a dedicated import folder, without granting write access to your entire music collection. Artwork Recovery and all existing listening features remain available.\n\n[See what's new in v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1)"
+  },
+  {
+    "path": "README.md",
+    "before": "- **Administration that stays yours:** backend-enforced account permissions, instance-level branding and language settings.",
+    "after": "- **Administration that stays yours:** backend-enforced account permissions, instance-level branding and language settings.\n- **Safer Soulseek downloads:** a dedicated `Singles/Kima Downloads` import folder for the non-root backend; existing music folders retain their permissions."
+  },
+  {
+    "path": "README.md",
+    "before": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`",
+    "after": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.1`"
+  },
+  {
+    "path": "README.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.0\n",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.16.1\n"
+  },
+  {
+    "path": "README.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.0 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "README.md",
+    "before": "v1.16.0 completed native multi-architecture builds and release security checks. **Residual HIGH and CRITICAL dependency advisories remain.** Successful CI is not a guarantee of zero vulnerabilities; consult the [current security report](docs/image-security.md) before exposing a service.",
+    "after": "Every stable release requires native multi-architecture build and security review. **Residual HIGH and CRITICAL dependency advisories remain in the documented prior image scan.** Successful CI does not guarantee zero vulnerabilities; consult the [image security report](docs/image-security.md) and the exact release's preflight before deployment."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Current published fork release:** [v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) — Artwork Recovery",
+    "after": "**Current published fork release:** [v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) — Soulseek download hotfix"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "The published all-in-one Docker image is `ghcr.io/oxygengs/kima-hub:v1.16.0`, with native **linux/amd64** and **linux/arm64** support. Its [Docker publication workflow](https://github.com/OxygenGS/kima-hub/actions/runs/41072280580) and GitHub Release completed successfully.",
+    "after": "The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.16.1`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.16.1 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) has been published and the Docker publication workflow has completed successfully."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.0\n",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.16.1\n"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.0 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "    image: ghcr.io/oxygengs/kima-hub:v1.16.0",
+    "after": "    image: ghcr.io/oxygengs/kima-hub:v1.16.1"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| `3030` | Web and OpenSubsonic client API. Internal services do not need separate public ports. |",
+    "after": "| `3030` | Web and OpenSubsonic client API. Internal services do not need separate public ports. |\n\n**Soulseek download permissions:** v1.16.1 creates a narrowly writable `/music/Singles/Kima Downloads` import directory for the backend when possible. The rest of `/music` remains unchanged. If the host mount is read-only or prevents creating/chowning that folder, grant the container's backend user limited write access to this specific import directory; never recursively make the whole music collection writable."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "4. Select `ghcr.io/oxygengs/kima-hub:v1.16.0` in the existing deployment",
+    "after": "4. Select `ghcr.io/oxygengs/kima-hub:v1.16.1` in the existing deployment"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Database migration note:** v1.16.0 introduces **no new schema migration**.",
+    "after": "**Database migration note:** v1.16.1 introduces **no new schema migration**."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "In v1.16.0, administrators can go to **Settings → Artwork** and initiate:",
+    "after": "Administrators can go to **Settings → Artwork** and initiate:"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.0` |",
+    "after": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.1` |"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "The [v1.16.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144) passed on the exact merged source, but residual HIGH and CRITICAL image advisories remain. Approval and publication do not establish that all dependencies are free of known vulnerabilities. See [image security](image-security.md) for the current findings and risk guidance.",
+    "after": "Native image builds and a security preflight must pass for the exact release commit before approval and publication. Previously recorded HIGH and CRITICAL image advisories remain relevant until reassessed. Approval does not establish that all dependencies are free of known vulnerabilities. See the [image security report](image-security.md) and the exact release's native preflight for risk guidance."
+  }
+]
