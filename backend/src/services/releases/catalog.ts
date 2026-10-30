@@ -101,6 +101,41 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.16.1
+    {
+        "version": "1.16.1",
+        "title": "Kima Hub 1.16.1 \u2014 Soulseek Download Fix",
+        "summary": "Fix Soulseek permission-denied downloads in the all-in-one Docker installation while preserving music-library permissions.",
+        "date": "2026-10-30",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1161.soulseek",
+                "title": "Soulseek downloads work with the non-root backend",
+                "summary": "Send P2P downloads to a dedicated, narrowly writable import folder.",
+                "body": "The all-in-one backend runs as an unprivileged user. In earlier builds, a Soulseek download tried to create artist and album directories directly under the music mount, which could fail with EACCES: permission denied. Both manual P2P downloads and automatic Soulseek acquisition now write under Singles/Kima Downloads inside the configured music library. During startup the container prepares only that dedicated directory for the backend user, without changing other music files or directory permissions. Downloaded tracks are then eligible for the existing library scan.",
+                "links": [
+                    {
+                        "label": "Open music library",
+                        "href": "/collection?tab=tracks"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1161.permissions",
+                "title": "Keep the rest of the music library protected",
+                "summary": "No broad write permissions, new root-running backend, or automatic changes to existing music folders.",
+                "body": "An existing Soulseek import directory is never forcibly re-owned and no recursive chmod or chown is performed on the music collection. If the /music mount is read-only, root-squashed, or denies creation of the new import folder, downloads will still require limited host-side access to /music/Singles/Kima Downloads; the app continues to start and reports an actionable permission error. Input filenames and directory components are normalized to prevent path traversal. Existing audio files and previous downloads are not moved. Playback, modern Symfonium and Feishin authentication and the Artwork Recovery controls are unchanged. No database schema migration is added by this hotfix. Back up the full persistent /data volume before updating. Native image vulnerabilities still require explicit security review before publication.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.16.0
     {
         "version": "1.16.0",

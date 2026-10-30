@@ -19,11 +19,11 @@ A modern, self-hosted music experience for the collection you own. Stream your l
 
 ---
 
-## Latest stable release: v1.16.0
+## Latest stable release: v1.16.1
 
-**Artwork Recovery** is available now. The current stable release adds local album-cover discovery and dedicated tools to repair missing covers and artist photos in libraries that have already been indexed.
+**Soulseek downloads fixed.** The current release restores P2P downloads in the all-in-one installation using a dedicated import folder, without granting write access to your entire music collection. Artwork Recovery and all existing listening features remain available.
 
-[See what's new in v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) · [View the changelog](CHANGELOG.md)
+[See what's new in v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) · [View the changelog](CHANGELOG.md)
 
 ## Everything in one place
 
@@ -59,13 +59,14 @@ Both tools show progress, results and a continuation option. They **preserve man
 - **Smarter local search:** exact-match priority, accent-aware queries and typo-tolerant fallback, alongside source-aware Library, Discover and P2P results.
 - **Better native-client connections:** modern authentication and synchronization with Symfonium and Feishin, without requiring their older compatibility settings when using newly generated keys.
 - **Administration that stays yours:** backend-enforced account permissions, instance-level branding and language settings.
+- **Safer Soulseek downloads:** a dedicated `Singles/Kima Downloads` import folder for the non-root backend; existing music folders retain their permissions.
 - **Release safeguards:** automated tests, upgrade/restore checks, AMD64/ARM64 builds, vulnerability scans and separate stable-release approval.
 
 The fork retains the upstream music server, playback functionality and existing integrations. These improvements build on that foundation rather than replacing it.
 
 ## Get started
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`  
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.1`
 **Platforms:** `linux/amd64` and `linux/arm64`  
 **Web and client API:** port `3030`
 
@@ -78,7 +79,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.16.0
+  ghcr.io/oxygengs/kima-hub:v1.16.1
 ```
 
 Replace `/absolute/path/to/music` with your music directory, then open `http://localhost:3030` on your Docker host and complete first-run setup.
@@ -94,7 +95,7 @@ Replace `/absolute/path/to/music` with your music directory, then open `http://l
 Use the [production Compose example](docker-compose.prod.yml) with an explicit version:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d
 ```
 
 The example Compose files retain a conservative fallback image and do not automatically follow the newest release. The `:latest` tag is **not** automatically promoted. Pin a published version or immutable digest.
@@ -117,7 +118,7 @@ Older API keys may need replacement for modern salted-token authentication. Keep
 
 Your library and account data stay on your own server. Restrict remote access, protect credentials and maintain independent backups.
 
-v1.16.0 completed native multi-architecture builds and release security checks. **Residual HIGH and CRITICAL dependency advisories remain.** Successful CI is not a guarantee of zero vulnerabilities; consult the [current security report](docs/image-security.md) before exposing a service.
+Every stable release requires native multi-architecture build and security review. **Residual HIGH and CRITICAL dependency advisories remain in the documented prior image scan.** Successful CI does not guarantee zero vulnerabilities; consult the [image security report](docs/image-security.md) and the exact release's preflight before deployment.
 
 [Security policy](SECURITY.md) · [Privacy policy](PRIVACY.md) · [Release validation](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144)
 

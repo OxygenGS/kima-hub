@@ -49,6 +49,33 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.16.1
+    "1.16.1": {
+        "titles": {
+            "Kima Hub 1.16.1 \u2014 Soulseek Download Fix": "Kima Hub 1.16.1 \u2014 Soulseek-downloads hersteld"
+        },
+        "summaries": {
+            "Fix Soulseek permission-denied downloads in the all-in-one Docker installation while preserving music-library permissions.": "Herstel Soulseek-downloads die vastlopen op toegangsrechten in de all-in-one Docker-installatie, zonder schrijfrechten voor de hele muziekbibliotheek."
+        },
+        "items": {
+            "fork.1161.soulseek": {
+                "title": "Soulseek-downloads werken weer met de niet-rootbackend",
+                "summary": "Sla P2P-downloads op in een afzonderlijke importmap met beperkte schrijfrechten.",
+                "body": "De backend in de all-in-one-container draait als gebruiker zonder rootrechten. Voorheen probeerde Soulseek nieuwe artiest- en albummappen direct in de muziekmap aan te maken. Dit kon mislukken met EACCES: permission denied. Zowel handmatige P2P-downloads als automatische Soulseek-downloads worden voortaan in Singles/Kima Downloads binnen de ingestelde muziekbibliotheek opgeslagen. Bij het opstarten bereidt de container uitsluitend deze importmap voor de backendgebruiker voor. Andere muziekbestanden en maprechten blijven ongewijzigd. Nieuwe downloads kunnen daarna via de bestaande muziekscan worden ge\u00efmporteerd.",
+                "links": {
+                    "/collection?tab=tracks": "Open muziekbibliotheek"
+                }
+            },
+            "fork.1161.permissions": {
+                "title": "De rest van je muziekbibliotheek blijft beschermd",
+                "summary": "Geen algemene schrijfrechten, geen rootbackend en geen automatische wijzigingen aan bestaande muziekmappen.",
+                "body": "Een bestaande Soulseek-importmap krijgt niet zonder toestemming een andere eigenaar. Er worden geen recursieve chmod- of chown-opdrachten op de muziekbibliotheek uitgevoerd. Is de /music-koppeling alleen-lezen, gebruikt de host root-squash of blokkeert het bestandssysteem het aanmaken van de importmap, dan zijn nog beperkte rechten voor /music/Singles/Kima Downloads nodig op de host. Kima blijft opstarten en geeft een gerichte foutmelding. Bestandsnamen en mapnamen worden gecontroleerd op onveilige paden. Bestaande muziek en eerdere downloads worden niet verplaatst. Afspelen, moderne Symfonium- en Feishin-authenticatie en Artwork Recovery veranderen niet. Deze hotfix voegt geen databasemigratie toe. Maak v\u00f3\u00f3r de update een volledige back-up van het blijvende /data-volume. Bestaande kwetsbaarheden in Docker-images moeten voor publicatie apart beoordeeld worden.",
+                "links": {
+                    "/settings": "Open instellingen"
+                }
+            }
+        }
+    },
     // release-candidate:1.16.0
     "1.16.0": {
         "titles": {
