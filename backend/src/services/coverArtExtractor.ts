@@ -48,7 +48,7 @@ async function recoverAlbumFolderCover(
             // Normalize PNG/WebP/JPEG into real JPEG bytes: /cover-art serves
             // native files as image/jpeg. No relabelling of non-JPEG data.
             const sharp = (await import("sharp")).default;
-            temp = `${cachePath}.part-${crypto.randomUUID()}`;
+            temp = `${cachePath}.part-${crypto.randomUUID()}.jpg`;
             await sharp(candidate, { limitInputPixels: 40_000_000 })
                 .rotate()
                 .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
