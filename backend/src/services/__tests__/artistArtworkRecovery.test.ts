@@ -61,7 +61,7 @@ beforeEach(() => {
     mockArtistUpdateMany.mockResolvedValue({ count: 1 });
     mockTrackFindFirst.mockResolvedValue(null);
     mockFindArtistArtwork.mockResolvedValue({ url: IMG, source: "fanart" });
-    mockDownloadAndStoreImage.mockResolvedValue("native:artists/artist-test-1.jpg");
+    mockDownloadAndStoreImage.mockImplementation(async (_url: string, id: string) => `native:artists/${id}.jpg`);
     mockFindLocalArtistImage.mockResolvedValue(null);
     mockRedisDel.mockResolvedValue(1);
 });
@@ -84,10 +84,10 @@ describe("missing artist photo recovery", () => {
         expect(mockFindArtistArtwork).toHaveBeenCalledWith({
             name: "Safe Artist", mbid: rows[0].mbid, refresh: true,
         });
-        expect(mockDownloadAndStoreImage).toHaveBeenCalledWith(IMG, "artist-test-1", "artist");
+        expect(mockDownloadAndStoreImage).toHaveBeenCalledWith(IMG, expect.stringMatching(/^recovery-artist-test-1-/), "artist");
         expect(mockArtistUpdateMany).toHaveBeenCalledWith({
             where: { id: "artist-test-1", heroUrl: null, userHeroUrl: null },
-            data: { heroUrl: "native:artists/artist-test-1.jpg" },
+            data: { heroUrl: expect.stringMatching(/^native:artists\/recovery-artist-test-1-.*\.jpg$/) },
         });
         expect(mockRedisDel).toHaveBeenCalledWith("hero:artist-test-1");
         expect(getArtistArtworkRecoveryProgress()).toMatchObject({
@@ -97,15 +97,16 @@ describe("missing artist photo recovery", () => {
 
     it("takes a local artist file before asking any external service", async () => {
         mockTrackFindFirst.mockResolvedValue({ filePath: "Safe Artist/Album/01.flac" });
-        mockFindLocalArtistImage.mockResolvedValue("native:artists/artist-test-1.png");
+        mockFindLocalArtistImage.mockImplementation(async (_root: string, _track: string, _id: string, opts: { cacheId: string }) => `native:artists/${opts.cacheId}.png`);
         expect(startArtistArtworkRecovery()).toBe(true);
         await drainJob();
         expect(mockFindLocalArtistImage).toHaveBeenCalledWith(
             "/music", "Safe Artist/Album/01.flac", "artist-test-1",
+            { artistOnly: true, cacheId: expect.stringMatching(/^recovery-artist-test-1-/) },
         );
         expect(mockFindArtistArtwork).not.toHaveBeenCalled();
         expect(mockArtistUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
-            data: { heroUrl: "native:artists/artist-test-1.png" },
+            data: { heroUrl: expect.stringMatching(/^native:artists\/recovery-artist-test-1-.*\.png$/) },
         }));
     });
 
