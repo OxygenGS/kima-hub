@@ -44,6 +44,8 @@ export interface ArtistArtworkQuery {
     candidateUrl?: string | null;
     /** Set on page-view calls so the fanart.tv queue runs this ahead of enrichment work. */
     interactive?: boolean;
+    /** Bypass short-lived "not found" answers for explicit admin recovery. */
+    refresh?: boolean;
 }
 
 export interface ArtworkResult {
@@ -91,7 +93,9 @@ const ARTIST_SOURCES: Source<ArtistArtworkQuery>[] = [
     },
     {
         name: "deezer",
-        find: (q) => deezerService.getArtistImage(q.name),
+        find: (q) => q.refresh
+            ? deezerService.getArtistImage(q.name, { refresh: true })
+            : deezerService.getArtistImage(q.name),
     },
 ];
 
@@ -229,13 +233,14 @@ export async function findArtistArtwork(
     return findArtwork(artistKey(query), ARTIST_SOURCES, query, query.name);
 }
 
-async function findArtwork<Q extends { candidateUrl?: string | null }>(
+async function findArtwork<Q extends { candidateUrl?: string | null; refresh?: boolean }>(
     key: string,
     sources: Source<Q>[],
     query: Q,
     label: string,
 ): Promise<ArtworkResult | null> {
-    const cached = await remembered(key);
+    // A deliberate admin retry skips remembered NONE and stale image URLs.
+    const cached = query.refresh ? undefined : await remembered(key);
     if (cached !== undefined) {
         return cached ? { url: cached, source: "cache" } : null;
     }
