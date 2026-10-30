@@ -20,7 +20,9 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
     const { t } = useLanguage();
     const queryClient = useQueryClient();
     const [recovery, setRecovery] = useState<Awaited<ReturnType<typeof api.getMissingArtistArtwork>> | null>(null);
-    const [recoveryError, setRecoveryError] = useState<string | null>(null);
+    const [recoveryError, setRecoveryError] = useState<
+        "Couldn't load missing artwork" | "Couldn't start artwork recovery" | null
+    >(null);
     const [isStarting, setIsStarting] = useState(false);
     const wasRunning = useRef(false);
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
