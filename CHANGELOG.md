@@ -1,5 +1,32 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.16.0 — release preparation (unpublished)
+
+Kima Hub v1.16.0 adds bounded artwork recovery for already-indexed libraries after v1.15.0. The release improves missing image coverage without deleting music, replacing manually selected artwork or requiring a full library rescan.
+
+### Local album artwork (PR #165)
+- Preserve the existing cached/embedded priority, then look for cover, folder, front or album image files beside music tracks, including case-insensitive JPEG, PNG and WebP filenames.
+- Decode and normalize recovered folder images into real JPEG cache entries. Reject invalid sizes, unreadable media and symlink candidates.
+- Continue to the existing ordered external artwork sources when local artwork cannot be recovered.
+
+### Repair album covers for existing library entries (PR #166)
+- Admin-only Settings > Artwork control for at most 200 candidate albums per round, with observable progress and a continuation option.
+- Repair null/empty album artwork and stale native cache references without rescanning unchanged music or rewriting track tags.
+- Preserve existing good images, external URLs and user overrides; use conditional database updates to protect concurrent changes.
+- Prefer embedded/local cover files, then the existing Deezer, Cover Art Archive and Fanart.tv provider chain, with paced requests.
+
+### Repair artist images for existing library entries (PR #167)
+- Admin-only Settings > Artwork control for at most 100 candidate artists per round, with local/online/skipped/failed counts.
+- Search for artist-named image files and accept folder images only in a directory matching the artist name, avoiding accidental use of album covers as artist portraits.
+- Validate physical music-root containment; normalize local portraits to actual JPEG; fall back to existing Fanart.tv and Deezer providers.
+- Preserve good, manually selected and externally stored images; refresh artist-image cache after successful conditional database writes.
+
+### Compatibility, limitations, backups and security
+- No v1.16.0 database schema migration, authentication change, audio engine replacement or change to working modern Symfonium and Feishin connections. Existing user data and media remain intact.
+- Repairs require a manual admin action; a source may have no artwork and not every missing picture can be recovered. Progress and resume cursors are in-memory and reset when the API process restarts.
+- Back up the complete persistent data volume before upgrading and verify an independent restore. Earlier releases such as v1.14.0 may include database migrations.
+- **Release gate:** Candidate only. Require exact-commit CI, real AIO install/upgrade checks and AMD64/ARM64 native preflight; review residual image vulnerabilities and explicitly approve stable publication. Passing a fixable-security gate does not mean that native images are vulnerability-free.
+
 ## OxygenGS fork v1.15.0 — released 2026-10-30
 
 A focused frontend-only update following v1.14.0: keep navigation responsive, make the selected search source trustworthy and give artist pages a visible section index. No measured production speed percentage is claimed.

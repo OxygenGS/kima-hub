@@ -1,0 +1,110 @@
+{
+  "release": {
+    "version": "1.16.0",
+    "title": "Kima Hub 1.16.0 — Artwork Recovery",
+    "summary": "Find more local covers and repair missing album and artist artwork from Settings without rescanning your music library.",
+    "date": "2026-10-30",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1160.folder",
+        "title": "More album artwork from your music folders",
+        "summary": "Recognize embedded and nearby cover, folder, front and album pictures when scanning tracks.",
+        "body": "When album artwork is missing from an audio file, Kima now checks nearby image files named cover, folder, front or album (JPG, JPEG, PNG or WebP) before using external artwork providers. Embedded pictures remain preferred; recovered folder pictures are decoded and stored as real JPEG files in the artwork cache.\n\nThis is a safe fallback when a track is processed. Previously indexed unchanged tracks are still skipped by the normal scanner; use the separate repair control for existing missing images.",
+        "links": [
+          {
+            "label": "Browse albums",
+            "href": "/collection?tab=albums"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1160.album",
+        "title": "Repair covers on already-indexed albums",
+        "summary": "Use Settings to repair missing covers in bounded rounds without a full music scan.",
+        "body": "Admins can open Settings > Artwork and start an album-cover repair. The operation checks at most 200 albums per round and can continue with another round when more remain. It checks missing or empty covers and existing native cover references whose cached files may be missing, then tries embedded images and local album artwork before asking the existing external providers (Deezer, Cover Art Archive and Fanart.tv).\n\nValid cached images, existing external cover URLs and user-selected artwork are preserved. The music files, track metadata and playlists are not rewritten. Progress reports recovered local and online covers, skipped albums and failures. Not every album is guaranteed a cover; sources may have none.",
+        "links": [
+          {
+            "label": "Open artwork settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1160.artist",
+        "title": "Recover missing artist portraits",
+        "summary": "Restore local artist photos or ask trusted artwork providers, while preserving manual choices.",
+        "body": "A separate admin control in Settings > Artwork repairs up to 100 existing artists per round. Kima looks for artist.jpg, artist.jpeg, artist.png and artist.webp near their music, or a folder picture only in a directory matching the artist's name. This prevents an album's folder.jpg from being mistaken for an artist portrait.\n\nIf no local portrait is found, Kima uses its existing Fanart.tv and Deezer lookup. Good current images, manually selected artist photos and existing external URLs are not replaced. Results and progress are shown in Settings; additional batches are available when more artists remain.",
+        "links": [
+          {
+            "label": "Browse artists",
+            "href": "/collection?tab=artists"
+          },
+          {
+            "label": "Open artwork settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1160.safety",
+        "title": "Artwork recovery without a database migration",
+        "summary": "Keep playback and connected clients unchanged; review backups and native-image security findings.",
+        "body": "The artwork recovery paths verify music-root containment and reject unsafe local image candidates; nearby pictures have size limits and are normalized before being placed in local caches. Both repair controls are admin-only, bounded and use conditional database writes so an image chosen during a repair is not overwritten. Progress and batch position are held in the API process and reset when it restarts; it is safe to start a new manual pass.\n\nThere is no new database schema migration, audio-engine change, authentication change or change to modern Symfonium and Feishin connections. Back up the complete persistent data volume before upgrading and verify restore separately. If upgrading from a version before v1.14.0, consult the earlier database migration notes. Existing native-image security advisories require review; passing tests does not mean that images have zero vulnerabilities.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.16.0 — Artwork Recovery": "Kima Hub 1.16.0 — Herstel van afbeeldingen"
+    },
+    "summaries": {
+      "Find more local covers and repair missing album and artist artwork from Settings without rescanning your music library.": "Vind meer lokale hoezen en herstel ontbrekende album- en artiestenafbeeldingen via Instellingen, zonder de hele muziekbibliotheek opnieuw te scannen."
+    },
+    "items": {
+      "fork.1160.folder": {
+        "title": "Meer albumhoezen uit je muziekmappen",
+        "summary": "Herken ingebedde hoezen en afbeeldingen met de naam cover, folder, front of album.",
+        "body": "Wanneer een audiobestand geen ingebedde hoes heeft, zoekt Kima voortaan in dezelfde map naar afbeeldingen met de naam cover, folder, front of album (JPG, JPEG, PNG of WebP). Pas daarna worden externe aanbieders geraadpleegd. Ingebedde hoezen krijgen voorrang; gevonden mapafbeeldingen worden gecontroleerd en als echte JPEG in de afbeeldingscache opgeslagen.\n\nDit werkt wanneer een nummer wordt verwerkt. De normale scanner slaat ongewijzigde, eerder geïndexeerde nummers nog steeds over. Gebruik daarvoor de aparte herstelknop.",
+        "links": {
+          "/collection?tab=albums": "Bekijk albums"
+        }
+      },
+      "fork.1160.album": {
+        "title": "Ontbrekende hoezen van bestaande albums herstellen",
+        "summary": "Herstel albumhoezen in begrensde rondes vanuit Instellingen, zonder volledige muziekscan.",
+        "body": "Beheerders kunnen bij Instellingen > Artwork het herstellen van albumhoezen starten. Per ronde worden maximaal 200 albums gecontroleerd. Als er meer albums zijn, kun je daarna verdergaan. De herstelactie kijkt naar ontbrekende of lege hoezen en naar lokale cacheverwijzingen waarvan het bestand verdwenen kan zijn. Eerst worden ingebedde afbeeldingen en lokale hoezen geprobeerd, vervolgens de bestaande externe bronnen Deezer, Cover Art Archive en Fanart.tv.\n\nGeldige lokale hoezen, bestaande externe afbeeldingsadressen en zelfgekozen afbeeldingen blijven behouden. Muziekbestanden, nummertags en afspeellijsten veranderen niet. De voortgang toont lokale en online vondsten, overgeslagen albums en fouten. Niet ieder album heeft bij de aanbieders een afbeelding.",
+        "links": {
+          "/settings": "Open afbeeldingsinstellingen"
+        }
+      },
+      "fork.1160.artist": {
+        "title": "Ontbrekende artiestenfoto's terugvinden",
+        "summary": "Herstel lokale artiestenfoto's of gebruik bestaande afbeeldingsbronnen zonder eigen keuzes te vervangen.",
+        "body": "Een tweede herstelknop in Instellingen > Artwork behandelt maximaal 100 bestaande artiesten per ronde. Kima zoekt naar artist.jpg, artist.jpeg, artist.png of artist.webp bij hun muziek. Een bestand met de naam folder wordt alleen als artiestenfoto gebruikt wanneer de mapnaam bij de artiest past. Een gewone albumhoes wordt dus niet zomaar een artiestenportret.\n\nAls er lokaal niets gevonden wordt, gebruikt Kima de bestaande Fanart.tv- en Deezer-bronnen. Goede huidige afbeeldingen, handmatig gekozen foto's en bestaande externe adressen worden niet vervangen. Voortgang en resultaten staan in Instellingen; zo nodig kun je meer rondes starten.",
+        "links": {
+          "/collection?tab=artists": "Bekijk artiesten",
+          "/settings": "Open afbeeldingsinstellingen"
+        }
+      },
+      "fork.1160.safety": {
+        "title": "Afbeeldingen herstellen zonder databasemigratie",
+        "summary": "Afspeelfuncties en muziekapps blijven hetzelfde; controleer de back-up en beveiligingsmeldingen.",
+        "body": "De herstelcode controleert of muziekbestanden binnen de ingestelde muziekbibliotheek staan en weigert onveilige lokale afbeeldingkandidaten. Er gelden limieten voor de bestandsgrootte en afbeeldingen worden gecontroleerd voordat ze in de cache komen. Beide herstelacties zijn alleen voor beheerders toegankelijk, zijn begrensd en vervangen geen afbeelding die ondertussen handmatig werd aangepast. De voortgang en de batchpositie staan in het API-proces en beginnen opnieuw als dat proces herstart. Daarna kun je veilig een nieuwe herstelronde starten.\n\nEr is geen nieuwe databasemigratie en er verandert niets aan de audiomotor, authenticatie of moderne verbindingen met Symfonium en Feishin. Maak voor het bijwerken een volledige back-up van het blijvende gegevensvolume en test het terugzetten afzonderlijk. Kom je van een versie ouder dan v1.14.0, controleer dan ook de eerdere databasemigratie. Bestaande beveiligingsmeldingen over Docker-images vragen nog steeds beoordeling; geslaagde tests betekenen niet dat een image geen kwetsbaarheden bevat.",
+        "links": {
+          "/settings": "Open instellingen"
+        }
+      }
+    }
+  },
+  "changelog": "Kima Hub v1.16.0 adds bounded artwork recovery for already-indexed libraries after v1.15.0. The release improves missing image coverage without deleting music, replacing manually selected artwork or requiring a full library rescan.\n\n### Local album artwork (PR #165)\n- Preserve the existing cached/embedded priority, then look for cover, folder, front or album image files beside music tracks, including case-insensitive JPEG, PNG and WebP filenames.\n- Decode and normalize recovered folder images into real JPEG cache entries. Reject invalid sizes, unreadable media and symlink candidates.\n- Continue to the existing ordered external artwork sources when local artwork cannot be recovered.\n\n### Repair album covers for existing library entries (PR #166)\n- Admin-only Settings > Artwork control for at most 200 candidate albums per round, with observable progress and a continuation option.\n- Repair null/empty album artwork and stale native cache references without rescanning unchanged music or rewriting track tags.\n- Preserve existing good images, external URLs and user overrides; use conditional database updates to protect concurrent changes.\n- Prefer embedded/local cover files, then the existing Deezer, Cover Art Archive and Fanart.tv provider chain, with paced requests.\n\n### Repair artist images for existing library entries (PR #167)\n- Admin-only Settings > Artwork control for at most 100 candidate artists per round, with local/online/skipped/failed counts.\n- Search for artist-named image files and accept folder images only in a directory matching the artist name, avoiding accidental use of album covers as artist portraits.\n- Validate physical music-root containment; normalize local portraits to actual JPEG; fall back to existing Fanart.tv and Deezer providers.\n- Preserve good, manually selected and externally stored images; refresh artist-image cache after successful conditional database writes.\n\n### Compatibility, limitations, backups and security\n- No v1.16.0 database schema migration, authentication change, audio engine replacement or change to working modern Symfonium and Feishin connections. Existing user data and media remain intact.\n- Repairs require a manual admin action; a source may have no artwork and not every missing picture can be recovered. Progress and resume cursors are in-memory and reset when the API process restarts.\n- Back up the complete persistent data volume before upgrading and verify an independent restore. Earlier releases such as v1.14.0 may include database migrations.\n- **Release gate:** Candidate only. Require exact-commit CI, real AIO install/upgrade checks and AMD64/ARM64 native preflight; review residual image vulnerabilities and explicitly approve stable publication. Passing a fixable-security gate does not mean that native images are vulnerability-free."
+}

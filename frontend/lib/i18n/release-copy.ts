@@ -49,6 +49,50 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.16.0
+    "1.16.0": {
+        "titles": {
+            "Kima Hub 1.16.0 \u2014 Artwork Recovery": "Kima Hub 1.16.0 \u2014 Herstel van afbeeldingen"
+        },
+        "summaries": {
+            "Find more local covers and repair missing album and artist artwork from Settings without rescanning your music library.": "Vind meer lokale hoezen en herstel ontbrekende album- en artiestenafbeeldingen via Instellingen, zonder de hele muziekbibliotheek opnieuw te scannen."
+        },
+        "items": {
+            "fork.1160.folder": {
+                "title": "Meer albumhoezen uit je muziekmappen",
+                "summary": "Herken ingebedde hoezen en afbeeldingen met de naam cover, folder, front of album.",
+                "body": "Wanneer een audiobestand geen ingebedde hoes heeft, zoekt Kima voortaan in dezelfde map naar afbeeldingen met de naam cover, folder, front of album (JPG, JPEG, PNG of WebP). Pas daarna worden externe aanbieders geraadpleegd. Ingebedde hoezen krijgen voorrang; gevonden mapafbeeldingen worden gecontroleerd en als echte JPEG in de afbeeldingscache opgeslagen.\n\nDit werkt wanneer een nummer wordt verwerkt. De normale scanner slaat ongewijzigde, eerder ge\u00efndexeerde nummers nog steeds over. Gebruik daarvoor de aparte herstelknop.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            },
+            "fork.1160.album": {
+                "title": "Ontbrekende hoezen van bestaande albums herstellen",
+                "summary": "Herstel albumhoezen in begrensde rondes vanuit Instellingen, zonder volledige muziekscan.",
+                "body": "Beheerders kunnen bij Instellingen > Artwork het herstellen van albumhoezen starten. Per ronde worden maximaal 200 albums gecontroleerd. Als er meer albums zijn, kun je daarna verdergaan. De herstelactie kijkt naar ontbrekende of lege hoezen en naar lokale cacheverwijzingen waarvan het bestand verdwenen kan zijn. Eerst worden ingebedde afbeeldingen en lokale hoezen geprobeerd, vervolgens de bestaande externe bronnen Deezer, Cover Art Archive en Fanart.tv.\n\nGeldige lokale hoezen, bestaande externe afbeeldingsadressen en zelfgekozen afbeeldingen blijven behouden. Muziekbestanden, nummertags en afspeellijsten veranderen niet. De voortgang toont lokale en online vondsten, overgeslagen albums en fouten. Niet ieder album heeft bij de aanbieders een afbeelding.",
+                "links": {
+                    "/settings": "Open afbeeldingsinstellingen"
+                }
+            },
+            "fork.1160.artist": {
+                "title": "Ontbrekende artiestenfoto's terugvinden",
+                "summary": "Herstel lokale artiestenfoto's of gebruik bestaande afbeeldingsbronnen zonder eigen keuzes te vervangen.",
+                "body": "Een tweede herstelknop in Instellingen > Artwork behandelt maximaal 100 bestaande artiesten per ronde. Kima zoekt naar artist.jpg, artist.jpeg, artist.png of artist.webp bij hun muziek. Een bestand met de naam folder wordt alleen als artiestenfoto gebruikt wanneer de mapnaam bij de artiest past. Een gewone albumhoes wordt dus niet zomaar een artiestenportret.\n\nAls er lokaal niets gevonden wordt, gebruikt Kima de bestaande Fanart.tv- en Deezer-bronnen. Goede huidige afbeeldingen, handmatig gekozen foto's en bestaande externe adressen worden niet vervangen. Voortgang en resultaten staan in Instellingen; zo nodig kun je meer rondes starten.",
+                "links": {
+                    "/collection?tab=artists": "Bekijk artiesten",
+                    "/settings": "Open afbeeldingsinstellingen"
+                }
+            },
+            "fork.1160.safety": {
+                "title": "Afbeeldingen herstellen zonder databasemigratie",
+                "summary": "Afspeelfuncties en muziekapps blijven hetzelfde; controleer de back-up en beveiligingsmeldingen.",
+                "body": "De herstelcode controleert of muziekbestanden binnen de ingestelde muziekbibliotheek staan en weigert onveilige lokale afbeeldingkandidaten. Er gelden limieten voor de bestandsgrootte en afbeeldingen worden gecontroleerd voordat ze in de cache komen. Beide herstelacties zijn alleen voor beheerders toegankelijk, zijn begrensd en vervangen geen afbeelding die ondertussen handmatig werd aangepast. De voortgang en de batchpositie staan in het API-proces en beginnen opnieuw als dat proces herstart. Daarna kun je veilig een nieuwe herstelronde starten.\n\nEr is geen nieuwe databasemigratie en er verandert niets aan de audiomotor, authenticatie of moderne verbindingen met Symfonium en Feishin. Maak voor het bijwerken een volledige back-up van het blijvende gegevensvolume en test het terugzetten afzonderlijk. Kom je van een versie ouder dan v1.14.0, controleer dan ook de eerdere databasemigratie. Bestaande beveiligingsmeldingen over Docker-images vragen nog steeds beoordeling; geslaagde tests betekenen niet dat een image geen kwetsbaarheden bevat.",
+                "links": {
+                    "/settings": "Open instellingen"
+                }
+            }
+        }
+    },
     // release-candidate:1.15.0
     "1.15.0": {
         "titles": {
