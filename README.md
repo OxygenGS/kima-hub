@@ -1,75 +1,75 @@
 <div align="center">
 
-<img src="assets/readme-header.svg" width="100%" alt="Kima Hub — Oxygen's Fork. Your music. Your space." />
+<img src="assets/readme-header.svg" width="100%" alt="Kima Hub — Your music. Your space." />
 
-# Kima Hub — Oxygen's Fork
+# Kima Hub
 
-**A self-hosted music server for your library, your listening habits and your devices.**
+### Your music. Your server. Your way to listen.
 
-Browse and stream your own music, discover new connections between tracks and manage your collection from one place. Your music, accounts and application data stay on your server.
+A modern, self-hosted music experience for the collection you own. Stream your library, discover new favorites, and stay in control of your data.
 
 [![Stable release](https://img.shields.io/github/v/release/OxygenGS/kima-hub?label=stable&style=flat-square&color=ffb000)](https://github.com/OxygenGS/kima-hub/releases/latest)
-[![Docker image](https://img.shields.io/badge/Docker-GHCR-2779bd?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
-[![Languages](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
-[![License](https://img.shields.io/badge/License-GPL--3.0-555555?style=flat-square)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-GHCR-2779bd?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
+[![English and Dutch](https://img.shields.io/badge/UI-English%20%2F%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-[**What's new**](#latest-release-v1160) · [**Features**](#what-kima-offers) · [**Artwork recovery**](#recover-missing-artwork) · [**Install**](#quick-start) · [**Native clients**](#symfonium-feishin-and-opensubsonic) · [**Docs**](#documentation)
+**[Features](#everything-in-one-place) · [Artwork Recovery](#artwork-recovery) · [Install](#get-started) · [Native apps](#symfonium--feishin) · [Documentation](#documentation)**
 
 </div>
 
-## Latest release: v1.16.0
+---
 
-**[Kima Hub v1.16.0 — Artwork Recovery](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0)** is published for **linux/amd64** and **linux/arm64**.
+## Latest stable release: v1.16.0
 
-This update improves missing album covers and artist pictures, including music that was indexed before the new artwork detection was added.
+**Artwork Recovery** is available now. The current stable release adds local album-cover discovery and dedicated tools to repair missing covers and artist photos in libraries that have already been indexed.
 
-| Better album covers | Repair existing albums | Repair artist photos |
+[See what's new in v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) · [View the changelog](CHANGELOG.md)
+
+## Everything in one place
+
+| **Listen** | **Discover** | **Make it yours** |
 | :--- | :--- | :--- |
-| When processing music, Kima checks embedded artwork and nearby `cover`, `folder`, `front` or `album` images in JPG, JPEG, PNG and WebP formats. | Admins can repair up to **200 albums per round** from **Settings → Artwork**, without a full library rescan. | Admins can repair up to **100 artists per round**, using local `artist.*` pictures and the existing external providers. |
+| Browse your own artists, albums and tracks. Create playlists, organize your queue and enjoy responsive playback on desktop or mobile. | Explore Mood Mixer, Vibe Map, personalized recommendations, artist radio and listening statistics, powered by your own library. | Control user permissions, choose English or Dutch, adjust your instance branding and manage your media on your own server. |
+| Lyrics, shuffle, repeat, seeking and a sleep timer support everyday listening. | Fast local-first artist pages, improved library search and clear loading states make browsing more natural. | Install the web app as a PWA where supported, or use compatible native music players through OpenSubsonic. |
 
-**Designed to preserve your library:** valid artwork, user-selected images, existing external image URLs, music files, playlists and track metadata are not replaced by these repair actions. Where local artwork is unavailable, Kima uses its existing providers (including Deezer, Cover Art Archive and Fanart.tv, as applicable).
+Podcasts and optional Audiobookshelf, Lidarr and other integrations remain available when configured. Discovery features depend on library analysis and configured services.
 
-**Compatibility:** v1.16.0 adds no database schema migration, playback-engine replacement or authentication change. Older versions may have their own migrations; always back up persistent data before upgrading.
+## Artwork Recovery
 
-[Full v1.16.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) · [Release history](CHANGELOG.md)
+<details open>
+<summary><strong>Find more covers. Repair missing images. Keep your existing artwork.</strong></summary>
 
-## What Kima offers
+Kima looks for embedded album artwork first, then nearby image files named `cover`, `folder`, `front` or `album` (JPG, JPEG, PNG and WebP), followed by its existing external artwork providers.
 
-| Music and listening | Discovery and browsing | Your server, your settings |
-| :--- | :--- | :--- |
-| Your own artists, albums and tracks; playlists, queue management, lyrics and responsive playback. | Mood Mixer, Vibe Map, personalized discovery, artist radio, listening statistics and search across your library. | Self-hosted accounts, user permissions, instance branding, English/Dutch UI and persistent local data. |
-| Desktop and mobile web experience, with installable PWA support where available. | Local-first artist pages, consistent loading states, Unicode-aware search and more useful results across Library, Discover and P2P. | Admin-managed API keys, artwork controls, library management and documented Docker upgrades. |
+For albums and artists already in your library, administrators can use **Settings → Artwork**:
 
-Podcasts, Audiobookshelf integration and additional services are available where configured. Recommendations and vibe features depend on your music, background analysis and enabled integrations.
+| **Missing album covers** | **Missing artist photos** |
+| :--- | :--- |
+| Recover artwork for up to **200 albums per round**. Checks embedded and local files, then existing external sources. | Recover portraits for up to **100 artists per round**. Looks for local `artist.*` images and uses existing external sources if needed. |
+| No full library rescan is required. | Album `folder.jpg` files are not mistaken for artist portraits. |
 
-### Improvements maintained by this fork
+Both tools show progress, results and a continuation option. They **preserve manual image choices, good existing artwork and your music files**. Online providers may not have images for every item. An interrupted session can be started again; in-memory batch progress resets when the API restarts.
 
-- **Artwork recovery:** local album covers, missing-covers repair, local artist portraits and provider fallback, without forcing a complete library rescan.
-- **Modern music clients:** improved authentication and synchronization for existing Symfonium and Feishin support, without needing Legacy Authentication or Symfonium Compatibility Mode with newly generated keys.
-- **Faster-feeling browsing:** local-first artist information, fewer unnecessary repeated requests, bounded artwork processing and layout-stable loading states. No unmeasured speedup percentage is claimed.
-- **Better search:** source-aware result tabs, more reliable exact matches, support for accented characters and a typo-tolerant fallback for local music.
-- **Administration:** backend-enforced user permissions, configurable application name/logo/colors and English/Dutch language settings.
-- **Safer releases:** CI, independent restore checks, native AMD64/ARM64 image builds, secret scanning and explicit review of residual vulnerabilities before stable publication.
+</details>
 
-This fork retains the original Kima Hub foundations and upstream features. Its version numbers refer to **OxygenGS releases**, not upstream version numbers.
+## Built on the original Kima, refined by this fork
 
-## Recover missing artwork
+- **Modern interface:** refreshed Home, artist and album pages, player, queue and navigation.
+- **Faster browsing:** lightweight local artist loading, cached data, fewer unnecessary requests and bounded image processing.
+- **Smarter local search:** exact-match priority, accent-aware queries and typo-tolerant fallback, alongside source-aware Library, Discover and P2P results.
+- **Better native-client connections:** modern authentication and synchronization with Symfonium and Feishin, without requiring their older compatibility settings when using newly generated keys.
+- **Administration that stays yours:** backend-enforced account permissions, instance-level branding and language settings.
+- **Release safeguards:** automated tests, upgrade/restore checks, AMD64/ARM64 builds, vulnerability scans and separate stable-release approval.
 
-Sign in as an **administrator** and open **Settings → Artwork**.
+The fork retains the upstream music server, playback functionality and existing integrations. These improvements build on that foundation rather than replacing it.
 
-1. Use **Repair missing album covers** to check albums that have no cover or a missing local cache file. The job processes up to **200 albums per round**.
-2. Use **Repair missing artist photos** to find images named `artist.jpg`, `artist.jpeg`, `artist.png` or `artist.webp`. A `folder.*` image is only considered when its directory matches the artist name. The job processes up to **100 artists per round**.
-3. Follow the progress and recovered/skipped/failed counts. If more items remain, use the continuation button for the next round.
-
-Both operations are **manual and admin-only**. They preserve hand-picked artwork and valid existing images. Remote providers do not have artwork for every artist or album, so complete coverage is not guaranteed. Progress and batch position are held in the running API process; after a restart, begin a new pass.
-
-## Quick start
+## Get started
 
 **Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`  
-**Platforms:** `linux/amd64`, `linux/arm64`  
-**Web interface / API:** port `3030`
+**Platforms:** `linux/amd64` and `linux/arm64`  
+**Web and client API:** port `3030`
 
-You need Docker, a music directory and persistent storage for Kima's data. The all-in-one image includes the web app, backend, database, Redis and bundled analysis services.
+A single Docker container includes the web app, API, database, Redis and bundled analysis services.
 
 ```bash
 docker run -d \
@@ -81,67 +81,59 @@ docker run -d \
   ghcr.io/oxygengs/kima-hub:v1.16.0
 ```
 
-Replace the example music path with your own, then open `http://localhost:3030` on the Docker host and create the first administrator account. For access from another device, use the server's appropriate hostname or address.
+Replace `/absolute/path/to/music` with your music directory, then open `http://localhost:3030` on your Docker host and complete first-run setup.
 
-| Mount / port | What it is for |
+| What to keep | Purpose |
 | :--- | :--- |
-| `/music` | Your music library; keep the host path consistent when updating. |
-| `/data` | Database, accounts, configuration, secrets and caches. **Persist and back up the full volume.** |
-| `3030` | Web application and client API. Restrict exposure and use HTTPS when accessed remotely. |
+| `/music` | Your own music files. Keep the correct host path mounted. |
+| `/data` | Database, accounts, configuration, secrets and artwork cache. **Keep and back up the complete volume.** |
+| Port `3030` | Web UI and client API; restrict access and use HTTPS for remote connections. |
 
-### Docker Compose / Dockge
+**Docker Compose / Dockge**
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml) or the [installation guide](docs/install.md), and **explicitly select the published image version**:
+Use the [production Compose example](docker-compose.prod.yml) with an explicit version:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
-The Compose files intentionally retain a conservative fallback tag; omitting `VERSION` does **not** mean v1.16.0. The `:latest` image alias is **not automatically promoted** by the release publisher. Pin an explicit version or digest.
+The example Compose files retain a conservative fallback image and do not automatically follow the newest release. The `:latest` tag is **not** automatically promoted. Pin a published version or immutable digest.
 
-### Updating an existing installation
+**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations even though v1.16.0 introduces no new schema migration. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
 
-Back up the **entire persistent `/data` volume** and your deployment configuration, and verify an independent restore **before** changing the image. Preserve the original volume, music mounts, secrets and Compose project identity. Never use `docker compose down -v` for an upgrade.
+[Full installation guide](docs/install.md) · [Safe upgrades](docs/safe-aio-updates.md)
 
-If upgrading from **before v1.14.0**, an earlier migration creates PostgreSQL `pg_trgm` support and search indexes; allow extra time and disk space. **v1.16.0 adds no new schema migration**, but returning to an older image after any earlier migration may require restoring the original pre-upgrade data snapshot.
+## Symfonium & Feishin
 
-Use the [safe AIO upgrade and rollback guide](docs/safe-aio-updates.md). Publishing a release does not update running containers automatically.
+Both clients were supported by the original Kima Hub. The OxygenGS fork improves authentication and synchronization.
 
-## Symfonium, Feishin and OpenSubsonic
+1. Create a **new, separate API key** for each client under **Settings → Native Apps**.
+2. Connect to your Kima server. Supply your account username when required and use the new API key as the password.
+3. Keep **Legacy Authentication disabled**; Symfonium can also use **Compatibility Mode disabled**.
 
-Symfonium and Feishin support existed in upstream Kima Hub; this fork improves how those integrations authenticate and synchronize.
+Older API keys may need replacement for modern salted-token authentication. Keep keys private and see [OpenSubsonic setup](docs/subsonic.md) for supported options and troubleshooting.
 
-1. In **Settings → Native Apps**, generate a separate **new API key** for each client.
-2. Use your Kima server address and the account's username if the client requests one. Enter the newly generated API key as the password where applicable.
-3. Leave **Legacy Authentication disabled**; in Symfonium, leave **Compatibility Mode disabled** too.
+## Privacy, security and compatibility
 
-Keys issued before the improved authentication implementation must be replaced for salted-token authentication to work without Legacy Authentication. See [OpenSubsonic setup, key handling and troubleshooting](docs/subsonic.md). Treat each key as a password.
+Your library and account data stay on your own server. Restrict remote access, protect credentials and maintain independent backups.
 
-## Security and privacy
+v1.16.0 completed native multi-architecture builds and release security checks. **Residual HIGH and CRITICAL dependency advisories remain.** Successful CI is not a guarantee of zero vulnerabilities; consult the [current security report](docs/image-security.md) before exposing a service.
 
-The v1.16.0 native preflight and release publisher completed successfully, but **the images are not vulnerability-free**. The October 30, 2026 preflight reported remaining HIGH and CRITICAL package advisories on both architectures, without a scanner-listed fixed version for those findings. These require risk assessment; a passing CI gate does not demonstrate that the vulnerabilities are harmless.
-
-[Current image security findings](docs/image-security.md) · [v1.16.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144) · [v1.16.0 publisher](https://github.com/OxygenGS/kima-hub/actions/runs/41072280580)
-
-Keep credentials private, limit network access, use HTTPS for remote access and maintain recoverable backups. Never include real installation hostnames, addresses, credentials, private paths or installation screenshots in public issues or contributions.
-
-[Privacy policy](PRIVACY.md) · [Security / responsible disclosure](SECURITY.md)
+[Security policy](SECURITY.md) · [Privacy policy](PRIVACY.md) · [Release validation](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144)
 
 ## Documentation
 
-| Getting started | Running your server | Listening and integrations |
+| Start here | Manage | Explore |
 | :--- | :--- | :--- |
-| [Install](docs/install.md) | [Safe updates and rollback](docs/safe-aio-updates.md) | [Using Kima](docs/using-kima.md) |
-| [Configuration](docs/configuration.md) | [Administration](docs/administration.md) | [OpenSubsonic / native apps](docs/subsonic.md) |
-| [Version history](CHANGELOG.md) | [User permissions](docs/user-permissions.md) | [Integrations](docs/integrations.md) |
-| [Security guidance](docs/image-security.md) | [Custom branding](docs/instance-branding.md) | [Languages](docs/internationalization.md) |
+| [Installation](docs/install.md) | [Administration](docs/administration.md) | [Using Kima](docs/using-kima.md) |
+| [Safe updates](docs/safe-aio-updates.md) | [User permissions](docs/user-permissions.md) | [Native clients](docs/subsonic.md) |
+| [Configuration](docs/configuration.md) | [Instance branding](docs/instance-branding.md) | [Integrations](docs/integrations.md) |
+| [Latest releases](https://github.com/OxygenGS/kima-hub/releases) | [Image security](docs/image-security.md) | [Language settings](docs/internationalization.md) |
 
-Historical UI captures and their synthetic-data provenance remain available in the [screenshot archive](assets/screenshots/v1.13/README.md); they are **not presented as v1.16.0 screenshots**.
+[Open an issue](https://github.com/OxygenGS/kima-hub/issues) · [Contribution guidelines](CONTRIBUTING.md) · [Upstream compatibility](docs/upstream-compatibility.md)
 
-[Report an issue](https://github.com/OxygenGS/kima-hub/issues) · [Contribute](CONTRIBUTING.md) · [Upstream compatibility](docs/upstream-compatibility.md)
+## Credits and license
 
-## Upstream and license
+This independently maintained fork is based on **[Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub)**. Credit for the original application and existing integrations belongs to upstream developers and contributors. This repository is not an official upstream release.
 
-**Kima Hub — Oxygen's Fork** is independently maintained by [OxygenGS](https://github.com/OxygenGS/kima-hub), based on the original [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub). Upstream developers and contributors retain credit for the original application and its features. This is **not an official upstream release**.
-
-Kima Hub remains licensed under [GNU GPL v3.0](LICENSE). Third-party dependencies and machine-learning models retain their respective licenses and notices, including the [model notice](services/audio-analyzer/models/LICENSE-upf-models).
+Licensed under [GNU GPL v3.0](LICENSE). Third-party dependencies and machine-learning models retain their individual license terms, including the [model notice](services/audio-analyzer/models/LICENSE-upf-models).
