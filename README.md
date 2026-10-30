@@ -100,7 +100,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-comp
 
 The example Compose files retain a conservative fallback image and do not automatically follow the newest release. The `:latest` tag is **not** automatically promoted. Pin a published version or immutable digest.
 
-**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations even though v1.16.0 introduces no new schema migration. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
+**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations. The v1.16.1 hotfix adds no new schema migration. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
 
 [Full installation guide](docs/install.md) · [Safe upgrades](docs/safe-aio-updates.md)
 
