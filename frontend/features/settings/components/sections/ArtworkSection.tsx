@@ -1,6 +1,6 @@
 "use client";
 import { useLanguage } from "@/lib/i18n/language-context";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
@@ -22,20 +22,20 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
     const [recovery, setRecovery] = useState<Awaited<ReturnType<typeof api.getMissingArtistArtwork>> | null>(null);
     const [recoveryError, setRecoveryError] = useState<string | null>(null);
     const [isStarting, setIsStarting] = useState(false);
+    const wasRunning = useRef(false);
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
 
     const refreshRecovery = useCallback(async () => {
         try {
             const response = await api.getMissingArtistArtwork();
-            setRecovery((previous) => {
-                // A completed job can change list images that TanStack Query
-                // still considers fresh for several minutes.
-                if (previous?.progress.inProgress && !response.progress.inProgress) {
-                    void queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
-                    void queryClient.invalidateQueries({ queryKey: ["artist"] });
-                }
-                return response;
-            });
+            // A completed job can change images still considered fresh in
+            // TanStack Query. Invalidate outside React's state updater.
+            if (wasRunning.current && !response.progress.inProgress) {
+                void queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
+                void queryClient.invalidateQueries({ queryKey: ["artist"] });
+            }
+            wasRunning.current = response.progress.inProgress;
+            setRecovery(response);
             setRecoveryError(null);
         } catch {
             setRecoveryError("Couldn't load missing artwork");
@@ -58,6 +58,7 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
         setRecoveryError(null);
         try {
             const response = await api.retryMissingArtistArtwork();
+            wasRunning.current = response.progress.inProgress;
             setRecovery((previous) => previous
                 ? { ...previous, progress: response.progress }
                 : null);
