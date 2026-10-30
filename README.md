@@ -13,11 +13,11 @@ Browse and stream your own music, discover new connections between tracks and ma
 [![Languages](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/License-GPL--3.0-555555?style=flat-square)](LICENSE)
 
-[**What's new**](#latest-release--v1160) · [**Features**](#what-kima-offers) · [**Artwork recovery**](#recover-missing-artwork) · [**Install**](#quick-start) · [**Native clients**](#symfonium-feishin-and-opensubsonic) · [**Docs**](#documentation)
+[**What's new**](#latest-release-v1160) · [**Features**](#what-kima-offers) · [**Artwork recovery**](#recover-missing-artwork) · [**Install**](#quick-start) · [**Native clients**](#symfonium-feishin-and-opensubsonic) · [**Docs**](#documentation)
 
 </div>
 
-## Latest release — v1.16.0
+## Latest release: v1.16.0
 
 **[Kima Hub v1.16.0 — Artwork Recovery](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0)** is published for **linux/amd64** and **linux/arm64**.
 
