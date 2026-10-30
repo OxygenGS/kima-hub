@@ -6,9 +6,16 @@
 const mockCurrentUser = jest.fn();
 const mockIsAvailable = jest.fn();
 const mockDownloadTrack = jest.fn();
+const mockCreateDownloadJob = jest.fn();
+const mockUpdateDownloadJob = jest.fn();
+const mockSystemSettings = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: {
         user: { findUnique: (...args: unknown[]) => mockCurrentUser(...args) },
+        downloadJob: {
+            create: (...args: unknown[]) => mockCreateDownloadJob(...args),
+            update: (...args: unknown[]) => mockUpdateDownloadJob(...args),
+        },
     },
 }));
 jest.mock("../../utils/logger", () => ({
@@ -24,7 +31,7 @@ jest.mock("../../services/eventBus", () => ({
     eventBus: { emit: jest.fn() },
 }));
 jest.mock("../../utils/systemSettings", () => ({
-    getSystemSettings: jest.fn(),
+    getSystemSettings: (...args: unknown[]) => mockSystemSettings(...args),
 }));
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (req: any, _res: any, next: any) => {
@@ -50,6 +57,9 @@ beforeEach(() => {
     });
     mockIsAvailable.mockReset().mockResolvedValue(true);
     mockDownloadTrack.mockReset();
+    mockCreateDownloadJob.mockReset().mockResolvedValue({ id: "test-download-job" });
+    mockUpdateDownloadJob.mockReset().mockResolvedValue({ id: "test-download-job" });
+    mockSystemSettings.mockReset().mockResolvedValue({ musicPath: "/music" });
 });
 
 describe("POST /soulseek/download — original fork rights retained in v1.11", () => {
@@ -103,4 +113,31 @@ describe("POST /soulseek/download — original fork rights retained in v1.11", (
         expect(mockIsAvailable).not.toHaveBeenCalled();
         expect(mockDownloadTrack).not.toHaveBeenCalled();
     });
+
+    it("sends permitted manual downloads to the isolated backend-writable import directory", async () => {
+        mockCurrentUser.mockResolvedValue({
+            role: "user", canRequestAlbums: false, canDownloadTracks: true,
+        });
+        mockDownloadTrack.mockResolvedValue({ success: false, error: "Synthetic P2P error" });
+
+        const response = await request(app).post("/soulseek/download").send({
+            username: "test-peer",
+            filepath: "Artist\\Album\\01 - Test.flac",
+            artist: "Artist",
+            title: "Test",
+            album: "Album",
+            filename: "01 - Test.flac",
+        });
+
+        expect(response.status).toBe(500);
+        expect(mockDownloadTrack).toHaveBeenCalledTimes(1);
+        expect(mockDownloadTrack.mock.calls[0][1]).toBe(
+            "/music/Singles/Kima Downloads/Artist/Album/01 - Test.flac"
+        );
+        expect(mockUpdateDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: "test-download-job" },
+            data: expect.objectContaining({ status: "failed" }),
+        }));
+    });
+
 });

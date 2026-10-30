@@ -88,6 +88,22 @@ start_aio
 wait_ready
 assert_clap_started
 bash .github/ci/check-aio-service-boundaries.sh "$name"
+echo "---- Verify non-root Soulseek import can write without library-wide privileges ----"
+docker exec "$name" test -d "/music/Singles/Kima Downloads"
+docker exec "$name" gosu kimabackend test -w "/music/Singles/Kima Downloads"
+if docker exec "$name" gosu kimabackend test -w /music; then
+    echo "Backend unexpectedly has write access to the whole music root" >&2
+    exit 1
+fi
+docker exec "$name" gosu kimabackend sh -c '
+    mkdir -p "/music/Singles/Kima Downloads/permission-probe/album"
+    touch "/music/Singles/Kima Downloads/permission-probe/album/probe.tmp"
+    test -f "/music/Singles/Kima Downloads/permission-probe/album/probe.tmp"
+    rm "/music/Singles/Kima Downloads/permission-probe/album/probe.tmp"
+    rmdir "/music/Singles/Kima Downloads/permission-probe/album"
+    rmdir "/music/Singles/Kima Downloads/permission-probe"
+'
+echo "AIO Soulseek import writable, music root read-only to backend: PASS"
 if [ "${AIO_SMOKE_WITH_CLAP:-0}" = "1" ]; then
     docker exec "$name" python3 /app/nonroot-services.py audit
 fi
