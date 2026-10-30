@@ -131,49 +131,7 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
             )}
 
             {isAdmin && (
-                {isAdmin && (
                 <div className="mt-6 pt-6 border-t border-white/5">
-                    <SettingsRow
-                        label={t("Repair missing artist photos")}
-                        description={t("Restore artist images for existing music without rescanning or replacing custom artwork.")}
-                    >
-                        <button
-                            type="button"
-                            onClick={() => { void startArtistRecovery(); }}
-                            disabled={isStartingArtist || artistRecovery?.inProgress === true}
-                            className="rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {isStartingArtist || artistRecovery?.inProgress
-                                ? t("Repairing artist photos...")
-                                : artistRecovery?.hasMore
-                                    ? t("Continue artist photo repair")
-                                    : t("Start artist photo repair")}
-                        </button>
-                    </SettingsRow>
-                    {artistRecovery && (
-                        <div role="status" aria-live="polite" className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
-                            <p>{t("Artists checked")}: {artistRecovery.processed} / {artistRecovery.total}</p>
-                            <p>{t("Local artist photos recovered")}: {artistRecovery.recoveredLocal} · {t("Online artist photos recovered")}: {artistRecovery.recoveredExternal}</p>
-                            <p>{t("Artists skipped")}: {artistRecovery.skipped} · {t("Artist photo failures")}: {artistRecovery.failed}</p>
-                            {artistRecovery.hasMore && !artistRecovery.inProgress && (
-                                <p>{t("More artists remain; continue with the next batch.")}</p>
-                            )}
-                            {artistRecovery.error && (
-                                <p className="text-red-400">{t("Artist photo repair stopped. Check the server logs.")}</p>
-                            )}
-                        </div>
-                    )}
-                    {artistRepairError && (
-                        <p role="alert" className="mt-2 text-xs text-red-400">
-                            {artistRepairError === "load"
-                                ? t("Could not load artist photo repair status")
-                                : t("Could not start artist photo repair")}
-                        </p>
-                    )}
-                </div>
-            )}
-
-            <div className="mt-6 pt-6 border-t border-white/5">
                     <SettingsRow
                         label={t("Repair missing album covers")}
                         description={t("Repair covers for albums already in your library, without rescanning music or replacing existing artwork.")}
@@ -211,6 +169,48 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                     )}
                 </div>
             )}
+
+            {isAdmin && (
+            <div className="mt-6 pt-6 border-t border-white/5">
+                <SettingsRow
+                    label={t("Repair missing artist photos")}
+                    description={t("Restore artist images for existing music without rescanning or replacing custom artwork.")}
+                >
+                    <button
+                        type="button"
+                        onClick={() => { void startArtistRecovery(); }}
+                        disabled={isStartingArtist || artistRecovery?.inProgress === true}
+                        className="rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isStartingArtist || artistRecovery?.inProgress
+                            ? t("Repairing artist photos...")
+                            : artistRecovery?.hasMore
+                                ? t("Continue artist photo repair")
+                                : t("Start artist photo repair")}
+                    </button>
+                </SettingsRow>
+                {artistRecovery && (
+                    <div role="status" aria-live="polite" className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                        <p>{t("Artists checked")}: {artistRecovery.processed} / {artistRecovery.total}</p>
+                        <p>{t("Local artist photos recovered")}: {artistRecovery.recoveredLocal} · {t("Online artist photos recovered")}: {artistRecovery.recoveredExternal}</p>
+                        <p>{t("Artists skipped")}: {artistRecovery.skipped} · {t("Artist photo failures")}: {artistRecovery.failed}</p>
+                        {artistRecovery.hasMore && !artistRecovery.inProgress && (
+                            <p>{t("More artists remain; continue with the next batch.")}</p>
+                        )}
+                        {artistRecovery.error && (
+                            <p className="text-red-400">{t("Artist photo repair stopped. Check the server logs.")}</p>
+                        )}
+                    </div>
+                )}
+                {artistRepairError && (
+                    <p role="alert" className="mt-2 text-xs text-red-400">
+                        {artistRepairError === "load"
+                            ? t("Could not load artist photo repair status")
+                            : t("Could not start artist photo repair")}
+                    </p>
+                )}
+            </div>
+        )}
 
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
