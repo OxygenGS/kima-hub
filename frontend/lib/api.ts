@@ -16,6 +16,8 @@ export interface AlbumCoverRecoveryStatus {
     error: string | null;
 }
 
+export type ArtistImageRecoveryStatus = AlbumCoverRecoveryStatus;
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -664,6 +666,16 @@ class ApiClient {
     async getRecentlyAdded(limit = 10) {
         return this.request<{ artists: ApiData[] }>(
             `/library/recently-added?limit=${limit}`
+        );
+    }
+
+    async getArtistImageRecoveryStatus(): Promise<ArtistImageRecoveryStatus> {
+        return this.get<ArtistImageRecoveryStatus>("/library/artist-image-recovery/status");
+    }
+
+    async startArtistImageRecovery(): Promise<{ started: boolean; status: ArtistImageRecoveryStatus }> {
+        return this.post<{ started: boolean; status: ArtistImageRecoveryStatus }>(
+            "/library/artist-image-recovery/start"
         );
     }
 
