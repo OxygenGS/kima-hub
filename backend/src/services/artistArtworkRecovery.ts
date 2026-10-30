@@ -6,6 +6,7 @@
  * and never resets enrichment state or overwrites a custom image.
  */
 import { config } from "../config";
+import { randomUUID } from "crypto";
 import { prisma } from "../utils/db";
 import { logger } from "../utils/logger";
 import { redisClient } from "../utils/redis";
@@ -96,8 +97,12 @@ async function selectMissingArtists(): Promise<MissingArtist[]> {
 
 async function recoverArtist(artist: MissingArtist): Promise<void> {
     try {
-        // Keep local files authoritative: artist.jpg / artist.png / folder.jpg
-        // near an owned track, before any remote metadata request.
+        // Always write recovered files to a fresh path. A concurrent manual
+        // override may already reference artists/{id}.jpg; even a failed DB
+        // compare-and-set must not mutate that user's image on disk.
+        const recoveryId = `recovery-${artist.id}-${randomUUID()}`;
+        // Explicit artist.* filenames are authoritative; folder.jpg in an
+        // album directory is album cover art, not an artist portrait.
         const track = await prisma.track.findFirst({
             where: {
                 album: { artistId: artist.id, location: LIBRARY_LOCATION },
@@ -106,7 +111,10 @@ async function recoverArtist(artist: MissingArtist): Promise<void> {
         });
 
         const local = track
-            ? await findLocalArtistImage(config.music.musicPath, track.filePath, artist.id)
+            ? await findLocalArtistImage(config.music.musicPath, track.filePath, artist.id, {
+                artistOnly: true,
+                cacheId: recoveryId,
+            })
             : null;
 
         let image = local;
@@ -119,7 +127,7 @@ async function recoverArtist(artist: MissingArtist): Promise<void> {
             if (remote?.url && isTrustedArtistImageUrl(remote.url)) {
                 // Never cache a URL supplied by a caller: it must originate
                 // from the shared, verified provider pipeline.
-                image = (await downloadAndStoreImage(remote.url, artist.id, "artist")) || remote.url;
+                image = (await downloadAndStoreImage(remote.url, recoveryId, "artist")) || remote.url;
             }
         }
 
