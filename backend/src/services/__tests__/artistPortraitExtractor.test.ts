@@ -21,10 +21,11 @@ let covers: string;
 
 async function syntheticImage(base: number): Promise<Buffer> {
     const pixels = Buffer.alloc(120 * 120 * 3);
-    for (let i = 0; i < pixels.length; i += 3) {
-        pixels[i] = (base + i * 11) % 256;
-        pixels[i + 1] = (base + i * 17) % 256;
-        pixels[i + 2] = (base + i * 23) % 256;
+    // Pseudorandom pixels make a PNG safely larger than the 1 KB minimum.
+    let state = base + 1;
+    for (let i = 0; i < pixels.length; i++) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        pixels[i] = (state >>> 16) & 255;
     }
     return sharp(pixels, { raw: { width: 120, height: 120, channels: 3 } }).png().toBuffer();
 }
