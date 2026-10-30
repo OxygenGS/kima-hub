@@ -26,6 +26,11 @@ import {
   reassignArtistMbid,
 } from "../services/mbidReassign";
 import { artistSortName } from "../services/artistIdentity";
+import {
+  getArtistArtworkRecoveryProgress,
+  getMissingArtistArtworkCount,
+  startArtistArtworkRecovery,
+} from "../services/artistArtworkRecovery";
 
 const router = Router();
 
@@ -43,6 +48,29 @@ function respondIfDeleted(res: Response, error: unknown, entity: string): boolea
 
 // Authentication is per-route: a path that matches no route must 404, not 401,
 // so the settings UI sees "no such control", not "log in".
+
+/**
+ * Admin-only, bounded artwork recovery. Status requests never trigger lookups.
+ */
+router.get("/artwork/missing", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const missingArtists = await getMissingArtistArtworkCount();
+    res.json({ missingArtists, progress: getArtistArtworkRecoveryProgress() });
+  } catch (error) {
+    safeError(res, "Get missing artist artwork", error);
+  }
+});
+
+router.post("/artwork/retry-missing", requireAuth, requireAdmin, (_req, res) => {
+  if (!startArtistArtworkRecovery()) {
+    return res.status(409).json({ error: "Artwork recovery is already running" });
+  }
+  return res.status(202).json({
+    message: "Started recovery for up to 20 missing artist images",
+    progress: getArtistArtworkRecoveryProgress(),
+  });
+});
+
 
 /**
  * GET /enrichment/progress
