@@ -65,7 +65,7 @@ Both operations are **manual and admin-only**. They preserve hand-picked artwork
 
 ## Quick start
 
-**Stable image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`  
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`  
 **Platforms:** `linux/amd64`, `linux/arm64`  
 **Web interface / API:** port `3030`
 
