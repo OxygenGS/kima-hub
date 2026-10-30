@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAdmin } from "../../middleware/auth";
 import { logger } from "../../utils/logger";
+import { getArtistImageRecoveryStatus, startArtistImageRecovery } from "../../services/artistImageRecovery";
 import {
   getAlbumCoverRecoveryStatus,
   startAlbumCoverRecovery,
@@ -12,6 +13,16 @@ import {
 } from "../../services/imageBackfill";
 
 const router = Router();
+
+router.get("/artist-image-recovery/status", requireAdmin, (_req, res) => {
+  res.json(getArtistImageRecoveryStatus());
+});
+
+router.post("/artist-image-recovery/start", requireAdmin, (_req, res) => {
+  const started = startArtistImageRecovery();
+  res.status(202).json({ started, status: getArtistImageRecoveryStatus() });
+});
+
 
 router.get("/album-cover-recovery/status", requireAdmin, (_req, res) => {
   res.json(getAlbumCoverRecoveryStatus());

@@ -2,7 +2,7 @@
 import { useLanguage } from "@/lib/i18n/language-context";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { api, type AlbumCoverRecoveryStatus } from "@/lib/api";
+import { api, type AlbumCoverRecoveryStatus, type ArtistImageRecoveryStatus } from "@/lib/api";
 
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, ConnectionTestButton } from "../ui";
 import { ConnectionTestResult, SystemSettings } from "../../types";
@@ -22,6 +22,9 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
     const [recovery, setRecovery] = useState<AlbumCoverRecoveryStatus | null>(null);
     const [isStarting, setIsStarting] = useState(false);
     const [repairError, setRepairError] = useState<"load" | "start" | null>(null);
+    const [artistRecovery, setArtistRecovery] = useState<ArtistImageRecoveryStatus | null>(null);
+    const [isStartingArtist, setIsStartingArtist] = useState(false);
+    const [artistRepairError, setArtistRepairError] = useState<"load" | "start" | null>(null);
 
     const refreshRecovery = useCallback(async () => {
         try {
@@ -54,6 +57,39 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
             setRepairError("start");
         } finally {
             setIsStarting(false);
+        }
+    };
+    const refreshArtistRecovery = useCallback(async () => {
+        try {
+            const state = await api.getArtistImageRecoveryStatus();
+            setArtistRecovery(state);
+            setArtistRepairError(null);
+        } catch {
+            setArtistRepairError("load");
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        void refreshArtistRecovery();
+    }, [isAdmin, refreshArtistRecovery]);
+
+    useEffect(() => {
+        if (!isAdmin || !artistRecovery?.inProgress) return;
+        const timer = window.setInterval(() => { void refreshArtistRecovery(); }, 3000);
+        return () => window.clearInterval(timer);
+    }, [isAdmin, artistRecovery?.inProgress, refreshArtistRecovery]);
+
+    const startArtistRecovery = async () => {
+        setIsStartingArtist(true);
+        setArtistRepairError(null);
+        try {
+            await api.startArtistImageRecovery();
+            await refreshArtistRecovery();
+        } catch {
+            setArtistRepairError("start");
+        } finally {
+            setIsStartingArtist(false);
         }
     };
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
@@ -133,6 +169,48 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                     )}
                 </div>
             )}
+
+            {isAdmin && (
+            <div className="mt-6 pt-6 border-t border-white/5">
+                <SettingsRow
+                    label={t("Repair missing artist photos")}
+                    description={t("Restore artist images for existing music without rescanning or replacing custom artwork.")}
+                >
+                    <button
+                        type="button"
+                        onClick={() => { void startArtistRecovery(); }}
+                        disabled={isStartingArtist || artistRecovery?.inProgress === true}
+                        className="rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {isStartingArtist || artistRecovery?.inProgress
+                            ? t("Repairing artist photos...")
+                            : artistRecovery?.hasMore
+                                ? t("Continue artist photo repair")
+                                : t("Start artist photo repair")}
+                    </button>
+                </SettingsRow>
+                {artistRecovery && (
+                    <div role="status" aria-live="polite" className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                        <p>{t("Artists checked")}: {artistRecovery.processed} / {artistRecovery.total}</p>
+                        <p>{t("Local artist photos recovered")}: {artistRecovery.recoveredLocal} · {t("Online artist photos recovered")}: {artistRecovery.recoveredExternal}</p>
+                        <p>{t("Artists skipped")}: {artistRecovery.skipped} · {t("Artist photo failures")}: {artistRecovery.failed}</p>
+                        {artistRecovery.hasMore && !artistRecovery.inProgress && (
+                            <p>{t("More artists remain; continue with the next batch.")}</p>
+                        )}
+                        {artistRecovery.error && (
+                            <p className="text-red-400">{t("Artist photo repair stopped. Check the server logs.")}</p>
+                        )}
+                    </div>
+                )}
+                {artistRepairError && (
+                    <p role="alert" className="mt-2 text-xs text-red-400">
+                        {artistRepairError === "load"
+                            ? t("Could not load artist photo repair status")
+                            : t("Could not start artist photo repair")}
+                    </p>
+                )}
+            </div>
+        )}
 
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">
