@@ -172,6 +172,17 @@ async function checkLocalArtistImage(
     if (!resolvedArtistDir.startsWith(resolvedMusicPath + path.sep)) {
         return null;
     }
+    try {
+        // A directory symlink can escape the root even if its lexical path
+        // still starts with the music root. Check the physical directory.
+        const [realRoot, realArtistDir] = await Promise.all([
+            fs.promises.realpath(resolvedMusicPath),
+            fs.promises.realpath(resolvedArtistDir),
+        ]);
+        if (!realArtistDir.startsWith(realRoot + path.sep)) return null;
+    } catch {
+        return null;
+    }
 
     const candidates = options.artistOnly
         ? ["artist.jpg", "artist.png", "artist.webp"]
