@@ -1,5 +1,9 @@
 "use client";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
 
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, ConnectionTestButton } from "../ui";
 import { ConnectionTestResult, SystemSettings } from "../../types";
@@ -14,7 +18,59 @@ interface ArtworkSectionProps {
 
 export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: ArtworkSectionProps) {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
+    const [recovery, setRecovery] = useState<Awaited<ReturnType<typeof api.getMissingArtistArtwork>> | null>(null);
+    const [recoveryError, setRecoveryError] = useState<
+        "Couldn't load missing artwork" | "Couldn't start artwork recovery" | null
+    >(null);
+    const [isStarting, setIsStarting] = useState(false);
+    const wasRunning = useRef(false);
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
+
+    const refreshRecovery = useCallback(async () => {
+        try {
+            const response = await api.getMissingArtistArtwork();
+            // A completed job can change images still considered fresh in
+            // TanStack Query. Invalidate outside React's state updater.
+            if (wasRunning.current && !response.progress.inProgress) {
+                void queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
+                void queryClient.invalidateQueries({ queryKey: ["artist"] });
+            }
+            wasRunning.current = response.progress.inProgress;
+            setRecovery(response);
+            setRecoveryError(null);
+        } catch {
+            setRecoveryError("Couldn't load missing artwork");
+        }
+    }, [queryClient]);
+
+    useEffect(() => {
+        void refreshRecovery();
+    }, [refreshRecovery]);
+
+    useEffect(() => {
+        if (!recovery?.progress.inProgress) return;
+        const interval = setInterval(() => { void refreshRecovery(); }, 4000);
+        return () => clearInterval(interval);
+    }, [recovery?.progress.inProgress, refreshRecovery]);
+
+    const startRecovery = async () => {
+        if (isStarting || recovery?.progress.inProgress) return;
+        setIsStarting(true);
+        setRecoveryError(null);
+        try {
+            const response = await api.retryMissingArtistArtwork();
+            wasRunning.current = response.progress.inProgress;
+            setRecovery((previous) => previous
+                ? { ...previous, progress: response.progress }
+                : null);
+            await refreshRecovery();
+        } catch {
+            setRecoveryError("Couldn't start artwork recovery");
+        } finally {
+            setIsStarting(false);
+        }
+    };
 
     return (
         <SettingsSection
@@ -51,6 +107,40 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                     </div>
                 </>
             )}
+
+            <div className="mt-6 pt-6 border-t border-white/5">
+                <SettingsRow
+                    label={t("Missing artist photos")}
+                    description={t("Retry up to 20 missing artist photos per scan. Local images are checked first; manual artwork is never replaced.")}
+                >
+                    <span className="text-sm tabular-nums text-white" aria-live="polite">
+                        {recovery ? recovery.missingArtists : t("Loading...")}
+                    </span>
+                </SettingsRow>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <Button
+                        type="button"
+                        onClick={() => { void startRecovery(); }}
+                        disabled={isStarting || !recovery || recovery.missingArtists === 0 || recovery.progress.inProgress}
+                    >
+                        {isStarting || recovery?.progress.inProgress
+                            ? t("Searching for artist photos...")
+                            : t("Retry missing artist photos")}
+                    </Button>
+                    {recovery?.progress.startedAt && (
+                        <span className="text-xs tabular-nums text-[var(--text-secondary)]" role="status" aria-live="polite">
+                            {recovery.progress.recovered} {t("artist photos recovered")};{" "}
+                            {recovery.progress.processed}/{recovery.progress.queued} {t("checked")}
+                            {recovery.progress.failed > 0 && (
+                                <>; {recovery.progress.failed} {t("failed")}</>
+                            )}
+                        </span>
+                    )}
+                    {recoveryError && (
+                        <p role="alert" className="text-xs text-danger-light">{t(recoveryError)}</p>
+                    )}
+                </div>
+            </div>
 
             <div className="mt-6 pt-6 border-t border-white/5">
                 <div className="mb-4">

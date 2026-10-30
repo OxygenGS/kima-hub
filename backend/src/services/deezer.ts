@@ -123,13 +123,15 @@ class DeezerService {
      * Redis first; on a miss run `requestFn` (which must call `deezerGet`) and
      * cache the result, including a null answer.
      */
-    private async cachedRequest<T>(cacheKey: string, requestFn: () => Promise<T>): Promise<T> {
-        const cached = await this.cache.get<string>(`${this.cachePrefix}${cacheKey}`);
-        if (cached !== null) {
-            try {
-                return cached === "null" ? (null as T) : (JSON.parse(cached) as T);
-            } catch {
-                // Stale/incompatible cache entry - fall through and refetch.
+    private async cachedRequest<T>(cacheKey: string, requestFn: () => Promise<T>, refresh = false): Promise<T> {
+        if (!refresh) {
+            const cached = await this.cache.get<string>(`${this.cachePrefix}${cacheKey}`);
+            if (cached !== null) {
+                try {
+                    return cached === "null" ? (null as T) : (JSON.parse(cached) as T);
+                } catch {
+                    // Stale/incompatible cache entry - fall through and refetch.
+                }
             }
         }
 
@@ -150,25 +152,32 @@ class DeezerService {
         return rateLimitedGet<T>("deezer", `${DEEZER_API}${path}`, config);
     }
 
-    async getArtistImage(artistName: string): Promise<string | null> {
-        const cacheKey = `artist:${artistName.toLowerCase()}`;
+    async getArtistImage(artistName: string, options: { refresh?: boolean } = {}): Promise<string | null> {
+        // v2 avoids carrying forward negative answers from the older
+        // top-result-only search until their one-day TTL expires.
+        const cacheKey = `artist-image-v2:${artistName.toLowerCase()}`;
 
         try {
             return await this.cachedRequest(cacheKey, async () => {
                 const body = await this.deezerGet<any>("/search/artist", {
-                    params: { q: artistName, limit: 1 },
+                    params: { q: artistName, limit: 25 },
                     timeout: 5000,
                 });
 
-                const artist = body?.data?.[0];
-                if (!namesAgree(artist?.name, artistName)) {
-                    logger.debug(
-                        `[DEEZER] No verified artist image for "${artistName}"`
-                    );
+                // The first Deezer hit can be a different artist or a minor
+                // namesake. Accept only verified name matches, preferring the
+                // most-followed one; never pick a merely similar spelling.
+                const artists: any[] = Array.isArray(body?.data) ? body.data : [];
+                const artist = artists
+                    .filter((entry) => namesAgree(entry?.name, artistName))
+                    .sort((a, b) => (Number(b.nb_fan) || 0) - (Number(a.nb_fan) || 0))
+                    .find((entry) => entry.picture_xl || entry.picture_big || entry.picture_medium);
+                if (!artist) {
+                    logger.debug(`[DEEZER] No verified artist image for "${artistName}"`);
                     return null;
                 }
-                return artist?.picture_xl || artist?.picture_big || artist?.picture_medium || null;
-            });
+                return artist.picture_xl || artist.picture_big || artist.picture_medium || null;
+            }, options.refresh === true);
         } catch (error: any) {
             // A failed request is not "no image": the caller must not remember it as one.
             logger.warn(`Deezer artist image error for ${artistName}:`, error.message);
