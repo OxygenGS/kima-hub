@@ -55,6 +55,48 @@ class GuardTests(unittest.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError): n.configure()
                 tree.assert_not_called()
 
+
+    def test_new_soulseek_import_only_chowns_new_leaf(self):
+        music = self.root / 'music'
+        music.mkdir()
+        with patch.object(n.os, 'chown') as change_owner:
+            result = n.prepare_soulseek_import(music, 1201, 1202)
+        leaf = music / 'Singles' / 'Kima Downloads'
+        self.assertEqual(result, leaf)
+        self.assertTrue(leaf.is_dir())
+        change_owner.assert_called_once_with(leaf, 1201, 1202, follow_symlinks=False)
+        self.assertNotIn(music, [call.args[0] for call in change_owner.call_args_list])
+
+    def test_existing_soulseek_import_is_not_reowned(self):
+        leaf = self.root / 'Singles' / 'Kima Downloads'
+        leaf.mkdir(parents=True)
+        owner = leaf.stat().st_uid
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertEqual(n.prepare_soulseek_import(self.root, owner, 1202), leaf)
+        change_owner.assert_not_called()
+
+    def test_existing_foreign_soulseek_import_is_left_unchanged(self):
+        leaf = self.root / 'Singles' / 'Kima Downloads'
+        leaf.mkdir(parents=True)
+        old_mode = leaf.stat().st_mode
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertIsNone(n.prepare_soulseek_import(self.root, leaf.stat().st_uid + 1, 1202))
+        change_owner.assert_not_called()
+        self.assertEqual(leaf.stat().st_mode, old_mode)
+
+    def test_soulseek_import_rejects_symlinked_parent(self):
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (self.root / 'Singles').symlink_to(outside, target_is_directory=True)
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertIsNone(n.prepare_soulseek_import(self.root, 1201, 1202))
+        change_owner.assert_not_called()
+        self.assertFalse((outside / 'Kima Downloads').exists())
+
+    def test_soulseek_import_read_only_mount_does_not_block_boot(self):
+        with patch.object(n.Path, 'mkdir', side_effect=PermissionError('readonly host mount')):
+            self.assertIsNone(n.prepare_soulseek_import(self.root, 1201, 1202))
+
     def test_requires_root(self):
         with patch.object(n.os, 'geteuid', return_value=1000):
             with self.assertRaises(RuntimeError): n.main()

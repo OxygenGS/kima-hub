@@ -24,6 +24,7 @@ import {
 } from "../utils/metrics";
 import { sourcePauseController } from "./sourcePauseController";
 import { soulseekConfigured } from "../utils/soulseekConfigured";
+import { soulseekDownloadDestination } from "./soulseekDestination";
 
 export interface SearchResult {
     user: string;
@@ -50,17 +51,8 @@ interface SearchTrackResult {
     allMatches: TrackMatch[];
 }
 
-const sanitizePathPart = (name: string) => name.replace(/[<>:"/\\|?*]/g, "_").trim();
-
-function singlesPath(musicPath: string, artistName: string, albumName: string, fileName: string): string {
-    return path.join(
-        musicPath,
-        "Singles",
-        sanitizePathPart(artistName),
-        sanitizePathPart(albumName),
-        sanitizePathPart(fileName)
-    );
-}
+// All manual and automatic Soulseek downloads use one narrowly writable folder.
+const singlesPath = soulseekDownloadDestination;
 
 interface RateLimiterWaiter {
     resolve: () => void;
@@ -1146,10 +1138,11 @@ class SoulseekService {
                 "ERROR"
             );
             this.activeDownloads--;
-            return {
-                success: false,
-                error: `Cannot create destination directory: ${err.message}`,
-            };
+            const code = (err as NodeJS.ErrnoException).code;
+            const error = ["EACCES", "EPERM", "EROFS"].includes(code || "")
+                ? "Soulseek cannot write to its import folder. Check that /music/Singles/Kima Downloads is writable by the Kima backend user and that the music mount is not read-only."
+                : `Cannot create destination directory: ${err.message}`;
+            return { success: false, error };
         }
 
         sessionLog(

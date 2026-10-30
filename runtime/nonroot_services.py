@@ -63,9 +63,52 @@ def ownership(root, path, backend, audio, shared_gid):
     return owner.pw_uid, shared_gid, mode
 
 
+
+def prepare_soulseek_import(music_root, backend_uid, backend_gid):
+    """Prepare ONLY a dedicated Soulseek leaf; never chown an existing music tree.
+
+    An existing leaf owned by someone else is deliberately not taken over.
+    A read-only/unmapped host bind mount is warned about, not a startup failure.
+    """
+    root = Path(music_root)
+    singles = root / 'Singles'
+    target = singles / 'Kima Downloads'
+    try:
+        for parent in (root, singles, target):
+            check_path(parent)
+            if parent.exists() and not parent.is_dir():
+                raise RuntimeError('Expected directory: ' + str(parent))
+        if not singles.exists():
+            singles.mkdir(mode=0o755)
+            singles.chmod(0o755)  # Only a newly created parent.
+        if target.exists():
+            # No existing folder owner, content or permissions are modified.
+            if target.stat().st_uid != backend_uid:
+                print('WARNING: Existing Soulseek import folder is not owned by the backend; '
+                      'grant that folder writable access explicitly, without changing /music recursively')
+                return None
+            return target
+
+        target.mkdir(mode=0o755)
+        try:
+            os.chown(target, backend_uid, backend_gid, follow_symlinks=False)
+            os.chmod(target, 0o755)
+        except OSError:
+            # Never leave behind a root-owned empty target that blocks subsequent
+            # attempts when a mapped/readonly bind mount rejects chown.
+            target.rmdir()
+            raise
+        return target
+    except (OSError, RuntimeError) as exc:
+        print('WARNING: Soulseek import folder could not be prepared; downloads will '
+              'require explicit write permissions on /music/Singles/Kima Downloads: '
+              + str(exc))
+        return None
+
 def configure():
-    # Only independently prepared, exclusively mounted volumes are supported. The helper
-    # does not change /music, secrets, database files, models or app source.
+    # Only independently prepared, exclusively mounted volumes are supported.
+    # Only the dedicated Soulseek import leaf may be created under /music.
+    # Existing music files, parents, secrets, database and models are never chowned.
     for user in sorted(set(USERS.values())):
         for path in ('/music', '/app/models', '/app/audio-analyzer', '/app/audio-analyzer-clap'):
             for flag in ('-r', '-x'):
@@ -83,6 +126,11 @@ def configure():
     shared_gid = grp.getgrnam(SHARED_GROUP).gr_gid
     if shared_gid == 0 or 0 in (backend.pw_uid, backend.pw_gid, audio.pw_uid, audio.pw_gid):
         raise RuntimeError('Refusing root service identities/groups')
+    import_dir = prepare_soulseek_import('/music', backend.pw_uid, backend.pw_gid)
+    if import_dir is not None:
+        if subprocess.run(['gosu', 'kimabackend', 'test', '-w', str(import_dir)], check=False).returncode != 0:
+            print('WARNING: Soulseek import folder is not writable by the non-root backend; '
+                  'check host bind-mount permissions')
     for root, paths in inventory.items():
         Path(root).mkdir(parents=True, exist_ok=True)
         for path in paths:
@@ -92,7 +140,7 @@ def configure():
             os.chmod(path, mode)
     with CONF.open('w') as handle:
         parser.write(handle)
-    print('AIO service identities: nonroot backend/audio, limited shared GPU IPC; music/secrets untouched')
+    print('AIO service identities: nonroot backend/audio, limited shared GPU IPC; only dedicated Soulseek import may be writable')
 
 
 def launch(service):

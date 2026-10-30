@@ -11,7 +11,7 @@ import { randomUUID } from "crypto";
 import { eventBus } from "../services/eventBus";
 import { prisma } from "../utils/db";
 import fs from "fs";
-import path from "path";
+import { soulseekDownloadDestination } from "../services/soulseekDestination";
 import type { FileSearchResponse } from "../lib/soulseek/messages/from/peer";
 import { FileAttribute } from "../lib/soulseek/messages/common";
 
@@ -335,16 +335,13 @@ router.post(
                 });
             }
 
-            // Build destination path: musicPath/artist/album/filename
-            const sanitize = (str: string) =>
-                str.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-                   .replace(/\.\./g, "_")  // Block parent directory traversal
-                   .replace(/^\.+/, "");    // Block hidden files
-            const destPath = path.join(
+            // Import only into Kima's dedicated, backend-writable download
+            // directory. Existing artist/album folders are never changed.
+            const destPath = soulseekDownloadDestination(
                 musicPath,
-                sanitize(resolvedArtist),
-                sanitize(album || "Unknown Album"),
-                sanitize(filename || filepath.split(/[/\\]/).pop() || "track.mp3"),
+                resolvedArtist,
+                album || "Unknown Album",
+                filename || filepath.split(/[/\\]/).pop() || "track.mp3",
             );
 
             logger.debug(`[Soulseek] Downloading from ${username}: ${filepath} -> ${destPath}`);
