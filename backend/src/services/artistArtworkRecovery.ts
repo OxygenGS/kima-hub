@@ -55,6 +55,19 @@ export async function getMissingArtistArtworkCount(): Promise<number> {
 
 type MissingArtist = { id: string; name: string; mbid: string | null };
 
+/** Recovery accepts known provider CDN addresses, never arbitrary URL input. */
+function isTrustedArtistImageUrl(url: string): boolean {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === "https:" && (
+            parsed.hostname === "assets.fanart.tv" ||
+            parsed.hostname === "e-cdns-images.dzcdn.net"
+        );
+    } catch {
+        return false;
+    }
+}
+
 async function selectMissingArtists(): Promise<MissingArtist[]> {
     const where = {
         heroUrl: null,
@@ -103,7 +116,7 @@ async function recoverArtist(artist: MissingArtist): Promise<void> {
                 mbid: isMbid(artist.mbid) ? artist.mbid : undefined,
                 refresh: true,
             });
-            if (remote?.url && /^https:\/\//i.test(remote.url)) {
+            if (remote?.url && isTrustedArtistImageUrl(remote.url)) {
                 // Never cache a URL supplied by a caller: it must originate
                 // from the shared, verified provider pipeline.
                 image = (await downloadAndStoreImage(remote.url, artist.id, "artist")) || remote.url;
