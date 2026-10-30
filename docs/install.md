@@ -1,14 +1,14 @@
 # Install OxygenGS Kima Hub
 
-**Current published fork release:** [v1.15.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.15.0). Building on the v1.14 search and artwork work, this version adds more consistent loading layouts, source-aware search filters, local-first artist prefetching and direct artist section navigation. English/Dutch release notes and modern Symfonium/Feishin authentication remain supported.
+**Current published fork release:** [v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) — Artwork Recovery
 
-**v1.15.0 is published.** Its native AMD64/ARM64 images and GitHub release are available. The examples below select this version explicitly. No new database migration is introduced by v1.15.0, but earlier migrations still apply when upgrading from an older installation; always verify a backup before upgrading.
+The published all-in-one Docker image is `ghcr.io/oxygengs/kima-hub:v1.16.0`, with native **linux/amd64** and **linux/arm64** support. Its [Docker publication workflow](https://github.com/OxygenGS/kima-hub/actions/runs/41072280580) and GitHub Release completed successfully.
 
-Use the versioned **OxygenGS** image, not the upstream `chevron7locked/kima` image. Confirm the [Docker publish workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) has succeeded before pulling a newly released tag. The guarded workflow creates its GitHub Release after verifying the multi-architecture image; a Git tag alone is not proof of publication.
+Kima runs the web app, API, PostgreSQL, Redis and bundled analysis services in one container. Your music and persistent application data remain on volumes you control.
 
-## Fresh installation
+## Fresh install
 
-An all-in-one container runs the web app, API, PostgreSQL, Redis and audio analyzers. Replace `/absolute/path/to/music` with an existing folder containing your music.
+You need Docker, an existing music folder and space for the persistent `/data` volume. Replace `/absolute/path/to/music` with the host directory containing your audio files.
 
 ```bash
 docker run -d \
@@ -17,29 +17,33 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.15.0
+  ghcr.io/oxygengs/kima-hub:v1.16.0
 ```
 
-Open [http://localhost:3030](http://localhost:3030), complete onboarding and create your administrator account.
+Open `http://localhost:3030` on the Docker host, finish setup and create the administrator account. If connecting from a different computer, use your server's appropriate address.
 
-- **`/music`** is the music library; keep its host path consistent.
-- **`/data`** is the complete persistent database, job/caching state and generated secrets. Keep it through updates and always back it up.
-- **3030** is the web UI port. Internal API/database ports are not meant to be separately published.
+| Path or port | Purpose |
+| :--- | :--- |
+| `/music` | Mounted library; preserve the correct host music path when upgrading. |
+| `/data` | Database, users, generated secrets, configuration, processing state and cached artwork. **Back up the entire volume.** |
+| `3030` | Web and OpenSubsonic client API. Internal services do not need separate public ports. |
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the single-container stack, or [server Compose](../docker-compose.server.yml) for optional download companions. Explicitly select the desired **published** release with `VERSION=v1.15.0`; the Compose files retain a conservative older default.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services before deploying.
+
+Set the version **explicitly**. The checked-in Compose files deliberately retain an older conservative fallback, so leaving `VERSION` unset does **not** select the current release:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.15.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
-A minimal standalone Compose configuration:
+Minimal standalone Compose example:
 
 ```yaml
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:v1.15.0
+    image: ghcr.io/oxygengs/kima-hub:v1.16.0
     ports:
       - "3030:3030"
     volumes:
@@ -51,27 +55,45 @@ volumes:
   kima_data:
 ```
 
-For development builds, see [development](development.md); `docker-compose.yml` runs the separate source services rather than the released AIO image.
+For source development use [development.md](development.md); the general `docker-compose.yml` runs source services instead of the published all-in-one image.
 
-## Updating
+## Updating an existing installation
 
-**Do not update an existing installation by simply swapping Docker tags.** The application can migrate its database automatically. An older image cannot necessarily start on data that has been migrated.
+**Back up and verify a restore before updating.** An existing installation's database may undergo migrations, and reverting a Docker tag does not reverse them.
 
-1. Record the current image/tag and actual mounts privately. Do not commit installation-specific information to this public repository.
-2. Stop the existing stack and make a **cold backup of the entire original `/data` volume**, including `/data/secrets`, plus the Compose configuration.
-3. Verify a full restore to a **different volume**. Keep the original snapshot unchanged for rollback.
-4. v1.15.0 introduces no additional database migration. If upgrading from a version before v1.14.0, PostgreSQL still needs to create `pg_trgm` and three GIN indexes on the first migration. Allow extra disk space and I/O for large libraries. Select a verified published version/digest and test an upgrade of a separate nonproduction copy first.
-5. On an approved installation update, verify accounts, playlists, audio/seek, downloads, per-user rights and language preferences. For rollback, restore the separate **pre-upgrade** data snapshot before restarting the old image.
+1. Privately record the running image version, deployment configuration, Compose project name and volume mounts. Never post installation-specific values to this repository.
+2. Stop the current stack and make a **cold, complete backup** of its original `/data` volume, including secrets, plus the Compose/environment configuration.
+3. Verify an independent restore into a **different** volume. Keep the pre-upgrade original and backup intact for rollback.
+4. Select `ghcr.io/oxygengs/kima-hub:v1.16.0` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.
+5. After updating, verify accounts, music playback/seek, playlists, user permissions, client authentication and language settings. If rolling back after a migration, restore the independent **pre-upgrade data backup** before starting the older image.
 
-Follow the full [safe AIO update and rollback guide](safe-aio-updates.md). Never use `docker compose down -v` to update a database you want to keep.
+**Database migration note:** v1.16.0 introduces **no new schema migration**. When upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` extension and three search indexes may still need to be created. Allow disk space and I/O time, particularly with large libraries.
 
-## Release channels
+Follow the complete [safe all-in-one backup and rollback guide](safe-aio-updates.md). Its named-volume commands apply only to named Docker volumes, not arbitrary host-directory bind mounts. **Never use `docker compose down -v`** when the application data must be retained.
 
-| Channel | Docker image | Usage |
-| --- | --- | --- |
-| Stable | `ghcr.io/oxygengs/kima-hub:v1.15.0` | Current versioned OxygenGS release; verify GHCR publishing first |
-| Previous stable | `ghcr.io/oxygengs/kima-hub:v1.14.0` | Previous release; use only with a compatible data backup |
-| Pre-release | A specific published `prerelease-...` tag/digest | Testing only, not a production upgrade path |
-| `:latest` | Not automatically promoted | Avoid for controlled upgrades |
+## Recover missing images after updating
 
-[All GitHub releases](https://github.com/OxygenGS/kima-hub/releases) · [GHCR package](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
+In v1.16.0, administrators can go to **Settings → Artwork** and initiate:
+
+- **Repair missing album covers:** at most **200 albums** per round, using embedded artwork, local cover/folder/front/album images and existing trusted external providers.
+- **Repair missing artist photos:** at most **100 artists** per round, with local `artist.*` images and existing external providers.
+
+Each control displays progress and a continuation option if more candidates remain. Good existing images, manually chosen artwork and music files are preserved. The normal music scanner does not need to rescan unchanged files; artwork repair is a separate manual action. Batch progress resets after an API restart, and providers may not have a picture for every item.
+
+## Native music applications
+
+Symfonium and Feishin already had upstream support. The fork improves modern authentication and Symfonium synchronization so newly generated keys work with **Legacy Authentication disabled**, and Symfonium can work with **Compatibility Mode disabled**.
+
+Create a new API key under **Settings → Native Apps** for each client; use the appropriate Kima username and new key in the client. Older keys may require replacement for salted-token authentication. Read [OpenSubsonic client setup](subsonic.md) for exact methods and troubleshooting.
+
+## Release and security notes
+
+| Channel | Image | Recommendation |
+| :--- | :--- | :--- |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.0` | Versioned production release; pin a tag or immutable digest. |
+| Pre-release | Explicit published `prerelease-…` tag or digest | Testing only. |
+| `:latest` | Not automatically promoted | Avoid for controlled updates. |
+
+The [v1.16.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144) passed on the exact merged source, but residual HIGH and CRITICAL image advisories remain. Approval and publication do not establish that all dependencies are free of known vulnerabilities. See [image security](image-security.md) for the current findings and risk guidance.
+
+[All releases](https://github.com/OxygenGS/kima-hub/releases) · [GHCR image](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub) · [Safe updates](safe-aio-updates.md)
