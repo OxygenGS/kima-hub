@@ -1,39 +1,55 @@
-# OxygenGS image security and residual risks
+# Container image security and residual risk
 
-This is an overview of **known scanner findings**, not a certification, an exploit demonstration or a claim that the final published registry image has been independently audited. The original source and full GitHub Actions reports remain accessible through Git history and the linked runs.
+This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## Native v1.12.0 source-built image preflight
+## v1.16.0 — native image preflight
 
-The v1.12.0 native preflight built and scanned the exact source commit `400058238dcf826bd50faaf2b1b59cb425e944be` on AMD64 and ARM64 runners without publishing images. The subsequent stable Docker publisher completed successfully. These scan counts describe the **preflight images**, not a separate verification of the published registry digest.
+The [v1.16.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144) completed on **October 30, 2026** using the exact merged `main` commit `46b0dba68a28d5ebc47e8085d617e431b86723cb`. It built the application independently on AMD64 and ARM64, ran vulnerability and secret checks, and **did not publish an image**.
 
-| Native preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed fixed versions |
-| --- | ---: | ---: | ---: |
-| AMD64 | 288 | 8 | 0 |
-| ARM64 | 287 | 8 | 0 |
+| Scanned native AIO image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 270 | 8 | 0 |
+| linux/arm64 | 269 | 8 | 0 |
 
-The critical advisories reported for both architectures were CVE-2023-45853 (zlib1g), CVE-2023-6879 (libaom3), CVE-2025-47917, CVE-2026-34873 and CVE-2026-34875 (libmbedcrypto7), CVE-2025-7458 (libsqlite3-0), CVE-2026-58016 (libglib2.0-0), and CVE-2026-6653 (libxml2).
+The eight CRITICAL advisories reported on each architecture were:
 
-The prior v1.11.0 report also listed eight critical findings across the same package families. This is **not** proof that every CVE identifier was unchanged or that the affected code is exploitable in Kima. The scanner blocks findings that report a fixed package version, and reports the others for explicit assessment; passing it is **not** a zero-risk certification. Bookworm security-tracker statuses and residual-risk review are recorded in [release PR #141](https://github.com/OxygenGS/kima-hub/pull/141).
+| Advisory | Reported package | Scanner-reported status |
+| :--- | :--- | :--- |
+| CVE-2023-45853 | `zlib1g` | will_not_fix |
+| CVE-2023-6879 | `libaom3` | affected |
+| CVE-2025-47917 | `libmbedcrypto7` | end_of_life |
+| CVE-2025-7458 | `libsqlite3-0` | affected |
+| CVE-2026-34873 | `libmbedcrypto7` | affected |
+| CVE-2026-34875 | `libmbedcrypto7` | affected |
+| CVE-2026-58016 | `libglib2.0-0` | fix_deferred |
+| CVE-2026-6653 | `libxml2` | fix_deferred |
 
-## Native v1.11.0 source-built image audit
+The preflight reports **no explicitly scanner-listed fixed version** for these advisories. This does **not** establish that they are harmless, unreachable, resolved or impossible to patch. Some affected packages are used by bundled media processing, database or other system software. Removing packages without examining runtime dependencies can break playback, indexing or startup.
 
-The real AIO images built on native AMD64 and ARM64 GitHub runners from the combined application source `4c26b502537092da764791e83266f7b1a2d0ab61` passed the [9-job implementation workflow](https://github.com/OxygenGS/kima-hub/actions/runs/39296775113), including actual login/audio behavior, service identity checks and old-image copy-upgrade with independent rollback.
+Trivy's image secret scan found no findings under its configured rules and exclusions. That result is limited to the scan scope and does not replace protecting application-generated secrets in `/data`.
 
-| Native image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL entries with scanner-listed fixed versions |
-| --- | ---: | ---: | ---: |
-| AMD64 | 295 | 8 | 0 |
-| ARM64 | 294 | 8 | 0 |
+### Source validation and publication
 
-The reports and Debian package inventory were retained as artifacts on that workflow. These are **package/advisory findings**, not 303 distinct demonstrated app exploits. The absence of a `FixedVersion` does **not** prove they are harmless or resolved.
+The release was published only after an explicit security-reviewed approval:
 
-The eight critical scanner records included `libaom3`, `libglib2.0-0`, `libmbedcrypto7` (three advisories), `libsqlite3-0`, `libxml2` and `zlib1g`. Some are dependencies of FFmpeg, PostgreSQL or Python, so blindly removing them may break the app. The image-build workflow blocks any HIGH/CRITICAL item with an explicitly listed available fixed version, and separately scans for embedded secrets.
+- [Native AMD64/ARM64 preflight and retained scan artifacts](https://github.com/OxygenGS/kima-hub/actions/runs/41067045144)
+- [Approved stable-release gate](https://github.com/OxygenGS/kima-hub/actions/runs/41072247107)
+- [Docker publication workflow](https://github.com/OxygenGS/kima-hub/actions/runs/41072280580)
+- [v1.16.0 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0)
 
-## Service boundaries
+The published multi-architecture registry image is a **separate build artifact**. The figures above describe the native **preflight** images, not an independent post-publication vulnerability audit of every registry digest. Verify the exact released tag/digest when assessing your deployment.
 
-The v1.11.0 backend and Essentia/CLAP audio analyzers run under distinct **non-root service identities** with reduced capabilities; native CI confirmed denial of stored backend secrets and Supervisor socket access. The bootstrap and Supervisor remain privileged, and these controls do not verify a custom host's GPU, ACLs, filesystem mounts or network exposure.
+## Runtime and deployment boundaries
 
-## Before exposing an instance
+The application backend and bundled audio analysis services run under separate non-root identities with reduced capabilities. Bootstrap and supervisor operations still require elevated privileges; these controls are not a replacement for host hardening. CI does not validate the particular ACLs, network exposure, storage permissions or GPU setup of your installation.
 
-Use current supported host updates, network access controls and HTTPS reverse proxy configuration. Limit access to port 3030, back up all `/data` (including secrets) and verify rollback before upgrades. Review the [stable Docker publisher](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) for the **exact release tag**, since the published digest is a distinct image from a local CI build.
+Before exposing an instance:
 
-See [security](security.md), [safe updates](safe-aio-updates.md), [configuration](configuration.md) and [SECURITY.md](../SECURITY.md).
+- Keep the Docker host, operating system and reverse proxy patched; restrict access to the web/API port `3030` and use HTTPS for remote connections.
+- Use explicit version tags or immutable image digests instead of an implicitly moving `:latest` reference.
+- Protect API keys and all application data in `/data`, including secrets. Create a complete pre-upgrade backup and verify a separate restore.
+- Review scanner advisories against the actual packages and functions in use; track fixes and reassess residual risk before subsequent upgrades.
+
+Earlier release preflight reports and security evidence remain available in [GitHub Actions history](https://github.com/OxygenGS/kima-hub/actions/workflows/v112-native-preflight.yml) and the [release history](../CHANGELOG.md). Previous snapshot counts are not treated as current-release findings here.
+
+[General security guidance](security.md) · [Safe updates](safe-aio-updates.md) · [Configuration](configuration.md) · [Responsible disclosure](../SECURITY.md)
