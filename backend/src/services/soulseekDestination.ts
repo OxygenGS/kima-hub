@@ -7,8 +7,9 @@ function safePart(value: string, fallback: string): string {
     // Filenames may come from untrusted P2P peers or user-supplied metadata.
     // Replace separators, controls, traversal, Windows-forbidden punctuation,
     // trailing dots/spaces and empty names instead of allowing path escapes.
-    const cleaned = String(value || "")
-        .normalize("NFKC")
+    const original = String(value || "").normalize("NFKC").trim();
+    if (!original || /^\\.+$/.test(original)) return fallback;
+    const cleaned = original
         .replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, "_")
         .replace(/\.\./g, "_")
         .replace(/^\.+/, "")
