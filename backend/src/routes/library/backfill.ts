@@ -2,12 +2,26 @@ import { Router } from "express";
 import { requireAdmin } from "../../middleware/auth";
 import { logger } from "../../utils/logger";
 import {
+  getAlbumCoverRecoveryStatus,
+  startAlbumCoverRecovery,
+} from "../../services/albumCoverRecovery";
+import {
   isImageBackfillNeeded,
   getImageBackfillProgress,
   backfillAllImages,
 } from "../../services/imageBackfill";
 
 const router = Router();
+
+router.get("/album-cover-recovery/status", requireAdmin, (_req, res) => {
+  res.json(getAlbumCoverRecoveryStatus());
+});
+
+router.post("/album-cover-recovery/start", requireAdmin, (_req, res) => {
+  const started = startAlbumCoverRecovery();
+  res.status(202).json({ started, status: getAlbumCoverRecoveryStatus() });
+});
+
 
 router.get("/image-backfill/status", async (_req, res) => {
   try {
