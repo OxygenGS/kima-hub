@@ -1,5 +1,22 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.16.1 — release preparation (unpublished)
+
+Kima Hub v1.16.1 is a focused Soulseek download permission hotfix for the published v1.16.0 Artwork Recovery release.
+
+### Fix Soulseek downloads on non-root all-in-one installations (PR #171)
+- Fix manual Soulseek P2P and automatic fallback downloads failing with "Cannot create destination directory: EACCES: permission denied" when the backend cannot create directories under /music.
+- Store all new Soulseek downloads under /music/Singles/Kima Downloads/<artist>/<album>/<filename> so existing library folders remain unchanged.
+- During AIO bootstrap, provision only the dedicated import leaf for the unprivileged backend user. Never recursively chown or chmod a mounted music collection and never take ownership of an existing foreign-owned import directory.
+- Preserve user-level download permissions and use a containment-checked, sanitized P2P destination path.
+- Explain restricted or read-only host mounts clearly; a host may still require narrow write access to the import folder.
+
+### Verification and compatibility
+- Added backend path/route regression tests and Python non-root permissions tests; the full AIO install smoke verifies write access inside the dedicated folder while rejecting write access to the /music root.
+- No database migration, playback change, authentication change or data migration. Previous downloads and artist folders are not moved. Artwork Recovery, Symfonium and Feishin are unchanged.
+- Back up the persistent /data volume and independently verify the restore before any upgrade. Only update to a published stable tag, not a release candidate.
+- Release requires exact-commit tests, native AMD64/ARM64 preflight and residual vulnerability review before protected Docker publication. No-pass CI status or scanner result establishes zero vulnerability risk.
+
 ## OxygenGS fork v1.16.0 — release preparation (unpublished)
 
 Kima Hub v1.16.0 adds bounded artwork recovery for already-indexed libraries after v1.15.0. The release improves missing image coverage without deleting music, replacing manually selected artwork or requiring a full library rescan.

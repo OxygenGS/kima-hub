@@ -1,0 +1,63 @@
+{
+  "release": {
+    "version": "1.16.1",
+    "title": "Kima Hub 1.16.1 — Soulseek Download Fix",
+    "summary": "Fix Soulseek permission-denied downloads in the all-in-one Docker installation while preserving music-library permissions.",
+    "date": "2026-10-30",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1161.soulseek",
+        "title": "Soulseek downloads work with the non-root backend",
+        "summary": "Send P2P downloads to a dedicated, narrowly writable import folder.",
+        "body": "The all-in-one backend runs as an unprivileged user. In earlier builds, a Soulseek download tried to create artist and album directories directly under the music mount, which could fail with EACCES: permission denied. Both manual P2P downloads and automatic Soulseek acquisition now write under Singles/Kima Downloads inside the configured music library. During startup the container prepares only that dedicated directory for the backend user, without changing other music files or directory permissions. Downloaded tracks are then eligible for the existing library scan.",
+        "links": [
+          {
+            "label": "Open music library",
+            "href": "/collection?tab=tracks"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1161.permissions",
+        "title": "Keep the rest of the music library protected",
+        "summary": "No broad write permissions, new root-running backend, or automatic changes to existing music folders.",
+        "body": "An existing Soulseek import directory is never forcibly re-owned and no recursive chmod or chown is performed on the music collection. If the /music mount is read-only, root-squashed, or denies creation of the new import folder, downloads will still require limited host-side access to /music/Singles/Kima Downloads; the app continues to start and reports an actionable permission error. Input filenames and directory components are normalized to prevent path traversal. Existing audio files and previous downloads are not moved. Playback, modern Symfonium and Feishin authentication and the Artwork Recovery controls are unchanged. No database schema migration is added by this hotfix. Back up the full persistent /data volume before updating. Native image vulnerabilities still require explicit security review before publication.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.16.1 — Soulseek Download Fix": "Kima Hub 1.16.1 — Soulseek-downloads hersteld"
+    },
+    "summaries": {
+      "Fix Soulseek permission-denied downloads in the all-in-one Docker installation while preserving music-library permissions.": "Herstel Soulseek-downloads die vastlopen op toegangsrechten in de all-in-one Docker-installatie, zonder schrijfrechten voor de hele muziekbibliotheek."
+    },
+    "items": {
+      "fork.1161.soulseek": {
+        "title": "Soulseek-downloads werken weer met de niet-rootbackend",
+        "summary": "Sla P2P-downloads op in een afzonderlijke importmap met beperkte schrijfrechten.",
+        "body": "De backend in de all-in-one-container draait als gebruiker zonder rootrechten. Voorheen probeerde Soulseek nieuwe artiest- en albummappen direct in de muziekmap aan te maken. Dit kon mislukken met EACCES: permission denied. Zowel handmatige P2P-downloads als automatische Soulseek-downloads worden voortaan in Singles/Kima Downloads binnen de ingestelde muziekbibliotheek opgeslagen. Bij het opstarten bereidt de container uitsluitend deze importmap voor de backendgebruiker voor. Andere muziekbestanden en maprechten blijven ongewijzigd. Nieuwe downloads kunnen daarna via de bestaande muziekscan worden geïmporteerd.",
+        "links": {
+          "/collection?tab=tracks": "Open muziekbibliotheek"
+        }
+      },
+      "fork.1161.permissions": {
+        "title": "De rest van je muziekbibliotheek blijft beschermd",
+        "summary": "Geen algemene schrijfrechten, geen rootbackend en geen automatische wijzigingen aan bestaande muziekmappen.",
+        "body": "Een bestaande Soulseek-importmap krijgt niet zonder toestemming een andere eigenaar. Er worden geen recursieve chmod- of chown-opdrachten op de muziekbibliotheek uitgevoerd. Is de /music-koppeling alleen-lezen, gebruikt de host root-squash of blokkeert het bestandssysteem het aanmaken van de importmap, dan zijn nog beperkte rechten voor /music/Singles/Kima Downloads nodig op de host. Kima blijft opstarten en geeft een gerichte foutmelding. Bestandsnamen en mapnamen worden gecontroleerd op onveilige paden. Bestaande muziek en eerdere downloads worden niet verplaatst. Afspelen, moderne Symfonium- en Feishin-authenticatie en Artwork Recovery veranderen niet. Deze hotfix voegt geen databasemigratie toe. Maak vóór de update een volledige back-up van het blijvende /data-volume. Bestaande kwetsbaarheden in Docker-images moeten voor publicatie apart beoordeeld worden.",
+        "links": {
+          "/settings": "Open instellingen"
+        }
+      }
+    }
+  },
+  "changelog": "Kima Hub v1.16.1 is a focused Soulseek download permission hotfix for the published v1.16.0 Artwork Recovery release.\n\n### Fix Soulseek downloads on non-root all-in-one installations (PR #171)\n- Fix manual Soulseek P2P and automatic fallback downloads failing with \"Cannot create destination directory: EACCES: permission denied\" when the backend cannot create directories under /music.\n- Store all new Soulseek downloads under /music/Singles/Kima Downloads/<artist>/<album>/<filename> so existing library folders remain unchanged.\n- During AIO bootstrap, provision only the dedicated import leaf for the unprivileged backend user. Never recursively chown or chmod a mounted music collection and never take ownership of an existing foreign-owned import directory.\n- Preserve user-level download permissions and use a containment-checked, sanitized P2P destination path.\n- Explain restricted or read-only host mounts clearly; a host may still require narrow write access to the import folder.\n\n### Verification and compatibility\n- Added backend path/route regression tests and Python non-root permissions tests; the full AIO install smoke verifies write access inside the dedicated folder while rejecting write access to the /music root.\n- No database migration, playback change, authentication change or data migration. Previous downloads and artist folders are not moved. Artwork Recovery, Symfonium and Feishin are unchanged.\n- Back up the persistent /data volume and independently verify the restore before any upgrade. Only update to a published stable tag, not a release candidate.\n- Release requires exact-commit tests, native AMD64/ARM64 preflight and residual vulnerability review before protected Docker publication. No-pass CI status or scanner result establishes zero vulnerability risk."
+}
