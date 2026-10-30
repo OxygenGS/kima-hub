@@ -161,7 +161,8 @@ export function nativeFileExists(nativePath: string | null | undefined): boolean
 async function checkLocalArtistImage(
     musicPath: string,
     artistDirName: string,
-    artistId: string
+    artistId: string,
+    options: { artistOnly?: boolean; cacheId?: string } = {},
 ): Promise<string | null> {
     const artistDir = path.join(musicPath, artistDirName);
 
@@ -172,10 +173,11 @@ async function checkLocalArtistImage(
         return null;
     }
 
-    const candidates = [
-        "artist.jpg", "artist.png", "artist.webp",
-        "folder.jpg", "folder.png", "folder.webp",
-    ];
+    const candidates = options.artistOnly
+        ? ["artist.jpg", "artist.png", "artist.webp"]
+        : ["artist.jpg", "artist.png", "artist.webp", "folder.jpg", "folder.png", "folder.webp"];
+    const filenameId = options.cacheId ?? artistId;
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(filenameId)) return null;
 
     for (const filename of candidates) {
         const filePath = path.join(artistDir, filename);
@@ -185,10 +187,12 @@ async function checkLocalArtistImage(
             if (lstat.isFile() && lstat.size > 1000) {
                 const dirPath = ensureCoversDir(ARTIST_IMAGES_DIR);
                 const ext = path.extname(filename);
-                const cachePath = path.join(dirPath, `${artistId}${ext}`);
+                const cachePath = path.join(dirPath, `${filenameId}${ext}`);
+                // The recovery flow uses a unique cache id, never replacing
+                // artwork already referenced by a manual user override.
                 await fs.promises.copyFile(filePath, cachePath);
                 logger.debug(`[ImageStorage] Local artist image found: ${filePath}`);
-                return `native:${ARTIST_IMAGES_DIR}/${artistId}${ext}`;
+                return `native:${ARTIST_IMAGES_DIR}/${filenameId}${ext}`;
             }
         } catch {
             // Most candidate names do not exist; try the next.
@@ -204,11 +208,14 @@ async function checkLocalArtistImage(
 export async function findLocalArtistImage(
     musicPath: string,
     relativeTrackPath: string,
-    artistId: string
+    artistId: string,
+    options: { artistOnly?: boolean; cacheId?: string } = {},
 ): Promise<string | null> {
     const parts = relativeTrackPath.split(path.sep);
     for (let i = parts.length - 2; i >= 0; i--) {
-        const found = await checkLocalArtistImage(musicPath, parts.slice(0, i + 1).join(path.sep), artistId);
+        const found = await checkLocalArtistImage(
+            musicPath, parts.slice(0, i + 1).join(path.sep), artistId, options,
+        );
         if (found) return found;
     }
     return null;
