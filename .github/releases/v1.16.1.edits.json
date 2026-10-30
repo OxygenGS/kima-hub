@@ -11,7 +11,7 @@
   },
   {
     "path": "README.md",
-    "before": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`",
+    "before": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.0`  ",
     "after": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.1`"
   },
   {
