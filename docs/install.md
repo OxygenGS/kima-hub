@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current stable release: [v1.16.0 — Artwork Recovery](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0)**
+**Current published fork release:** [v1.16.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.0) — Artwork Recovery
 
 The published all-in-one Docker image is `ghcr.io/oxygengs/kima-hub:v1.16.0`, with native **linux/amd64** and **linux/arm64** support. Its [Docker publication workflow](https://github.com/OxygenGS/kima-hub/actions/runs/41072280580) and GitHub Release completed successfully.
 
