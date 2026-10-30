@@ -7,6 +7,23 @@ import {
   backfillAllImages,
 } from "../../services/imageBackfill";
 
+import {
+  getAlbumCoverRecoveryStatus,
+  startAlbumCoverRecovery,
+} from "../../services/albumCoverRecovery";
+
+router.get("/album-cover-recovery/status", requireAdmin, (_req, res) => {
+  res.json(getAlbumCoverRecoveryStatus());
+});
+
+router.post("/album-cover-recovery/start", requireAdmin, (_req, res) => {
+  const started = startAlbumCoverRecovery();
+  res.status(202).json({
+    started,
+    status: getAlbumCoverRecoveryStatus(),
+  });
+});
+
 const router = Router();
 
 router.get("/image-backfill/status", async (_req, res) => {
