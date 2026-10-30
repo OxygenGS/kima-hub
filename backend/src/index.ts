@@ -39,6 +39,7 @@ import browseRoutes from "./routes/browse";
 import analysisRoutes from "./routes/analysis";
 import releasesRoutes from "./routes/releases";
 import vibeRoutes from "./routes/vibe";
+import smartDjRoutes from "./routes/smartDj";
 import publicVibeRoutes from "./routes/publicVibe";
 import systemRoutes from "./routes/system";
 import shareRoutes from "./routes/share";
@@ -182,6 +183,7 @@ app.use("/api/browse", apiLimiter, browseRoutes);
 app.use("/api/analysis", apiLimiter, analysisRoutes);
 app.use("/api/releases", apiLimiter, releasesRoutes);
 app.use("/api/vibe", apiLimiter, vibeRoutes);
+app.use("/api/smart-dj", apiLimiter, smartDjRoutes);
 // Read-only public vibe feed; it does not exist unless KIMA_PUBLIC_VIBE=true.
 if (config.publicVibe) {
     app.use("/api/public/vibe", apiLimiter, publicVibeRoutes);
