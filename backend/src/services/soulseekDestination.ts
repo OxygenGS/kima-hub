@@ -8,7 +8,7 @@ function safePart(value: string, fallback: string): string {
     // Replace separators, controls, traversal, Windows-forbidden punctuation,
     // trailing dots/spaces and empty names instead of allowing path escapes.
     const original = String(value || "").normalize("NFKC").trim();
-    if (!original || /^\\.+$/.test(original)) return fallback;
+    if (!original || /^[.]+$/.test(original)) return fallback;
     const cleaned = original
         .replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, "_")
         .replace(/\.\./g, "_")
