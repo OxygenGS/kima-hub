@@ -4,7 +4,7 @@
 
 # Kima Hub - Oxygen's Fork
 
-**Your music, your server — now with smoother artwork and smarter search.**
+**Your music, your server — now with clearer browsing and faster artist navigation.**
 
 Stream the albums you own. Rediscover forgotten favorites. Keep your library, accounts and settings on your own server.
 
@@ -13,9 +13,19 @@ Stream the albums you own. Rediscover forgotten favorites. Keep your library, ac
 [![Languages](https://img.shields.io/badge/Interface-English%20%2B%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-[**What's new**](#new-in-v1140) &nbsp; / &nbsp; [**Screenshots**](#see-the-interface) &nbsp; / &nbsp; [**Install**](#quick-start) &nbsp; / &nbsp; [**Documentation**](#documentation)
+[**What's new**](#new-in-v1150) &nbsp; / &nbsp; [**Screenshots**](#see-the-interface) &nbsp; / &nbsp; [**Install**](#quick-start) &nbsp; / &nbsp; [**Documentation**](#documentation)
 
 </div>
+
+## New in v1.15.0
+
+**[Kima Hub v1.15.0 is released](https://github.com/OxygenGS/kima-hub/releases/tag/v1.15.0).** The update makes music browsing more consistent, especially when opening artists and switching between search sources. The existing audio engine, permissions and modern Symfonium/Feishin connections remain unchanged.
+
+| Better page transitions | Search that respects each tab | Local-first artist navigation |
+| :--- | :--- | :--- |
+| Album, collection and search routes have layout-matched loading placeholders instead of an unrelated full-screen loader. | Library, Discover and P2P show only relevant results, accurate empty states and source-specific loading indicators. | Artist cards prefetch the lightweight local overview. Artist pages display optional enrichment progress and offer direct links to populated sections. |
+
+**Before updating:** v1.15.0 introduces no new database migration. If upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` and GIN-index migration still applies. **Back up the entire persistent `/data` volume and verify an independent restore before updating**; do not point an older image at newly migrated data. See the [safe update guide](docs/safe-aio-updates.md), [installation instructions](docs/install.md) and [release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.15.0).
 
 ## New in v1.14.0
 
@@ -74,7 +84,7 @@ This release keeps the existing audio engine, library, playlists, permissions an
   </tr>
 </table>
 
-**About these screenshots:** real browser captures from the successful v1.13.0 release-validation build, using generated audio and a fictional test library. The v1.14.0 update retains this interface; new screenshots would not represent a different UI. The visible `ci-smoke` build label and placeholder artwork are intentional. No private installation screenshots or generated UI mockups are used. [Capture provenance](assets/screenshots/v1.13/provenance.json).
+**About these screenshots:** real browser captures from the successful v1.13.0 release-validation build, using generated audio and a fictional test library. The screenshots document the v1.13 design; the v1.14 search/artwork changes and v1.15 loading, artist-navigation and search improvements are not shown in these older captures. The visible `ci-smoke` build label and placeholder artwork are intentional. No private installation screenshots or generated UI mockups are used. [Capture provenance](assets/screenshots/v1.13/provenance.json).
 
 ## More than a music player
 
@@ -92,8 +102,8 @@ This release keeps the existing audio engine, library, playlists, permissions an
 - **Modern client authentication:** improvements to the existing Symfonium and Feishin integrations, without Legacy Authentication. Symfonium can synchronize without Compatibility Mode.
 - **Enforced user permissions:** administrators control who can request albums and download tracks, with checks on the backend as well as in the interface.
 - **Instance branding:** customize the app name, tagline, accent, logo and favicon without editing source code.
-- **Navigation improvements:** cached artist/album data, intent-based prefetching, fewer repeated album-track requests and stable loading placeholders. Local artist albums appear without waiting for external enrichment; optional metadata and images may arrive later.
-- **Smarter local search (v1.14):** Unicode-safe search terms, exact-match priority and PostgreSQL trigram fallback for small typing mistakes when normal search finds nothing.
+- **Navigation improvements (v1.15):** cached artist/album data, lightweight local artist prefetching, fewer repeated track requests and layout-matched loading placeholders. Local albums can appear while optional external metadata loads, with progress/retry feedback and jump links to available artist sections.
+- **Search improvements (v1.14–v1.15):** Unicode-safe local queries, exact-match priority and PostgreSQL trigram fallback; source-aware Library, Discover and P2P filters, loading states and empty results.
 - **Less blocking artwork (v1.14):** asynchronous local cover processing, bounded resize concurrency and atomic cached variants. No fixed speedup is claimed.
 - **Release safeguards:** native AMD64/ARM64 builds, automated application/audio checks, upgrade/independent-restore tests, image vulnerability scans and secret detection.
 
@@ -111,7 +121,7 @@ See [OpenSubsonic setup and authentication](docs/subsonic.md) for supported meth
 
 ## Quick start
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.14.0`  
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.15.0`  
 **Architectures:** `linux/amd64` and `linux/arm64`  
 **Interface:** port `3030`
 
@@ -124,7 +134,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.14.0
+  ghcr.io/oxygengs/kima-hub:v1.15.0
 ```
 
 Replace the example music path, then open **http://localhost:3030** on the server, or use your server address, and create the administrator account.
@@ -137,13 +147,13 @@ Replace the example music path, then open **http://localhost:3030** on the serve
 
 ### Compose or Dockge
 
-Use the [production Compose example](docker-compose.prod.yml) and [installation guide](docs/install.md). **Set `VERSION=v1.14.0` explicitly.** The checked-in Compose file retains an older conservative fallback; leaving the version unset does not select the release shown here.
+Use the [production Compose example](docker-compose.prod.yml) and [installation guide](docs/install.md). **Set `VERSION=v1.15.0` explicitly.** The checked-in Compose file retains an older conservative fallback; leaving the version unset does not select the release shown here.
 
 Use explicit version tags. The `:latest` alias is **not automatically advanced** by the stable publisher.
 
 ### Upgrade safely
 
-**v1.14.0 database migration:** PostgreSQL enables `pg_trgm` and builds three extra text indexes for artist, album and track search. Reserve additional disk space and allow the first startup to complete; larger collections may take longer.
+**Upgrades from before v1.14.0:** PostgreSQL enables `pg_trgm` and builds three extra text indexes for artist, album and track search. Reserve additional disk space and allow the first startup to complete; larger collections may take longer.
 
 Back up the complete persistent `/data` volume and your deployment configuration **before** upgrading. Preserve music mounts, data mounts and existing environment settings; change the image version rather than creating a fresh empty data volume.
 

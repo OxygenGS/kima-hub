@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.15.0 — release preparation (unpublished)
+## OxygenGS fork v1.15.0 — released 2026-10-30
 
 A focused frontend-only update following v1.14.0: keep navigation responsive, make the selected search source trustworthy and give artist pages a visible section index. No measured production speed percentage is claimed.
 
@@ -28,7 +28,7 @@ A focused frontend-only update following v1.14.0: keep navigation responsive, ma
 - If upgrading from before v1.14.0, the earlier PostgreSQL trigram/index migration can still apply. Back up the full persistent /data volume and verify independent restore before updating. Rollback after a migration requires the original pre-upgrade backup.
 - Existing security advisories may remain; any native-image findings require explicit review before publishing stable artifacts.
 
-- **Release gate:** Candidate only. Require final-head CI, native AMD64 and ARM64 preflight on the exact merged main commit, review of residual vulnerability reports and explicit stable-release approval before tagging or publishing.
+- **Release verification:** Final PR #162 passed frontend/backend checks, real AIO browser/audio tests, database-upgrade/restore guards and native AMD64/ARM64 build checks. [Exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/41025248575) verified commit `ababa1c1`; [explicit security-reviewed stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/41026923680) and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/41026945547) succeeded, producing a verified multi-architecture OCI index and the [official v1.15.0 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.15.0). The images still contain unpatched HIGH/CRITICAL advisories (preflight reported AMD64: 270 HIGH / 8 CRITICAL; ARM64: 269 HIGH / 8 CRITICAL). Passing the fixable-advisory gate does not imply zero security risk; refer to [image security guidance](docs/image-security.md) and the native preflight evidence.
 
 ## OxygenGS fork v1.14.0 — released 2026-10-29
 
