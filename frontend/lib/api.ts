@@ -1,6 +1,21 @@
 import type { MapTrack } from "@/features/vibe/types";
 import { backendUrl } from "@/lib/backend-url";
 
+export interface AlbumCoverRecoveryStatus {
+    inProgress: boolean;
+    total: number;
+    processed: number;
+    recoveredLocal: number;
+    recoveredExternal: number;
+    skipped: number;
+    failed: number;
+    hasMore: boolean;
+    batchLimit: number;
+    startedAt: string | null;
+    finishedAt: string | null;
+    error: string | null;
+}
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -649,6 +664,16 @@ class ApiClient {
     async getRecentlyAdded(limit = 10) {
         return this.request<{ artists: ApiData[] }>(
             `/library/recently-added?limit=${limit}`
+        );
+    }
+
+    async getAlbumCoverRecoveryStatus(): Promise<AlbumCoverRecoveryStatus> {
+        return this.get<AlbumCoverRecoveryStatus>("/library/album-cover-recovery/status");
+    }
+
+    async startAlbumCoverRecovery(): Promise<{ started: boolean; status: AlbumCoverRecoveryStatus }> {
+        return this.post<{ started: boolean; status: AlbumCoverRecoveryStatus }>(
+            "/library/album-cover-recovery/start"
         );
     }
 

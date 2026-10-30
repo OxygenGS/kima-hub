@@ -1,5 +1,8 @@
 "use client";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { api, type AlbumCoverRecoveryStatus } from "@/lib/api";
 
 import { SettingsSection, SettingsRow, SettingsInput, SettingsToggle, ConnectionTestButton } from "../ui";
 import { ConnectionTestResult, SystemSettings } from "../../types";
@@ -14,6 +17,45 @@ interface ArtworkSectionProps {
 
 export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: ArtworkSectionProps) {
     const { t } = useLanguage();
+    const { user } = useAuth();
+    const isAdmin = user?.role === "admin";
+    const [recovery, setRecovery] = useState<AlbumCoverRecoveryStatus | null>(null);
+    const [isStarting, setIsStarting] = useState(false);
+    const [repairError, setRepairError] = useState<"load" | "start" | null>(null);
+
+    const refreshRecovery = useCallback(async () => {
+        try {
+            const state = await api.getAlbumCoverRecoveryStatus();
+            setRecovery(state);
+            setRepairError(null);
+        } catch {
+            setRepairError("load");
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        void refreshRecovery();
+    }, [isAdmin, refreshRecovery]);
+
+    useEffect(() => {
+        if (!isAdmin || !recovery?.inProgress) return;
+        const timer = window.setInterval(() => { void refreshRecovery(); }, 3000);
+        return () => window.clearInterval(timer);
+    }, [isAdmin, recovery?.inProgress, refreshRecovery]);
+
+    const startRecovery = async () => {
+        setIsStarting(true);
+        setRepairError(null);
+        try {
+            await api.startAlbumCoverRecovery();
+            await refreshRecovery();
+        } catch {
+            setRepairError("start");
+        } finally {
+            setIsStarting(false);
+        }
+    };
     const fanartTest = useConnectionTest(() => onTest("fanart"), { connected: () => "Connected" });
 
     return (
@@ -50,6 +92,46 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                         <ConnectionTestButton connection={fanartTest} disabled={isTesting || !settings.fanartApiKey} />
                     </div>
                 </>
+            )}
+
+            {isAdmin && (
+                <div className="mt-6 pt-6 border-t border-white/5">
+                    <SettingsRow
+                        label={t("Repair missing album covers")}
+                        description={t("Repair covers for albums already in your library, without rescanning music or replacing existing artwork.")}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => { void startRecovery(); }}
+                            disabled={isStarting || recovery?.inProgress === true}
+                            className="rounded-lg border border-white/10 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {isStarting || recovery?.inProgress
+                                ? t("Repairing covers...")
+                                : recovery?.hasMore
+                                    ? t("Continue cover repair")
+                                    : t("Start cover repair")}
+                        </button>
+                    </SettingsRow>
+                    {recovery && (
+                        <div role="status" aria-live="polite" className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">
+                            <p>{t("Albums checked")}: {recovery.processed} / {recovery.total}</p>
+                            <p>{t("Local covers recovered")}: {recovery.recoveredLocal} · {t("Online covers recovered")}: {recovery.recoveredExternal}</p>
+                            <p>{t("Albums skipped")}: {recovery.skipped} · {t("Repair failures")}: {recovery.failed}</p>
+                            {recovery.hasMore && !recovery.inProgress && (
+                                <p>{t("More albums remain; continue to process the next batch.")}</p>
+                            )}
+                            {recovery.error && <p className="text-red-400">{t("Artwork repair stopped. Check the server logs.")}</p>}
+                        </div>
+                    )}
+                    {repairError && (
+                        <p role="alert" className="mt-2 text-xs text-red-400">
+                            {repairError === "load"
+                                ? t("Could not load cover repair status")
+                                : t("Could not start cover repair")}
+                        </p>
+                    )}
+                </div>
             )}
 
             <div className="mt-6 pt-6 border-t border-white/5">

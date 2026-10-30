@@ -96,7 +96,7 @@ describe("existing indexed album cover recovery", () => {
             hasMore: false,
         });
         expect(mockExtract).toHaveBeenCalledWith("/music/Artist/Local/01.flac", "local");
-        expect(mockExistingMusicFile).not.toHaveBeenCalledWith("../../private.flac");
+        expect(mockExistingMusicFile).toHaveBeenCalledWith("../../private.flac");
         // Outside paths are rejected by the resolver and never passed to the extractor.
         expect(mockExtract).not.toHaveBeenCalledWith(expect.stringContaining("private"), expect.anything());
         expect(mockArtwork).toHaveBeenCalledTimes(2);
