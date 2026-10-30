@@ -122,13 +122,18 @@ async function recoverAlbum(
         logger.warn("[ArtworkRepair] Local extraction failed for " + album.id, error);
     }
 
-    const found = await findAlbumArtwork({
-        rgMbid: album.rgMbid,
-        artistName: album.artist.name,
-        albumTitle: album.title,
-    });
-    if (!found) return "skipped";
-    return (await writeCover(album, found.url)) ? "external" : "skipped";
+    try {
+        const found = await findAlbumArtwork({
+            rgMbid: album.rgMbid,
+            artistName: album.artist.name,
+            albumTitle: album.title,
+        });
+        if (!found) return "skipped";
+        return (await writeCover(album, found.url)) ? "external" : "skipped";
+    } finally {
+        // Only remote lookups are paced; locally cached covers remain fast.
+        await new Promise<void>((resolve) => setTimeout(resolve, REMOTE_PAUSE_MS));
+    }
 }
 
 async function processAlbumCoverRecovery(): Promise<void> {
@@ -171,11 +176,6 @@ async function processAlbumCoverRecovery(): Promise<void> {
                 logger.warn("[ArtworkRepair] Album recovery failed for " + album.id, error);
             } finally {
                 status.processed++;
-            }
-            // Artwork source providers are shared with user-facing pages.
-            // Serial, paced requests keep repair work from flooding them.
-            if (status.processed < status.total) {
-                await new Promise<void>((resolve) => setTimeout(resolve, REMOTE_PAUSE_MS));
             }
         }
     }

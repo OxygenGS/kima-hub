@@ -115,4 +115,57 @@ describe("existing indexed album cover recovery", () => {
         });
         expect(firstCall.take).toBeLessThanOrEqual(20);
     });
+
+    it("resumes at the next album and never overwrites a concurrent edit", async () => {
+        mockCount.mockReset()
+            .mockResolvedValueOnce(1).mockResolvedValueOnce(1)
+            .mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+        mockFindMany.mockReset()
+            .mockResolvedValueOnce([
+                { id: "a", title: "First", rgMbid: "rg-a", coverUrl: null, artist: { name: "Artist" }, tracks: [{ filePath: "Artist/First/01.flac" }] },
+            ])
+            .mockResolvedValueOnce([
+                { id: "b", title: "Second", rgMbid: "rg-b", coverUrl: null, artist: { name: "Artist" }, tracks: [{ filePath: "Artist/Second/01.flac" }] },
+            ]);
+        mockExtract.mockResolvedValue("recovered.jpg");
+        mockUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+        expect(startAlbumCoverRecovery()).toBe(true);
+        await waitForRecovery();
+        expect(getAlbumCoverRecoveryStatus()).toMatchObject({
+            processed: 1, recoveredLocal: 0, skipped: 1, hasMore: true,
+        });
+
+        expect(startAlbumCoverRecovery()).toBe(true);
+        await waitForRecovery();
+        expect(getAlbumCoverRecoveryStatus()).toMatchObject({
+            processed: 1, recoveredLocal: 1, hasMore: false,
+        });
+        expect(mockFindMany.mock.calls[1][0].where.id).toEqual({ gt: "a" });
+        expect(mockUpdateMany).toHaveBeenCalledWith({
+            where: { id: "a", coverUrl: null, userCoverUrl: null },
+            data: { coverUrl: "native:recovered.jpg" },
+        });
+        expect(mockArtwork).not.toHaveBeenCalled();
+    });
+
+    it("repairs a missing native cache entry without replacing a valid URL", async () => {
+        mockCount.mockReset().mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+        mockFindMany.mockReset().mockResolvedValueOnce([
+            { id: "stale", title: "Remote", rgMbid: "rg-stale", coverUrl: "native:albums/gone.jpg", artist: { name: "Artist" }, tracks: [{ filePath: "Artist/Remote/01.flac" }] },
+        ]);
+        mockExtract.mockResolvedValue(null);
+        mockNativePath.mockResolvedValue(null);
+
+        expect(startAlbumCoverRecovery()).toBe(true);
+        await waitForRecovery();
+        expect(getAlbumCoverRecoveryStatus()).toMatchObject({
+            recoveredExternal: 1, failed: 0, hasMore: false,
+        });
+        expect(mockUpdateMany).toHaveBeenCalledWith({
+            where: { id: "stale", coverUrl: "native:albums/gone.jpg", userCoverUrl: null },
+            data: { coverUrl: "https://images.example/cover.jpg" },
+        });
+    });
+
 });
