@@ -33,10 +33,17 @@ async function closeFixtureNotices(page: Page) {
     expect(current.ok()).toBe(true);
     const currentBody = await current.json() as { release: { version: string; items: { kind: string; key: string }[] } };
     expect(currentBody.release.version).toBe(packageMetadata.version);
-    expect(currentBody.release.items.map((item) => item.key)).toEqual([
-        "fork.1140.artwork", "fork.1140.search", "fork.1140.upgrade",
-    ]);
-    expect(currentBody.release.items.every((item) => item.kind === "note")).toBe(true);
+    // Playback acceptance verifies the current release, not a pinned older
+    // catalog's item keys. Exact editorial text/keys are reviewed separately
+    // in the versioned backend catalog and Dutch release-copy tests.
+    const items = currentBody.release.items;
+    expect(items.length).toBeGreaterThan(0);
+    const keys = items.map((item) => item.key);
+    expect(keys.every((key) => key.trim().length > 0)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+    // Synthetic CI users may dismiss informational notices only: never
+    // silently accept a future action or choice in the playback test.
+    expect(items.every((item) => item.kind === "note")).toBe(true);
     const pending = await page.request.get("/api/whats-new/pending", { headers });
     expect(pending.ok()).toBe(true);
     const body = await pending.json() as { releases: { version: string }[] };

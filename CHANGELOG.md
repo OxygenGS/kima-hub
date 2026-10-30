@@ -1,5 +1,35 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.15.0 — release preparation (unpublished)
+
+A focused frontend-only update following v1.14.0: keep navigation responsive, make the selected search source trustworthy and give artist pages a visible section index. No measured production speed percentage is claimed.
+
+### Loading and navigation (PR #158)
+- Album, collection and search routes now show layout-stable placeholders that match the destination instead of an unrelated full-screen loader.
+- Retain reduced-motion accessibility and existing translation behavior.
+
+### Search results (PR #159)
+- Restrict local artists, discovery matches and P2P tracks to the selected tab, avoiding unrelated top matches and empty track headings.
+- Scope loading indicators and empty states to the current source; do not block completed Library or Discover views on P2P polling.
+- Include accessible filter-selection state, Dutch artist labels and regression tests.
+
+### Faster local-first artist pages (PR #160)
+- Use intent-only prefetch of the existing database overview from library cards, local top matches and similar artists actually in the library.
+- Keep local overview and full enrichment under separate cache keys; opening the artist still loads full details independently.
+- Show a localized progress status while optional enrichment completes, with an explicit retry on failure that does not hide owned albums.
+- Do not claim exact latency improvements without on-device measurements.
+
+### Artist section jump links (PR #161)
+- Add horizontally scrollable navigation to populated About, Popular, Discography, Available Albums and Fans Also Like sections.
+- Preserve keyboard/TV access; handle single/EP-only artists without broken or duplicate anchors; hide the links when fewer than two sections exist.
+
+### Compatibility and safe upgrades
+- No new v1.15 database migration, API protocol, audio engine, authentication format or user-permission change; preserve existing modern Symfonium and Feishin support.
+- If upgrading from before v1.14.0, the earlier PostgreSQL trigram/index migration can still apply. Back up the full persistent /data volume and verify independent restore before updating. Rollback after a migration requires the original pre-upgrade backup.
+- Existing security advisories may remain; any native-image findings require explicit review before publishing stable artifacts.
+
+- **Release gate:** Candidate only. Require final-head CI, native AMD64 and ARM64 preflight on the exact merged main commit, review of residual vulnerability reports and explicit stable-release approval before tagging or publishing.
+
 ## OxygenGS fork v1.14.0 — released 2026-10-29
 
 Performance and search improvements following the published v1.13.1 artist-loading update. This release improves two independent hot paths without replacing the v1.13 UI or audio engine.

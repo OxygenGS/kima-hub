@@ -1,0 +1,126 @@
+{
+  "release": {
+    "version": "1.15.0",
+    "title": "Kima Hub 1.15.0 — Faster Artist Navigation & Clearer Browsing",
+    "summary": "Local-first artist navigation, more consistent search tabs and clearer music browsing without changing playback or native clients.",
+    "date": "2026-10-29",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1150.loading",
+        "title": "Smoother page transitions",
+        "summary": "Album, collection and search routes keep their layout while content loads.",
+        "body": "New page-shaped placeholders retain the album hero and track rows, collection masthead and music grid, and search box and results layout during navigation. Instead of replacing the entire view with one generic loader, Kima shows the structure of the destination while data arrives.\n\nThese changes target perceived responsiveness and layout stability; no specific speed improvement is claimed.",
+        "links": [
+          {
+            "label": "Browse your collection",
+            "href": "/collection"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1150.search",
+        "title": "Search tabs that respect their source",
+        "summary": "Library, Discover and P2P views no longer mix unrelated results or loading states.",
+        "body": "The Library filter shows local music, while Discover shows its own artist results. Empty track headings and irrelevant top matches are hidden, and a background P2P lookup no longer forces a completed Library or Discover view to keep showing a spinner. Accessible selected-filter states and the Dutch artist label are included.\n\nThe existing search services and permissions remain in place; this update corrects frontend presentation, not search storage or authentication.",
+        "links": [
+          {
+            "label": "Open search",
+            "href": "/search"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1150.artist",
+        "title": "Artist pages show local details first",
+        "summary": "Artist-card intent preloads the database overview, with clear progress for optional enrichment.",
+        "body": "Moving the pointer onto or focusing a local artist card now warms the smaller database-only artist overview, instead of starting full external metadata enrichment before the page is opened. The overview and complete result have separate cache keys, so already saved albums can appear while additional artist details are requested.\n\nA visible status explains that extra information is loading. If optional enrichment fails, a retry control is available without hiding the existing local information. Exact loading-time gains depend on cache, network and provider availability and have not been measured.",
+        "links": [
+          {
+            "label": "Browse artists",
+            "href": "/collection?tab=artists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1150.sections",
+        "title": "Jump straight to artist sections",
+        "summary": "Profiles offer direct links to the populated biography, popular tracks and album sections.",
+        "body": "A compact, horizontally scrollable navigation beneath the artist header links only to sections that exist on that profile: About, Popular, Discography, Available Albums and Fans Also Like. Links work with keyboard and TV focus and point to the correct section even when an artist only has singles or EPs.\n\nThe navigation is omitted when there is fewer than two populated sections, avoiding empty or misleading destinations.",
+        "links": [
+          {
+            "label": "View artist collection",
+            "href": "/collection?tab=artists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1150.upgrade",
+        "title": "Compatibility and safe updates",
+        "summary": "Playback and client authentication stay unchanged; back up the persistent data volume before any upgrade.",
+        "body": "This release's changes are frontend-only: no new database migration, playback engine replacement, permission model change or new native-client authentication requirement is introduced by the v1.15 update. Existing modern Symfonium and Feishin connections remain supported.\n\nBefore changing a running installation, back up the complete persistent /data volume and verify an independent restore. If updating from a release older than v1.14.0, earlier database migrations may still apply. A rollback must restore the pre-upgrade data backup; reverting only the container image is not a safe database rollback. Security advisories still require review before the stable image is approved.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.15.0 — Faster Artist Navigation & Clearer Browsing": "Kima Hub 1.15.0 — Sneller naar artiesten en duidelijker bladeren"
+    },
+    "summaries": {
+      "Local-first artist navigation, more consistent search tabs and clearer music browsing without changing playback or native clients.": "Sneller naar artiesten vanuit lokale gegevens, betrouwbaardere zoekfilters en duidelijkere navigatie zonder wijzigingen aan afspelen of externe muziekapps."
+    },
+    "items": {
+      "fork.1150.loading": {
+        "title": "Rustigere overgangen tussen pagina's",
+        "summary": "Album-, collectie- en zoekpagina's behouden hun indeling tijdens het laden.",
+        "body": "Nieuwe tijdelijke laadweergaven volgen de vorm van de albumpagina, de collectie met muziektegels en de zoekpagina. In plaats van één algemeen laadscherm blijft de structuur van de bestemming zichtbaar terwijl de inhoud verschijnt.\n\nDe wijzigingen richten zich op een rustigere, stabielere interface. Er wordt geen gemeten snelheidswinst geclaimd.",
+        "links": {
+          "/collection": "Bekijk je collectie"
+        }
+      },
+      "fork.1150.search": {
+        "title": "Zoekfilters die de gekozen bron volgen",
+        "summary": "Bibliotheek, Ontdekken en P2P mengen geen ongerelateerde resultaten of laadstatussen meer.",
+        "body": "Het filter Bibliotheek toont lokale muziek en Ontdekken toont de bijbehorende artiestresultaten. Lege kopjes boven nummers en onjuiste hoofdresultaten worden niet meer getoond. Een P2P-zoekactie houdt een al geladen Bibliotheek- of Ontdekken-weergave niet langer in een laadstatus. Ook de geselecteerde filters en het Nederlandse artiestlabel zijn verbeterd.\n\nDe bestaande zoekdiensten en gebruikersrechten blijven behouden. Dit is een aanpassing van de interface, niet van opslag of aanmelding.",
+        "links": {
+          "/search": "Open zoeken"
+        }
+      },
+      "fork.1150.artist": {
+        "title": "Lokale artiestinformatie eerder in beeld",
+        "summary": "Artiestkaarten bereiden de lokale samenvatting voor en tonen de voortgang van aanvullende gegevens.",
+        "body": "Wanneer je met de muis of het toetsenbord een lokale artiestkaart selecteert, bereidt Kima voortaan eerst de kleinere samenvatting uit de eigen database voor. De volledige externe verrijking start pas bij het openen van de artiestpagina. Beide resultaten gebruiken verschillende cachevermeldingen, zodat opgeslagen albums alvast beschikbaar kunnen zijn.\n\nEen zichtbare melding laat zien dat aanvullende informatie nog laadt. Als die optionele gegevens niet beschikbaar komen, kun je het opnieuw proberen terwijl de lokale gegevens zichtbaar blijven. De daadwerkelijke tijdwinst is niet gemeten en hangt onder meer af van netwerk en caches.",
+        "links": {
+          "/collection?tab=artists": "Bekijk artiesten"
+        }
+      },
+      "fork.1150.sections": {
+        "title": "Direct naar onderdelen van een artiest",
+        "summary": "Artiestprofielen krijgen snelkoppelingen naar aanwezige biografieën, nummers en albums.",
+        "body": "Onder de artiestkop staat een compacte, horizontaal schuifbare navigatie naar onderdelen die echt aanwezig zijn: Over, Populair, Discografie, Beschikbare albums en Vergelijkbare artiesten. De koppelingen werken met toetsenbord en tv-bediening en verwijzen ook bij uitsluitend singles of EP's naar het juiste onderdeel.\n\nAls een artiestprofiel minder dan twee gevulde onderdelen heeft, wordt de navigatie niet getoond.",
+        "links": {
+          "/collection?tab=artists": "Bekijk de artiestencollectie"
+        }
+      },
+      "fork.1150.upgrade": {
+        "title": "Compatibiliteit en veilig bijwerken",
+        "summary": "Afspeelfuncties en clientaanmelding blijven behouden; maak vóór het bijwerken een volledige gegevensback-up.",
+        "body": "De wijzigingen van v1.15 zijn beperkt tot de frontend. Deze update voegt geen databasemigratie, vervanging van de audiomotor, ander rechtenmodel of nieuwe eis voor clientaanmelding toe. De moderne ondersteuning voor Symfonium en Feishin blijft behouden.\n\nMaak vóór het bijwerken een volledige back-up van het blijvende /data-volume en controleer een afzonderlijke herstelprocedure. Bij een upgrade vanaf een versie ouder dan v1.14.0 kunnen eerdere databasemigraties nog wel worden uitgevoerd. Voor teruggaan naar een oudere versie moet de back-up van vóór de upgrade worden hersteld; alleen de container terugzetten is niet veilig. Eventuele beveiligingsmeldingen moeten vóór goedkeuring van de stabiele image worden beoordeeld.",
+        "links": {
+          "/settings": "Open instellingen"
+        }
+      }
+    }
+  },
+  "changelog": "A focused frontend-only update following v1.14.0: keep navigation responsive, make the selected search source trustworthy and give artist pages a visible section index. No measured production speed percentage is claimed.\n\n### Loading and navigation (PR #158)\n- Album, collection and search routes now show layout-stable placeholders that match the destination instead of an unrelated full-screen loader.\n- Retain reduced-motion accessibility and existing translation behavior.\n\n### Search results (PR #159)\n- Restrict local artists, discovery matches and P2P tracks to the selected tab, avoiding unrelated top matches and empty track headings.\n- Scope loading indicators and empty states to the current source; do not block completed Library or Discover views on P2P polling.\n- Include accessible filter-selection state, Dutch artist labels and regression tests.\n\n### Faster local-first artist pages (PR #160)\n- Use intent-only prefetch of the existing database overview from library cards, local top matches and similar artists actually in the library.\n- Keep local overview and full enrichment under separate cache keys; opening the artist still loads full details independently.\n- Show a localized progress status while optional enrichment completes, with an explicit retry on failure that does not hide owned albums.\n- Do not claim exact latency improvements without on-device measurements.\n\n### Artist section jump links (PR #161)\n- Add horizontally scrollable navigation to populated About, Popular, Discography, Available Albums and Fans Also Like sections.\n- Preserve keyboard/TV access; handle single/EP-only artists without broken or duplicate anchors; hide the links when fewer than two sections exist.\n\n### Compatibility and safe upgrades\n- No new v1.15 database migration, API protocol, audio engine, authentication format or user-permission change; preserve existing modern Symfonium and Feishin support.\n- If upgrading from before v1.14.0, the earlier PostgreSQL trigram/index migration can still apply. Back up the full persistent /data volume and verify independent restore before updating. Rollback after a migration requires the original pre-upgrade backup.\n- Existing security advisories may remain; any native-image findings require explicit review before publishing stable artifacts.\n\n- **Release gate:** Candidate only. Require final-head CI, native AMD64 and ARM64 preflight on the exact merged main commit, review of residual vulnerability reports and explicit stable-release approval before tagging or publishing."
+}
