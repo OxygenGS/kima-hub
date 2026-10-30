@@ -10,7 +10,7 @@ jest.mock("../../config", () => ({
     USER_AGENT: "Kima/test",
 }));
 
-import { nativeFileExists, getCanonicalCoverFilePath, getLocalImagePath, getLocalImagePathAsync } from "../imageStorage";
+import { nativeFileExists, getCanonicalCoverFilePath, getLocalImagePath, getLocalImagePathAsync, findLocalArtistImage } from "../imageStorage";
 
 describe("nativeFileExists", () => {
     const cacheRoot = `/tmp/kima-test-cache-${process.pid}`;
@@ -98,4 +98,51 @@ describe("nativeFileExists", () => {
         await expect(getLocalImagePathAsync("https://example.invalid/image")).resolves.toBeNull();
     });
 
+});
+
+describe("local artist portrait recovery", () => {
+    const root = `/tmp/kima-test-artist-portraits-${process.pid}`;
+    const artistDir = path.join(root, "music", "Artist");
+    const albumDir = path.join(artistDir, "Album");
+    const cacheRoot = `/tmp/kima-test-cache-${process.pid}`;
+    const coversDir = path.join(cacheRoot, "covers", "artists");
+
+    beforeEach(() => {
+        fs.mkdirSync(albumDir, { recursive: true });
+    });
+
+    afterEach(() => {
+        fs.rmSync(root, { recursive: true, force: true });
+    });
+
+    it("does not use an album folder.jpg as the artist portrait in recovery mode", async () => {
+        fs.writeFileSync(path.join(albumDir, "folder.jpg"), Buffer.alloc(1300, 12));
+        expect(await findLocalArtistImage(
+            path.join(root, "music"), "Artist/Album/01.flac", "artist-id",
+            { artistOnly: true, cacheId: "recovery-artist-id" },
+        )).toBeNull();
+        expect(fs.existsSync(path.join(coversDir, "recovery-artist-id.jpg"))).toBe(false);
+    });
+
+    it("uses an explicit artist.png in the parent folder and a unique cache name", async () => {
+        fs.writeFileSync(path.join(albumDir, "folder.jpg"), Buffer.alloc(1300, 12));
+        fs.writeFileSync(path.join(artistDir, "artist.png"), Buffer.alloc(1400, 34));
+        expect(await findLocalArtistImage(
+            path.join(root, "music"), "Artist/Album/01.flac", "artist-id",
+            { artistOnly: true, cacheId: "recovery-artist-id" },
+        )).toBe("native:artists/recovery-artist-id.png");
+        expect(fs.existsSync(path.join(coversDir, "recovery-artist-id.png"))).toBe(true);
+        expect(fs.existsSync(path.join(coversDir, "artist-id.png"))).toBe(false);
+    });
+
+    it("rejects a directory symlink that points outside the music library", async () => {
+        const outside = path.join(root, "outside");
+        fs.mkdirSync(outside, { recursive: true });
+        fs.writeFileSync(path.join(outside, "artist.jpg"), Buffer.alloc(1400, 2));
+        fs.symlinkSync(outside, path.join(root, "music", "Linked"));
+        expect(await findLocalArtistImage(
+            path.join(root, "music"), "Linked/Album/01.flac", "artist-id",
+            { artistOnly: true, cacheId: "recovery-linked" },
+        )).toBeNull();
+    });
 });
