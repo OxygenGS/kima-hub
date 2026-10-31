@@ -17,7 +17,7 @@ Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles o
 - Back up persistent `/data` and independently verify restore before upgrading; keep the existing `/music` mount and dedicated Soulseek import folder permissions unchanged.
 - This source candidate is not a published image or installation instruction. Native AMD64/ARM64 preflight and review of remaining HIGH/CRITICAL advisories are required; a separate explicit approval is needed before a stable tag and Docker publication.
 
-## OxygenGS fork v1.16.1 — release preparation (unpublished)
+## OxygenGS fork v1.16.1 — released 2026-10-30
 
 Kima Hub v1.16.1 is a focused Soulseek download permission hotfix for the published v1.16.0 Artwork Recovery release.
 
@@ -34,7 +34,7 @@ Kima Hub v1.16.1 is a focused Soulseek download permission hotfix for the publis
 - Back up the persistent /data volume and independently verify the restore before any upgrade. Only update to a published stable tag, not a release candidate.
 - Release requires exact-commit tests, native AMD64/ARM64 preflight and residual vulnerability review before protected Docker publication. No-pass CI status or scanner result establishes zero vulnerability risk.
 
-## OxygenGS fork v1.16.0 — release preparation (unpublished)
+## OxygenGS fork v1.16.0 — released 2026-10-30
 
 Kima Hub v1.16.0 adds bounded artwork recovery for already-indexed libraries after v1.15.0. The release improves missing image coverage without deleting music, replacing manually selected artwork or requiring a full library rescan.
 
