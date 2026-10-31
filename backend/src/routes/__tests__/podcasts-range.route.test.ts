@@ -146,3 +146,42 @@ describe('cached-path range policy', () => {
         expect(res.body.length).toBe(FILE_SIZE);
     });
 });
+
+
+describe("authenticated podcast artwork cache boundaries", () => {
+    const app = makeApp();
+    let coverFile: string;
+
+    beforeAll(async () => {
+        coverFile = path.join(os.tmpdir(), `kima-cover-policy-${Date.now()}.jpg`);
+        await fs.promises.writeFile(coverFile, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    });
+    afterAll(async () => {
+        await fs.promises.unlink(coverFile).catch(() => {});
+    });
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it("revalidates podcast covers across user sessions", async () => {
+        (prisma.podcast.findUnique as jest.Mock).mockResolvedValue({
+            localCoverPath: coverFile, imageUrl: null,
+        });
+        const res = await request(app).get("/podcasts/pod-1/cover");
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-cache");
+        expect(res.headers.vary).toContain("Authorization");
+        expect(res.headers.vary).toContain("Cookie");
+    });
+
+    it("revalidates episode covers across user sessions", async () => {
+        (prisma.podcastEpisode.findUnique as jest.Mock).mockResolvedValue({
+            localCoverPath: coverFile, imageUrl: null,
+        });
+        const res = await request(app).get("/podcasts/episodes/ep-1/cover");
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-cache");
+        expect(res.headers.vary).toContain("Authorization");
+        expect(res.headers.vary).toContain("Cookie");
+    });
+});
