@@ -24,6 +24,7 @@ export interface LocalCandidate {
     id: string;
     title: string;
     displayTitle: string | null;
+    filePath?: string;
     duration: number;
     recordingMbid: string | null;
     album: {
@@ -41,6 +42,24 @@ export interface CatalogWithAvailability {
     title: string;
     rgMbid?: string | null;
     owned?: boolean;
+}
+
+/**
+ * Tagless Soulseek files can be indexed by their filename (e.g.
+ * "02 - Dance Monkey" or "Tones and I - Dance Monkey"). Strip only
+ * unambiguous prefixes in our dedicated import folder; never strip version
+ * words such as Live, Remix or Acoustic.
+ */
+function candidateTitle(candidate: LocalCandidate): string {
+    const original = candidate.displayTitle || candidate.title;
+    if (!candidate.filePath?.replace(/\\/g, "/").toLowerCase()
+        .startsWith("singles/kima downloads/")) return original;
+    let normalized = original.replace(/^\s*\d{1,3}\s*[-._]\s*/, "").trim();
+    const artistPrefix = candidate.album.artist.name.trim() + " - ";
+    if (normalized.toLowerCase().startsWith(artistPrefix.toLowerCase())) {
+        normalized = normalized.slice(artistPrefix.length).trim();
+    }
+    return normalized || original;
 }
 
 function sameRecording(a: string | null | undefined, b: string | null): boolean {
@@ -63,7 +82,7 @@ export function matchCatalogTracks(
             if (sameRecording(entry.recordingMbid, candidate.recordingMbid)) return true;
             return recordingAgrees({
                 id: candidate.id,
-                title: candidate.displayTitle || candidate.title,
+                title: candidateTitle(candidate),
                 lengthMs: candidate.duration > 0 ? candidate.duration * 1000 : null,
                 artists: [candidate.album.artist.name],
             }, {
@@ -145,7 +164,7 @@ export async function withLocalTrackAvailability(
             ],
         },
         select: {
-            id: true, title: true, displayTitle: true, duration: true, recordingMbid: true,
+            id: true, title: true, displayTitle: true, filePath: true, duration: true, recordingMbid: true,
             album: {
                 select: {
                     id: true, title: true, coverUrl: true, rgMbid: true,
