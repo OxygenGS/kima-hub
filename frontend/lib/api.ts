@@ -625,10 +625,16 @@ class ApiClient {
     }
 
     async logout() {
-        await this.request<void>("/auth/logout", {
-            method: "POST",
-        });
-        this.clearToken();
+        const tokenAtStart = this.token;
+        try {
+            await this.request<void>("/auth/logout", {
+                method: "POST",
+            });
+        } finally {
+            // This request may outlive local sign-out. It must never erase a
+            // replacement token from a different account that logged in since.
+            if (this.token === tokenAtStart) this.clearToken();
+        }
     }
 
     async getCurrentUser() {

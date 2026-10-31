@@ -77,6 +77,16 @@ describe("sign-out and session transitions", () => {
         expect(mocks.router.replace).toHaveBeenCalledWith("/login");
     });
 
+    it("does not wait for a stuck server logout before redirecting", async () => {
+        let resolveLogout!: () => void;
+        mocks.logout.mockImplementationOnce(() => new Promise<void>(resolve => { resolveLogout = resolve; }));
+        await act(async () => { await auth.logout(); });
+        expect(auth.isAuthenticated).toBe(false);
+        expect(mocks.clearToken).toHaveBeenCalled();
+        expect(mocks.router.replace).toHaveBeenCalledWith("/login");
+        await act(async () => { resolveLogout(); await Promise.resolve(); });
+    });
+
     it("does not let a delayed permission refresh restore the signed-out user", async () => {
         let resolveRefresh!: (user: typeof alice) => void;
         mocks.getCurrentUser.mockImplementationOnce(() => new Promise(resolve => { resolveRefresh = resolve; }));

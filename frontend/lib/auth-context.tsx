@@ -206,23 +206,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = useCallback(async () => {
         const epoch = ++authEpochRef.current;
-        // Hide the private interface and stop audio/SSE immediately.
+        // Hide private pages and destroy the audio/SSE tree immediately.
         setIsAuthenticated(false);
         setUser(null);
+
+        // Send the existing token to the server before clearing it locally,
+        // but never block sign-out on a failing or unreachable endpoint.
+        // The server may not have revoked the session if the request fails.
+        void api.logout().catch(() => {});
+        api.clearToken();
+        clearAccountMediaStorage();
         try {
-            await api.logout();
-        } catch {
-            // Offline or expired server session: still remove local credentials.
-            // Server-side revocation may not have completed in this case.
+            await clearBrowserQueryCache();
         } finally {
             if (authEpochRef.current === epoch) {
-                api.clearToken();
-                clearAccountMediaStorage();
-                await clearBrowserQueryCache();
-                if (authEpochRef.current === epoch) {
-                    setIsLoading(false);
-                    router.replace("/login");
-                }
+                setIsLoading(false);
+                router.replace("/login");
             }
         }
     }, [router]);

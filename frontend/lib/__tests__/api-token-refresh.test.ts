@@ -44,6 +44,30 @@ afterEach(() => {
     (api as unknown as ApiClientInternals).token = null;
 });
 
+describe("logout race safety", () => {
+    it("does not erase a newer account's token when the old logout response arrives late", async () => {
+        let finish!: (response: Response) => void;
+        const fetchMock = vi.fn().mockImplementationOnce(
+            () => new Promise<Response>(resolve => { finish = resolve; })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const pendingLogout = api.logout();
+        expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("POST");
+        api.setToken("account-b-token", "account-b-refresh");
+        finish(makeResponse({ ok: true, status: 200 }));
+        await pendingLogout;
+        expect(api.getToken()).toBe("account-b-token");
+        expect(localStorage.getItem("auth_token")).toBe("account-b-token");
+    });
+
+    it("still removes the old token when logout returns an error", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new TypeError("offline")));
+        await expect(api.logout()).rejects.toThrow("offline");
+        expect(api.getToken()).toBeNull();
+        expect(localStorage.getItem("auth_token")).toBeNull();
+    });
+});
+
 describe("ApiClient.request -- 401 refresh three-way", () => {
     it("refresh network-error -> throws a distinguishable NetworkError, tokens left intact, no retry-as-auth", async () => {
         const fetchMock = vi
