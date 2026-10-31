@@ -44,6 +44,45 @@ afterEach(() => {
     (api as unknown as ApiClientInternals).token = null;
 });
 
+describe("in-flight token refresh cannot restore an old account", () => {
+    it("does not restore a signed-out session when its refresh returns late", async () => {
+        let finishRefresh!: (response: Response) => void;
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(makeResponse({ ok: false, status: 401 }))
+            .mockImplementationOnce(() => new Promise<Response>(resolve => { finishRefresh = resolve; }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const request = api.request("/library/tracks");
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        api.clearToken();
+        finishRefresh(makeResponse({ ok: true, status: 200, body: {
+            token: "old-access", refreshToken: "old-refresh",
+        } }));
+        await expect(request).rejects.toBeInstanceOf(NetworkError);
+        expect(api.getToken()).toBeNull();
+        expect(localStorage.getItem("auth_token")).toBeNull();
+        expect(localStorage.getItem("refresh_token")).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not replace a new login with a late response from the old account", async () => {
+        let finishRefresh!: (response: Response) => void;
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(makeResponse({ ok: false, status: 401 }))
+            .mockImplementationOnce(() => new Promise<Response>(resolve => { finishRefresh = resolve; }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const request = api.request("/library/tracks");
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        api.setToken("new-account-token", "new-account-refresh");
+        finishRefresh(makeResponse({ ok: false, status: 401 }));
+        await expect(request).rejects.toBeInstanceOf(NetworkError);
+        expect(api.getToken()).toBe("new-account-token");
+        expect(localStorage.getItem("refresh_token")).toBe("new-account-refresh");
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});
+
 describe("logout race safety", () => {
     it("does not erase a newer account's token when the old logout response arrives late", async () => {
         let finish!: (response: Response) => void;
@@ -58,6 +97,20 @@ describe("logout race safety", () => {
         await pendingLogout;
         expect(api.getToken()).toBe("account-b-token");
         expect(localStorage.getItem("auth_token")).toBe("account-b-token");
+    });
+
+    it("does not attempt to refresh a newer account's credentials on a late 401 from logout", async () => {
+        let finishLogout!: (response: Response) => void;
+        const fetchMock = vi.fn().mockImplementationOnce(
+            () => new Promise<Response>(resolve => { finishLogout = resolve; })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const pendingLogout = api.logout();
+        api.setToken("next-account-token", "next-account-refresh");
+        finishLogout(makeResponse({ ok: false, status: 401, body: { error: "Session expired" } }));
+        await expect(pendingLogout).rejects.toThrow();
+        expect(api.getToken()).toBe("next-account-token");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     it("still removes the old token when logout returns an error", async () => {

@@ -131,7 +131,7 @@ export const getApiBaseUrl = () => {
     return "";
 };
 
-type RefreshResult = "refreshed" | "rejected" | "network-error";
+type RefreshResult = "refreshed" | "rejected" | "network-error" | "superseded";
 
 // Distinguishes a transient network outage during token refresh from a real
 // 401 (session expired) so callers don't log the user out on a dropped
@@ -275,6 +275,8 @@ function clearStoredToken(key: string): void {
 class ApiClient {
     private token: string | null = null;
     private tokenInitialized: boolean = false;
+    // Every token replacement invalidates in-flight refresh/logout responses.
+    private sessionGeneration = 0;
     private refreshPromise: Promise<RefreshResult> | null = null;
     private ensurePromise: Promise<"fresh" | RefreshResult> | null = null;
 
@@ -290,7 +292,8 @@ class ApiClient {
      */
     async initToken(): Promise<string | null> {
         const storedToken = readStoredToken(AUTH_TOKEN_KEY);
-        if (storedToken) {
+        if (storedToken && this.token !== storedToken) {
+            this.sessionGeneration++;
             this.token = storedToken;
         }
 
@@ -313,6 +316,7 @@ class ApiClient {
     }
 
     setToken(token: string, refreshToken?: string) {
+        this.sessionGeneration++;
         this.token = token;
         writeStoredToken(AUTH_TOKEN_KEY, token);
         if (refreshToken) writeStoredToken(REFRESH_TOKEN_KEY, refreshToken);
@@ -323,6 +327,7 @@ class ApiClient {
     }
 
     clearToken() {
+        this.sessionGeneration++;
         this.token = null;
         clearStoredToken(AUTH_TOKEN_KEY);
         clearStoredToken(REFRESH_TOKEN_KEY);
@@ -397,7 +402,8 @@ class ApiClient {
         return secondsLeft !== null && secondsLeft < 3600;
     }
 
-    private async _doRefresh(): Promise<"refreshed" | "rejected" | "network-error"> {
+    private async _doRefresh(): Promise<RefreshResult> {
+        const generation = this.sessionGeneration;
         const refreshToken = this.getRefreshToken();
         if (!refreshToken) {
             return "rejected";
@@ -415,13 +421,13 @@ class ApiClient {
                 }
             );
         } catch (error) {
+            if (this.sessionGeneration !== generation) return "superseded";
             // Network/fetch failure (TypeError, AbortError): keep tokens intact.
-            // Clearing tokens on a transient network failure would log the user
-            // out during a subway ride.
             console.error("[API] Token refresh network error:", error);
             return "network-error";
         }
 
+        if (this.sessionGeneration !== generation) return "superseded";
         if (!response.ok) {
             // Server explicitly rejected the refresh token -- session is invalid.
             this.clearToken();
@@ -429,6 +435,9 @@ class ApiClient {
         }
 
         const data = await response.json();
+        // A login or sign-out may have occurred while the response body arrived.
+        // Never resurrect the old account's token or discard the new account.
+        if (this.sessionGeneration !== generation) return "superseded";
 
         if (data.token) {
             this.setToken(data.token, data.refreshToken);
@@ -513,6 +522,7 @@ class ApiClient {
                 response.status === 401 &&
                 _retryCount === 0 &&
                 endpoint !== "/auth/refresh" &&
+                endpoint !== "/auth/logout" &&
                 !signingIn
             ) {
                 const refreshResult = await this.refreshAccessToken();
@@ -522,6 +532,12 @@ class ApiClient {
                         ...options,
                         _retryCount: 1, // Prevent infinite loops
                     });
+                }
+
+                if (refreshResult === "superseded") {
+                    // This request belongs to the former session. Don't turn
+                    // its late 401 into a forced logout of a newer login.
+                    throw new NetworkError("Authentication session changed");
                 }
 
                 if (refreshResult === "network-error") {
@@ -625,7 +641,7 @@ class ApiClient {
     }
 
     async logout() {
-        const tokenAtStart = this.token;
+        const generationAtStart = this.sessionGeneration;
         try {
             await this.request<void>("/auth/logout", {
                 method: "POST",
@@ -633,7 +649,7 @@ class ApiClient {
         } finally {
             // This request may outlive local sign-out. It must never erase a
             // replacement token from a different account that logged in since.
-            if (this.token === tokenAtStart) this.clearToken();
+            if (this.sessionGeneration === generationAtStart) this.clearToken();
         }
     }
 
