@@ -16,6 +16,7 @@ import {
 import { safeError } from "../utils/errors";
 import { proxyPreviewStream } from "../utils/previewProxy";
 import { failureCause } from "../utils/outcome";
+import { withLocalTrackAvailability } from "../services/catalogTrackAvailability";
 
 const router = Router();
 router.use(requireAuthOrToken);
@@ -430,7 +431,13 @@ router.get("/album/:mbid", async (req, res) => {
             const cached = await redisClient.get(cacheKey);
             if (cached) {
                 logger.debug(`[Discovery] Cache hit for album: ${mbid}`);
-                return res.json(JSON.parse(cached));
+                const catalog = JSON.parse(cached);
+                try {
+                    return res.json(await withLocalTrackAvailability(catalog));
+                } catch (error) {
+                    logger.warn("[Discovery] Local availability check failed", error);
+                    return res.json(catalog);
+                }
             }
         } catch {
             // A failed cache read falls through to a fresh lookup.
@@ -582,6 +589,7 @@ router.get("/album/:mbid", async (req, res) => {
                 discSubtitle: null,
                 duration: track.length ? Math.floor(track.length / 1000) : 0,
                 artist: { name: artistName },
+                recordingMbid: track.recording?.id || null,
             })),
             owned: false,
             source: "discovery",
@@ -601,7 +609,14 @@ router.get("/album/:mbid", async (req, res) => {
             }
         }
 
-        res.json(response);
+        // Cached MusicBrainz metadata is stable; local file ownership is not.
+        // Never cache the local join, so a newly scanned single appears here.
+        try {
+            res.json(await withLocalTrackAvailability(response));
+        } catch (error) {
+            logger.warn("[Discovery] Local availability check failed", error);
+            res.json(response);
+        }
     } catch (error) {
         safeError(res, "Album discovery", error);
     }
