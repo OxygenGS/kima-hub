@@ -108,6 +108,8 @@ export function useEventSource() {
                                 queryClient.invalidateQueries({ queryKey: ["artist"] });
                                 queryClient.invalidateQueries({ queryKey: ["library", "albums"] });
                                 queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
+                                queryClient.invalidateQueries({ queryKey: ["library", "tracks"] });
+                                queryClient.invalidateQueries({ queryKey: ["search"] });
                             }
                             break;
                         case "enrichment:progress":
@@ -164,8 +166,9 @@ export function useEventSource() {
                                 // currently observed queries; inactive ones become stale.
                                 for (const key of [
                                     ["notifications"], ["active-downloads"], ["download-history"],
-                                    ["album"], ["artist"], ["library"], ["playlists"],
-                                    ["scan-status"], ["user-imports"], ["enrichment-progress"],
+                                    ["album"], ["artist"], ["library"], ["search"],
+                                    ["playlists"], ["scan-status"], ["user-imports"],
+                                    ["enrichment-progress"],
                                 ]) {
                                     void queryClient.invalidateQueries({ queryKey: key });
                                 }
