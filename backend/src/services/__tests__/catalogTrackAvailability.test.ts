@@ -73,7 +73,13 @@ describe("MusicBrainz album availability from Soulseek singles", () => {
             { id: "impostor", mbid: "33333333-3333-3333-3333-333333333333" },
         ]);
         expect((await withLocalTrackAvailability(catalog())).availableTrackCount).toBe(0);
-        expect(prisma.track.findMany).not.toHaveBeenCalled();
+        // The tagless-import fallback is still allowed for the real artist's
+        // private download directory, but never queries the impostor's rows.
+        const query = (prisma.track.findMany as jest.Mock).mock.calls[0][0];
+        expect(query.where.AND[1].OR).toEqual(expect.arrayContaining([
+            { filePath: { startsWith: "Singles/Kima Downloads/Tones and I/", mode: "insensitive" } },
+        ]));
+        expect(JSON.stringify(query.where.AND[1])).not.toContain("impostor");
     });
 
     it("rejects live/remix variants and significantly different durations", () => {
