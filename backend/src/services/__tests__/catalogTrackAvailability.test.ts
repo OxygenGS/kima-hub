@@ -196,9 +196,7 @@ describe("App-owned Soulseek folder fallback for incorrectly tagged singles", ()
         expect(query.where.AND[2].OR).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 OR: expect.arrayContaining([
-                    expect.objectContaining({ AND: expect.arrayContaining([
-                        { filePath: { contains: "Monkey", mode: "insensitive" } },
-                    ]) }),
+                    { filePath: { contains: "Monkey", mode: "insensitive" } },
                 ]),
             }),
         ]));
@@ -237,5 +235,109 @@ describe("App-owned Soulseek folder fallback for incorrectly tagged singles", ()
             "Dance Monkey (Live)",
         );
         expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
+    });
+});
+
+
+describe("real-world locally owned Dance Monkey files", () => {
+    const artistFilePath = "Tones and I/Tones and I_The Kids Are Coming_02_Dance Monkey.flac";
+    const compilationFilePath = "Singles/Kima Downloads/87 [2019]/CD 2/01. Tones And I - Dance Monkey.flac";
+    const artistFile = (): LocalCandidate => ({
+        ...available("real-album-file", "Tones and I_The Kids Are Coming_02_Dance Monkey", 209),
+        filePath: artistFilePath,
+    });
+    const compilationFile = (artist = "87 [2019]", title = "01. Tones And I - Dance Monkey"): LocalCandidate => ({
+        ...available("real-compilation-file", title, 209, artist),
+        filePath: compilationFilePath,
+        album: {
+            ...available("real-compilation-file", title, 209, artist).album,
+            artist: { id: "compilation-artist", name: artist, mbid: null },
+        },
+    });
+
+    it("recognizes the user's artist-folder filename without requiring a metadata rewrite", () => {
+        const result = matchCatalogTracks(catalog().tracks, [artistFile()], ARTIST, RELEASE, ARTIST_MBID);
+        expect(result[1]).toMatchObject({ id: "real-album-file", isAvailable: true });
+        expect(result[0].isAvailable).toBe(false);
+    });
+
+    it("recognizes the actual compilation file despite a numeric folder parsed as artist", () => {
+        const result = matchCatalogTracks(catalog().tracks, [compilationFile()], ARTIST, RELEASE, ARTIST_MBID);
+        expect(result[1]).toMatchObject({ id: "real-compilation-file", isAvailable: true });
+        expect(result[2].isAvailable).toBe(false);
+    });
+
+    it("recognizes the compilation file when its album artist is Various Artists", () => {
+        expect(matchCatalogTracks(catalog().tracks, [compilationFile("Various Artists")], ARTIST)[1])
+            .toMatchObject({ isAvailable: true });
+    });
+
+    it("prioritizes the identified artist's physical file when both versions agree", () => {
+        const results = matchCatalogTracks(catalog().tracks, [compilationFile(), artistFile()], ARTIST);
+        expect(results[1].id).toBe("real-album-file");
+        expect(results.filter(t => t.isAvailable)).toHaveLength(1);
+    });
+
+    it("queries the actual artist and compilation paths even without an indexed Artist record", async () => {
+        (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.track.findMany as jest.Mock).mockResolvedValue([artistFile(), compilationFile()]);
+        const merged = await withLocalTrackAvailability(catalog());
+        expect(merged.availableTrackCount).toBe(1);
+        expect(merged.tracks[1].id).toBe("real-album-file");
+        expect(merged.owned).toBe(false);
+
+        const query = (prisma.track.findMany as jest.Mock).mock.calls[0][0];
+        expect(query.where.AND[1].OR).toEqual(expect.arrayContaining([
+            { filePath: { startsWith: "Tones and I/", mode: "insensitive" } },
+            { AND: [
+                { filePath: { startsWith: "Singles/Kima Downloads/", mode: "insensitive" } },
+                { OR: expect.arrayContaining([
+                    { filePath: { contains: "Tones and I", mode: "insensitive" } },
+                ]) },
+            ] },
+        ]));
+        expect(query.where.AND[2].OR).toEqual(expect.arrayContaining([
+            expect.objectContaining({ OR: expect.arrayContaining([
+                { filePath: { contains: "Monkey", mode: "insensitive" } },
+            ]) }),
+        ]));
+    });
+
+    it("never trusts a different explicitly tagged artist even when the filename credits Tones and I", () => {
+        const otherSinger = compilationFile("Another Singer");
+        expect(matchCatalogTracks(catalog().tracks, [otherSinger], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("never trusts a different performer in the compilation filename", () => {
+        const candidate = {
+            ...compilationFile("87 [2019]", "01. Other Singer - Dance Monkey"),
+            filePath: compilationFilePath.replace("Tones And I", "Other Singer"),
+        };
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("does not override explicit live titles with the studio title in the filename", () => {
+        const taggedLive = compilationFile("Various Artists", "Dance Monkey (Live)");
+        expect(matchCatalogTracks(catalog().tracks, [taggedLive], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("rejects compilation downloads with mismatched duration", () => {
+        const wrongLength = { ...compilationFile("Various Artists"), duration: 243 };
+        expect(matchCatalogTracks(catalog().tracks, [wrongLength], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("rejects an album artist with a conflicting MusicBrainz ID", () => {
+        const mismatch = compilationFile("87 [2019]");
+        mismatch.album.artist.mbid = "33333333-3333-3333-3333-333333333333";
+        expect(matchCatalogTracks(catalog().tracks, [mismatch], ARTIST, RELEASE, ARTIST_MBID)[1].isAvailable)
+            .toBe(false);
+    });
+
+    it("does not use a compilation filename from an unrelated directory as artist proof", () => {
+        const outsideImport = {
+            ...compilationFile("Various Artists"),
+            filePath: "Compilations/87 [2019]/CD 2/01. Tones And I - Dance Monkey.flac",
+        };
+        expect(matchCatalogTracks(catalog().tracks, [outsideImport], ARTIST)[1].isAvailable).toBe(false);
     });
 });
