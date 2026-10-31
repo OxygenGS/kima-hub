@@ -44,60 +44,114 @@ export interface CatalogWithAvailability {
     owned?: boolean;
 }
 
-/** Only the dedicated app-owned import folder is eligible for a tagless artist fallback. */
-function importFolderArtist(filePath?: string): string | null {
-    if (!filePath) return null;
-    const parts = filePath.replace(/\\/g, "/").split("/");
-    if (parts.length < 5 ||
-        parts[0]?.toLowerCase() !== "singles" ||
-        parts[1]?.toLowerCase() !== "kima downloads") return null;
-    const name = parts[2]?.trim();
-    return name && !["unknownartist", "variousartists", "music", "downloads", "unknown"].includes(artistIdentityKey(name))
-        ? name : null;
+const IMPORT_ROOT = "Singles/Kima Downloads/";
+const GENERIC_ARTIST_KEYS = new Set([
+    "unknownartist", "variousartists", "various", "unknown", "compilation",
+]);
+
+function relativeParts(filePath?: string): string[] {
+    return filePath ? filePath.replace(/\\/g, "/").split("/") : [];
 }
 
-/** Peer folders can spell the same name with "&" or "and". These are
- * exact directory prefixes, not a search across the entire music collection.
- */
+/** Only use literal artist-directory variants; no fuzzy performer identities. */
+function artistPathAliases(name: string): string[] {
+    if (!name || GENERIC_ARTIST_KEYS.has(artistIdentityKey(name))) return [];
+    const values = [name, name.replace(/\band\b/gi, "&"), name.replace(/&/g, "and")];
+    return [...new Set(values.map(a => a.trim()))].filter(
+        a => a.length <= 180 && a.length > 0 &&
+            !a.includes("/") && !a.includes("\\") &&
+            ![...a].some(ch => ch.charCodeAt(0) < 32),
+    );
+}
+
 function importArtistPrefixes(name: string): string[] {
-    // "Unknown Artist" is not an identity and must never open a global match.
-    if (GENERIC_ARTIST_KEYS.has(artistIdentityKey(name))) return [];
-    const aliases = [name, name.replace(/\band\b/gi, "&"), name.replace(/&/g, "and")];
-    return [...new Set(aliases.map(a => a.trim()))]
-        .filter(a => !!a && !a.includes("/") && !a.includes("\\") && ![...a].some(ch => ch.charCodeAt(0) < 32))
-        .map(a => `Singles/Kima Downloads/${a}/`);
+    return artistPathAliases(name).map(a => IMPORT_ROOT + a + "/");
 }
 
-const GENERIC_ARTIST_KEYS = new Set(["unknownartist", "variousartists", "unknown"]);
-
-/** Use an app-managed download directory only when the file's embedded artist
- * is absent/generic. Explicitly tagged other performers are never overridden.
+/** Extract a credited performer and title from strongly structured filenames:
+ * "01. Tones And I - Dance Monkey" and
+ * "Tones and I_The Kids Are Coming_02_Dance Monkey".
  */
+function creditedFilenameTitle(text: string, expectedArtist: string): string | null {
+    const stem = text.replace(/\.(?:flac|mp3|m4a|aac|ogg|opus|wav|wma|ape|wv)$/i, "");
+    const trimmed = stem.replace(/^\s*\d{1,3}\s*[._-]\s*/, "").trim();
+    const fromArtistAlbumTrack = trimmed.match(/^(.+?)_(.+?)_(\d{1,3})_(.+)$/);
+    if (fromArtistAlbumTrack &&
+        artistIdentityKey(fromArtistAlbumTrack[1]) === artistIdentityKey(expectedArtist)) {
+        return fromArtistAlbumTrack[4].trim();
+    }
+    const fromArtistTrack = trimmed.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+    if (fromArtistTrack &&
+        artistIdentityKey(fromArtistTrack[1]) === artistIdentityKey(expectedArtist)) {
+        return fromArtistTrack[2].trim();
+    }
+    return null;
+}
+
+type PathEvidence = { filenameTitle: string | null; source: "artist-folder" | "import-folder" | "import-credited-filename" };
+
+/** Artist proof comes only from an exact artist folder or an explicit,
+ * structured "Artist - Title" filename under Kima's dedicated import root.
+ * A compilation folder name is never treated as the performing artist.
+ */
+function pathArtistEvidence(candidate: LocalCandidate, expectedArtist: string): PathEvidence | null {
+    const parts = relativeParts(candidate.filePath);
+    if (parts.length < 2) return null;
+    const filename = parts[parts.length - 1] || "";
+    const filenameTitle = creditedFilenameTitle(filename, expectedArtist);
+    const isImport = parts.length >= 4 &&
+        parts[0].toLowerCase() === "singles" &&
+        parts[1].toLowerCase() === "kima downloads";
+    const expected = artistIdentityKey(expectedArtist);
+    if (isImport) {
+        const folder = parts[2] || "";
+        if (expected && artistIdentityKey(folder) === expected) {
+            return { source: "import-folder", filenameTitle };
+        }
+        if (filenameTitle) return { source: "import-credited-filename", filenameTitle };
+        return null;
+    }
+    if (expected && artistIdentityKey(parts[0]) === expected) {
+        return { source: "artist-folder", filenameTitle };
+    }
+    return null;
+}
+
+function isGenericOrDerivedCompilationArtist(candidate: LocalCandidate, evidence: PathEvidence): boolean {
+    const embedded = candidate.album.artist.name.trim();
+    if (GENERIC_ARTIST_KEYS.has(artistIdentityKey(embedded))) return true;
+    if (evidence.source !== "import-credited-filename" || isMbid(candidate.album.artist.mbid)) return false;
+    const folder = relativeParts(candidate.filePath)[2] || "";
+    // The scanner can mistake the numeric compilation folder "87 [2019]"
+    // for a performer if the peer's file contains no artist tags.
+    return /^\d{1,3}\s*\[\d{4}\]$/.test(folder) &&
+        artistIdentityKey(embedded) === artistIdentityKey(folder);
+}
+
+/** Never overwrite another explicitly identified artist or MusicBrainz artist. */
 function candidateArtist(candidate: LocalCandidate, expectedArtist: string): string {
     const embedded = candidate.album.artist.name;
-    const folder = importFolderArtist(candidate.filePath);
-    return folder &&
-        artistIdentityKey(folder) === artistIdentityKey(expectedArtist) &&
-        GENERIC_ARTIST_KEYS.has(artistIdentityKey(embedded))
+    const evidence = pathArtistEvidence(candidate, expectedArtist);
+    return evidence && isGenericOrDerivedCompilationArtist(candidate, evidence)
         ? expectedArtist : embedded;
 }
 
-/**
- * Tagless Soulseek files can be indexed by their filename (e.g.
- * "02 - Dance Monkey" or "Tones and I - Dance Monkey"). Strip only
- * unambiguous prefixes in our dedicated import folder; never strip version
- * words such as Live, Remix or Acoustic.
- */
-function candidateTitle(candidate: LocalCandidate): string {
+function candidateTitle(candidate: LocalCandidate, expectedArtist: string): string {
     const original = candidate.displayTitle || candidate.title;
-    const folder = importFolderArtist(candidate.filePath);
-    if (!folder) return original;
-    let normalized = original.replace(/^\s*\d{1,3}[\s._-]+/, "").trim();
-    const prefix = normalized.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-    if (prefix && [candidate.album.artist.name, folder].some(
-        name => artistIdentityKey(name) === artistIdentityKey(prefix[1]),
-    )) normalized = prefix[2].trim();
-    return normalized || original;
+    const evidence = pathArtistEvidence(candidate, expectedArtist);
+    if (!evidence) return original;
+
+    // If the scanner used the whole filename as the title, use its artist-
+    // verified recording name. Explicit title tags ("Dance Monkey (Live)")
+    // take precedence even if the peer's filename says otherwise.
+    const filename = relativeParts(candidate.filePath).at(-1) || "";
+    const stem = filename.replace(/\.(?:flac|mp3|m4a|aac|ogg|opus|wav|wma|ape|wv)$/i, "");
+    if (evidence.filenameTitle && original.trim().toLowerCase() === stem.trim().toLowerCase()) {
+        return evidence.filenameTitle;
+    }
+    const fromRaw = creditedFilenameTitle(original, expectedArtist);
+    if (fromRaw) return fromRaw;
+    return original.replace(/^\s*\d{1,3}[\s._-]+/, "").trim() || original;
 }
 
 function sameRecording(a: string | null | undefined, b: string | null): boolean {
@@ -125,7 +179,7 @@ export function matchCatalogTracks(
             if (sameRecording(entry.recordingMbid, candidate.recordingMbid)) return true;
             return recordingAgrees({
                 id: candidate.id,
-                title: candidateTitle(candidate),
+                title: candidateTitle(candidate, artistName),
                 lengthMs: candidate.duration > 0 ? candidate.duration * 1000 : null,
                 artists: [candidateArtist(candidate, artistName)],
             }, {
@@ -180,10 +234,27 @@ export async function withLocalTrackAvailability(
     // A track imported through the UI can be tagged "Unknown Artist" even
     // though its app-controlled folder correctly names the performer. Do not
     // require a matching Artist DB row before considering that narrow fallback.
-    const importPrefixes = importArtistPrefixes(catalog.artist.name);
-    if (!artistIds.length && !importPrefixes.length) {
-        return { ...catalog, availableTrackCount: 0 };
-    }
+    // Artist rows may be generic for an imported compilation. Keep the SQL
+    // fallback bounded by an app-owned directory AND a literal artist name.
+    const aliases = artistPathAliases(catalog.artist.name);
+    const artistScope: Prisma.TrackWhereInput[] = [
+        ...(artistIds.length ? [{ album: { artistId: { in: artistIds } } }] : []),
+        ...importArtistPrefixes(catalog.artist.name).map(prefix => ({
+            filePath: { startsWith: prefix, mode: "insensitive" as const },
+        })),
+        ...aliases.map(name => ({
+            filePath: { startsWith: name + "/", mode: "insensitive" as const },
+        })),
+        ...(aliases.length ? [{
+            AND: [
+                { filePath: { startsWith: IMPORT_ROOT, mode: "insensitive" as const } },
+                { OR: aliases.map(name => ({
+                    filePath: { contains: name, mode: "insensitive" as const },
+                })) },
+            ],
+        }] : []),
+    ];
+    if (!artistScope.length) return { ...catalog, availableTrackCount: 0 };
 
     const lookup: Prisma.TrackWhereInput[] = [];
     for (const title of [...new Set(tracks.map(t => t.title.trim()).filter(Boolean))]) {
@@ -191,16 +262,12 @@ export async function withLocalTrackAvailability(
             { title: { contains: title, mode: "insensitive" } },
             { displayTitle: { contains: title, mode: "insensitive" } },
         ];
-        // A tagless download named "02 - dance_monkey.flac" won't match
-        // "Dance Monkey" as a substring. The final matcher still demands
-        // title, version, performer and duration agreement.
+        // Covers underscore and album-prefixed filenames such as
+        // "Tones and I_The Kids Are Coming_02_Dance Monkey.flac".
         const keyword = [...(title.match(/[\p{L}\p{N}]{4,}/gu) || [])]
             .sort((a, b) => b.length - a.length)[0];
-        if (keyword && importPrefixes.length) alternatives.push({
-            AND: [
-                { filePath: { startsWith: "Singles/Kima Downloads/" } },
-                { filePath: { contains: keyword, mode: "insensitive" } },
-            ],
+        if (keyword) alternatives.push({
+            filePath: { contains: keyword, mode: "insensitive" },
         });
         lookup.push({ OR: alternatives });
     }
@@ -208,12 +275,6 @@ export async function withLocalTrackAvailability(
     if (recordingMbids.length) lookup.push({ recordingMbid: { in: recordingMbids } });
     if (!lookup.length) return { ...catalog, availableTrackCount: 0 };
 
-    const artistScope: Prisma.TrackWhereInput[] = [
-        ...(artistIds.length ? [{ album: { artistId: { in: artistIds } } }] : []),
-        ...importPrefixes.map(prefix => ({
-            filePath: { startsWith: prefix, mode: "insensitive" as const },
-        })),
-    ];
     const candidates = await prisma.track.findMany({
         where: {
             ...NOT_MISSING,
