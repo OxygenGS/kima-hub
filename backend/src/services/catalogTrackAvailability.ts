@@ -60,9 +60,9 @@ function importFolderArtist(filePath?: string): string | null {
  * exact directory prefixes, not a search across the entire music collection.
  */
 function importArtistPrefixes(name: string): string[] {
-    const aliases = [name, name.replace(/\\band\\b/gi, "&"), name.replace(/&/g, "and")];
+    const aliases = [name, name.replace(/\band\b/gi, "&"), name.replace(/&/g, "and")];
     return [...new Set(aliases.map(a => a.trim()))]
-        .filter(a => !!a && !/[\\/\\\\\\x00-\\x1f]/.test(a))
+        .filter(a => !!a && !a.includes("/") && !a.includes("\\") && ![...a].some(ch => ch.charCodeAt(0) < 32))
         .map(a => `Singles/Kima Downloads/${a}/`);
 }
 
@@ -90,8 +90,8 @@ function candidateTitle(candidate: LocalCandidate): string {
     const original = candidate.displayTitle || candidate.title;
     const folder = importFolderArtist(candidate.filePath);
     if (!folder) return original;
-    let normalized = original.replace(/^\\s*\\d{1,3}[\\s._-]+/, "").trim();
-    const prefix = normalized.match(/^(.+?)\\s+[-–—]\\s+(.+)$/);
+    let normalized = original.replace(/^\s*\d{1,3}[\s._-]+/, "").trim();
+    const prefix = normalized.match(/^(.+?)\s+[-–—]\s+(.+)$/);
     if (prefix && [candidate.album.artist.name, folder].some(
         name => artistIdentityKey(name) === artistIdentityKey(prefix[1]),
     )) normalized = prefix[2].trim();
@@ -192,7 +192,7 @@ export async function withLocalTrackAvailability(
         // A tagless download named "02 - dance_monkey.flac" won't match
         // "Dance Monkey" as a substring. The final matcher still demands
         // title, version, performer and duration agreement.
-        const keyword = [...(title.match(/[\\p{L}\\p{N}]{4,}/gu) || [])]
+        const keyword = [...(title.match(/[\p{L}\p{N}]{4,}/gu) || [])]
             .sort((a, b) => b.length - a.length)[0];
         if (keyword && importPrefixes.length) alternatives.push({
             AND: [
