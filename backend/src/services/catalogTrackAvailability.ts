@@ -122,7 +122,7 @@ function isGenericOrDerivedCompilationArtist(candidate: LocalCandidate, evidence
     if (GENERIC_ARTIST_KEYS.has(artistIdentityKey(embedded))) return true;
     if (evidence.source !== "import-credited-filename" || isMbid(candidate.album.artist.mbid)) return false;
     const folder = relativeParts(candidate.filePath)[2] || "";
-    // The scanner can mistake the numeric compilation folder "87 [2019]"
+    // The scanner can mistake the numeric compilation folder "71 [2020]"
     // for a performer if the peer's file contains no artist tags.
     return /^\d{1,3}\s*\[\d{4}\]$/.test(folder) &&
         artistIdentityKey(embedded) === artistIdentityKey(folder);

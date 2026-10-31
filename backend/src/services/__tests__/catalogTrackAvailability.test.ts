@@ -239,14 +239,14 @@ describe("App-owned Soulseek folder fallback for incorrectly tagged singles", ()
 });
 
 
-describe("real-world locally owned Dance Monkey files", () => {
-    const artistFilePath = "Tones and I/Tones and I_The Kids Are Coming_02_Dance Monkey.flac";
-    const compilationFilePath = "Singles/Kima Downloads/87 [2019]/CD 2/01. Tones And I - Dance Monkey.flac";
+describe("representative artist-folder and compilation imports", () => {
+    const artistFilePath = "Tones and I/Tones and I_Sample EP_02_Dance Monkey.flac";
+    const compilationFilePath = "Singles/Kima Downloads/71 [2020]/Disc 2/01. Tones And I - Dance Monkey.flac";
     const artistFile = (): LocalCandidate => ({
         ...available("real-album-file", "Tones and I_The Kids Are Coming_02_Dance Monkey", 209),
         filePath: artistFilePath,
     });
-    const compilationFile = (artist = "87 [2019]", title = "01. Tones And I - Dance Monkey"): LocalCandidate => ({
+    const compilationFile = (artist = "71 [2020]", title = "01. Tones And I - Dance Monkey"): LocalCandidate => ({
         ...available("real-compilation-file", title, 209, artist),
         filePath: compilationFilePath,
         album: {
@@ -310,7 +310,7 @@ describe("real-world locally owned Dance Monkey files", () => {
 
     it("never trusts a different performer in the compilation filename", () => {
         const candidate = {
-            ...compilationFile("87 [2019]", "01. Other Singer - Dance Monkey"),
+            ...compilationFile("71 [2020]", "01. Other Singer - Dance Monkey"),
             filePath: compilationFilePath.replace("Tones And I", "Other Singer"),
         };
         expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
@@ -327,7 +327,7 @@ describe("real-world locally owned Dance Monkey files", () => {
     });
 
     it("rejects an album artist with a conflicting MusicBrainz ID", () => {
-        const mismatch = compilationFile("87 [2019]");
+        const mismatch = compilationFile("71 [2020]");
         mismatch.album.artist.mbid = "33333333-3333-3333-3333-333333333333";
         expect(matchCatalogTracks(catalog().tracks, [mismatch], ARTIST, RELEASE, ARTIST_MBID)[1].isAvailable)
             .toBe(false);
@@ -336,7 +336,7 @@ describe("real-world locally owned Dance Monkey files", () => {
     it("does not use a compilation filename from an unrelated directory as artist proof", () => {
         const outsideImport = {
             ...compilationFile("Various Artists"),
-            filePath: "Compilations/87 [2019]/CD 2/01. Tones And I - Dance Monkey.flac",
+            filePath: "Compilations/71 [2020]/Disc 2/01. Tones And I - Dance Monkey.flac",
         };
         expect(matchCatalogTracks(catalog().tracks, [outsideImport], ARTIST)[1].isAvailable).toBe(false);
     });
