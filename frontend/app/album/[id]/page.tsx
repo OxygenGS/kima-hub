@@ -144,7 +144,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
         );
     }
 
-    const handlePlayTrack = (track: AlbumTrack, index: number) => {
+    const handlePlayTrack = (track: AlbumTrack, _index: number) => {
         const indexInPlayableQueue = playableAlbumTracks(album).findIndex(
             (available: AlbumTrack) => available.id === track.id
         );
