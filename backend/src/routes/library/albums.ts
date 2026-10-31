@@ -151,7 +151,8 @@ router.get("/albums/:id", async (req, res) => {
         ? lidarrService.getMissingTracksByAlbumMbid(album.rgMbid)
         : Promise.resolve([]),
     ]);
-    const isOwned = !!owned;
+    const isOwned = !!owned || (album.location === LIBRARY_LOCATION &&
+      album.tracks.some((track) => !track.missingSince && !track.corrupt));
 
     const artistData = album.artist;
 
@@ -188,6 +189,7 @@ router.get("/albums/:id", async (req, res) => {
       tracks: album.tracks.map((t) => ({
         ...t,
         audioFeatures: toAudioFeaturesDTO(t),
+        isAvailable: !t.missingSince && !t.corrupt,
       })),
       artist: artistData,
       owned: isOwned,

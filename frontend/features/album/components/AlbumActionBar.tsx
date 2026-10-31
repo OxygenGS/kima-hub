@@ -6,6 +6,7 @@ import { useMusicPermissions } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { MediaActionBar, MediaActionButton } from "@/components/ui/MediaActionBar";
 import type { Album, AlbumSource } from "../types";
+import { playableAlbumTracks } from "../lib/availableTracks";
 
 interface AlbumActionBarProps {
     album: Album;
@@ -27,6 +28,7 @@ export function AlbumActionBar({
     const { canRequestAlbums } = useMusicPermissions();
     const { t } = useLanguage();
     const isOwned = album.owned !== undefined ? album.owned : source === "library";
+    const hasPlayableTracks = playableAlbumTracks(album).length > 0;
     const showDownload = canRequestAlbums && !isOwned && (album.mbid || album.rgMbid);
     const showPause = isPlaying && isPlayingThisAlbum;
     const handlePlayPauseClick = () => {
@@ -36,14 +38,14 @@ export function AlbumActionBar({
 
     return (
         <MediaActionBar
-            showPlay={isOwned}
+            showPlay={isOwned || hasPlayableTracks}
             showPause={showPause}
             onPlayPause={handlePlayPauseClick}
             onShuffle={onShuffle}
             secondaryShape="square"
             showLabels
         >
-            {isOwned && (
+            {(isOwned || hasPlayableTracks) && (
                 <MediaActionButton
                     shape="square"
                     icon={<ListPlus className="w-5 h-5 shrink-0" aria-hidden="true" />}

@@ -812,6 +812,12 @@ export class MusicScannerService {
         // normalised title so a release-group id always wins, and retries on a unique
         // violation.
         let isDiscoveryAlbum = false;
+        // A manual Soulseek import is a user-owned physical file even if
+        // the artist was previously known only through MusicBrainz discovery.
+        const isManualSoulseekImport = relativePath
+            .replace(/\\/g, "/")
+            .toLowerCase()
+            .startsWith("singles/kima downloads/");
 
         // Album identity comes from the file's own release-group tag only; an
         // untagged file keeps the placeholder until the recording stage asks.
@@ -829,14 +835,14 @@ export class MusicScannerService {
                 // 1. legacy /music/discovery/ folder
                 // 2. artist+album matches a discovery download job
                 // 3. artist is discovery-only (has albums, none LIBRARY)
-                const isDiscoveryByPath = this.isDiscoveryPath(relativePath);
-                const isDiscoveryByJob = await this.isDiscoveryDownload(
+                const isDiscoveryByPath = !isManualSoulseekImport && this.isDiscoveryPath(relativePath);
+                const isDiscoveryByJob = !isManualSoulseekImport && await this.isDiscoveryDownload(
                     artistName,
                     albumTitle
                 );
 
                 let isDiscoveryArtist = false;
-                if (!isDiscoveryByPath && !isDiscoveryByJob) {
+                if (!isManualSoulseekImport && !isDiscoveryByPath && !isDiscoveryByJob) {
                     const artistAlbums = await prisma.album.findMany({
                         where: { artistId: artist.id },
                         select: { location: true },
@@ -862,6 +868,16 @@ export class MusicScannerService {
                 };
             },
         });
+
+        // An existing provisional DISCOVER album can gain its first locally
+        // imported file. Promote only this exact matched album, never all
+        // releases of the artist and never any files on disk.
+        if (isManualSoulseekImport && album.location !== "LIBRARY") {
+            await prisma.album.updateMany({
+                where: { id: album.id, location: "DISCOVER" },
+                data: { location: "LIBRARY" },
+            });
+        }
 
         // Only track ownership for library albums; discovery albums are
         // provisional and must not appear as owned. Keyed on the album's OWN

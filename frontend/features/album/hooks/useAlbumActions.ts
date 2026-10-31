@@ -6,8 +6,9 @@ import { notify } from "@/lib/notify";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { isMbid } from "@/lib/mbid";
 import { Album, Track } from "../types";
+import { isPlayableAlbumTrack, playableAlbumTracks } from "../lib/availableTracks";
 
-const toQueueTrack = (track: Track, album: Album) => ({
+export const toQueueTrack = (track: Track, album: Album) => ({
     id: track.id,
     title: track.title,
     duration: track.duration,
@@ -16,9 +17,9 @@ const toQueueTrack = (track: Track, album: Album) => ({
         id: track.artist?.id || album.artist?.id || "",
     },
     album: {
-        title: album.title,
-        id: album.id,
-        coverArt: album.coverArt || album.coverUrl,
+        title: track.album?.title || album.title,
+        id: track.album?.id || album.id,
+        coverArt: track.album?.coverArt || album.coverArt || album.coverUrl,
     },
 });
 
@@ -37,22 +38,26 @@ export function useAlbumActions() {
     };
 
     const playAlbum = (album: Album | null, startIndex: number = 0) => {
-        if (!requireAlbum(album) || !album.tracks) return;
-        playTracks(album.tracks.map((t) => toQueueTrack(t, album)), startIndex);
+        if (!requireAlbum(album)) return;
+        const tracks = playableAlbumTracks(album);
+        if (!tracks.length) return;
+        playTracks(tracks.map((t) => toQueueTrack(t, album)), Math.min(Math.max(startIndex, 0), tracks.length - 1));
     };
 
     const shufflePlay = (album: Album | null) => {
-        if (!requireAlbum(album) || !album.tracks) return;
-        playTracks(shuffleArray(album.tracks.map((t) => toQueueTrack(t, album))), 0);
+        if (!requireAlbum(album)) return;
+        const tracks = playableAlbumTracks(album);
+        if (!tracks.length) return;
+        playTracks(shuffleArray(tracks.map((t) => toQueueTrack(t, album))), 0);
     };
 
     const playTrack = (track: Track, album: Album | null) => {
-        if (!requireAlbum(album)) return;
+        if (!requireAlbum(album) || !isPlayableAlbumTrack(track, album)) return;
         playTrackAudio(toQueueTrack(track, album));
     };
 
     const addToQueue = (track: Track, album: Album | null) => {
-        if (!requireAlbum(album)) return;
+        if (!requireAlbum(album) || !isPlayableAlbumTrack(track, album)) return;
         addToQueueAudio(toQueueTrack(track, album));
     };
 

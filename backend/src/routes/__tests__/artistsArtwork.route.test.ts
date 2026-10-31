@@ -63,6 +63,11 @@ jest.mock("../../services/deezer", () => ({
     },
 }));
 
+const mockWithLocalTrackAvailability = jest.fn();
+jest.mock("../../services/catalogTrackAvailability", () => ({
+    withLocalTrackAvailability: (...a: unknown[]) => mockWithLocalTrackAvailability(...a),
+}));
+
 const mockWithAlbumArtwork = jest.fn();
 const mockFindAlbumArtwork = jest.fn();
 const mockFindArtistArtwork = jest.fn();
@@ -98,6 +103,9 @@ describe("the discovery routes and the pictures they promise", () => {
         mockGetReleaseGroup.mockResolvedValue(noData);
         mockFindArtistArtwork.mockResolvedValue(null);
         mockFindAlbumArtwork.mockResolvedValue(null);
+        mockWithLocalTrackAvailability.mockImplementation(async (album: any) => ({
+            ...album, availableTrackCount: 0,
+        }));
         // Stand in for the real helper: null every cover unless a test says so.
         mockWithAlbumArtwork.mockImplementation(
             async (items: any[], _read: any, write: any) => items.map((i) => write(i, null)),
@@ -222,6 +230,37 @@ describe("the discovery routes and the pictures they promise", () => {
     });
 
     describe("GET /artists/album/:mbid", () => {
+        it("reconciles cached release metadata with today's playable local songs", async () => {
+            const oldCatalog = {
+                id: MBID,
+                title: "The Kids Are Coming",
+                artist: { name: "Tones and I" },
+                tracks: [
+                    { id: "mb-1", title: "Dance Monkey", duration: 209 },
+                    { id: "mb-2", title: "Colourblind", duration: 206 },
+                ],
+                owned: false,
+            };
+            (redisClient.get as jest.Mock).mockResolvedValueOnce(JSON.stringify(oldCatalog));
+            mockWithLocalTrackAvailability.mockImplementationOnce(async (album: any) => ({
+                ...album,
+                tracks: [
+                    { ...album.tracks[0], id: "real-local-id", isAvailable: true },
+                    album.tracks[1],
+                ],
+                availableTrackCount: 1,
+            }));
+            const res = await request(makeApp()).get(`/artists/album/${MBID}`);
+            expect(res.status).toBe(200);
+            expect(res.body.owned).toBe(false);
+            expect(res.body.availableTrackCount).toBe(1);
+            expect(res.body.tracks[0].id).toBe("real-local-id");
+            expect(res.body.tracks[1].id).toBe("mb-2");
+            expect(mockWithLocalTrackAvailability).toHaveBeenCalledTimes(1);
+            expect(mockGetReleaseGroup).not.toHaveBeenCalled();
+            expect(redisClient.setex).not.toHaveBeenCalled();
+        });
+
         it("refuses an id MusicBrainz could never have issued", async () => {
             const res = await request(makeApp()).get("/artists/album/not-a-uuid");
 
