@@ -196,13 +196,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Offline or expired server session: still remove local credentials.
             // Server-side revocation may not have completed in this case.
         } finally {
-            if (authEpochRef.current !== epoch) return;
-            api.clearToken();
-            clearAccountMediaStorage();
-            await clearBrowserQueryCache();
             if (authEpochRef.current === epoch) {
-                setIsLoading(false);
-                router.replace("/login");
+                api.clearToken();
+                clearAccountMediaStorage();
+                await clearBrowserQueryCache();
+                if (authEpochRef.current === epoch) {
+                    setIsLoading(false);
+                    router.replace("/login");
+                }
             }
         }
     }, [router]);
