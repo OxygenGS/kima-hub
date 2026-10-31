@@ -1,0 +1,84 @@
+{
+  "release": {
+    "version": "1.16.2",
+    "title": "Kima Hub 1.16.2 — Soulseek Singles in Artist Albums",
+    "summary": "Show verified locally downloaded Soulseek singles as playable tracks on their artist and MusicBrainz album pages.",
+    "date": "2026-10-31",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.1162.catalog",
+        "title": "Downloaded singles now appear on the correct artist release",
+        "summary": "Recognize locally indexed singles in MusicBrainz album tracklists without moving music files.",
+        "body": "After a Soulseek single is downloaded and indexed, its local file can appear as available in the corresponding artist and MusicBrainz release tracklist even when its file tags refer to a different album or Unknown Album. Kima reconciles catalog tracks with playable local files for the same verified artist. It prefers matching MusicBrainz recording IDs and otherwise requires conservative title, version, artist and duration agreement. It also recognizes unambiguous numbered filename prefixes inside the dedicated Singles/Kima Downloads import folder. A different performer, remix, live take or unrelated recording will not be silently treated as the same track. Cached MusicBrainz release information is combined with current local availability on every request; the underlying files and original album identities remain unchanged.",
+        "links": [
+          {
+            "label": "Browse artists",
+            "href": "/collection?tab=artists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1162.playback",
+        "title": "Play available songs without claiming the entire album",
+        "summary": "Use the real local track ID for playback, queues and playlists while other songs remain previews.",
+        "body": "A release can contain both available local songs and catalog-only previews. Individually verified songs now have playable controls on the artist album page and use their actual indexed track ID and local album information for playback and queue actions. Playing or shuffling a partially available release includes only its verified local songs; adding tracks to the queue or playlist never includes an unavailable preview. The full release is not marked as owned simply because one song exists, so requesting the complete album remains possible when allowed. Missing or corrupt files are never presented as playable.",
+        "links": [
+          {
+            "label": "Browse albums",
+            "href": "/collection?tab=albums"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.1162.indexing",
+        "title": "Refresh availability after scanning new singles",
+        "summary": "Keep manual Soulseek imports in the local library and refresh artist and album views after a successful scan.",
+        "body": "New manual Soulseek imports are classified as locally owned library files, even when the artist was previously known only from discovery. Existing imports in the dedicated download folder are also considered when matching local songs. A completed successful library scan refreshes relevant album, artist and library queries so newly indexed tracks can appear without waiting for stale catalog data to expire. This patch makes no database schema changes, does not move or retag audio, and does not change Soulseek transport, the download folder permissions, OpenSubsonic client authentication or Artwork Recovery. A complete backup and verified restore of persistent /data remain essential before updating. Native AMD64/ARM64 build, vulnerability and secret checks, explicit security review and protected publication remain required.",
+        "links": [
+          {
+            "label": "Open music library",
+            "href": "/collection?tab=tracks"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.16.2 — Soulseek Singles in Artist Albums": "Kima Hub 1.16.2 — Soulseek-singles zichtbaar bij artiesten"
+    },
+    "summaries": {
+      "Show verified locally downloaded Soulseek singles as playable tracks on their artist and MusicBrainz album pages.": "Toon gecontroleerde, lokaal gedownloade Soulseek-singles als afspeelbare nummers op artiest- en MusicBrainz-albumpagina's."
+    },
+    "items": {
+      "fork.1162.catalog": {
+        "title": "Gedownloade singles staan bij de juiste artiest en release",
+        "summary": "Herken lokaal geïndexeerde singles in MusicBrainz-albumlijsten zonder muziekbestanden te verplaatsen.",
+        "body": "Na downloaden en indexeren kan een Soulseek-single op de bijbehorende artiesten- en MusicBrainz-releasepagina als beschikbaar verschijnen, ook als het bestand andere albumtags of Unknown Album heeft. Kima koppelt catalogusnummers uitsluitend aan afspeelbare lokale bestanden van dezelfde gecontroleerde artiest. Een overeenkomende MusicBrainz-opname-ID krijgt voorrang; anders moeten titel, versie, artiest en speelduur voldoende precies overeenkomen. Ook ondubbelzinnige nummerprefixen in bestandsnamen binnen Singles/Kima Downloads worden herkend. Een andere uitvoerder, remix, liveversie of andere opname wordt niet zomaar gelijkgesteld. Bij elk verzoek wordt de gecachete MusicBrainz-informatie gecombineerd met de actuele lokale beschikbaarheid. De muziekbestanden en oorspronkelijke albumidentiteiten blijven ongewijzigd.",
+        "links": {
+          "/collection?tab=artists": "Bekijk artiesten"
+        }
+      },
+      "fork.1162.playback": {
+        "title": "Speel aanwezige nummers af zonder het hele album als bezit te markeren",
+        "summary": "Gebruik echte lokale nummer-ID's voor afspelen en wachtrijen; ontbrekende nummers blijven previews.",
+        "body": "Een release kan zowel aanwezige lokale nummers als alleen voorbeeldnummers bevatten. Gecontroleerde lokale nummers krijgen nu afspeelknoppen op de albumpagina bij de artiest. Afspelen en toevoegen aan de wachtrij gebruiken de werkelijke lokale nummer-ID en albuminformatie. Bij het afspelen of willekeurig afspelen van een gedeeltelijk aanwezig album worden uitsluitend beschikbare nummers gebruikt. Voorbeeldnummers komen niet in de wachtrij of afspeellijst terecht. Eén aanwezige single maakt niet automatisch het hele album eigendom. Een aanvraag voor het volledige album blijft mogelijk als de gebruiker daarvoor rechten heeft. Ontbrekende of beschadigde bestanden worden niet als afspeelbaar getoond.",
+        "links": {
+          "/collection?tab=albums": "Bekijk albums"
+        }
+      },
+      "fork.1162.indexing": {
+        "title": "Vernieuw de beschikbaarheid na het scannen van nieuwe singles",
+        "summary": "Nieuwe Soulseek-imports horen bij je bibliotheek; ververs artiest- en albumpagina's na een geslaagde scan.",
+        "body": "Nieuwe handmatige Soulseek-downloads worden als lokale bibliotheekbestanden verwerkt, ook als de artiest eerder alleen via Ontdekken bekend was. Ook bestaande imports uit de speciale downloadmap tellen mee bij het koppelen van nummers. Na een geslaagde bibliotheekscan vernieuwt Kima de relevante artiest-, album- en bibliotheekgegevens, zodat nieuwe nummers niet onnodig achter verouderde catalogusinformatie verborgen blijven. Deze patch voegt geen databasemigratie toe, verplaatst of herschrijft geen muziek en verandert niets aan Soulseek-transport, maprechten, OpenSubsonic-authenticatie of Artwork Recovery. Maak vóór het bijwerken een volledige back-up van het blijvende /data-volume en controleer of herstel werkt. Native AMD64/ARM64-controles, kwetsbaarheids- en geheime-sleutelscans, expliciete beveiligingsbeoordeling en beveiligde publicatie blijven verplicht.",
+        "links": {
+          "/collection?tab=tracks": "Open muziekbibliotheek"
+        }
+      }
+    }
+  },
+  "changelog": "Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles on artist and MusicBrainz album pages after the published v1.16.1 download-permission hotfix.\n\n### Show locally downloaded singles within artist albums (PR #173)\n- Match cached and freshly fetched MusicBrainz release tracklists with verified local, non-missing, non-corrupt files from the same identified artist. Prefer recording MBIDs; otherwise use conservative title, version, artist and duration matching.\n- Recognize unambiguous numbered or artist-prefixed filenames from the dedicated `Singles/Kima Downloads` import folder without weakening matching for unrelated library tracks.\n- Display each matched row as available, with its real local track and album IDs, without falsely marking an incomplete release as fully owned. Keep remaining catalog entries as previews and preserve the option to request the full album.\n- Play, shuffle, queue and add to playlists only verified locally available tracks; preserve correct local album identity for playback.\n- Classify future manual Soulseek imports as library music and refresh relevant album/artist/library views after a successful scan. Older indexed imports can be recognized without a file move or database backfill.\n\n### Verification and upgrade safeguards\n- Includes backend catalog matching, cached-release and scanner regression coverage plus frontend mixed-availability tests. PR #173 passed backend/frontend tests, typechecks, security/privacy guards, AIO smoke and native no-push builds.\n- No schema migration, music file movement or retagging, new download permission, Soulseek transport change, authentication change or artwork recovery change.\n- Back up persistent `/data` and independently verify restore before upgrading; keep the existing `/music` mount and dedicated Soulseek import folder permissions unchanged.\n- This source candidate is not a published image or installation instruction. Native AMD64/ARM64 preflight and review of remaining HIGH/CRITICAL advisories are required; a separate explicit approval is needed before a stable tag and Docker publication."
+}

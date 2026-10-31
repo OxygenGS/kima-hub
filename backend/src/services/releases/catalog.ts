@@ -101,6 +101,54 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.16.2
+    {
+        "version": "1.16.2",
+        "title": "Kima Hub 1.16.2 \u2014 Soulseek Singles in Artist Albums",
+        "summary": "Show verified locally downloaded Soulseek singles as playable tracks on their artist and MusicBrainz album pages.",
+        "date": "2026-10-31",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1162.catalog",
+                "title": "Downloaded singles now appear on the correct artist release",
+                "summary": "Recognize locally indexed singles in MusicBrainz album tracklists without moving music files.",
+                "body": "After a Soulseek single is downloaded and indexed, its local file can appear as available in the corresponding artist and MusicBrainz release tracklist even when its file tags refer to a different album or Unknown Album. Kima reconciles catalog tracks with playable local files for the same verified artist. It prefers matching MusicBrainz recording IDs and otherwise requires conservative title, version, artist and duration agreement. It also recognizes unambiguous numbered filename prefixes inside the dedicated Singles/Kima Downloads import folder. A different performer, remix, live take or unrelated recording will not be silently treated as the same track. Cached MusicBrainz release information is combined with current local availability on every request; the underlying files and original album identities remain unchanged.",
+                "links": [
+                    {
+                        "label": "Browse artists",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1162.playback",
+                "title": "Play available songs without claiming the entire album",
+                "summary": "Use the real local track ID for playback, queues and playlists while other songs remain previews.",
+                "body": "A release can contain both available local songs and catalog-only previews. Individually verified songs now have playable controls on the artist album page and use their actual indexed track ID and local album information for playback and queue actions. Playing or shuffling a partially available release includes only its verified local songs; adding tracks to the queue or playlist never includes an unavailable preview. The full release is not marked as owned simply because one song exists, so requesting the complete album remains possible when allowed. Missing or corrupt files are never presented as playable.",
+                "links": [
+                    {
+                        "label": "Browse albums",
+                        "href": "/collection?tab=albums"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1162.indexing",
+                "title": "Refresh availability after scanning new singles",
+                "summary": "Keep manual Soulseek imports in the local library and refresh artist and album views after a successful scan.",
+                "body": "New manual Soulseek imports are classified as locally owned library files, even when the artist was previously known only from discovery. Existing imports in the dedicated download folder are also considered when matching local songs. A completed successful library scan refreshes relevant album, artist and library queries so newly indexed tracks can appear without waiting for stale catalog data to expire. This patch makes no database schema changes, does not move or retag audio, and does not change Soulseek transport, the download folder permissions, OpenSubsonic client authentication or Artwork Recovery. A complete backup and verified restore of persistent /data remain essential before updating. Native AMD64/ARM64 build, vulnerability and secret checks, explicit security review and protected publication remain required.",
+                "links": [
+                    {
+                        "label": "Open music library",
+                        "href": "/collection?tab=tracks"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.16.1
     {
         "version": "1.16.1",
