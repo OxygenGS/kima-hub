@@ -129,3 +129,107 @@ describe("MusicBrainz album availability from Soulseek singles", () => {
         expect(result[0].id).toBe("mb");
     });
 });
+
+
+describe("App-owned Soulseek folder fallback for incorrectly tagged singles", () => {
+    const tagless = (filePath: string, title = "Tones and I - Dance Monkey") => ({
+        ...available("tagless-from-unknown-artist", title, 209, "Unknown Artist"),
+        filePath,
+        album: {
+            ...available("tagless-from-unknown-artist", title).album,
+            artist: { id: "unknown-artist-row", name: "Unknown Artist", mbid: null },
+        },
+    });
+
+    it("links Dance Monkey when the file is tagged Unknown Artist but the dedicated import folder identifies Tones and I", async () => {
+        (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.track.findMany as jest.Mock).mockResolvedValue([
+            tagless("Singles/Kima Downloads/Tones and I/Unknown Album/02 - Tones and I - Dance Monkey.flac",
+                "02 - Tones and I - Dance Monkey"),
+        ]);
+
+        const result = await withLocalTrackAvailability(catalog());
+        expect(result.availableTrackCount).toBe(1);
+        expect(result.tracks[1]).toMatchObject({
+            id: "tagless-from-unknown-artist", isAvailable: true,
+        });
+        expect(result.tracks[0].isAvailable).toBe(false);
+        expect(result.owned).toBe(false);
+
+        const query = (prisma.track.findMany as jest.Mock).mock.calls[0][0];
+        expect(query.where.AND[1].OR).toEqual(expect.arrayContaining([
+            { filePath: { startsWith: "Singles/Kima Downloads/Tones and I/", mode: "insensitive" } },
+            { filePath: { startsWith: "Singles/Kima Downloads/Tones & I/", mode: "insensitive" } },
+        ]));
+        // Fail closed for other directories and artists, even with identical titles.
+        expect(query.where.AND[0].OR).toContainEqual(
+            { filePath: { startsWith: "Singles/Kima Downloads/" } },
+        );
+    });
+
+    it("accepts an ampersand alias in the download folder with the same exact artist identity", () => {
+        const candidate = tagless(
+            "Singles/Kima Downloads/Tones & I/Album/02 - Tones & I - Dance Monkey.flac",
+            "02 - Tones & I - Dance Monkey",
+        );
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].id)
+            .toBe(candidate.id);
+    });
+
+    it("matches a tagless filename using underscores without fetching unrelated library tracks", async () => {
+        (prisma.artist.findMany as jest.Mock).mockResolvedValue([]);
+        (prisma.track.findMany as jest.Mock).mockResolvedValue([
+            tagless("Singles/Kima Downloads/Tones and I/Unknown Album/02_Dance_Monkey.flac",
+                "02_Dance_Monkey"),
+        ]);
+
+        const result = await withLocalTrackAvailability(catalog());
+        expect(result.availableTrackCount).toBe(1);
+        expect(result.tracks[1].isAvailable).toBe(true);
+        const query = (prisma.track.findMany as jest.Mock).mock.calls[0][0];
+        expect(query.where.AND[2].OR).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                OR: expect.arrayContaining([
+                    expect.objectContaining({ AND: expect.arrayContaining([
+                        { filePath: { contains: "Monkey", mode: "insensitive" } },
+                    ]) }),
+                ]),
+            }),
+        ]));
+    });
+
+    it("rejects a different explicitly tagged performer even in a correctly named import folder", () => {
+        const candidate = tagless(
+            "Singles/Kima Downloads/Tones and I/Album/Dance Monkey.flac",
+            "Dance Monkey",
+        );
+        candidate.album.artist.name = "Another Singer";
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("rejects a wrong performer folder for tagless files", () => {
+        const candidate = tagless(
+            "Singles/Kima Downloads/Other Artist/Album/Dance Monkey.flac",
+            "Dance Monkey",
+        );
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
+    });
+
+    it("refuses a conflicting known artist MBID even if the folder and title agree", () => {
+        const candidate = tagless(
+            "Singles/Kima Downloads/Tones and I/Album/Dance Monkey.flac",
+            "Dance Monkey",
+        );
+        candidate.album.artist.mbid = "33333333-3333-3333-3333-333333333333";
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST, RELEASE, ARTIST_MBID)[1].isAvailable)
+            .toBe(false);
+    });
+
+    it("rejects different versions even for an untagged download", () => {
+        const candidate = tagless(
+            "Singles/Kima Downloads/Tones and I/Album/Dance Monkey (Live).flac",
+            "Dance Monkey (Live)",
+        );
+        expect(matchCatalogTracks(catalog().tracks, [candidate], ARTIST)[1].isAvailable).toBe(false);
+    });
+});
