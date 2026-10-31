@@ -132,7 +132,7 @@ describe("MusicBrainz album availability from Soulseek singles", () => {
 
 
 describe("App-owned Soulseek folder fallback for incorrectly tagged singles", () => {
-    const tagless = (filePath: string, title = "Tones and I - Dance Monkey") => ({
+    const tagless = (filePath: string, title = "Tones and I - Dance Monkey"): LocalCandidate => ({
         ...available("tagless-from-unknown-artist", title, 209, "Unknown Artist"),
         filePath,
         album: {
