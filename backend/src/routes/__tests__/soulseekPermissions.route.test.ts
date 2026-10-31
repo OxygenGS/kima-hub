@@ -6,6 +6,7 @@
 const mockCurrentUser = jest.fn();
 const mockIsAvailable = jest.fn();
 const mockDownloadTrack = jest.fn();
+const mockSearchTrack = jest.fn();
 const mockCreateDownloadJob = jest.fn();
 const mockUpdateDownloadJob = jest.fn();
 const mockSystemSettings = jest.fn();
@@ -25,6 +26,7 @@ jest.mock("../../services/soulseek", () => ({
     soulseekService: {
         isAvailable: (...args: unknown[]) => mockIsAvailable(...args),
         downloadTrack: (...args: unknown[]) => mockDownloadTrack(...args),
+        searchTrack: (...args: unknown[]) => mockSearchTrack(...args),
     },
 }));
 jest.mock("../../services/eventBus", () => ({
@@ -57,6 +59,7 @@ beforeEach(() => {
     });
     mockIsAvailable.mockReset().mockResolvedValue(true);
     mockDownloadTrack.mockReset();
+    mockSearchTrack.mockReset();
     mockCreateDownloadJob.mockReset().mockResolvedValue({ id: "test-download-job" });
     mockUpdateDownloadJob.mockReset().mockResolvedValue({ id: "test-download-job" });
     mockSystemSettings.mockReset().mockResolvedValue({ musicPath: "/music" });
@@ -140,4 +143,38 @@ describe("POST /soulseek/download — original fork rights retained in v1.11", (
         }));
     });
 
+});
+
+
+describe("Soulseek search fallback memory bounds", () => {
+    it("keeps at most 200 fallback hits even when peers return larger inventories", async () => {
+        mockSearchTrack.mockImplementation(
+            async (_query: string, _title: string, _user: unknown, _download: unknown,
+                _timeout: number, onResult: (result: unknown) => void) => {
+                for (let batch = 0; batch < 3; batch++) {
+                    onResult({
+                        username: "synthetic-peer",
+                        files: Array.from({ length: 120 }, (_, i) => ({
+                            filename: `Artist/Album/${batch}-${i}.flac`,
+                            size: 12_345_678,
+                            attrs: new Map(),
+                        })),
+                    });
+                }
+                return { found: true, allMatches: [] };
+            },
+        );
+        const start = await request(app)
+            .post("/soulseek/search")
+            .send({ query: "Synthetic Artist Album" });
+        expect(start.status).toBe(200);
+        expect(start.body.searchId).toEqual(expect.any(String));
+
+        const fallback = await request(app).get(`/soulseek/search/${start.body.searchId}`);
+        expect(fallback.status).toBe(200);
+        expect(fallback.body.count).toBe(200);
+        expect(fallback.body.results).toHaveLength(200);
+        expect(fallback.body.results[0].filename).toBe("0-0.flac");
+        expect(fallback.body.results[199].filename).toBe("1-79.flac");
+    });
 });
