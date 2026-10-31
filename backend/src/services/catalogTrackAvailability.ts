@@ -60,6 +60,8 @@ function importFolderArtist(filePath?: string): string | null {
  * exact directory prefixes, not a search across the entire music collection.
  */
 function importArtistPrefixes(name: string): string[] {
+    // "Unknown Artist" is not an identity and must never open a global match.
+    if (GENERIC_ARTIST_KEYS.has(artistIdentityKey(name))) return [];
     const aliases = [name, name.replace(/\band\b/gi, "&"), name.replace(/&/g, "and")];
     return [...new Set(aliases.map(a => a.trim()))]
         .filter(a => !!a && !a.includes("/") && !a.includes("\\") && ![...a].some(ch => ch.charCodeAt(0) < 32))
