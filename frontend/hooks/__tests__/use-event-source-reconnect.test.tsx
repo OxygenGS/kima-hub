@@ -120,6 +120,28 @@ describe("live event connection recovery", () => {
         );
     });
 
+    it("refreshes tracks and search when a new music scan finishes", async () => {
+        await mount();
+        await act(async () => {
+            FakeSource.instances[0].emit("scan:complete", { jobId: "scan-1", result: { tracksAdded: 1 } });
+        });
+        const keys = mocks.invalidateQueries.mock.calls.map(([q]) => q.queryKey.join("/"));
+        expect(keys).toContain("album");
+        expect(keys).toContain("artist");
+        expect(keys).toContain("library/tracks");
+        expect(keys).toContain("search");
+    });
+
+    it("does not claim new tracks when the scan failed", async () => {
+        await mount();
+        await act(async () => {
+            FakeSource.instances[0].emit("scan:complete", { jobId: "scan-2", error: "unavailable" });
+        });
+        const keys = mocks.invalidateQueries.mock.calls.map(([q]) => q.queryKey.join("/"));
+        expect(keys).not.toContain("search");
+        expect(keys).not.toContain("album");
+    });
+
     it("closes the old stream and never retries after sign-out", async () => {
         await mount();
         const stream = FakeSource.instances[0];
