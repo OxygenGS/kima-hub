@@ -326,7 +326,7 @@ export const TrackList = memo(function TrackList({
                                 track={track}
                                 index={index}
                                 album={album}
-                                isOwned={isPlayableAlbumTrack(track, album)}
+                                isOwned={isPlayableAlbumTrack(track, album) || (isOwned && track.isAvailable === undefined && !track.isMissing)}
                                 isPlaying={isPlaying}
                                 isPreviewPlaying={isPreviewPlaying}
                                 colors={colors}
