@@ -129,6 +129,26 @@ const bookRowNullTracks = {
     sectionsJson: null,
 };
 
+// The audiobook stream is a private, authenticated resource.
+describe("GET /audiobooks/:id/stream cache boundaries", () => {
+    it("forbids a shared cache even for a valid audio stream", async () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const service = require("../../services/audiobookshelf").audiobookshelfService;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { Readable } = require("stream") as typeof import("stream");
+        (getSystemSettings as jest.Mock).mockResolvedValue(enabledSettings);
+        service.streamAudiobook.mockResolvedValue({
+            stream: Readable.from([Buffer.from("synthetic audiobook audio")]),
+            headers: { "content-type": "audio/mpeg" },
+            status: 200,
+        });
+        const res = await request(createApp()).get("/audiobooks/abs-book-1/stream");
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-store");
+        expect(res.headers["content-type"]).toMatch(/audio\/mpeg/);
+    });
+});
+
 // ── GET / (list) ──────────────────────────────────────────────────────────────
 
 describe("GET /audiobooks", () => {

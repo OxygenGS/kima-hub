@@ -33,6 +33,15 @@ export function useSoulseekSearch({
     const [hasActiveSearch, setHasActiveSearch] = useState(false);
 
     const searchIdRef = useRef<string | null>(null);
+    // State alone is not synchronous: protect against rapid double clicks and
+    // duplicate entries in a bulk selection before any network request begins.
+    const activeDownloadKeys = useRef(new Set<string>());
+    const releaseTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+    useEffect(() => () => {
+        for (const timer of releaseTimers.current) clearTimeout(timer);
+        releaseTimers.current = [];
+    }, []);
 
     useEffect(() => {
         const checkSoulseekStatus = async () => {
@@ -69,7 +78,10 @@ export function useSoulseekSearch({
 
             try {
                 const { searchId } = await api.searchSoulseek(query);
-                if (cancelled) return;
+                if (cancelled) {
+                    searchResultStore.clear(searchId);
+                    return;
+                }
 
                 searchIdRef.current = searchId;
                 setIsSoulseekSearching(false);
@@ -128,6 +140,8 @@ export function useSoulseekSearch({
 
     const handleDownload = useCallback(async (result: SoulseekResult) => {
         const downloadKey = `${result.username}:${result.path}`;
+        if (activeDownloadKeys.current.has(downloadKey)) return;
+        activeDownloadKeys.current.add(downloadKey);
         try {
             setDownloadingFiles((prev) => new Set([...prev, downloadKey]));
 
@@ -146,16 +160,20 @@ export function useSoulseekSearch({
                 queryClient.invalidateQueries({ queryKey: ["notifications"] });
             }
 
-            setTimeout(() => {
+            const timer = setTimeout(() => {
+                activeDownloadKeys.current.delete(downloadKey);
                 setDownloadingFiles((prev) => {
                     const newSet = new Set(prev);
                     newSet.delete(downloadKey);
                     return newSet;
                 });
+                releaseTimers.current = releaseTimers.current.filter((pending) => pending !== timer);
             }, 5000);
+            releaseTimers.current.push(timer);
         } catch (error) {
             console.error("Download error:", error);
             notify.error("Failed to start download", { message: error instanceof Error ? error.message : undefined });
+            activeDownloadKeys.current.delete(downloadKey);
             setDownloadingFiles((prev) => {
                 const newSet = new Set(prev);
                 newSet.delete(downloadKey);

@@ -1153,7 +1153,8 @@ router.get("/:podcastId/episodes/:episodeId/stream", requireAuthOrToken, async (
         const baseHeaders = {
             "Content-Type": episode.mimeType || "audio/mpeg",
             "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
+            // Podcast subscriptions and cached audio are account-restricted.
+            "Cache-Control": "private, no-store",
             ...corsHeaders(corsOrigin),
         };
 
@@ -1602,6 +1603,10 @@ router.options("/:id/cover", (req, res) => {
  * Serve cached podcast cover from local disk
  */
 router.get("/:id/cover", async (req, res) => {
+    // Authenticated artwork must be revalidated for every signed-in account.
+    res.setHeader("Cache-Control", "private, no-cache");
+    res.vary("Authorization");
+    res.vary("Cookie");
     try {
         const { id } = req.params;
 
@@ -1618,7 +1623,7 @@ router.get("/:id/cover", async (req, res) => {
         if (podcast.localCoverPath) {
             res.setHeader(
                 "Cache-Control",
-                "public, max-age=31536000, immutable"
+                "private, no-cache"
             );
             const origin = resolveCorsOrigin(req.headers.origin);
             if (origin) {
@@ -1661,6 +1666,10 @@ router.options("/episodes/:episodeId/cover", (req, res) => {
  * Serve cached episode cover from local disk
  */
 router.get("/episodes/:episodeId/cover", async (req, res) => {
+    // Authenticated artwork must be revalidated for every signed-in account.
+    res.setHeader("Cache-Control", "private, no-cache");
+    res.vary("Authorization");
+    res.vary("Cookie");
     try {
         const { episodeId } = req.params;
 
@@ -1677,7 +1686,7 @@ router.get("/episodes/:episodeId/cover", async (req, res) => {
         if (episode.localCoverPath) {
             res.setHeader(
                 "Cache-Control",
-                "public, max-age=31536000, immutable"
+                "private, no-cache"
             );
             const origin = resolveCorsOrigin(req.headers.origin);
             if (origin) {
