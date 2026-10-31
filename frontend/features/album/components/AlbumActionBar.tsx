@@ -45,7 +45,7 @@ export function AlbumActionBar({
             secondaryShape="square"
             showLabels
         >
-            {hasPlayableTracks && (
+            {(isOwned || hasPlayableTracks) && (
                 <MediaActionButton
                     shape="square"
                     icon={<ListPlus className="w-5 h-5 shrink-0" aria-hidden="true" />}
