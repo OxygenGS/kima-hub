@@ -1,5 +1,22 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.16.2 — release preparation (unpublished)
+
+Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles on artist and MusicBrainz album pages after the published v1.16.1 download-permission hotfix.
+
+### Show locally downloaded singles within artist albums (PR #173)
+- Match cached and freshly fetched MusicBrainz release tracklists with verified local, non-missing, non-corrupt files from the same identified artist. Prefer recording MBIDs; otherwise use conservative title, version, artist and duration matching.
+- Recognize unambiguous numbered or artist-prefixed filenames from the dedicated `Singles/Kima Downloads` import folder without weakening matching for unrelated library tracks.
+- Display each matched row as available, with its real local track and album IDs, without falsely marking an incomplete release as fully owned. Keep remaining catalog entries as previews and preserve the option to request the full album.
+- Play, shuffle, queue and add to playlists only verified locally available tracks; preserve correct local album identity for playback.
+- Classify future manual Soulseek imports as library music and refresh relevant album/artist/library views after a successful scan. Older indexed imports can be recognized without a file move or database backfill.
+
+### Verification and upgrade safeguards
+- Includes backend catalog matching, cached-release and scanner regression coverage plus frontend mixed-availability tests. PR #173 passed backend/frontend tests, typechecks, security/privacy guards, AIO smoke and native no-push builds.
+- No schema migration, music file movement or retagging, new download permission, Soulseek transport change, authentication change or artwork recovery change.
+- Back up persistent `/data` and independently verify restore before upgrading; keep the existing `/music` mount and dedicated Soulseek import folder permissions unchanged.
+- This source candidate is not a published image or installation instruction. Native AMD64/ARM64 preflight and review of remaining HIGH/CRITICAL advisories are required; a separate explicit approval is needed before a stable tag and Docker publication.
+
 ## OxygenGS fork v1.16.1 — release preparation (unpublished)
 
 Kima Hub v1.16.1 is a focused Soulseek download permission hotfix for the published v1.16.0 Artwork Recovery release.

@@ -49,6 +49,41 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.16.2
+    "1.16.2": {
+        "titles": {
+            "Kima Hub 1.16.2 \u2014 Soulseek Singles in Artist Albums": "Kima Hub 1.16.2 \u2014 Soulseek-singles zichtbaar bij artiesten"
+        },
+        "summaries": {
+            "Show verified locally downloaded Soulseek singles as playable tracks on their artist and MusicBrainz album pages.": "Toon gecontroleerde, lokaal gedownloade Soulseek-singles als afspeelbare nummers op artiest- en MusicBrainz-albumpagina's."
+        },
+        "items": {
+            "fork.1162.catalog": {
+                "title": "Gedownloade singles staan bij de juiste artiest en release",
+                "summary": "Herken lokaal ge\u00efndexeerde singles in MusicBrainz-albumlijsten zonder muziekbestanden te verplaatsen.",
+                "body": "Na downloaden en indexeren kan een Soulseek-single op de bijbehorende artiesten- en MusicBrainz-releasepagina als beschikbaar verschijnen, ook als het bestand andere albumtags of Unknown Album heeft. Kima koppelt catalogusnummers uitsluitend aan afspeelbare lokale bestanden van dezelfde gecontroleerde artiest. Een overeenkomende MusicBrainz-opname-ID krijgt voorrang; anders moeten titel, versie, artiest en speelduur voldoende precies overeenkomen. Ook ondubbelzinnige nummerprefixen in bestandsnamen binnen Singles/Kima Downloads worden herkend. Een andere uitvoerder, remix, liveversie of andere opname wordt niet zomaar gelijkgesteld. Bij elk verzoek wordt de gecachete MusicBrainz-informatie gecombineerd met de actuele lokale beschikbaarheid. De muziekbestanden en oorspronkelijke albumidentiteiten blijven ongewijzigd.",
+                "links": {
+                    "/collection?tab=artists": "Bekijk artiesten"
+                }
+            },
+            "fork.1162.playback": {
+                "title": "Speel aanwezige nummers af zonder het hele album als bezit te markeren",
+                "summary": "Gebruik echte lokale nummer-ID's voor afspelen en wachtrijen; ontbrekende nummers blijven previews.",
+                "body": "Een release kan zowel aanwezige lokale nummers als alleen voorbeeldnummers bevatten. Gecontroleerde lokale nummers krijgen nu afspeelknoppen op de albumpagina bij de artiest. Afspelen en toevoegen aan de wachtrij gebruiken de werkelijke lokale nummer-ID en albuminformatie. Bij het afspelen of willekeurig afspelen van een gedeeltelijk aanwezig album worden uitsluitend beschikbare nummers gebruikt. Voorbeeldnummers komen niet in de wachtrij of afspeellijst terecht. E\u00e9n aanwezige single maakt niet automatisch het hele album eigendom. Een aanvraag voor het volledige album blijft mogelijk als de gebruiker daarvoor rechten heeft. Ontbrekende of beschadigde bestanden worden niet als afspeelbaar getoond.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            },
+            "fork.1162.indexing": {
+                "title": "Vernieuw de beschikbaarheid na het scannen van nieuwe singles",
+                "summary": "Nieuwe Soulseek-imports horen bij je bibliotheek; ververs artiest- en albumpagina's na een geslaagde scan.",
+                "body": "Nieuwe handmatige Soulseek-downloads worden als lokale bibliotheekbestanden verwerkt, ook als de artiest eerder alleen via Ontdekken bekend was. Ook bestaande imports uit de speciale downloadmap tellen mee bij het koppelen van nummers. Na een geslaagde bibliotheekscan vernieuwt Kima de relevante artiest-, album- en bibliotheekgegevens, zodat nieuwe nummers niet onnodig achter verouderde catalogusinformatie verborgen blijven. Deze patch voegt geen databasemigratie toe, verplaatst of herschrijft geen muziek en verandert niets aan Soulseek-transport, maprechten, OpenSubsonic-authenticatie of Artwork Recovery. Maak v\u00f3\u00f3r het bijwerken een volledige back-up van het blijvende /data-volume en controleer of herstel werkt. Native AMD64/ARM64-controles, kwetsbaarheids- en geheime-sleutelscans, expliciete beveiligingsbeoordeling en beveiligde publicatie blijven verplicht.",
+                "links": {
+                    "/collection?tab=tracks": "Open muziekbibliotheek"
+                }
+            }
+        }
+    },
     // release-candidate:1.16.1
     "1.16.1": {
         "titles": {
