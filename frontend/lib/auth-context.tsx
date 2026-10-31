@@ -58,9 +58,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // all permissions against the database on every protected request.
     const refreshUser = useCallback(async () => {
         const epoch = authEpochRef.current;
-        const current = await api.getCurrentUser();
-        if (authEpochRef.current === epoch) setUser(current);
-    }, []);
+        try {
+            const current = await api.getCurrentUser();
+            if (authEpochRef.current === epoch) setUser(current);
+        } catch (error) {
+            if ((error as { status?: number } | null)?.status !== 401 ||
+                authEpochRef.current !== epoch) {
+                // Offline, 5xx or timeout: keep the current account in the UI.
+                throw error;
+            }
+            // The API only reports 401 after refresh-token rejection. An
+            // expired session must not leave the old library visible forever.
+            const expiredEpoch = ++authEpochRef.current;
+            api.clearToken();
+            setIsAuthenticated(false);
+            setUser(null);
+            clearAccountMediaStorage();
+            await clearBrowserQueryCache();
+            if (authEpochRef.current === expiredEpoch) {
+                router.replace("/login?error=session_expired");
+            }
+        }
+    }, [router]);
 
     useEffect(() => {
         if (!isAuthenticated) return;
