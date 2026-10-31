@@ -8,10 +8,13 @@ import {
     ReactNode,
     useMemo,
     useCallback,
+    useRef,
 } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "./api";
 import { getMusicPermissions } from "./music-permissions";
+import { clearBrowserQueryCache } from "./query-client";
+import { clearAccountMediaStorage } from "./storage-keys";
 
 interface User {
     id: string;
@@ -46,14 +49,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
+    // Reject late /auth/me responses after account changes or sign-out.
+    const authEpochRef = useRef(0);
 
     // Refresh when the user returns to the tab and periodically while visible.
     // This reflects admin changes without forcing listeners to log out.
     // A failed refresh leaves the current session alone; the backend enforces
     // all permissions against the database on every protected request.
     const refreshUser = useCallback(async () => {
+        const epoch = authEpochRef.current;
         const current = await api.getCurrentUser();
-        setUser(current);
+        if (authEpochRef.current === epoch) setUser(current);
     }, []);
 
     useEffect(() => {
@@ -76,8 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         // Check if user has valid session on mount ONLY
         const checkAuth = async () => {
+            const epoch = authEpochRef.current;
             try {
                 const userData = await api.getCurrentUser();
+                if (authEpochRef.current !== epoch) return;
                 setUser(userData);
                 setIsAuthenticated(true);
 
@@ -94,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     router.push("/");
                 }
             } catch {
+                if (authEpochRef.current !== epoch) return;
                 setIsAuthenticated(false);
                 setUser(null);
 
@@ -110,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         const status = await api.get<{ hasAccount: boolean }>(
                             "/onboarding/status"
                         );
+                        if (authEpochRef.current !== epoch) return;
 
                         if (!status.hasAccount) {
                             // No users exist - redirect to onboarding
@@ -117,13 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             return;
                         }
                     } catch {
-                        // Intentionally ignored: if onboarding status check fails, assume users exist and proceed to login
+                        // If onboarding cannot be checked, leave account setup alone.
                     }
-                    // Users exist but not logged in - redirect to login
-                    router.push("/login");
+                    // Do not redirect a user who signed in while this request was pending.
+                    if (authEpochRef.current === epoch) router.push("/login");
                 }
             } finally {
-                setIsLoading(false);
+                if (authEpochRef.current === epoch) setIsLoading(false);
             }
         };
 
@@ -136,26 +146,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: string,
         token?: string
     ) => {
+        const epoch = ++authEpochRef.current;
         try {
             const userData = await api.login(username, password, token);
 
             if (userData.requires2FA) {
-                // Don't set user or redirect, just throw an error to trigger 2FA UI
+                // Wait for the actual second factor before changing account state.
                 throw new Error("2FA token required");
             }
+            if (authEpochRef.current !== epoch) return;
 
-            // Login responses are intentionally minimal. Load the current rights
-            // from /auth/me immediately, rather than waiting for a page reload.
+            // Old queries and local audiobook/podcast identities must not be
+            // rendered for the newly authenticated account.
+            await clearBrowserQueryCache();
+            clearAccountMediaStorage();
+            if (authEpochRef.current !== epoch) return;
+
             let authenticatedUser: User = userData;
             try {
                 authenticatedUser = await api.getCurrentUser();
             } catch {
-                // Retain the login result; missing flags hide acquisition UI.
+                // Keep the minimal login response; the backend enforces rights.
             }
+            if (authEpochRef.current !== epoch) return;
             setUser(authenticatedUser);
             setIsAuthenticated(true);
 
-            // Redirect based on onboarding status
             if (authenticatedUser.onboardingComplete === false) {
                 router.push("/onboarding");
             } else {
@@ -164,14 +180,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error: unknown) {
             console.error("[AUTH] Login failed:", error instanceof Error ? error.message : error);
             throw error;
+        } finally {
+            if (authEpochRef.current === epoch) setIsLoading(false);
         }
     }, [router]);
 
     const logout = useCallback(async () => {
-        await api.logout();
+        const epoch = ++authEpochRef.current;
+        // Hide the private interface and stop audio/SSE immediately.
         setIsAuthenticated(false);
         setUser(null);
-        router.push("/login");
+        try {
+            await api.logout();
+        } catch {
+            // Offline or expired server session: still remove local credentials.
+            // Server-side revocation may not have completed in this case.
+        } finally {
+            if (authEpochRef.current !== epoch) return;
+            api.clearToken();
+            clearAccountMediaStorage();
+            await clearBrowserQueryCache();
+            if (authEpochRef.current === epoch) {
+                setIsLoading(false);
+                router.replace("/login");
+            }
+        }
     }, [router]);
 
     const contextValue = useMemo(() => ({

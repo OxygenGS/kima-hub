@@ -57,3 +57,15 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
         </QueryClientProvider>
     );
 }
+
+
+/** Remove cached private responses before a different account can render them. */
+export async function clearBrowserQueryCache(): Promise<void> {
+    const client = browserQueryClient;
+    if (!client) return;
+    try {
+        await client.cancelQueries();
+    } finally {
+        client.clear();
+    }
+}
