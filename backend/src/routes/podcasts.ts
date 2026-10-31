@@ -1153,7 +1153,8 @@ router.get("/:podcastId/episodes/:episodeId/stream", requireAuthOrToken, async (
         const baseHeaders = {
             "Content-Type": episode.mimeType || "audio/mpeg",
             "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
+            // Podcast subscriptions and cached audio are account-restricted.
+            "Cache-Control": "private, no-store",
             ...corsHeaders(corsOrigin),
         };
 

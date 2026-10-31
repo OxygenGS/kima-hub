@@ -119,6 +119,7 @@ describe('cached-path range policy', () => {
         expect(res.status).toBe(206);
         expect(res.headers['content-range']).toBe(`bytes 0-99/${FILE_SIZE}`);
         expect(res.headers['accept-ranges']).toBe('bytes');
+        expect(res.headers['cache-control']).toBe('private, no-store');
         expect(parseInt(res.headers['content-length'])).toBe(100);
         expect(res.body.length).toBe(100);
         // First byte must match position 0 in the file (0 & 0xff = 0).
