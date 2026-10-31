@@ -106,6 +106,20 @@ describe("MusicBrainz album availability from Soulseek singles", () => {
         expect(result[0].id).toBe("right-id");
     });
 
+    it("recognizes tagless numbered filenames from the dedicated Soulseek import", () => {
+        const file = available("tagless", "02 - Dance Monkey", 209);
+        file.filePath = "Singles/Kima Downloads/Tones and I/Unknown Album/02 - Dance Monkey.flac";
+        expect(matchCatalogTracks(catalog().tracks, [file], ARTIST)[1].id).toBe("tagless");
+        file.title = "Tones and I - Dance Monkey";
+        expect(matchCatalogTracks(catalog().tracks, [file], ARTIST)[1].id).toBe("tagless");
+    });
+
+    it("does not strip numbered prefixes from unrelated existing library tracks", () => {
+        const file = available("regular", "02 - Dance Monkey", 209);
+        file.filePath = "Tones and I/An Album/02 - Dance Monkey.flac";
+        expect(matchCatalogTracks(catalog().tracks, [file], ARTIST)[1].id).toBe("mb-two");
+    });
+
     it("does not treat a different singer's cover as the same recording", () => {
         const result = matchCatalogTracks(
             [{ id: "mb", title: "Dance Monkey", duration: 209 }],
