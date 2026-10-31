@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SoulseekResult } from "@/features/search/types";
@@ -37,7 +37,10 @@ let root: Root;
 let latest: ReturnType<typeof useSoulseekSearch>;
 
 function Probe() {
-    latest = useSoulseekSearch({ query: "" });
+    const value = useSoulseekSearch({ query: "" });
+    useEffect(() => {
+        latest = value;
+    }, [value]);
     return null;
 }
 

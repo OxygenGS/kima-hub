@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -12,7 +12,10 @@ let host: HTMLDivElement;
 let client: QueryClient;
 
 function Probe() {
-    client = useQueryClient();
+    const value = useQueryClient();
+    useEffect(() => {
+        client = value;
+    }, [value]);
     return null;
 }
 

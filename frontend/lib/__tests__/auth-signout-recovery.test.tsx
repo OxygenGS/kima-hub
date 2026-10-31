@@ -1,4 +1,4 @@
-import React, { act } from "react";
+import React, { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,7 +42,10 @@ let root: Root;
 let auth: ReturnType<typeof useAuth>;
 
 function Probe() {
-    auth = useAuth();
+    const value = useAuth();
+    useEffect(() => {
+        auth = value;
+    }, [value]);
     return null;
 }
 
