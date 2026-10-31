@@ -87,6 +87,26 @@ describe("sign-out and session transitions", () => {
         expect(auth.isAuthenticated).toBe(false);
     });
 
+    it("exits a truly expired session rather than displaying stale account data", async () => {
+        const expired = Object.assign(new Error("Not authenticated"), { status: 401 });
+        mocks.getCurrentUser.mockRejectedValueOnce(expired);
+        await act(async () => { window.dispatchEvent(new Event("focus")); await Promise.resolve(); });
+        expect(auth.isAuthenticated).toBe(false);
+        expect(auth.user).toBeNull();
+        expect(mocks.clearCache).toHaveBeenCalledTimes(1);
+        expect(mocks.clearMedia).toHaveBeenCalledTimes(1);
+        expect(mocks.router.replace).toHaveBeenCalledWith("/login?error=session_expired");
+    });
+
+    it("keeps a signed-in session during a transient refresh outage", async () => {
+        mocks.getCurrentUser.mockRejectedValueOnce(Object.assign(new Error("server offline"), { status: 503 }));
+        await act(async () => { window.dispatchEvent(new Event("focus")); await Promise.resolve(); });
+        expect(auth.isAuthenticated).toBe(true);
+        expect(auth.user?.id).toBe("alice");
+        expect(mocks.clearCache).not.toHaveBeenCalled();
+        expect(mocks.router.replace).not.toHaveBeenCalled();
+    });
+
     it("clears previous account data before showing the new signed-in user", async () => {
         mocks.getCurrentUser.mockResolvedValueOnce(bob);
         await act(async () => { await auth.login("bob", "synthetic-password"); });
