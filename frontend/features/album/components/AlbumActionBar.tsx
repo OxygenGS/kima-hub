@@ -38,7 +38,7 @@ export function AlbumActionBar({
 
     return (
         <MediaActionBar
-            showPlay={hasPlayableTracks}
+            showPlay={isOwned || hasPlayableTracks}
             showPause={showPause}
             onPlayPause={handlePlayPauseClick}
             onShuffle={onShuffle}
