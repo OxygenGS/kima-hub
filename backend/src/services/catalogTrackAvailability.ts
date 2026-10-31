@@ -40,6 +40,7 @@ export interface CatalogWithAvailability {
     artist: { name: string; mbid?: string | null };
     title: string;
     rgMbid?: string | null;
+    owned?: boolean;
 }
 
 function sameRecording(a: string | null | undefined, b: string | null): boolean {
