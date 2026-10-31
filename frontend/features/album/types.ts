@@ -20,6 +20,7 @@ export interface Album {
     rgMbid?: string;
     owned?: boolean;
     tracks?: Track[];
+    availableTrackCount?: number;
     missingTracks?: MissingTrack[];
     similarAlbums?: SimilarAlbum[];
 }
@@ -39,6 +40,8 @@ export interface Track {
     discNumber?: number | null;
     discSubtitle?: string | null;
     isMissing?: boolean;
+    /** A real indexed, streamable file, even if the album itself is unowned. */
+    isAvailable?: boolean;
     previewUrl?: string | null;
     playCount?: number;
     artist?: {

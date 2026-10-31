@@ -3,6 +3,7 @@ import { Play, Pause, Volume2, ListPlus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useLanguage } from "@/lib/i18n/language-context";
 import type { Track, Album, AlbumSource } from "../types";
+import { isPlayableAlbumTrack } from "../lib/availableTracks";
 import type { ColorPalette } from "@/hooks/useImageColor";
 import { formatNumber, formatTime } from "@/lib/format";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
@@ -266,6 +267,7 @@ export const TrackList = memo(function TrackList({
     onPreview,
 }: TrackListProps) {
     const { t } = useLanguage();
+    // Availability is per track. One Soulseek single does not own an album.
     const isOwned = source === "library";
 
     // A playback-state change should update only the previously/currently
@@ -324,7 +326,7 @@ export const TrackList = memo(function TrackList({
                                 track={track}
                                 index={index}
                                 album={album}
-                                isOwned={isOwned}
+                                isOwned={isPlayableAlbumTrack(track, album)}
                                 isPlaying={isPlaying}
                                 isPreviewPlaying={isPreviewPlaying}
                                 colors={colors}

@@ -14,6 +14,7 @@ import { useAlbumData } from "@/features/album/hooks/useAlbumData";
 import { useAlbumActions } from "@/features/album/hooks/useAlbumActions";
 import { usePreview } from "@/hooks/usePreview";
 import type { MissingTrack, Track as AlbumTrack } from "@/features/album/types";
+import { playableAlbumTracks } from "@/features/album/lib/availableTracks";
 
 import { AlbumHero } from "@/features/album/components/AlbumHero";
 import { AlbumActionBar } from "@/features/album/components/AlbumActionBar";
@@ -144,10 +145,11 @@ export default function AlbumPage({ params }: AlbumPageProps) {
     }
 
     const handlePlayTrack = (track: AlbumTrack, index: number) => {
-        const ownedTrackIndex = (album.tracks || []).findIndex(
-            (ownedTrack: AlbumTrack) => ownedTrack.id === track.id
+        const indexInPlayableQueue = playableAlbumTracks(album).findIndex(
+            (available: AlbumTrack) => available.id === track.id
         );
-        playAlbum(album, ownedTrackIndex >= 0 ? ownedTrackIndex : index);
+        if (indexInPlayableQueue < 0) return;
+        playAlbum(album, indexInPlayableQueue);
     };
 
     const openPlaylistSelector = (trackIds: string[]) => {
@@ -158,7 +160,7 @@ export default function AlbumPage({ params }: AlbumPageProps) {
 
     const handleAddAlbumToPlaylist = () => {
         if (!album?.tracks?.length) return;
-        const trackIds = album.tracks
+        const trackIds = playableAlbumTracks(album)
             .map((track: AlbumTrack) => track.id)
             .filter(Boolean);
         openPlaylistSelector(trackIds);

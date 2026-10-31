@@ -88,6 +88,14 @@ export function useEventSource() {
                             );
                             queryClient.invalidateQueries({ queryKey: ["enrichment-progress"] });
                             queryClient.invalidateQueries({ queryKey: ["library", "recently-added"] });
+                            if (!data.error) {
+                                // Indexing a new Soulseek single changes live
+                                // availability even on cached MusicBrainz pages.
+                                queryClient.invalidateQueries({ queryKey: ["album"] });
+                                queryClient.invalidateQueries({ queryKey: ["artist"] });
+                                queryClient.invalidateQueries({ queryKey: ["library", "albums"] });
+                                queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
+                            }
                             break;
                         case "enrichment:progress":
                             queryClient.invalidateQueries({ queryKey: ["enrichment-progress"] });
