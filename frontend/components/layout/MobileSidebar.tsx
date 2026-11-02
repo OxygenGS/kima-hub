@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { notify } from "@/lib/notify";
 import { KimaMark } from "@/components/ui/KimaMark";
+import { useBranding } from "@/lib/branding-context";
 import { APP_VERSION } from "@/lib/version";
 import { openWhatsNew } from "@/components/whats-new/WhatsNewGate";
 import { useLanguage } from "@/lib/i18n/language-context";
@@ -21,6 +22,7 @@ interface MobileSidebarProps {
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     const pathname = usePathname();
     const { t } = useLanguage();
+    const { branding } = useBranding();
     const { logout } = useAuth();
     const [isSyncing, setIsSyncing] = useState(false);
     const isFirstRender = useRef(true);
@@ -88,7 +90,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     >
                         <KimaMark size={32} />
                         <span className="text-lg font-bold text-white tracking-tight">
-                            Kima
+                            {branding.name}
                         </span>
                     </Link>
                     <button
