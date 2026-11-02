@@ -32,6 +32,7 @@ import { StoragePathsSection } from "@/features/settings/components/sections/Sto
 import { CacheSection } from "@/features/settings/components/sections/CacheSection";
 import { UserManagementSection } from "@/features/settings/components/sections/UserManagementSection";
 import { CorruptTracksSection } from "@/features/settings/components/sections/CorruptTracksSection";
+import { LibraryDoctorSection } from "@/features/settings/components/sections/LibraryDoctorSection";
 import { Button } from "@/components/ui/Button";
 
 const sidebarItems: SidebarItem[] = [
@@ -48,6 +49,7 @@ const sidebarItems: SidebarItem[] = [
     { id: "artwork", label: "Artwork", adminOnly: true },
     { id: "storage", label: "Storage", adminOnly: true },
     { id: "cache", label: "Library Enrichment", adminOnly: true },
+    { id: "library-doctor", label: "Library Doctor", adminOnly: true },
     { id: "corrupt-tracks", label: "Corrupt Tracks", adminOnly: true },
     { id: "users", label: "Users", adminOnly: true },
 ];
@@ -280,6 +282,8 @@ export default function SettingsPage() {
                             settings={systemSettings}
                             onUpdate={updateSystemSettings}
                         />
+
+                        <LibraryDoctorSection />
 
                         <CorruptTracksSection />
 

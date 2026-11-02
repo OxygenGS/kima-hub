@@ -3,6 +3,21 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Library Doctor": "Library Doctor",
+    "Inspect your indexed library for issues without changing your music.": "Inspect your indexed library for issues without changing your music.",
+    "Run library check": "Run library check",
+    "Checking library...": "Checking library...",
+    "Indexed library tracks": "Indexed library tracks",
+    "Missing tracks": "Missing tracks",
+    "Corrupt tracks": "Corrupt tracks",
+    "Albums without covers": "Albums without covers",
+    "Artists without images": "Artists without images",
+    "Soulseek imports to review": "Soulseek imports to review",
+    "examples": "examples",
+    "Read-only: nothing is deleted, retagged or changed. Results reflect the last library scan, not a new disk scan.": "Read-only: nothing is deleted, retagged or changed. Results reflect the last library scan, not a new disk scan.",
+    "Library check failed. Verify the server connection and try again.": "Library check failed. Verify the server connection and try again.",
+    "Review candidates are not confirmed errors. Counts may overlap. Only the first eight examples per category are shown.": "Review candidates are not confirmed errors. Counts may overlap. Only the first eight examples per category are shown.",
+    "No missing tracks or suspicious Soulseek imports found in the index.": "No missing tracks or suspicious Soulseek imports found in the index.",
     "No preview for this song": "No preview for this song",
     "Couldn't play this preview": "Couldn't play this preview",
     "Album data not available": "Album data not available",
@@ -1906,6 +1921,21 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Library Doctor": "Bibliotheekdokter",
+    "Inspect your indexed library for issues without changing your music.": "Controleer problemen in je geïndexeerde muziekbibliotheek zonder bestanden te wijzigen.",
+    "Run library check": "Bibliotheek controleren",
+    "Checking library...": "Bibliotheek wordt gecontroleerd...",
+    "Indexed library tracks": "Geïndexeerde nummers",
+    "Missing tracks": "Ontbrekende nummers",
+    "Corrupt tracks": "Beschadigde nummers",
+    "Albums without covers": "Albums zonder hoes",
+    "Artists without images": "Artiesten zonder afbeelding",
+    "Soulseek imports to review": "Soulseek-imports ter controle",
+    "examples": "voorbeelden",
+    "Read-only: nothing is deleted, retagged or changed. Results reflect the last library scan, not a new disk scan.": "Alleen-lezen: er wordt niets verwijderd, hertagd of aangepast. De resultaten komen uit de laatste bibliotheekscan, niet uit een nieuwe schijfcontrole.",
+    "Library check failed. Verify the server connection and try again.": "Bibliotheekcontrole mislukt. Controleer de serververbinding en probeer opnieuw.",
+    "Review candidates are not confirmed errors. Counts may overlap. Only the first eight examples per category are shown.": "Deze nummers vereisen mogelijk controle, maar zijn niet noodzakelijk fout. Aantallen kunnen overlappen. Per categorie worden maximaal acht voorbeelden getoond.",
+    "No missing tracks or suspicious Soulseek imports found in the index.": "Geen ontbrekende nummers of verdachte Soulseek-imports gevonden in de index.",
     "No preview for this song": "Geen voorbeeld beschikbaar voor dit nummer",
     "Couldn't play this preview": "Kan dit voorbeeld niet afspelen",
     "Album data not available": "Albumgegevens niet beschikbaar",

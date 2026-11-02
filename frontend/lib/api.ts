@@ -18,6 +18,32 @@ export interface AlbumCoverRecoveryStatus {
 
 export type ArtistImageRecoveryStatus = AlbumCoverRecoveryStatus;
 
+export interface LibraryDoctorTrackSample {
+    id: string;
+    title: string;
+    album: string;
+    artist: string;
+    filePath: string;
+}
+
+export interface LibraryDoctorReport {
+    generatedAt: string;
+    basis: "indexed-metadata";
+    sampleLimit: number;
+    counts: {
+        libraryTracks: number;
+        missingTracks: number;
+        corruptTracks: number;
+        albumsWithoutCover: number;
+        artistsWithoutImage: number;
+        importsToReview: number;
+    };
+    samples: {
+        missingTracks: LibraryDoctorTrackSample[];
+        importsToReview: LibraryDoctorTrackSample[];
+    };
+}
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -2161,6 +2187,11 @@ class ApiClient {
 
         return response.json();
     }
+    // On-demand, admin-only, read-only Library Doctor report.
+    async getLibraryDoctorReport(): Promise<LibraryDoctorReport> {
+        return this.request<LibraryDoctorReport>("/library/doctor/report");
+    }
+
     // Corrupt tracks
     async getCorruptTracks() {
         return this.request<{
