@@ -123,7 +123,10 @@ if the original album no longer exists, the Track changed, the repair was
 already undone or the request belongs to a different user.
 
 The change is **only a database album assignment**. It never renames,
-transcodes, retags, moves or deletes a music file. Scanner metadata outside
+transcodes, retags, moves or deletes a music file. Both affected artists'
+summary counters are also refreshed in the same transaction, so the artist
+list and track-count sorting reflect the confirmed reassignment immediately.
+Scanner metadata outside
 the album assignment remains tag-driven. Existing plays/likes/stages stay
 attached to the same Track.id. The library may continue to show duplicated
 copies of a song if the proposed album already contains one; administrator

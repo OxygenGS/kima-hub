@@ -56,6 +56,23 @@ function translateDbConflict(error: unknown): never {
     throw error;
 }
 
+
+/** Artist list filters rely on stored counts; keep both artist summaries
+ * correct in the SAME transaction as the album link and its audit record. */
+async function refreshArtistSummaries(tx: Prisma.TransactionClient, ids: string[]): Promise<void> {
+    for (const artistId of new Set(ids)) {
+        const [libraryAlbumCount, discoveryAlbumCount, totalTrackCount] = await Promise.all([
+            tx.album.count({ where: { artistId, location: "LIBRARY", tracks: { some: {} } } }),
+            tx.album.count({ where: { artistId, location: "DISCOVER", tracks: { some: {} } } }),
+            tx.track.count({ where: { album: { artistId } } }),
+        ]);
+        await tx.artist.update({
+            where: { id: artistId },
+            data: { libraryAlbumCount, discoveryAlbumCount, totalTrackCount, countsLastUpdated: new Date() },
+        });
+    }
+}
+
 /** Undo is available until the track/album has been independently changed or deleted. */
 export async function applySmartImportRepair(userId: string, jobId: string, raw: unknown) {
     const input = validateInput(raw);
@@ -90,9 +107,13 @@ export async function applySmartImportRepair(userId: string, jobId: string, raw:
 
             const target = await tx.album.findFirst({
                 where: { id: input.newAlbumId, artistId: proposedArtist.id, location: "LIBRARY" },
-                select: { id: true },
+                select: { id: true, artistId: true },
             });
             if (!target) conflict("The proposed album no longer exists in the library.");
+            const original = await tx.album.findUnique({
+                where: { id: input.previousAlbumId }, select: { id: true, artistId: true },
+            });
+            if (!original) conflict("The original album no longer exists.");
 
             // Optimistic CAS prevents overwriting concurrent scan/metadata changes.
             // The migration's BEFORE UPDATE trigger keeps any subsequent scanner
@@ -122,6 +143,7 @@ export async function applySmartImportRepair(userId: string, jobId: string, raw:
                 },
                 select: { id: true, appliedAt: true },
             });
+            await refreshArtistSummaries(tx, [original.artistId, target.artistId]);
             return {
                 status: "relinked" as const,
                 repairId: repair.id, trackId: input.trackId,
@@ -152,9 +174,13 @@ export async function undoSmartImportRepair(userId: string, jobId: string, repai
             if (!repair) throw new SmartImportRepairError("Repair not found", 404);
 
             const original = await tx.album.findUnique({
-                where: { id: repair.previousAlbumId }, select: { id: true },
+                where: { id: repair.previousAlbumId }, select: { id: true, artistId: true },
             });
             if (!original) conflict("The original album has been removed. No changes made.");
+            const target = await tx.album.findUnique({
+                where: { id: repair.newAlbumId }, select: { id: true, artistId: true },
+            });
+            if (!target) conflict("The repaired album has been removed. No changes made.");
 
             const updated = await tx.track.updateMany({
                 where: {
@@ -170,6 +196,7 @@ export async function undoSmartImportRepair(userId: string, jobId: string, repai
                 data: { undoneAt: new Date() },
             });
             if (marked.count !== 1) conflict("The repair was already undone.");
+            await refreshArtistSummaries(tx, [original.artistId, target.artistId]);
 
             return { status: "undone" as const, repairId: repair.id, trackId: repair.trackId };
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

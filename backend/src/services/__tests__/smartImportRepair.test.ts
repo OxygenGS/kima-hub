@@ -12,10 +12,21 @@ const findJob = jest.fn();
 const findAlbum = jest.fn();
 const findRepair = jest.fn();
 const mark = jest.fn();
+const albumCount = jest.fn();
+const trackCount = jest.fn();
+const artistUpdate = jest.fn();
 const tx = {
     downloadJob: { findFirst: (...a: unknown[]) => findJob(...a) },
-    album: { findFirst: (...a: unknown[]) => findAlbum(...a), findUnique: (...a: unknown[]) => findAlbum(...a) },
-    track: { updateMany: (...a: unknown[]) => update(...a) },
+    album: {
+        findFirst: (...a: unknown[]) => findAlbum(...a),
+        findUnique: (...a: unknown[]) => findAlbum(...a),
+        count: (...a: unknown[]) => albumCount(...a),
+    },
+    track: {
+        updateMany: (...a: unknown[]) => update(...a),
+        count: (...a: unknown[]) => trackCount(...a),
+    },
+    artist: { update: (...a: unknown[]) => artistUpdate(...a) },
     smartImportRepair: { create: (...a: unknown[]) => create(...a),
         findFirst: (...a: unknown[]) => findRepair(...a),
         updateMany: (...a: unknown[]) => mark(...a) },
@@ -39,7 +50,13 @@ beforeEach(() => {
     transaction.mockImplementation(async (cb) => cb(tx));
     getSuggestion.mockResolvedValue(proposal);
     findJob.mockResolvedValue({ metadata: { importRelativePath: path } });
-    findAlbum.mockResolvedValue({ id: "target" });
+    findAlbum.mockImplementation(async (args: { where: { id: string } }) =>
+        args.where.id === "source"
+            ? { id: "source", artistId: "unknown" }
+            : { id: "target", artistId: "artist-1" });
+    albumCount.mockResolvedValue(2);
+    trackCount.mockResolvedValue(3);
+    artistUpdate.mockResolvedValue({});
     update.mockResolvedValue({ count: 1 });
     create.mockResolvedValue({ id: "repair-1", appliedAt: new Date(modified) });
     mark.mockResolvedValue({ count: 1 });
@@ -81,6 +98,19 @@ describe("Confirmed Smart Inbox album reclassification", () => {
             select: { id: true, appliedAt: true },
         });
         expect(result).toMatchObject({ status: "relinked", repairId: "repair-1" });
+        expect(albumCount).toHaveBeenCalledWith({ where: {
+            artistId: "unknown", location: "LIBRARY", tracks: { some: {} },
+        } });
+        expect(albumCount).toHaveBeenCalledWith({ where: {
+            artistId: "artist-1", location: "DISCOVER", tracks: { some: {} },
+        } });
+        expect(trackCount).toHaveBeenCalledWith({ where: { album: { artistId: "artist-1" } } });
+        expect(artistUpdate).toHaveBeenCalledWith({
+            where: { id: "artist-1" },
+            data: { libraryAlbumCount: 2, discoveryAlbumCount: 2,
+                totalTrackCount: 3, countsLastUpdated: expect.any(Date) },
+        });
+        expect(artistUpdate).toHaveBeenCalledTimes(2);
     });
 
     it("rejects stale source, file timestamp, unsafe proposals and guessed targets", async () => {
@@ -138,6 +168,8 @@ describe("Undo Smart Inbox album reclassification", () => {
             data: { undoneAt: expect.any(Date) },
         });
         expect(result).toEqual({ status: "undone", repairId: "repair-1", trackId: "track-1" });
+        expect(artistUpdate).toHaveBeenCalledTimes(2);
+        expect(artistUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "unknown" } }));
     });
     it("does not disclose or undo a repair belonging to another user", async () => {
         findRepair.mockResolvedValue(null);

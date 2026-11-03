@@ -14,6 +14,7 @@ jest.setTimeout(60000);
 
 let userId = "";
 let targetArtistId = "";
+let sourceArtistId = "";
 let sourceAlbumId = "";
 let targetAlbumId = "";
 let importedTrackId = "";
@@ -52,6 +53,7 @@ beforeEach(async () => {
         create: { name: "Unknown Artist", identityKey: "unknownartist" },
         update: {},
     });
+    sourceArtistId = unknownArtist.id;
     const targetArtist = await prisma.artist.create({
         data: { name, identityKey: artistIdentityKey(name) },
     });
@@ -101,7 +103,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
     await cleanup();
-    userId = targetArtistId = sourceAlbumId = targetAlbumId = importedTrackId = peerTrackId = jobId = "";
+    userId = targetArtistId = sourceArtistId = sourceAlbumId = targetAlbumId = importedTrackId = peerTrackId = jobId = "";
 });
 afterAll(async () => prisma.$disconnect());
 
@@ -110,6 +112,18 @@ function confirm() {
         trackId: importedTrackId, previousAlbumId: sourceAlbumId,
         newAlbumId: targetAlbumId, fileModified: stamp.toISOString(), fileSize: SIZE,
     };
+}
+
+
+async function expectCurrentArtistCounts(artistId: string) {
+    const artist = await prisma.artist.findUniqueOrThrow({ where: { id: artistId } });
+    const [libraryAlbumCount, discoveryAlbumCount, totalTrackCount] = await Promise.all([
+        prisma.album.count({ where: { artistId, location: "LIBRARY", tracks: { some: {} } } }),
+        prisma.album.count({ where: { artistId, location: "DISCOVER", tracks: { some: {} } } }),
+        prisma.track.count({ where: { album: { artistId } } }),
+    ]);
+    expect(artist).toMatchObject({ libraryAlbumCount, discoveryAlbumCount, totalTrackCount });
+    expect(artist.countsLastUpdated).not.toBeNull();
 }
 
 describe("Smart Import Repair database guarantees", () => {
@@ -121,6 +135,8 @@ describe("Smart Import Repair database guarantees", () => {
         let stored = await prisma.track.findUniqueOrThrow({ where: { id: importedTrackId } });
         expect(stored.albumId).toBe(targetAlbumId);
         expect(stored.manualAlbumId).toBe(targetAlbumId);
+        await expectCurrentArtistCounts(sourceArtistId);
+        await expectCurrentArtistCounts(targetArtistId);
         expect(await prisma.smartImportRepair.count({
             where: { trackId: importedTrackId, undoneAt: null },
         })).toBe(1);
@@ -138,6 +154,8 @@ describe("Smart Import Repair database guarantees", () => {
         stored = await prisma.track.findUniqueOrThrow({ where: { id: importedTrackId } });
         expect(stored.albumId).toBe(sourceAlbumId);
         expect(stored.manualAlbumId).toBeNull();
+        await expectCurrentArtistCounts(sourceArtistId);
+        await expectCurrentArtistCounts(targetArtistId);
         expect(await prisma.smartImportRepair.count({
             where: { trackId: importedTrackId, undoneAt: null },
         })).toBe(0);
