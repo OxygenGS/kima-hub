@@ -1,0 +1,126 @@
+{
+  "release": {
+    "version": "1.17.0",
+    "title": "Kima Hub 1.17.0 — Library Intelligence",
+    "summary": "Check library health and Soulseek imports, preview possible matches, and confirm reversible album corrections.",
+    "date": "2026-11-03",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.117.doctor",
+        "title": "Library Doctor: safe health report",
+        "summary": "Inspect missing tracks, damaged files, absent artwork and possible import problems.",
+        "body": "Administrators can run an on-demand, read-only report from Settings. It summarizes indexed missing or corrupt tracks, missing album covers and artist images, and possible Soulseek import problems. No full rescan, file move or metadata change is started.",
+        "links": [
+          {
+            "href": "/settings",
+            "label": "Open settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.117.inbox",
+        "title": "Smart Download Inbox",
+        "summary": "Distinguish completed Soulseek transfers from successfully indexed library files.",
+        "body": "The administrator-only inbox inspects up to 25 of the signed-in administrator's own recent Soulseek jobs. A sanitized music-root-relative path allows new imports to be matched to an exact indexed track. Older downloads without trustworthy path evidence remain unverified. Failed, unindexed, unavailable and suspect imports stay distinct.",
+        "links": [
+          {
+            "href": "/settings",
+            "label": "Check Soulseek imports"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.117.suggestions",
+        "title": "Conservative artist and album suggestions",
+        "summary": "Compare evidence before linking a downloaded track to an existing artist or album.",
+        "body": "For eligible imports, the app proposes existing library artists and, only when unambiguous, existing albums from folder identity or an exact title with compatible duration. A conflicting artist, duplicate release or missing file never produces an actionable album correction. A preview cannot modify your library.",
+        "links": [
+          {
+            "href": "/collection?tab=artists",
+            "label": "Browse artists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.117.repair",
+        "title": "Reversible album links with explicit confirmation",
+        "summary": "Correct a reviewed database album assignment, keep an audit trail, and undo safely.",
+        "body": "A two-step confirmation checks the job owner, indexed track, source and target album, file size and modification timestamp again inside a serializable database transaction. Only the track's database album link changes; both artists' counts update and a scanner guard preserves the decision. Undo restores the original link when safe. No audio files are moved, retagged or deleted. This release adds a PostgreSQL migration: take a restorable /data backup before updating.",
+        "links": [
+          {
+            "href": "/settings",
+            "label": "Open Smart Inbox"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.117.hardening",
+        "title": "Privacy and Soulseek catalog corrections",
+        "summary": "Improve account isolation, private images, live reconnects and playable single recognition.",
+        "body": "Privacy hardening from PR #175 protects account and private-artwork access, improves SSE reconnection and prevents duplicate Soulseek actions. The catalog fix from PR #176 correctly recognizes playable locally indexed Soulseek singles without marking an entire release owned, preserving real local track IDs. Modern Symfonium and Feishin authentication remains intact. The upstream Kima v1.12 audio model and automatic re-enrichment are not included.",
+        "links": [
+          {
+            "href": "/collection?tab=albums",
+            "label": "Browse albums"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.17.0 — Library Intelligence": "Kima Hub 1.17.0 — Bibliotheekintelligentie"
+    },
+    "summaries": {
+      "Check library health and Soulseek imports, preview possible matches, and confirm reversible album corrections.": "Controleer de bibliotheek en Soulseek-imports, bekijk mogelijke koppelingen en bevestig herstelbare albumcorrecties."
+    },
+    "items": {
+      "fork.117.doctor": {
+        "title": "Library Doctor: veilige bibliotheekcontrole",
+        "summary": "Controleer ontbrekende nummers, beschadigde bestanden, missend artwork en mogelijke importproblemen.",
+        "body": "Beheerders kunnen in Instellingen een rapport op aanvraag starten. Het toont volgens de bestaande bibliotheekindex ontbrekende of beschadigde nummers, ontbrekende albumhoezen en artiestenfoto's en mogelijke problemen met Soulseek-imports. Er start geen volledige scan, bestandsverplaatsing of metadatawijziging.",
+        "links": {
+          "/settings": "Open instellingen"
+        }
+      },
+      "fork.117.inbox": {
+        "title": "Slimme downloadinbox",
+        "summary": "Maak onderscheid tussen voltooide Soulseek-downloads en nummers die echt zijn geïndexeerd.",
+        "body": "De alleen voor beheerders beschikbare inbox controleert maximaal 25 recente eigen Soulseek-downloadtaken. Met een veilig relatief pad onder de muziekmap kunnen nieuwe imports exact aan een geïndexeerd nummer worden gekoppeld. Oude downloads zonder betrouwbaar bestandsbewijs blijven ongeverifieerd. Mislukte, nog niet geïndexeerde, ontbrekende en verdachte imports krijgen afzonderlijke statussen.",
+        "links": {
+          "/settings": "Controleer Soulseek-imports"
+        }
+      },
+      "fork.117.suggestions": {
+        "title": "Voorstellen voor artiest en album vergelijken",
+        "summary": "Bekijk de aanwijzingen voordat je een gedownload nummer aan een bestaande artiest of album koppelt.",
+        "body": "Bij geschikte imports stelt de app bestaande bibliotheekartiesten en, alleen wanneer de gegevens ondubbelzinnig zijn, een bestaand album voor op basis van de mapnaam of exacte titel en vergelijkbare speelduur. Een tegenstrijdige artiest, dubbele release of ontbrekend bestand levert geen uitvoerbare correctie op. Een voorbeeldweergave wijzigt niets.",
+        "links": {
+          "/collection?tab=artists": "Bekijk artiesten"
+        }
+      },
+      "fork.117.repair": {
+        "title": "Albumkoppelingen bevestigen en terugdraaien",
+        "summary": "Corrigeer na controle een albumkoppeling met een herstelrecord en maak de wijziging veilig ongedaan.",
+        "body": "Bij een bevestiging in twee stappen controleert de server binnen één database-transactie opnieuw de eigenaar, het geïndexeerde nummer, bron- en doelalbum, bestandsgrootte en wijzigingsdatum. Alleen de albumkoppeling in de database verandert; artiestenaantallen worden bijgewerkt en de scanner kan de handmatige keuze niet ongemerkt overschrijven. Herstellen brengt de oorspronkelijke koppeling veilig terug. Audiobestanden worden niet verplaatst, opnieuw getagd of verwijderd. Deze release bevat een PostgreSQL-migratie: maak vóór de update een afzonderlijk herstelbare /data-back-up.",
+        "links": {
+          "/settings": "Open downloadinbox"
+        }
+      },
+      "fork.117.hardening": {
+        "title": "Privacy en verbeterde Soulseek-herkenning",
+        "summary": "Verbeter accountisolatie, privéafbeeldingen, live verbindingen en herkenning van afspeelbare singles.",
+        "body": "De privacyfix uit PR #175 beschermt accountgegevens en privéafbeeldingen, herstelt SSE-verbindingen en voorkomt dubbele Soulseek-acties. De catalogusfix uit PR #176 herkent lokaal geïndexeerde afspeelbare Soulseek-singles zonder te beweren dat het hele album aanwezig is; echte lokale nummer-ID's blijven behouden. Moderne authenticatie voor Symfonium en Feishin blijft werken. Het nieuwe upstream muziekmodel uit Kima v1.12 en automatische heranalyse maken geen deel uit van deze versie.",
+        "links": {
+          "/collection?tab=albums": "Bekijk albums"
+        }
+      }
+    }
+  },
+  "changelog": "Kima Hub v1.17.0 introduces Library Intelligence and the privacy and Soulseek fixes merged from PRs #175 and #176.\n\n### Library Doctor and Smart Download Inbox\n- Add an on-demand administrator library report from indexed metadata: missing or corrupt tracks, absent album covers and artist images, and suspected import problems.\n- Show the administrator's 25 newest own manual Soulseek jobs, separating transfer completion from exact-path library indexing, and mark legacy jobs without a file path as unverified.\n- Keep report queries bounded and user-scoped; do not automatically rescan or retag files.\n\n### Safe review and reversible album corrections\n- Preview existing artist and album candidates from conservative identity, folder, title and duration evidence; reject ambiguity and conflicting artist metadata.\n- Require separate confirmation before writing; perform complete caller, track, destination and file-version checks inside a serializable transaction.\n- Store a SmartImportRepair audit entry, use a migration-backed scanner override guard and update both affected artists' counts in the same transaction.\n- Allow explicit undo only while the previous and current album records still match; never move, rewrite or delete audio files.\n\n### Privacy and playback reliability\n- Integrate PR #175 account isolation, protected artwork access, SSE reconnection and duplicate-Soulseek interaction guards.\n- Integrate PR #176 precise single-track availability on MusicBrainz artist and album pages; playable rows use real local IDs and missing tracks remain previews.\n- Preserve modern OpenSubsonic/Symfonium/Feishin authentication without legacy compatibility settings.\n\n### Migration and deployment safeguards\n- This release introduces a PostgreSQL migration and a manual album override trigger. Back up the entire persistent /data volume and independently verify restore before upgrading; keep /music mount points and ownership unchanged.\n- A tag downgrade alone does not reverse migrated data; rollback requires a tested pre-upgrade backup when necessary.\n- Upstream Kima v1.12 audio-model replacement and background re-enrichment are not included.\n- This is an unpublished source candidate. Native security review, release preflight and explicit stable publication approval are separate gates."
+}

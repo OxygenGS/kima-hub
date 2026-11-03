@@ -1,0 +1,77 @@
+[
+  {
+    "path": "README.md",
+    "before": "## Latest stable release: v1.16.1",
+    "after": "## Development candidate: v1.17.0 (unpublished)\n\nLibrary Intelligence is undergoing release review. There is no published v1.17.0 Docker image. The latest published stable release remains v1.16.2.\n\n## Latest stable release: v1.16.2"
+  },
+  {
+    "path": "README.md",
+    "before": "**Soulseek downloads fixed.** The current release restores P2P downloads in the all-in-one installation using a dedicated import folder, without granting write access to your entire music collection. Artwork Recovery and all existing listening features remain available.",
+    "after": "**Soulseek singles in artist albums.** v1.16.2 makes verified local Soulseek singles playable in the correct artist and album catalogs. The dedicated, limited-write download folder and Artwork Recovery remain available."
+  },
+  {
+    "path": "README.md",
+    "before": "[See what's new in v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1)",
+    "after": "[See what's new in v1.16.2](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2)"
+  },
+  {
+    "path": "README.md",
+    "before": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.1`",
+    "after": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.2`"
+  },
+  {
+    "path": "README.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.1",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.16.2"
+  },
+  {
+    "path": "README.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.2 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "README.md",
+    "before": "The v1.16.1 hotfix adds no new schema migration.",
+    "after": "The v1.16.2 release adds no new schema migration."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Current published fork release:** [v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) — Soulseek download hotfix",
+    "after": "**Current published fork release:** [v1.16.2](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) — Soulseek singles in artist albums"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.16.1`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.16.1 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) has been published and the Docker publication workflow has completed successfully.",
+    "after": "The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.16.2`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.16.2 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) has been published and the Docker publication workflow has completed successfully."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.1",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.16.2"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.2 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "image: ghcr.io/oxygengs/kima-hub:v1.16.1",
+    "after": "image: ghcr.io/oxygengs/kima-hub:v1.16.2"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "4. Select `ghcr.io/oxygengs/kima-hub:v1.16.1` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.",
+    "after": "4. Select `ghcr.io/oxygengs/kima-hub:v1.16.2` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Database migration note:** v1.16.1 introduces **no new schema migration**.",
+    "after": "**Database migration note:** v1.16.2 introduces **no new schema migration**."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.1` |",
+    "after": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.2` |"
+  }
+]
