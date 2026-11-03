@@ -5,6 +5,10 @@ jest.mock("../../../middleware/auth", () => ({
         next();
     },
 }));
+jest.mock("../../../services/smartImportRepair", () => ({
+    SmartImportRepairError: class extends Error { constructor(message: string, readonly status: number) { super(message); } },
+    applySmartImportRepair: jest.fn(), undoSmartImportRepair: jest.fn(),
+}));
 jest.mock("../../../services/smartImportSuggestion", () => ({
     getSmartImportSuggestion: jest.fn(),
 }));
@@ -24,11 +28,13 @@ import doctorRouter from "../doctor";
 import { getLibraryDoctorReport } from "../../../services/libraryDoctor";
 import { getSmartDownloadInbox } from "../../../services/smartDownloadInbox";
 import { getSmartImportSuggestion } from "../../../services/smartImportSuggestion";
+import { applySmartImportRepair, undoSmartImportRepair, SmartImportRepairError } from "../../../services/smartImportRepair";
 
 const getReport = getLibraryDoctorReport as jest.Mock;
 
 function appFor(role?: string) {
     const app = express();
+    app.use(express.json());
     app.use((req, _res, next) => {
         if (role) (req as any).user = { id: "test-user", username: "test", role };
         next();
@@ -117,5 +123,42 @@ describe("GET /doctor/inbox/:jobId/suggestion", () => {
         suggestion.mockRejectedValue(new Error("database offline"));
         const response = await request(appFor("admin")).get("/doctor/inbox/j1/suggestion");
         expect(response.status).toBe(500);
+    });
+});
+
+
+describe("POST /doctor/inbox/:jobId/apply and /undo", () => {
+    const apply = applySmartImportRepair as jest.Mock;
+    const undo = undoSmartImportRepair as jest.Mock;
+    it("enforces admin authorization before either mutation", async () => {
+        for (const suffix of ["apply", "undo"]) {
+            expect((await request(appFor()).post("/doctor/inbox/job-1/" + suffix).send({})).status).toBe(401);
+            expect((await request(appFor("user")).post("/doctor/inbox/job-1/" + suffix).send({})).status).toBe(403);
+        }
+        expect(apply).not.toHaveBeenCalled();
+        expect(undo).not.toHaveBeenCalled();
+    });
+    it("passes the signed-in caller identity, never a userId from the body", async () => {
+        apply.mockResolvedValue({ status: "relinked", repairId: "fix-1" });
+        const body = { userId: "other-user", trackId: "track-1" };
+        const res = await request(appFor("admin")).post("/doctor/inbox/job-1/apply").send(body);
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-store");
+        expect(apply).toHaveBeenCalledWith("test-user", "job-1", body);
+    });
+    it("undoes only the requested repair scoped to the caller", async () => {
+        undo.mockResolvedValue({ status: "undone", repairId: "fix-1" });
+        const res = await request(appFor("admin")).post("/doctor/inbox/job-1/undo")
+            .send({ repairId: "fix-1" });
+        expect(res.status).toBe(200);
+        expect(undo).toHaveBeenCalledWith("test-user", "job-1", "fix-1");
+    });
+    it("preserves expected 409/404 errors without leaking other user details", async () => {
+        apply.mockRejectedValue(new SmartImportRepairError("Stale confirmation", 409));
+        expect((await request(appFor("admin")).post("/doctor/inbox/job-1/apply").send({})).status).toBe(409);
+        undo.mockRejectedValue(new SmartImportRepairError("Repair not found", 404));
+        const res = await request(appFor("admin")).post("/doctor/inbox/job-1/undo").send({ repairId: "x" });
+        expect(res.status).toBe(404);
+        expect(res.body.error).toBe("Repair not found");
     });
 });

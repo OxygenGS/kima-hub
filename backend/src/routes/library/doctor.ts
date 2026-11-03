@@ -3,6 +3,7 @@ import { requireAdmin } from "../../middleware/auth";
 import { getLibraryDoctorReport } from "../../services/libraryDoctor";
 import { getSmartDownloadInbox } from "../../services/smartDownloadInbox";
 import { getSmartImportSuggestion } from "../../services/smartImportSuggestion";
+import { applySmartImportRepair, undoSmartImportRepair, SmartImportRepairError } from "../../services/smartImportRepair";
 import { logger } from "../../utils/logger";
 
 const router = Router();
@@ -40,6 +41,36 @@ router.get("/doctor/inbox/:jobId/suggestion", requireAdmin, async (req, res) => 
     } catch (error) {
         logger.error("[SmartInbox] Suggestion lookup failed", error);
         return res.status(500).json({ error: "Failed to inspect import suggestion" });
+    }
+});
+
+// Writes must be deliberate POSTs. All validation/revalidation is performed
+// again inside the service transaction, never trusted from the UI preview.
+router.post("/doctor/inbox/:jobId/apply", requireAdmin, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+        return res.json(await applySmartImportRepair(req.user!.id, req.params.jobId, req.body));
+    } catch (error) {
+        if (error instanceof SmartImportRepairError) {
+            return res.status(error.status).json({ error: error.message });
+        }
+        logger.error("[SmartInbox] Confirm repair failed", error);
+        return res.status(500).json({ error: "Failed to repair import" });
+    }
+});
+
+router.post("/doctor/inbox/:jobId/undo", requireAdmin, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    try {
+        return res.json(await undoSmartImportRepair(
+            req.user!.id, req.params.jobId, req.body?.repairId
+        ));
+    } catch (error) {
+        if (error instanceof SmartImportRepairError) {
+            return res.status(error.status).json({ error: error.message });
+        }
+        logger.error("[SmartInbox] Undo repair failed", error);
+        return res.status(500).json({ error: "Failed to undo import repair" });
     }
 });
 

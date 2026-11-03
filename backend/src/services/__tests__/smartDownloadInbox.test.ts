@@ -2,6 +2,7 @@ jest.mock("../../utils/db", () => ({
     prisma: {
         downloadJob: { count: jest.fn(), findMany: jest.fn() },
         track: { findMany: jest.fn() },
+        smartImportRepair: { findMany: jest.fn() },
     },
 }));
 
@@ -11,6 +12,7 @@ import { getSmartDownloadInbox } from "../smartDownloadInbox";
 const count = prisma.downloadJob.count as jest.Mock;
 const jobs = prisma.downloadJob.findMany as jest.Mock;
 const findTracks = prisma.track.findMany as jest.Mock;
+const findRepairs = prisma.smartImportRepair.findMany as jest.Mock;
 
 const job = (id: string, status: string, filePath?: unknown) => ({
     id, subject: "Artist - Song", status,
@@ -19,7 +21,7 @@ const job = (id: string, status: string, filePath?: unknown) => ({
 });
 const imported = (filePath: string, artist: string, location = "LIBRARY") => ({
     id: "track-" + artist, filePath, missingSince: null, corrupt: false,
-    album: { title: "Album", location, artist: { name: artist } },
+    album: { id: "album-" + artist, title: "Album", location, artist: { name: artist } },
 });
 const folder = "Singles/Kima Downloads/Artist/Album/Song.flac";
 
@@ -28,6 +30,7 @@ beforeEach(() => {
     count.mockResolvedValue(1);
     jobs.mockResolvedValue([job("j1", "completed", folder)]);
     findTracks.mockResolvedValue([imported(folder, "Artist")]);
+    findRepairs.mockResolvedValue([]);
 });
 
 describe("Smart Download Inbox", () => {
@@ -99,5 +102,31 @@ describe("Smart Download Inbox", () => {
     it("propagates a database outage instead of presenting fabricated success", async () => {
         count.mockRejectedValue(new Error("Database offline"));
         await expect(getSmartDownloadInbox("listener")).rejects.toThrow("Database offline");
+    });
+});
+
+
+describe("Smart Inbox confirmed reassignments", () => {
+    it("shows the active repair only for the caller's own matching track and album", async () => {
+        findRepairs.mockResolvedValue([{
+            id: "repair-1", jobId: "j1", trackId: "track-Artist", newAlbumId: "album-Artist",
+        }]);
+        const result = await getSmartDownloadInbox("listener-1");
+        expect(findRepairs).toHaveBeenCalledWith(expect.objectContaining({
+            where: { userId: "listener-1", jobId: { in: ["j1"] }, undoneAt: null },
+            take: 25,
+        }));
+        expect(result.items[0]).toMatchObject({
+            stage: "relinked", reason: "manual-relink", repairId: "repair-1",
+        });
+    });
+    it("never marks a stale repair as successfully linked", async () => {
+        findRepairs.mockResolvedValue([{
+            id: "repair-1", jobId: "j1", trackId: "different", newAlbumId: "album-Artist",
+        }]);
+        const result = await getSmartDownloadInbox("listener-1");
+        expect(result.items[0]).toMatchObject({
+            stage: "review", reason: "repair-inconsistent", repairId: "repair-1",
+        });
     });
 });
