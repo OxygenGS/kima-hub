@@ -11,6 +11,7 @@ import { randomUUID } from "crypto";
 import { eventBus } from "../services/eventBus";
 import { prisma } from "../utils/db";
 import fs from "fs";
+import path from "path";
 import { soulseekDownloadDestination } from "../services/soulseekDestination";
 import type { FileSearchResponse } from "../lib/soulseek/messages/from/peer";
 import { FileAttribute } from "../lib/soulseek/messages/common";
@@ -349,6 +350,14 @@ router.post(
                 filename || filepath.split(/[/\\]/).pop() || "track.mp3",
             );
 
+            // Keep only the path relative to /music in job metadata. It is
+            // safe to use later as an exact indexed-file lookup and never
+            // persists a server mount path or a P2P peer address.
+            const importRelativePath = path.relative(musicPath, destPath).split(path.sep).join("/");
+            if (!importRelativePath.startsWith("Singles/Kima Downloads/")) {
+                throw new Error("Invalid Soulseek import destination");
+            }
+
             logger.debug(`[Soulseek] Downloading from ${username}: ${filepath} -> ${destPath}`);
 
             const match = {
@@ -370,6 +379,7 @@ router.post(
                     subject,
                     type: "soulseek-search",
                     targetMbid: null,
+                    metadata: { importRelativePath },
                     status: "processing",
                     startedAt: new Date(),
                 },

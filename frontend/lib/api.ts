@@ -18,6 +18,103 @@ export interface AlbumCoverRecoveryStatus {
 
 export type ArtistImageRecoveryStatus = AlbumCoverRecoveryStatus;
 
+export type SmartDownloadInboxStage =
+    | "active" | "failed" | "awaiting-index" | "indexed"
+    | "review" | "unavailable" | "unverified" | "relinked";
+
+export type SmartDownloadInboxReason =
+    | "in-progress" | "download-failed" | "legacy-untracked"
+    | "not-indexed" | "missing-file" | "corrupt-file"
+    | "discovery-album" | "unknown-artist" | "indexed"
+    | "manual-relink" | "repair-inconsistent";
+
+export type SmartImportSuggestionEvidence =
+    | "folder-artist" | "existing-library-artist"
+    | "folder-album" | "same-title-duration";
+
+export interface SmartImportSuggestion {
+    status: "suggested" | "unavailable" | "no-match" | "conflict";
+    readOnly: true;
+    current: {
+        trackId: string;
+        albumId: string;
+        fileModified: string;
+        fileSize: number;
+        title: string;
+        artist: string;
+        album: string;
+    } | null;
+    proposedArtist: { id: string; name: string } | null;
+    proposedAlbum: { id: string; title: string } | null;
+    evidence: SmartImportSuggestionEvidence[];
+}
+
+export interface SmartDownloadInboxItem {
+    id: string;
+    subject: string;
+    createdAt: string;
+    stage: SmartDownloadInboxStage;
+    reason: SmartDownloadInboxReason;
+    filePath: string | null;
+    repairId: string | null;
+    track: { id: string; album: string; artist: string } | null;
+}
+
+export interface ConfirmSmartImportRepair {
+    trackId: string;
+    previousAlbumId: string;
+    newAlbumId: string;
+    fileModified: string;
+    fileSize: number;
+}
+export interface SmartImportRepairResult {
+    status: "relinked";
+    repairId: string;
+    trackId: string;
+    previousAlbumId: string;
+    newAlbumId: string;
+    appliedAt: string;
+}
+export interface SmartImportUndoResult {
+    status: "undone";
+    repairId: string;
+    trackId: string;
+}
+
+export interface SmartDownloadInbox {
+    generatedAt: string;
+    total: number;
+    displayed: number;
+    limit: number;
+    items: SmartDownloadInboxItem[];
+}
+
+export interface LibraryDoctorTrackSample {
+    id: string;
+    title: string;
+    album: string;
+    artist: string;
+    filePath: string;
+}
+
+export interface LibraryDoctorReport {
+    generatedAt: string;
+    basis: "indexed-metadata";
+    sampleLimit: number;
+    counts: {
+        libraryTracks: number;
+        missingTracks: number;
+        corruptTracks: number;
+        albumsWithoutCover: number;
+        artistsWithoutImage: number;
+        importsToReview: number;
+    };
+    samples: {
+        missingTracks: LibraryDoctorTrackSample[];
+        importsToReview: LibraryDoctorTrackSample[];
+    };
+}
+
 const AUTH_TOKEN_KEY = "auth_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -2183,6 +2280,38 @@ class ApiClient {
 
         return response.json();
     }
+    // Authorized and revalidated server-side in a serializable transaction.
+    async confirmSmartImportRepair(jobId: string, input: ConfirmSmartImportRepair): Promise<SmartImportRepairResult> {
+        return this.request<SmartImportRepairResult>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/apply",
+            { method: "POST", body: JSON.stringify(input) }
+        );
+    }
+
+    async undoSmartImportRepair(jobId: string, repairId: string): Promise<SmartImportUndoResult> {
+        return this.request<SmartImportUndoResult>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/undo",
+            { method: "POST", body: JSON.stringify({ repairId }) }
+        );
+    }
+
+    // Explicitly requested, caller-scoped, read-only preview of a suspect import.
+    async getSmartImportSuggestion(jobId: string): Promise<SmartImportSuggestion> {
+        return this.request<SmartImportSuggestion>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/suggestion"
+        );
+    }
+
+    // On-demand, admin-only, caller-scoped Smart Download Inbox.
+    async getSmartDownloadInbox(): Promise<SmartDownloadInbox> {
+        return this.request<SmartDownloadInbox>("/library/doctor/inbox");
+    }
+
+    // On-demand, admin-only, read-only Library Doctor report.
+    async getLibraryDoctorReport(): Promise<LibraryDoctorReport> {
+        return this.request<LibraryDoctorReport>("/library/doctor/report");
+    }
+
     // Corrupt tracks
     async getCorruptTracks() {
         return this.request<{

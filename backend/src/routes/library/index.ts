@@ -11,6 +11,7 @@ import streamingRouter from "./streaming";
 import coverArtRouter from "./coverArt";
 import backfillRouter from "./backfill";
 import waveformRouter from "./waveform";
+import doctorRouter from "./doctor";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use(streamingRouter);
 router.use(coverArtRouter);
 router.use(backfillRouter);
 router.use(waveformRouter);
+router.use(doctorRouter);
 
 export default router;
