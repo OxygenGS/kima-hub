@@ -4,6 +4,8 @@
 
 The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.16.2`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.16.2 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) has been published and the Docker publication workflow has completed successfully.
 
+**v1.17.0 is a source-only release candidate, not a published image.** Do not switch a running installation to `v1.17.0` until a signed-off release and native image preflight are complete. Unlike v1.16.2, v1.17.0 contains a PostgreSQL migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify a restore to an independent test instance, and keep the existing `/music` mount unchanged. If rolling back across the migration, restore the pre-upgrade `/data` backup; changing the image tag alone does not downgrade the database.
+
 Kima runs the web app, API, PostgreSQL, Redis and bundled analysis services in one container. Your music and persistent application data remain on volumes you control.
 
 ## Fresh install
