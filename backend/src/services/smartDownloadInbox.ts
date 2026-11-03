@@ -10,12 +10,13 @@ const LIMIT = 25;
 
 export type SmartInboxStage =
     | "active" | "failed" | "awaiting-index" | "indexed"
-    | "review" | "unavailable" | "unverified";
+    | "review" | "unavailable" | "unverified" | "relinked";
 
 export type SmartInboxReason =
     | "in-progress" | "download-failed" | "legacy-untracked"
     | "not-indexed" | "missing-file" | "corrupt-file"
-    | "discovery-album" | "unknown-artist" | "indexed";
+    | "discovery-album" | "unknown-artist" | "indexed"
+    | "manual-relink" | "repair-inconsistent";
 
 export interface SmartInboxItem {
     id: string;
@@ -24,6 +25,7 @@ export interface SmartInboxItem {
     stage: SmartInboxStage;
     reason: SmartInboxReason;
     filePath: string | null;
+    repairId: string | null;
     track: { id: string; album: string; artist: string } | null;
 }
 
@@ -67,7 +69,7 @@ export async function getSmartDownloadInbox(userId: string): Promise<SmartInboxR
             id: true, filePath: true, missingSince: true, corrupt: true,
             album: {
                 select: {
-                    title: true, location: true,
+                    id: true, title: true, location: true,
                     artist: { select: { name: true } },
                 },
             },
@@ -75,10 +77,17 @@ export async function getSmartDownloadInbox(userId: string): Promise<SmartInboxR
         take: LIMIT,
     }) : [];
     const indexed = new Map(tracks.map((track) => [track.filePath, track]));
+    const repairs = jobs.length ? await prisma.smartImportRepair.findMany({
+        where: { userId, jobId: { in: jobs.map((job) => job.id) }, undoneAt: null },
+        select: { id: true, jobId: true, trackId: true, newAlbumId: true },
+        take: LIMIT,
+    }) : [];
+    const activeRepairs = new Map(repairs.map((repair) => [repair.jobId, repair]));
 
     const items: SmartInboxItem[] = jobs.map((job) => {
         const filePath = safeStoredPath(job.metadata);
         const found = filePath ? indexed.get(filePath) : undefined;
+        const repair = activeRepairs.get(job.id);
         const track = found ? {
             id: found.id,
             album: found.album.title,
@@ -99,6 +108,10 @@ export async function getSmartDownloadInbox(userId: string): Promise<SmartInboxR
             stage = "unavailable"; reason = "missing-file";
         } else if (found.corrupt) {
             stage = "unavailable"; reason = "corrupt-file";
+        } else if (repair && found.id === repair.trackId && found.album.id === repair.newAlbumId) {
+            stage = "relinked"; reason = "manual-relink";
+        } else if (repair) {
+            stage = "review"; reason = "repair-inconsistent";
         } else if (found.album.location !== "LIBRARY") {
             stage = "review"; reason = "discovery-album";
         } else if (["unknown", "unknown artist"].includes(found.album.artist.name.trim().toLowerCase())) {
@@ -109,7 +122,8 @@ export async function getSmartDownloadInbox(userId: string): Promise<SmartInboxR
 
         return {
             id: job.id, subject: job.subject,
-            createdAt: job.createdAt.toISOString(), stage, reason, filePath, track,
+            createdAt: job.createdAt.toISOString(), stage, reason, filePath,
+            repairId: repair?.id ?? null, track,
         };
     });
 

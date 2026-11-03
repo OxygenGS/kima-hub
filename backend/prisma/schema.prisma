@@ -30,6 +30,7 @@ model Album {
   originalYear     Int?
   artist           Artist                   @relation(fields: [artistId], references: [id], onDelete: Cascade)
   tracks           Track[]
+  manualAlbumTracks Track[] @relation("ManuallyAssignedTrackAlbum")
 
   @@unique([artistId, identityKey])
   @@index([title])
@@ -316,6 +317,24 @@ model DownloadJob {
   @@index([status])
   @@index([targetMbid])
   @@index([userId, status])
+}
+
+/// Immutable history of explicitly confirmed import reassignments. An undone
+/// record remains for audit; unique partial indexes restrict ACTIVE repairs
+/// only and are managed by SQL because Prisma cannot model partial indexes.
+model SmartImportRepair {
+  id              String    @id @default(cuid())
+  jobId           String
+  trackId         String
+  userId          String
+  filePath        String
+  previousAlbumId String
+  newAlbumId      String
+  appliedAt       DateTime  @default(now())
+  undoneAt        DateTime?
+
+  @@index([jobId, userId, undoneAt])
+  @@index([trackId, undoneAt])
 }
 
 model EnrichmentFailure {
@@ -711,6 +730,9 @@ model Track {
   mime                        String?
   searchVector                Unsupported("tsvector")?
   filePath                    String                   @unique
+  // User-approved album selection, guarded against scanner re-assignment by SQL trigger.
+  manualAlbumId               String?
+  manualAlbum                 Album?                   @relation("ManuallyAssignedTrackAlbum", fields: [manualAlbumId], references: [id], onDelete: SetNull)
   fileModified                DateTime
   fileSize                    Int
   bpm                         Float?
@@ -800,6 +822,7 @@ model Track {
   @@index([analysisStatus, vibeAnalysisStatus])
   @@index([isrc])
   @@index([albumId])
+  @@index([manualAlbumId])
   @@index([acousticness])
   @@index([analysisMode])
   @@index([arousal])

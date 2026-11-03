@@ -2,6 +2,7 @@
  * On-demand Smart Download Inbox proposals. This code deliberately performs
  * reads only; a folder name is evidence for review, never proof to auto-retag.
  */
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../utils/db";
 import { artistIdentityKey } from "./artistIdentity";
 import { safeStoredPath } from "./smartDownloadInbox";
@@ -16,6 +17,9 @@ export interface SmartImportSuggestion {
     readOnly: true;
     current: {
         trackId: string;
+        albumId: string;
+        fileModified: string;
+        fileSize: number;
         title: string;
         artist: string;
         album: string;
@@ -27,6 +31,7 @@ export interface SmartImportSuggestion {
 
 const IMPORT_ROOT = "Singles/Kima Downloads/";
 const CANDIDATE_LIMIT = 12;
+export type SuggestionDb = Pick<Prisma.TransactionClient, "downloadJob" | "track" | "artist" | "album">;
 const UNKNOWN_ARTISTS = new Set(["unknown artist", "unknown", "various artists", "various", "v/a"]);
 const UNKNOWN_ALBUMS = new Set(["unknown album", "unknown", "untitled", "singles", "compilation", "various artists"]);
 
@@ -54,9 +59,10 @@ function titleFromImportPath(filePath: string, artistName: string): string | nul
 export async function getSmartImportSuggestion(
     userId: string,
     jobId: string,
+    db: SuggestionDb = prisma,
 ): Promise<SmartImportSuggestion | null> {
     // 404 for both unknown and other-user jobs; never reveal their existence.
-    const job = await prisma.downloadJob.findFirst({
+    const job = await db.downloadJob.findFirst({
         where: { id: jobId, userId, type: "soulseek-search", cleared: false },
         select: { status: true, metadata: true },
     });
@@ -65,12 +71,13 @@ export async function getSmartImportSuggestion(
     if (job.status !== "completed" || !filePath) return empty("unavailable");
 
     // Exact index lookup; never guess the source file from its title.
-    const imported = await prisma.track.findUnique({
+    const imported = await db.track.findUnique({
         where: { filePath },
         select: {
-            id: true, title: true, duration: true, missingSince: true, corrupt: true,
+            id: true, title: true, duration: true, fileModified: true, fileSize: true,
+            missingSince: true, corrupt: true,
             album: { select: {
-                title: true, location: true,
+                id: true, title: true, location: true,
                 artist: { select: { id: true, name: true } },
             } },
         },
@@ -78,6 +85,9 @@ export async function getSmartImportSuggestion(
     if (!imported || imported.corrupt || imported.missingSince) return empty("unavailable");
     const current: SmartImportSuggestion["current"] = {
         trackId: imported.id,
+        albumId: imported.album.id,
+        fileModified: imported.fileModified.toISOString(),
+        fileSize: imported.fileSize,
         title: imported.title,
         artist: imported.album.artist.name,
         album: imported.album.title,
@@ -101,7 +111,7 @@ export async function getSmartImportSuggestion(
         return { ...empty("conflict"), current };
     }
 
-    const artist = await prisma.artist.findFirst({
+    const artist = await db.artist.findFirst({
         where: {
             identityKey: folderArtistKey,
             albums: { some: {
@@ -121,7 +131,7 @@ export async function getSmartImportSuggestion(
     // An exact, non-generic album folder can suggest an existing album for
     // this artist. It does NOT prove that the imported audio belongs there.
     if (folderAlbum && !UNKNOWN_ALBUMS.has(folderAlbum.trim().toLowerCase())) {
-        const albums = await prisma.album.findMany({
+        const albums = await db.album.findMany({
             where: {
                 artistId: artist.id, location: "LIBRARY",
                 title: { equals: folderAlbum, mode: "insensitive" },
@@ -141,7 +151,7 @@ export async function getSmartImportSuggestion(
         // or a truncated candidate set.
         const title = titleFromImportPath(filePath, folderArtist);
         if (title && imported.duration > 0) {
-            const peers = await prisma.track.findMany({
+            const peers = await db.track.findMany({
                 where: {
                     album: { artistId: artist.id, location: "LIBRARY" },
                     missingSince: null, corrupt: false,
