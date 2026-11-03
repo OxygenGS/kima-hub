@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { api, type SmartDownloadInbox, type SmartDownloadInboxItem } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n/language-context";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import { SettingsSection } from "../ui";
 
-const statuses: Record<SmartDownloadInboxItem["stage"], string> = {
+const statuses: Record<SmartDownloadInboxItem["stage"], TranslationKey> = {
     active: "Downloading",
     failed: "Download failed",
     "awaiting-index": "Not yet indexed",
@@ -15,7 +16,7 @@ const statuses: Record<SmartDownloadInboxItem["stage"], string> = {
     unverified: "Older download: not verified",
 };
 
-const reasons: Record<SmartDownloadInboxItem["reason"], string> = {
+const reasons: Record<SmartDownloadInboxItem["reason"], TranslationKey> = {
     "in-progress": "Transfer is still in progress.",
     "download-failed": "The download did not finish successfully.",
     "legacy-untracked": "This older download has no stored file reference.",
