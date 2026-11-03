@@ -2,7 +2,7 @@ jest.mock("../../utils/db", () => ({ prisma: { $transaction: jest.fn() } }));
 jest.mock("../smartImportSuggestion", () => ({ getSmartImportSuggestion: jest.fn() }));
 import { prisma } from "../../utils/db";
 import { getSmartImportSuggestion } from "../smartImportSuggestion";
-import { applySmartImportRepair, undoSmartImportRepair, SmartImportRepairError } from "../smartImportRepair";
+import { applySmartImportRepair, undoSmartImportRepair } from "../smartImportRepair";
 
 const getSuggestion = getSmartImportSuggestion as jest.Mock;
 const transaction = prisma.$transaction as jest.Mock;
