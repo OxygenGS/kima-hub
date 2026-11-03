@@ -20,26 +20,39 @@ export function useEventSource() {
     const reconnectAttemptsRef = useRef(0);
 
     useEffect(() => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) {
+            reconnectAttemptsRef.current = 0;
+            return;
+        }
 
         let mounted = true;
 
-        const connect = async () => {
+        function scheduleReconnect() {
             if (!mounted) return;
+            if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+            const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
+            reconnectAttemptsRef.current++;
+            reconnectTimeoutRef.current = setTimeout(() => {
+                reconnectTimeoutRef.current = null;
+                void connect();
+            }, delay);
+        }
 
-            const ticket = await api.getSSETicket();
+        async function connect() {
             if (!mounted) return;
-            if (!ticket) {
-                const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-                reconnectAttemptsRef.current++;
-                reconnectTimeoutRef.current = setTimeout(() => { connect().catch(() => {}); }, delay);
-                return;
-            }
-
-            const es = new EventSource(`${getSSEBaseUrl()}/api/events?ticket=${ticket}`);
-            eventSourceRef.current = es;
+            try {
+                const ticket = await api.getSSETicket();
+                if (!mounted) return;
+                // A failed ticket fetch is common during a network handoff.
+                if (!ticket) {
+                    scheduleReconnect();
+                    return;
+                }
+                const es = new EventSource(`${getSSEBaseUrl()}/api/events?ticket=${encodeURIComponent(ticket)}`);
+                eventSourceRef.current = es;
 
             es.onmessage = (event) => {
+                if (!mounted || eventSourceRef.current !== es) return;
                 try {
                     const data = JSON.parse(event.data);
 
@@ -95,6 +108,8 @@ export function useEventSource() {
                                 queryClient.invalidateQueries({ queryKey: ["artist"] });
                                 queryClient.invalidateQueries({ queryKey: ["library", "albums"] });
                                 queryClient.invalidateQueries({ queryKey: ["library", "artists"] });
+                                queryClient.invalidateQueries({ queryKey: ["library", "tracks"] });
+                                queryClient.invalidateQueries({ queryKey: ["search"] });
                             }
                             break;
                         case "enrichment:progress":
@@ -146,20 +161,28 @@ export function useEventSource() {
                             // Only refetch on reconnect (not initial connect) to avoid
                             // duplicate requests when queries were just fetched on mount.
                             if (reconnectAttemptsRef.current > 0) {
-                                queryClient.invalidateQueries({ queryKey: ["notifications"] });
-                                queryClient.invalidateQueries({ queryKey: ["active-downloads"] });
-                                queryClient.invalidateQueries({ queryKey: ["download-history"] });
+                                // While offline we may have missed scan, playlist,
+                                // acquisition and ownership changes. Refresh only
+                                // currently observed queries; inactive ones become stale.
+                                for (const key of [
+                                    ["notifications"], ["active-downloads"], ["download-history"],
+                                    ["album"], ["artist"], ["library"], ["search"],
+                                    ["playlists"], ["scan-status"], ["user-imports"],
+                                    ["enrichment-progress"],
+                                ]) {
+                                    void queryClient.invalidateQueries({ queryKey: key });
+                                }
                             }
                             reconnectAttemptsRef.current = 0;
-                            // Sync batch status after reconnect to clear stale cache
-                            api.getDiscoverBatchStatus()
+                            // A transient status failure must not overwrite a
+                            // legitimate running batch with an invented idle state.
+                            void api.getDiscoverBatchStatus()
                                 .then(status => {
-                                    queryClient.setQueryData(["discover-batch-status"], status);
+                                    if (mounted && eventSourceRef.current === es) {
+                                        queryClient.setQueryData(["discover-batch-status"], status);
+                                    }
                                 })
-                                .catch(() => {
-                                    // On error, assume no active batch
-                                    queryClient.setQueryData(["discover-batch-status"], { active: false, status: null, batchId: null });
-                                });
+                                .catch(() => {});
                             break;
                     }
                 } catch {
@@ -168,20 +191,24 @@ export function useEventSource() {
             };
 
             es.onerror = () => {
+                // Ignore a delayed error from a stream already replaced.
+                if (eventSourceRef.current !== es) return;
                 es.close();
                 eventSourceRef.current = null;
-                if (mounted) {
-                    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-                    reconnectAttemptsRef.current++;
-                    reconnectTimeoutRef.current = setTimeout(() => { connect().catch(() => {}); }, delay);
-                }
+                scheduleReconnect();
             };
-        };
+            } catch {
+                // Ticket failures or EventSource constructor errors must not
+                // permanently disable live updates or cause unhandled promises.
+                scheduleReconnect();
+            }
+        }
 
-        connect();
+        void connect();
 
         return () => {
             mounted = false;
+            reconnectAttemptsRef.current = 0;
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
             }

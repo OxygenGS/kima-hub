@@ -50,7 +50,7 @@ async function serveNativeImage(
   const requestOrigin = req.headers.origin;
   const headers: Record<string, string> = {
     "Content-Type": "image/jpeg",
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cache-Control": "private, no-cache",
     "Cross-Origin-Resource-Policy": "cross-origin",
   };
   if (requestOrigin) {
@@ -116,7 +116,7 @@ async function serveAudiobookCover(
     res.setHeader("Content-Type", contentType);
   }
   applyCoverArtCorsHeaders(res, req.headers.origin as string | undefined);
-  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.setHeader("Cache-Control", "private, no-cache");
 
   return res.send(imageBuffer);
 }
@@ -124,6 +124,12 @@ async function serveAudiobookCover(
 const router = Router();
 
 router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
+  // Album covers can be personal and can change after Artwork Recovery.
+  // Require per-request revalidation (and the existing parent auth middleware)
+  // instead of exposing a year's worth of publicly cacheable responses.
+  res.setHeader("Cache-Control", "private, no-cache");
+  res.vary("Authorization");
+  res.vary("Cookie");
   try {
     const { size, url } = req.query;
     let coverUrl: string;
@@ -283,7 +289,7 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
           res.setHeader("Content-Type", cachedData.contentType);
         }
         applyCoverArtCorsHeaders(res, req.headers.origin as string | undefined);
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("Cache-Control", "private, no-cache");
         res.setHeader("ETag", cachedData.etag);
         return res.send(imageBuffer);
       } else {
@@ -376,7 +382,7 @@ router.get("/cover-art/:id?", imageLimiter, async (req, res) => {
     }
 
     applyCoverArtCorsHeaders(res, req.headers.origin as string | undefined);
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("Cache-Control", "private, no-cache");
     res.setHeader("ETag", etag);
 
     res.send(imageBuffer);

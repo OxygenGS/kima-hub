@@ -11,3 +11,21 @@ export const STORAGE_KEYS = {
     IS_MUTED: "kima_muted",
     PODCAST_EPISODE_QUEUE: "kima_podcast_episode_queue",
 } as const;
+
+
+/** Playback positions and media identities belong to the signed-in account.
+ * Keep device preferences (volume, mute, player mode) when signing out.
+ */
+export function clearAccountMediaStorage(): void {
+    if (typeof window === "undefined") return;
+    for (const key of [
+        STORAGE_KEYS.CURRENT_AUDIOBOOK,
+        STORAGE_KEYS.CURRENT_PODCAST,
+        STORAGE_KEYS.PLAYBACK_TYPE,
+        STORAGE_KEYS.CURRENT_INDEX,
+        STORAGE_KEYS.PODCAST_EPISODE_QUEUE,
+    ]) {
+        try { window.localStorage.removeItem(key); }
+        catch { /* Private browsing and sandboxed frames may block storage. */ }
+    }
+}

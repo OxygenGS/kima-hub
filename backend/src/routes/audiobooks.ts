@@ -593,7 +593,8 @@ router.get("/:id/stream", requireAuthOrToken, async (req, res) => {
             res.setHeader("Content-Range", headers["content-range"]);
         }
 
-        res.setHeader("Cache-Control", "public, max-age=0");
+        // Only the authorized listener may cache this media, never shared proxies.
+        res.setHeader("Cache-Control", "private, no-store");
 
         // Clean up upstream stream when client disconnects (e.g., skips track, closes browser)
         res.on("close", () => {

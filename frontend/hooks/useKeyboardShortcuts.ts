@@ -2,6 +2,21 @@ import { useEffect, useRef } from 'react';
 import { useAudio } from "@/lib/audio-context";
 import { useIsTV } from '@/lib/tv-utils';
 
+/** Let focused controls, accessibility widgets and browser key combinations win.
+ * This prevents space/arrow playback shortcuts from hijacking dialogs, sliders,
+ * buttons, text selection or the browser's own shortcuts.
+ */
+export function shouldIgnorePlaybackShortcut(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return true;
+  const target = e.target;
+  return target instanceof Element && Boolean(target.closest(
+    'input, textarea, select, button, a[href], [contenteditable], ' +
+    '[role="button"], [role="slider"], [role="spinbutton"], ' +
+    '[role="textbox"], [role="combobox"], [role="menu"], ' +
+    '[role="listbox"], [role="dialog"]'
+  ));
+}
+
 /** Global playback shortcuts; each key is listed at its case below. */
 export function useKeyboardShortcuts() {
   const isTV = useIsTV();
@@ -72,23 +87,11 @@ export function useKeyboardShortcuts() {
     if (!playbackType) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input/textarea
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      // Prevent default for media keys to avoid conflicts
-      if ([' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-        e.preventDefault();
-      }
+      if (shouldIgnorePlaybackShortcut(e)) return;
 
       switch (e.key.toLowerCase()) {
         case ' ': // Space - Play/Pause
+          e.preventDefault();
           if (isPlayingRef.current) {
             pauseRef.current();
           } else {
@@ -98,6 +101,7 @@ export function useKeyboardShortcuts() {
 
         case 'arrowright': // Right arrow - Seek forward 10s
           if (playbackType === 'track' || playbackType === 'audiobook' || playbackType === 'podcast') {
+            e.preventDefault();
             const duration = currentTrackRef.current?.duration || currentAudiobookRef.current?.duration || currentPodcastRef.current?.duration || 0;
             seekRef.current(Math.min(currentTimeRef.current + 10, duration));
           }
@@ -105,15 +109,18 @@ export function useKeyboardShortcuts() {
 
         case 'arrowleft': // Left arrow - Seek backward 10s
           if (playbackType === 'track' || playbackType === 'audiobook' || playbackType === 'podcast') {
+            e.preventDefault();
             seekRef.current(Math.max(currentTimeRef.current - 10, 0));
           }
           break;
 
         case 'arrowup': // Up arrow - Volume up 10%
+          e.preventDefault();
           setVolumeRef.current(Math.min(volumeRef.current + 0.1, 1));
           break;
 
         case 'arrowdown': // Down arrow - Volume down 10%
+          e.preventDefault();
           setVolumeRef.current(Math.max(volumeRef.current - 0.1, 0));
           break;
 
