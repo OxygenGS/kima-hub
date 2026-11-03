@@ -20,12 +20,13 @@ export type ArtistImageRecoveryStatus = AlbumCoverRecoveryStatus;
 
 export type SmartDownloadInboxStage =
     | "active" | "failed" | "awaiting-index" | "indexed"
-    | "review" | "unavailable" | "unverified";
+    | "review" | "unavailable" | "unverified" | "relinked";
 
 export type SmartDownloadInboxReason =
     | "in-progress" | "download-failed" | "legacy-untracked"
     | "not-indexed" | "missing-file" | "corrupt-file"
-    | "discovery-album" | "unknown-artist" | "indexed";
+    | "discovery-album" | "unknown-artist" | "indexed"
+    | "manual-relink" | "repair-inconsistent";
 
 export type SmartImportSuggestionEvidence =
     | "folder-artist" | "existing-library-artist"
@@ -36,6 +37,9 @@ export interface SmartImportSuggestion {
     readOnly: true;
     current: {
         trackId: string;
+        albumId: string;
+        fileModified: string;
+        fileSize: number;
         title: string;
         artist: string;
         album: string;
@@ -52,7 +56,29 @@ export interface SmartDownloadInboxItem {
     stage: SmartDownloadInboxStage;
     reason: SmartDownloadInboxReason;
     filePath: string | null;
+    repairId: string | null;
     track: { id: string; album: string; artist: string } | null;
+}
+
+export interface ConfirmSmartImportRepair {
+    trackId: string;
+    previousAlbumId: string;
+    newAlbumId: string;
+    fileModified: string;
+    fileSize: number;
+}
+export interface SmartImportRepairResult {
+    status: "relinked";
+    repairId: string;
+    trackId: string;
+    previousAlbumId: string;
+    newAlbumId: string;
+    appliedAt: string;
+}
+export interface SmartImportUndoResult {
+    status: "undone";
+    repairId: string;
+    trackId: string;
 }
 
 export interface SmartDownloadInbox {
@@ -2232,6 +2258,21 @@ class ApiClient {
 
         return response.json();
     }
+    // Authorized and revalidated server-side in a serializable transaction.
+    async confirmSmartImportRepair(jobId: string, input: ConfirmSmartImportRepair): Promise<SmartImportRepairResult> {
+        return this.request<SmartImportRepairResult>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/apply",
+            { method: "POST", body: JSON.stringify(input) }
+        );
+    }
+
+    async undoSmartImportRepair(jobId: string, repairId: string): Promise<SmartImportUndoResult> {
+        return this.request<SmartImportUndoResult>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/undo",
+            { method: "POST", body: JSON.stringify({ repairId }) }
+        );
+    }
+
     // Explicitly requested, caller-scoped, read-only preview of a suspect import.
     async getSmartImportSuggestion(jobId: string): Promise<SmartImportSuggestion> {
         return this.request<SmartImportSuggestion>(

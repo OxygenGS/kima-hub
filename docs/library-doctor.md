@@ -1,8 +1,9 @@
 # Library Doctor — v1.17.0 development
 
-The first Library Doctor slice is a **read-only, admin-only diagnostic report**.
-It uses the indexed metadata already stored by Kima Hub. No new database
-migration, background job, filesystem crawl or automatic repair is introduced.
+The Library Doctor *report* is an admin-only, read-only diagnostic view of
+indexed metadata. Smart Download Inbox adds optional, explicitly confirmed
+album assignment corrections later in the same v1.17 development PR.
+The report itself does not scan, write or modify any file.
 
 ## Usage
 
@@ -30,12 +31,11 @@ category. The API is authenticated and separately enforces admin privileges
 and sends private, non-cacheable responses. No absolute server mount paths
 or credentials are included in the source.
 
-## Deferred to later v1.17 slices
+## Planned later improvements
 
-- Safe linking/reclassification of downloaded singles with explicit previews.
-- A persistent download lifecycle and retry inbox.
-- Duplicate identification with evidence (hashes, recording identity).
-- Any edit, automatic correction, move, deletion or metadata rewrite.
+- Automatic import lifecycle tracking beyond existing download jobs.
+- Duplicate identification with recording evidence (hash, MBID, duration).
+- More metadata source integration; no automatic file moves or edits.
 
 PR #175 and PR #176 should be reviewed separately; neither is implicitly
 merged into this development slice. The patch is not a published Docker image.
@@ -66,7 +66,8 @@ The statuses distinguish:
 
 Only the last 25 jobs are classified, and the response includes the total
 number of retained manual Soulseek jobs for context. No retry, rescan, re-tag,
-file move, deletion, automatic fix or download permission change is added.
+file move, or download permission change is added. Explicit album reassignment
+is available separately after confirmation (see below).
 
 Further releases may introduce an opt-in reconciliation flow with explicit
 match evidence and undo support, plus per-user activity integration.
@@ -87,7 +88,48 @@ when a same-artist LIBRARY album has the folder's exact title, or an
 duration (within five seconds). Ambiguous matches never choose a first result.
 
 Evidence is visible, with links to compare the existing artist and album.
-This is **not verified identification** and no confirm/write endpoint is
-introduced. The proposal does not touch audio bytes, track tags, stored
-artist/album assignments, or the user's files. Future changes would need
-atomic revalidation, an explicit admin confirmation and rollback design.
+This is **not verified identification**. Preview is read-only and does not
+touch audio bytes, track tags or album assignments. A separate confirm/undo
+workflow is available only when an actual album candidate is present.
+
+
+## Confirmed database-only album relinking and undo
+
+The first reversible write path is intentionally narrow. An administrator can
+open an own manual Soulseek import, inspect a proposed existing artist/album,
+then select **Prepare album link** and **Confirm album link**. Artist-only
+suggestions cannot be applied, nor can ambiguous or stale candidates.
+Nothing is linked automatically or on the first preview click.
+
+The POST handler re-generates the proposal **within a serializable database
+transaction**, authorizes the exact caller and download job, compares the
+expected track ID, source album, destination album, last file modification
+timestamp and file size, and atomically updates only Track.albumId and
+Track.manualAlbumId. It writes an accompanying SmartImportRepair audit row.
+A mismatched or changed track/album fails with HTTP 409, and the entire
+transaction rolls back. Unique active-repair indexes prevent double repairs.
+The only approved target is an existing same-artist LIBRARY album.
+
+The additive database migration introduces a nullable Track.manualAlbumId,
+the SmartImportRepair audit table, active unique indexes and a small PostgreSQL
+trigger that keeps a user-approved album choice in effect when the normal
+scanner later upserts an existing track. This protects the choice without
+requiring the scanner to write differently or touching existing audio files.
+
+For a confirmed link, **Undo album link** and **Confirm undo** restores the
+original Track.albumId and clears the manual override within another
+serializable transaction, marking the audit record undone. Undo fails safely
+if the original album no longer exists, the Track changed, the repair was
+already undone or the request belongs to a different user.
+
+The change is **only a database album assignment**. It never renames,
+transcodes, retags, moves or deletes a music file. Scanner metadata outside
+the album assignment remains tag-driven. Existing plays/likes/stages stay
+attached to the same Track.id. The library may continue to show duplicated
+copies of a song if the proposed album already contains one; administrator
+comparison is necessary. A changed audio file can still alter recording
+identification and should be reviewed separately.
+
+As with every new migration, deploy only after a restorable database backup,
+successful migration smoke checks, and full green CI on the exact PR head.
+This development branch is not yet an installed release.

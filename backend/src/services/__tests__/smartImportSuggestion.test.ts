@@ -23,7 +23,8 @@ const target = root + "Tones and I/Unknown Album/02 - Tones and I - Dance Monkey
 const own = {
     id: "import-track", title: "02 - Tones and I - Dance Monkey",
     duration: 209, missingSince: null, corrupt: false,
-    album: { title: "Unknown Album", location: "LIBRARY",
+    fileModified: new Date("2026-11-03T10:00:00.000Z"), fileSize: 200000,
+    album: { id: "source-album", title: "Unknown Album", location: "LIBRARY",
         artist: { id: "unknown", name: "Unknown Artist" } },
 };
 const libraryArtist = { id: "tones", name: "Tones and I" };
@@ -50,6 +51,8 @@ describe("Smart Inbox safe import suggestions", () => {
         expect(file).toHaveBeenCalledWith(expect.objectContaining({ where: { filePath: target } }));
         expect(result).toMatchObject({
             status: "suggested", readOnly: true,
+            current: { trackId: "import-track", albumId: "source-album",
+                fileModified: "2026-11-03T10:00:00.000Z", fileSize: 200000 },
             proposedArtist: libraryArtist,
             proposedAlbum: { id: "kids", title: "The Kids Are Coming" },
             evidence: ["folder-artist", "existing-library-artist", "same-title-duration"],
