@@ -2,7 +2,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api", () => ({ api: { getSmartDownloadInbox: vi.fn(), getSmartImportSuggestion: vi.fn() } }));
+vi.mock("@/lib/api", () => ({ api: { getSmartDownloadInbox: vi.fn(), getSmartImportSuggestion: vi.fn(),
+    confirmSmartImportRepair: vi.fn(), undoSmartImportRepair: vi.fn() } }));
 vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "en", t: (key: string) => key }),
@@ -23,7 +24,7 @@ const report: SmartDownloadInbox = {
     items: [{
         id: "download-1", subject: "Tones and I - Dance Monkey",
         createdAt: "2026-11-03T10:00:00.000Z",
-        stage: "review", reason: "unknown-artist",
+        stage: "review", reason: "unknown-artist", repairId: null,
         filePath: "Singles/Kima Downloads/Tones and I/Album/Dance Monkey.flac",
         track: { id: "track-1", album: "Album", artist: "Unknown Artist" },
     }],
@@ -75,11 +76,13 @@ describe("read-only artist and album proposals", () => {
         expect(host.textContent).toContain("Find possible match");
     });
 
-    it("shows evidence and comparison links without offering an edit", async () => {
+    it("shows evidence and comparison links but requires separate confirmation before editing", async () => {
         vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
         vi.mocked(api.getSmartImportSuggestion).mockResolvedValueOnce({
             status: "suggested", readOnly: true,
-            current: { trackId: "track-1", title: "Dance Monkey", artist: "Unknown Artist", album: "Album" },
+            current: { trackId: "track-1", albumId: "old-album", title: "Dance Monkey",
+                artist: "Unknown Artist", album: "Album",
+                fileModified: "2026-11-03T10:00:00.000Z", fileSize: 200000 },
             proposedArtist: { id: "artist-1", name: "Tones and I" },
             proposedAlbum: { id: "album-1", title: "The Kids Are Coming" },
             evidence: ["folder-artist", "existing-library-artist", "same-title-duration"],
@@ -93,7 +96,9 @@ describe("read-only artist and album proposals", () => {
         expect(host.textContent).toContain("Possible match (not verified)");
         expect(host.querySelector('a[href="/artist/artist-1"]')).toBeTruthy();
         expect(host.querySelector('a[href="/album/album-1"]')).toBeTruthy();
-        expect(host.textContent).toContain("No change is applied");
+        expect(host.textContent).toContain("Files and tags stay intact");
+        expect(host.textContent).toContain("Prepare album link");
+        expect(api.confirmSmartImportRepair).not.toHaveBeenCalled();
     });
 
     it("does not invent a proposal when the server finds conflicting metadata", async () => {
@@ -108,5 +113,112 @@ describe("read-only artist and album proposals", () => {
         });
         expect(host.textContent).toContain("Artist metadata conflicts");
         expect(host.querySelectorAll('a[href^="/artist/"]')).toHaveLength(0);
+    });
+});
+
+
+const suggestionWithAlbum = {
+    status: "suggested" as const, readOnly: true as const,
+    current: {
+        trackId: "track-1", albumId: "old-album", title: "Dance Monkey",
+        artist: "Unknown Artist", album: "Unknown Album",
+        fileModified: "2026-11-03T10:00:00.000Z", fileSize: 200000,
+    },
+    proposedArtist: { id: "tones", name: "Tones and I" },
+    proposedAlbum: { id: "new-album", title: "The Kids Are Coming" },
+    evidence: ["folder-artist", "existing-library-artist", "same-title-duration"] as const,
+};
+
+function clickButton(label: string) {
+    const target = [...host.querySelectorAll("button")].find((node) => node.textContent === label);
+    expect(target).toBeDefined();
+    target?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+}
+
+async function openProposal() {
+    vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+    vi.mocked(api.getSmartImportSuggestion).mockResolvedValueOnce({
+        ...suggestionWithAlbum, evidence: [...suggestionWithAlbum.evidence],
+    });
+    await clickCheck();
+    await act(async () => clickButton("Find possible match"));
+}
+
+describe("Smart Download Inbox confirmed album changes", () => {
+    it("requires two separate clicks after a proposal before calling the write API", async () => {
+        await openProposal();
+        expect(api.confirmSmartImportRepair).not.toHaveBeenCalled();
+        await act(async () => clickButton("Prepare album link"));
+        expect(host.textContent).toContain("Confirm album link change?");
+        expect(host.textContent).toContain("Unknown Artist");
+        expect(host.textContent).toContain("The Kids Are Coming");
+        expect(api.confirmSmartImportRepair).not.toHaveBeenCalled();
+
+        vi.mocked(api.confirmSmartImportRepair).mockResolvedValueOnce({
+            status: "relinked", repairId: "repair-1", trackId: "track-1",
+            previousAlbumId: "old-album", newAlbumId: "new-album",
+            appliedAt: "2026-11-03T10:00:00.000Z",
+        });
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce({
+            ...report,
+            items: [{
+                ...report.items[0], stage: "relinked", reason: "manual-relink",
+                repairId: "repair-1", track: { id: "track-1", artist: "Tones and I", album: "The Kids Are Coming" },
+            }],
+        });
+        await act(async () => clickButton("Confirm album link"));
+        expect(api.confirmSmartImportRepair).toHaveBeenCalledWith("download-1", {
+            trackId: "track-1", previousAlbumId: "old-album", newAlbumId: "new-album",
+            fileModified: "2026-11-03T10:00:00.000Z", fileSize: 200000,
+        });
+        expect(host.textContent).toContain("Album link updated");
+        expect(host.textContent).toContain("Undo album link");
+    });
+
+    it("allows an admin to cancel a confirmation without writing anything", async () => {
+        await openProposal();
+        await act(async () => clickButton("Prepare album link"));
+        await act(async () => clickButton("Cancel"));
+        expect(host.textContent).not.toContain("Confirm album link change?");
+        expect(api.confirmSmartImportRepair).not.toHaveBeenCalled();
+    });
+
+    it("refuses to offer an apply action for artist-only suggestions", async () => {
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+        vi.mocked(api.getSmartImportSuggestion).mockResolvedValueOnce({
+            ...suggestionWithAlbum, proposedAlbum: null, evidence: ["folder-artist"],
+        });
+        await clickCheck();
+        await act(async () => clickButton("Find possible match"));
+        expect(host.textContent).toContain("Possible match");
+        expect(host.textContent).not.toContain("Prepare album link");
+        expect(api.confirmSmartImportRepair).not.toHaveBeenCalled();
+    });
+
+    it("requires explicit confirmation to undo and sends only the recorded repair ID", async () => {
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce({
+            ...report, items: [{ ...report.items[0], stage: "relinked", reason: "manual-relink", repairId: "repair-9" }],
+        });
+        await clickCheck();
+        await act(async () => clickButton("Undo album link"));
+        expect(api.undoSmartImportRepair).not.toHaveBeenCalled();
+        expect(host.textContent).toContain("Restore the original indexed album link?");
+        vi.mocked(api.undoSmartImportRepair).mockResolvedValueOnce({
+            status: "undone", repairId: "repair-9", trackId: "track-1",
+        });
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+        await act(async () => clickButton("Confirm undo"));
+        expect(api.undoSmartImportRepair).toHaveBeenCalledWith("download-1", "repair-9");
+        expect(host.textContent).toContain("Original album link restored.");
+    });
+
+    it("shows server conflict without falsely claiming a successful repair", async () => {
+        await openProposal();
+        await act(async () => clickButton("Prepare album link"));
+        vi.mocked(api.confirmSmartImportRepair).mockRejectedValueOnce(new Error("Stale confirmation"));
+        await act(async () => clickButton("Confirm album link"));
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain("Stale confirmation");
+        expect(host.textContent).not.toContain("Album link updated");
+        expect(api.getSmartDownloadInbox).toHaveBeenCalledTimes(1);
     });
 });
