@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { api, type SmartDownloadInbox, type SmartDownloadInboxItem } from "@/lib/api";
+import Link from "next/link";
+import { api, type SmartDownloadInbox, type SmartDownloadInboxItem, type SmartImportSuggestion, type SmartImportSuggestionEvidence } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n/language-context";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { SettingsSection } from "../ui";
@@ -28,11 +29,21 @@ const reasons: Record<SmartDownloadInboxItem["reason"], TranslationKey> = {
     indexed: "The downloaded file has a non-missing library record.",
 };
 
+const evidenceText: Record<SmartImportSuggestionEvidence, TranslationKey> = {
+    "folder-artist": "Artist matches the download folder.",
+    "existing-library-artist": "Artist has existing playable tracks in the library.",
+    "folder-album": "Album name matches the download folder.",
+    "same-title-duration": "An indexed track has the same title and a compatible duration.",
+};
+
 export function SmartDownloadInboxSection() {
     const { t, locale } = useLanguage();
     const [inbox, setInbox] = useState<SmartDownloadInbox | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(false);
+    const [suggestions, setSuggestions] = useState<Record<string, SmartImportSuggestion>>({});
+    const [checkingId, setCheckingId] = useState<string | null>(null);
+    const [suggestionErrors, setSuggestionErrors] = useState<Record<string, boolean>>({});
 
     const inspect = async () => {
         if (busy) return;
@@ -40,11 +51,27 @@ export function SmartDownloadInboxSection() {
         setError(false);
         try {
             setInbox(await api.getSmartDownloadInbox());
+            setSuggestions({});
+            setSuggestionErrors({});
         } catch {
             setInbox(null);
             setError(true);
         } finally {
             setBusy(false);
+        }
+    };
+
+    const checkSuggestion = async (jobId: string) => {
+        if (checkingId) return;
+        setCheckingId(jobId);
+        setSuggestionErrors((previous) => ({ ...previous, [jobId]: false }));
+        try {
+            const proposal = await api.getSmartImportSuggestion(jobId);
+            setSuggestions((previous) => ({ ...previous, [jobId]: proposal }));
+        } catch {
+            setSuggestionErrors((previous) => ({ ...previous, [jobId]: true }));
+        } finally {
+            setCheckingId(null);
         }
     };
 
@@ -107,6 +134,53 @@ export function SmartDownloadInboxSection() {
                                     {item.filePath && <p className="mt-1 break-all text-xs text-[var(--text-muted)]">
                                         {item.filePath}
                                     </p>}
+                                    {item.stage === "review" && <div className="mt-3 border-t border-white/10 pt-3">
+                                        <button type="button"
+                                            disabled={checkingId !== null}
+                                            onClick={() => { void checkSuggestion(item.id); }}
+                                            className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-50">
+                                            {checkingId === item.id ? t("Finding match...") : t("Find possible match")}
+                                        </button>
+                                        {suggestionErrors[item.id] && <p role="alert" className="mt-2 text-xs text-red-400">
+                                            {t("Suggestion check failed. Try again.")}
+                                        </p>}
+                                        {suggestions[item.id] && <div className="mt-3 space-y-2 rounded-md border border-white/10 bg-white/[0.03] p-3">
+                                            {suggestions[item.id].status === "suggested" && suggestions[item.id].proposedArtist ? <>
+                                                <p className="text-xs font-semibold text-white">{t("Possible match (not verified)")}</p>
+                                                <p className="text-xs text-[var(--text-secondary)]">
+                                                    {t("Suggested artist")}: {suggestions[item.id].proposedArtist.name}
+                                                </p>
+                                                {suggestions[item.id].proposedAlbum && <p className="text-xs text-[var(--text-secondary)]">
+                                                    {t("Suggested album")}: {suggestions[item.id].proposedAlbum.title}
+                                                </p>}
+                                                <ul className="list-disc space-y-1 pl-4 text-xs text-[var(--text-muted)]">
+                                                    {suggestions[item.id].evidence.map((evidence) =>
+                                                        <li key={evidence}>{t(evidenceText[evidence])}</li>
+                                                    )}
+                                                </ul>
+                                                <div className="flex flex-wrap gap-3 text-xs">
+                                                    <Link className="text-brand hover:underline"
+                                                        href={"/artist/" + encodeURIComponent(suggestions[item.id].proposedArtist.id)}>
+                                                        {t("Compare artist")}
+                                                    </Link>
+                                                    {suggestions[item.id].proposedAlbum && <Link className="text-brand hover:underline"
+                                                        href={"/album/" + encodeURIComponent(suggestions[item.id].proposedAlbum.id)}>
+                                                        {t("Compare album")}
+                                                    </Link>}
+                                                </div>
+                                            </> : <p className="text-xs text-[var(--text-muted)]">
+                                                {suggestions[item.id].status === "conflict"
+                                                    ? t("Artist metadata conflicts with the download folder. No suggestion is made.")
+                                                    : suggestions[item.id].status === "no-match"
+                                                        ? t("No reliable match found in the indexed library.")
+                                                        : t("This import is not eligible for a suggestion.")}
+                                            </p>}
+                                            <p className="text-xs text-[var(--text-muted)]">
+                                                {t("Review only. No change is applied to the file or library.")}
+                                            </p>
+                                        </div>}
+                                    </div>}
+
                                 </li>
                             ))}
                         </ul>}

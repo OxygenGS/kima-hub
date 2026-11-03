@@ -70,3 +70,24 @@ file move, deletion, automatic fix or download permission change is added.
 
 Further releases may introduce an opt-in reconciliation flow with explicit
 match evidence and undo support, plus per-user activity integration.
+
+
+## Review proposals (on-demand, read-only)
+
+For a Smart Download Inbox item marked **Needs review**, choose **Find
+possible match**. The app then inspects only that logged-in administrator's
+matching Soulseek download, its exact indexed track, and a bounded set of
+existing library records. This is not a new scan, MusicBrainz fetch or edit.
+
+A candidate artist must match the sanitized download-folder artist through
+Kima's canonical artist identity key and already have playable LIBRARY tracks.
+Known, conflicting artist tags block a suggestion. An album is suggested only
+when a same-artist LIBRARY album has the folder's exact title, or an
+**Unknown Album** import uniquely matches a local track's exact name and
+duration (within five seconds). Ambiguous matches never choose a first result.
+
+Evidence is visible, with links to compare the existing artist and album.
+This is **not verified identification** and no confirm/write endpoint is
+introduced. The proposal does not touch audio bytes, track tags, stored
+artist/album assignments, or the user's files. Future changes would need
+atomic revalidation, an explicit admin confirmation and rollback design.

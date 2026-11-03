@@ -2,7 +2,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/api", () => ({ api: { getSmartDownloadInbox: vi.fn() } }));
+vi.mock("@/lib/api", () => ({ api: { getSmartDownloadInbox: vi.fn(), getSmartImportSuggestion: vi.fn() } }));
+vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "en", t: (key: string) => key }),
 }));
@@ -63,5 +64,49 @@ describe("Smart Download Inbox", () => {
         await clickCheck();
         expect(host.querySelector('[role="alert"]')?.textContent).toContain("Import check failed");
         expect(host.textContent).not.toContain("No recent Soulseek downloads found");
+    });
+});
+
+describe("read-only artist and album proposals", () => {
+    it("never searches for suggestions without an explicit second click", async () => {
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+        await clickCheck();
+        expect(api.getSmartImportSuggestion).not.toHaveBeenCalled();
+        expect(host.textContent).toContain("Find possible match");
+    });
+
+    it("shows evidence and comparison links without offering an edit", async () => {
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+        vi.mocked(api.getSmartImportSuggestion).mockResolvedValueOnce({
+            status: "suggested", readOnly: true,
+            current: { trackId: "track-1", title: "Dance Monkey", artist: "Unknown Artist", album: "Album" },
+            proposedArtist: { id: "artist-1", name: "Tones and I" },
+            proposedAlbum: { id: "album-1", title: "The Kids Are Coming" },
+            evidence: ["folder-artist", "existing-library-artist", "same-title-duration"],
+        });
+        await clickCheck();
+        await act(async () => {
+            const button = [...host.querySelectorAll("button")].find((b) => b.textContent === "Find possible match");
+            button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        expect(api.getSmartImportSuggestion).toHaveBeenCalledWith("download-1");
+        expect(host.textContent).toContain("Possible match (not verified)");
+        expect(host.querySelector('a[href="/artist/artist-1"]')).toBeTruthy();
+        expect(host.querySelector('a[href="/album/album-1"]')).toBeTruthy();
+        expect(host.textContent).toContain("No change is applied");
+    });
+
+    it("does not invent a proposal when the server finds conflicting metadata", async () => {
+        vi.mocked(api.getSmartDownloadInbox).mockResolvedValueOnce(report);
+        vi.mocked(api.getSmartImportSuggestion).mockResolvedValueOnce({
+            status: "conflict", readOnly: true, current: null,
+            proposedArtist: null, proposedAlbum: null, evidence: [],
+        });
+        await clickCheck();
+        await act(async () => {
+            host.querySelectorAll("button")[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+        expect(host.textContent).toContain("Artist metadata conflicts");
+        expect(host.querySelectorAll('a[href^="/artist/"]')).toHaveLength(0);
     });
 });

@@ -5,6 +5,9 @@ jest.mock("../../../middleware/auth", () => ({
         next();
     },
 }));
+jest.mock("../../../services/smartImportSuggestion", () => ({
+    getSmartImportSuggestion: jest.fn(),
+}));
 jest.mock("../../../services/smartDownloadInbox", () => ({
     getSmartDownloadInbox: jest.fn(),
 }));
@@ -20,6 +23,7 @@ import request from "supertest";
 import doctorRouter from "../doctor";
 import { getLibraryDoctorReport } from "../../../services/libraryDoctor";
 import { getSmartDownloadInbox } from "../../../services/smartDownloadInbox";
+import { getSmartImportSuggestion } from "../../../services/smartImportSuggestion";
 
 const getReport = getLibraryDoctorReport as jest.Mock;
 
@@ -85,5 +89,33 @@ describe("GET /doctor/inbox", () => {
         const response = await request(appFor("admin")).get("/doctor/inbox");
         expect(response.status).toBe(500);
         expect(response.body.error).toBe("Failed to inspect Soulseek imports");
+    });
+});
+
+
+describe("GET /doctor/inbox/:jobId/suggestion", () => {
+    const suggestion = getSmartImportSuggestion as jest.Mock;
+    it("rejects anonymous and non-admin requests without a lookup", async () => {
+        expect((await request(appFor()).get("/doctor/inbox/j1/suggestion")).status).toBe(401);
+        expect((await request(appFor("user")).get("/doctor/inbox/j1/suggestion")).status).toBe(403);
+        expect(suggestion).not.toHaveBeenCalled();
+    });
+    it("scopes the request to the authenticated caller and disables caches", async () => {
+        suggestion.mockResolvedValue({ status: "suggested", readOnly: true });
+        const response = await request(appFor("admin")).get("/doctor/inbox/j1/suggestion");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("private, no-store");
+        expect(suggestion).toHaveBeenCalledWith("test-user", "j1");
+    });
+    it("does not disclose another user's job", async () => {
+        suggestion.mockResolvedValue(null);
+        const response = await request(appFor("admin")).get("/doctor/inbox/other/suggestion");
+        expect(response.status).toBe(404);
+        expect(response.body.error).toBe("Download not found");
+    });
+    it("returns 500 on read failures instead of a fabricated suggestion", async () => {
+        suggestion.mockRejectedValue(new Error("database offline"));
+        const response = await request(appFor("admin")).get("/doctor/inbox/j1/suggestion");
+        expect(response.status).toBe(500);
     });
 });

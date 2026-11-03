@@ -27,6 +27,24 @@ export type SmartDownloadInboxReason =
     | "not-indexed" | "missing-file" | "corrupt-file"
     | "discovery-album" | "unknown-artist" | "indexed";
 
+export type SmartImportSuggestionEvidence =
+    | "folder-artist" | "existing-library-artist"
+    | "folder-album" | "same-title-duration";
+
+export interface SmartImportSuggestion {
+    status: "suggested" | "unavailable" | "no-match" | "conflict";
+    readOnly: true;
+    current: {
+        trackId: string;
+        title: string;
+        artist: string;
+        album: string;
+    } | null;
+    proposedArtist: { id: string; name: string } | null;
+    proposedAlbum: { id: string; title: string } | null;
+    evidence: SmartImportSuggestionEvidence[];
+}
+
 export interface SmartDownloadInboxItem {
     id: string;
     subject: string;
@@ -2214,6 +2232,13 @@ class ApiClient {
 
         return response.json();
     }
+    // Explicitly requested, caller-scoped, read-only preview of a suspect import.
+    async getSmartImportSuggestion(jobId: string): Promise<SmartImportSuggestion> {
+        return this.request<SmartImportSuggestion>(
+            "/library/doctor/inbox/" + encodeURIComponent(jobId) + "/suggestion"
+        );
+    }
+
     // On-demand, admin-only, caller-scoped Smart Download Inbox.
     async getSmartDownloadInbox(): Promise<SmartDownloadInbox> {
         return this.request<SmartDownloadInbox>("/library/doctor/inbox");

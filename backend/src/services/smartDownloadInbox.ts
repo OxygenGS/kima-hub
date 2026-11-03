@@ -35,7 +35,7 @@ export interface SmartInboxReport {
     items: SmartInboxItem[];
 }
 
-function safeStoredPath(meta: unknown): string | null {
+export function safeStoredPath(meta: unknown): string | null {
     if (!meta || typeof meta !== "object" || Array.isArray(meta)) return null;
     const value = (meta as Record<string, unknown>).importRelativePath;
     if (typeof value !== "string" || !value.startsWith(IMPORT_ROOT) ||
