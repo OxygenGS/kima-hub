@@ -18,6 +18,33 @@ export interface AlbumCoverRecoveryStatus {
 
 export type ArtistImageRecoveryStatus = AlbumCoverRecoveryStatus;
 
+export type SmartDownloadInboxStage =
+    | "active" | "failed" | "awaiting-index" | "indexed"
+    | "review" | "unavailable" | "unverified";
+
+export type SmartDownloadInboxReason =
+    | "in-progress" | "download-failed" | "legacy-untracked"
+    | "not-indexed" | "missing-file" | "corrupt-file"
+    | "discovery-album" | "unknown-artist" | "indexed";
+
+export interface SmartDownloadInboxItem {
+    id: string;
+    subject: string;
+    createdAt: string;
+    stage: SmartDownloadInboxStage;
+    reason: SmartDownloadInboxReason;
+    filePath: string | null;
+    track: { id: string; album: string; artist: string } | null;
+}
+
+export interface SmartDownloadInbox {
+    generatedAt: string;
+    total: number;
+    displayed: number;
+    limit: number;
+    items: SmartDownloadInboxItem[];
+}
+
 export interface LibraryDoctorTrackSample {
     id: string;
     title: string;
@@ -2187,6 +2214,11 @@ class ApiClient {
 
         return response.json();
     }
+    // On-demand, admin-only, caller-scoped Smart Download Inbox.
+    async getSmartDownloadInbox(): Promise<SmartDownloadInbox> {
+        return this.request<SmartDownloadInbox>("/library/doctor/inbox");
+    }
+
     // On-demand, admin-only, read-only Library Doctor report.
     async getLibraryDoctorReport(): Promise<LibraryDoctorReport> {
         return this.request<LibraryDoctorReport>("/library/doctor/report");

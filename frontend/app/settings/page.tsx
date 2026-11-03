@@ -33,6 +33,7 @@ import { CacheSection } from "@/features/settings/components/sections/CacheSecti
 import { UserManagementSection } from "@/features/settings/components/sections/UserManagementSection";
 import { CorruptTracksSection } from "@/features/settings/components/sections/CorruptTracksSection";
 import { LibraryDoctorSection } from "@/features/settings/components/sections/LibraryDoctorSection";
+import { SmartDownloadInboxSection } from "@/features/settings/components/sections/SmartDownloadInboxSection";
 import { Button } from "@/components/ui/Button";
 
 const sidebarItems: SidebarItem[] = [
@@ -50,6 +51,7 @@ const sidebarItems: SidebarItem[] = [
     { id: "storage", label: "Storage", adminOnly: true },
     { id: "cache", label: "Library Enrichment", adminOnly: true },
     { id: "library-doctor", label: "Library Doctor", adminOnly: true },
+    { id: "smart-download-inbox", label: "Smart Download Inbox", adminOnly: true },
     { id: "corrupt-tracks", label: "Corrupt Tracks", adminOnly: true },
     { id: "users", label: "Users", adminOnly: true },
 ];
@@ -284,6 +286,8 @@ export default function SettingsPage() {
                         />
 
                         <LibraryDoctorSection />
+
+                        <SmartDownloadInboxSection />
 
                         <CorruptTracksSection />
 

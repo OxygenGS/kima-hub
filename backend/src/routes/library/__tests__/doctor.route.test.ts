@@ -5,6 +5,9 @@ jest.mock("../../../middleware/auth", () => ({
         next();
     },
 }));
+jest.mock("../../../services/smartDownloadInbox", () => ({
+    getSmartDownloadInbox: jest.fn(),
+}));
 jest.mock("../../../services/libraryDoctor", () => ({
     getLibraryDoctorReport: jest.fn(),
 }));
@@ -16,6 +19,7 @@ import express from "express";
 import request from "supertest";
 import doctorRouter from "../doctor";
 import { getLibraryDoctorReport } from "../../../services/libraryDoctor";
+import { getSmartDownloadInbox } from "../../../services/smartDownloadInbox";
 
 const getReport = getLibraryDoctorReport as jest.Mock;
 
@@ -59,5 +63,27 @@ describe("GET /doctor/report", () => {
         const response = await request(appFor("admin")).get("/doctor/report");
         expect(response.status).toBe(500);
         expect(response.body.error).toBe("Failed to inspect the library");
+    });
+});
+
+describe("GET /doctor/inbox", () => {
+    const getInbox = getSmartDownloadInbox as jest.Mock;
+    it("denies anonymous and non-admin requests before accessing private data", async () => {
+        expect((await request(appFor()).get("/doctor/inbox")).status).toBe(401);
+        expect((await request(appFor("user")).get("/doctor/inbox")).status).toBe(403);
+        expect(getInbox).not.toHaveBeenCalled();
+    });
+    it("passes only the authenticated admin id and disables caching", async () => {
+        getInbox.mockResolvedValue({ total: 0, displayed: 0, limit: 25, items: [] });
+        const response = await request(appFor("admin")).get("/doctor/inbox");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("private, no-store");
+        expect(getInbox).toHaveBeenCalledWith("test-user");
+    });
+    it("returns an error when database reads fail", async () => {
+        getInbox.mockRejectedValue(new Error("unavailable"));
+        const response = await request(appFor("admin")).get("/doctor/inbox");
+        expect(response.status).toBe(500);
+        expect(response.body.error).toBe("Failed to inspect Soulseek imports");
     });
 });

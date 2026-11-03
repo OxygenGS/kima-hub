@@ -39,3 +39,34 @@ or credentials are included in the source.
 
 PR #175 and PR #176 should be reviewed separately; neither is implicitly
 merged into this development slice. The patch is not a published Docker image.
+
+
+## Smart Download Inbox (first read-only slice)
+
+Settings -> Smart Download Inbox provides a manual, administrator-only check
+of **the signed-in administrator's own** most recent 25 non-cleared manual
+Soulseek download jobs. Other users' jobs are never included. The UI does
+not fetch these details until the administrator selects **Check Soulseek imports**.
+
+New manual Soulseek downloads store only the sanitized, music-root-relative
+destination in DownloadJob.metadata.importRelativePath; no absolute host paths
+or peer addresses are saved to this field. The inbox performs a bounded
+exact-path query against indexed Track rows without touching the filesystem.
+
+The statuses distinguish:
+- **Downloading / Download failed**: network job state.
+- **Not yet indexed**: transfer completed but no exact-path Track row found;
+  the scan may still be pending, have failed or have moved the file.
+- **Indexed**: a non-corrupt, non-missing LIBRARY track row exists at that path.
+  This is not proof of correct artist attribution or a fresh disk check.
+- **Needs review**: track is still a discovery album or has Unknown Artist.
+- **File unavailable**: scanner marked the track corrupt or missing.
+- **Older download: not verified**: legacy jobs lack a stored relative path,
+  so their linkage is intentionally not guessed.
+
+Only the last 25 jobs are classified, and the response includes the total
+number of retained manual Soulseek jobs for context. No retry, rescan, re-tag,
+file move, deletion, automatic fix or download permission change is added.
+
+Further releases may introduce an opt-in reconciliation flow with explicit
+match evidence and undo support, plus per-user activity integration.

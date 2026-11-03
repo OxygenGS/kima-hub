@@ -134,6 +134,11 @@ describe("POST /soulseek/download — original fork rights retained in v1.11", (
         expect(mockDownloadTrack.mock.calls[0][1]).toBe(
             "/music/Singles/Kima Downloads/Artist/Album/01 - Test.flac"
         );
+        expect(mockCreateDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                metadata: { importRelativePath: "Singles/Kima Downloads/Artist/Album/01 - Test.flac" },
+            }),
+        }));
         expect(mockUpdateDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
             where: { id: "test-download-job" },
             data: expect.objectContaining({ status: "failed" }),
