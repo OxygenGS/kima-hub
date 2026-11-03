@@ -1,5 +1,31 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.17.0 — release preparation (unpublished)
+
+Kima Hub v1.17.0 introduces Library Intelligence and the privacy and Soulseek fixes merged from PRs #175 and #176.
+
+### Library Doctor and Smart Download Inbox
+- Add an on-demand administrator library report from indexed metadata: missing or corrupt tracks, absent album covers and artist images, and suspected import problems.
+- Show the administrator's 25 newest own manual Soulseek jobs, separating transfer completion from exact-path library indexing, and mark legacy jobs without a file path as unverified.
+- Keep report queries bounded and user-scoped; do not automatically rescan or retag files.
+
+### Safe review and reversible album corrections
+- Preview existing artist and album candidates from conservative identity, folder, title and duration evidence; reject ambiguity and conflicting artist metadata.
+- Require separate confirmation before writing; perform complete caller, track, destination and file-version checks inside a serializable transaction.
+- Store a SmartImportRepair audit entry, use a migration-backed scanner override guard and update both affected artists' counts in the same transaction.
+- Allow explicit undo only while the previous and current album records still match; never move, rewrite or delete audio files.
+
+### Privacy and playback reliability
+- Integrate PR #175 account isolation, protected artwork access, SSE reconnection and duplicate-Soulseek interaction guards.
+- Integrate PR #176 precise single-track availability on MusicBrainz artist and album pages; playable rows use real local IDs and missing tracks remain previews.
+- Preserve modern OpenSubsonic/Symfonium/Feishin authentication without legacy compatibility settings.
+
+### Migration and deployment safeguards
+- This release introduces a PostgreSQL migration and a manual album override trigger. Back up the entire persistent /data volume and independently verify restore before upgrading; keep /music mount points and ownership unchanged.
+- A tag downgrade alone does not reverse migrated data; rollback requires a tested pre-upgrade backup when necessary.
+- Upstream Kima v1.12 audio-model replacement and background re-enrichment are not included.
+- This is an unpublished source candidate. Native security review, release preflight and explicit stable publication approval are separate gates.
+
 ## OxygenGS fork v1.16.2 — release preparation (unpublished)
 
 Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles on artist and MusicBrainz album pages after the published v1.16.1 download-permission hotfix.

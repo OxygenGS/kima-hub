@@ -19,11 +19,15 @@ A modern, self-hosted music experience for the collection you own. Stream your l
 
 ---
 
-## Latest stable release: v1.16.1
+## Development candidate: v1.17.0 (unpublished)
 
-**Soulseek downloads fixed.** The current release restores P2P downloads in the all-in-one installation using a dedicated import folder, without granting write access to your entire music collection. Artwork Recovery and all existing listening features remain available.
+Library Intelligence is undergoing release review. There is no published v1.17.0 Docker image. The latest published stable release remains v1.16.2.
 
-[See what's new in v1.16.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.1) · [View the changelog](CHANGELOG.md)
+## Latest stable release: v1.16.2
+
+**Soulseek singles in artist albums.** v1.16.2 makes verified local Soulseek singles playable in the correct artist and album catalogs. The dedicated, limited-write download folder and Artwork Recovery remain available.
+
+[See what's new in v1.16.2](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) · [View the changelog](CHANGELOG.md)
 
 ## Everything in one place
 
@@ -66,7 +70,7 @@ The fork retains the upstream music server, playback functionality and existing 
 
 ## Get started
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.1`
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.2`
 **Platforms:** `linux/amd64` and `linux/arm64`  
 **Web and client API:** port `3030`
 
@@ -79,7 +83,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.16.1
+  ghcr.io/oxygengs/kima-hub:v1.16.2
 ```
 
 Replace `/absolute/path/to/music` with your music directory, then open `http://localhost:3030` on your Docker host and complete first-run setup.
@@ -95,12 +99,12 @@ Replace `/absolute/path/to/music` with your music directory, then open `http://l
 Use the [production Compose example](docker-compose.prod.yml) with an explicit version:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.1 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.2 docker compose -f docker-compose.prod.yml up -d
 ```
 
 The example Compose files retain a conservative fallback image and do not automatically follow the newest release. The `:latest` tag is **not** automatically promoted. Pin a published version or immutable digest.
 
-**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations. The v1.16.1 hotfix adds no new schema migration. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
+**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations. The v1.16.2 release adds no new schema migration. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
 
 [Full installation guide](docs/install.md) · [Safe upgrades](docs/safe-aio-updates.md)
 
