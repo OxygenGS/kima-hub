@@ -145,36 +145,7 @@ export function SmartDownloadInboxSection() {
                                             {t("Suggestion check failed. Try again.")}
                                         </p>}
                                         {suggestions[item.id] && <div className="mt-3 space-y-2 rounded-md border border-white/10 bg-white/[0.03] p-3">
-                                            {suggestions[item.id].status === "suggested" && suggestions[item.id].proposedArtist ? <>
-                                                <p className="text-xs font-semibold text-white">{t("Possible match (not verified)")}</p>
-                                                <p className="text-xs text-[var(--text-secondary)]">
-                                                    {t("Suggested artist")}: {suggestions[item.id].proposedArtist.name}
-                                                </p>
-                                                {suggestions[item.id].proposedAlbum && <p className="text-xs text-[var(--text-secondary)]">
-                                                    {t("Suggested album")}: {suggestions[item.id].proposedAlbum.title}
-                                                </p>}
-                                                <ul className="list-disc space-y-1 pl-4 text-xs text-[var(--text-muted)]">
-                                                    {suggestions[item.id].evidence.map((evidence) =>
-                                                        <li key={evidence}>{t(evidenceText[evidence])}</li>
-                                                    )}
-                                                </ul>
-                                                <div className="flex flex-wrap gap-3 text-xs">
-                                                    <Link className="text-brand hover:underline"
-                                                        href={"/artist/" + encodeURIComponent(suggestions[item.id].proposedArtist.id)}>
-                                                        {t("Compare artist")}
-                                                    </Link>
-                                                    {suggestions[item.id].proposedAlbum && <Link className="text-brand hover:underline"
-                                                        href={"/album/" + encodeURIComponent(suggestions[item.id].proposedAlbum.id)}>
-                                                        {t("Compare album")}
-                                                    </Link>}
-                                                </div>
-                                            </> : <p className="text-xs text-[var(--text-muted)]">
-                                                {suggestions[item.id].status === "conflict"
-                                                    ? t("Artist metadata conflicts with the download folder. No suggestion is made.")
-                                                    : suggestions[item.id].status === "no-match"
-                                                        ? t("No reliable match found in the indexed library.")
-                                                        : t("This import is not eligible for a suggestion.")}
-                                            </p>}
+                                            <SuggestionDetails proposal={suggestions[item.id]} />
                                             <p className="text-xs text-[var(--text-muted)]">
                                                 {t("Review only. No change is applied to the file or library.")}
                                             </p>
@@ -191,4 +162,40 @@ export function SmartDownloadInboxSection() {
             </div>
         </SettingsSection>
     );
+}
+
+function SuggestionDetails({ proposal }: { proposal: SmartImportSuggestion }) {
+    const { t } = useLanguage();
+    if (proposal.status !== "suggested" || !proposal.proposedArtist) {
+        return <p className="text-xs text-[var(--text-muted)]">
+            {proposal.status === "conflict"
+                ? t("Artist metadata conflicts with the download folder. No suggestion is made.")
+                : proposal.status === "no-match"
+                    ? t("No reliable match found in the indexed library.")
+                    : t("This import is not eligible for a suggestion.")}
+        </p>;
+    }
+
+    // Narrow nullable fields once, rather than re-indexing a state dictionary.
+    const artist = proposal.proposedArtist;
+    const album = proposal.proposedAlbum;
+    return <>
+        <p className="text-xs font-semibold text-white">{t("Possible match (not verified)")}</p>
+        {proposal.current && <p className="text-xs text-[var(--text-muted)]">
+            {t("Current import")}: {proposal.current.artist} · {proposal.current.album}
+        </p>}
+        <p className="text-xs text-[var(--text-secondary)]">{t("Suggested artist")}: {artist.name}</p>
+        {album && <p className="text-xs text-[var(--text-secondary)]">
+            {t("Suggested album")}: {album.title}
+        </p>}
+        <ul className="list-disc space-y-1 pl-4 text-xs text-[var(--text-muted)]">
+            {proposal.evidence.map((evidence) => <li key={evidence}>{t(evidenceText[evidence])}</li>)}
+        </ul>
+        <div className="flex flex-wrap gap-3 text-xs">
+            <Link className="text-brand hover:underline"
+                href={"/artist/" + encodeURIComponent(artist.id)}>{t("Compare artist")}</Link>
+            {album && <Link className="text-brand hover:underline"
+                href={"/album/" + encodeURIComponent(album.id)}>{t("Compare album")}</Link>}
+        </div>
+    </>;
 }

@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Current import": "Current import",
     "Find possible match": "Find possible match",
     "Finding match...": "Finding match...",
     "Possible match (not verified)": "Possible match (not verified)",
@@ -1962,6 +1963,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Current import": "Huidige import",
     "Find possible match": "Mogelijke koppeling zoeken",
     "Finding match...": "Mogelijke koppeling zoeken...",
     "Possible match (not verified)": "Mogelijke koppeling (niet geverifieerd)",
