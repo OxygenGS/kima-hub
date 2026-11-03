@@ -27,6 +27,9 @@ interface SearchSession {
 const searchSessions = new Map<string, SearchSession>();
 const SEARCH_SESSION_TTL = 5 * 60 * 1000; // 5 minutes
 const MAX_SEARCH_SESSIONS = 50;
+// The client can display at most 200 streamed matches. Keep the polling
+// fallback bounded too: a single peer can announce thousands of files.
+const MAX_SEARCH_RESULTS = 200;
 
 function formatSearchResult(response: FileSearchResponse) {
     return response.files.map((file) => {
@@ -184,7 +187,7 @@ router.post(
             });
 
             let streamedCount = 0;
-            const MAX_STREAMED_RESULTS = 200;
+            const MAX_STREAMED_RESULTS = MAX_SEARCH_RESULTS;
             let searchAborted = false;
 
             // 10 s is enough for 200+ results and keeps the UI quick
@@ -213,10 +216,12 @@ router.post(
                         });
                     }
 
-                    // Also accumulate in session for GET fallback (all results, not filtered)
+                    // Polling fallback must not retain unbounded peer inventories.
+                    // Keep the existing unfiltered ordering for compatibility.
                     const session = searchSessions.get(searchId);
-                    if (session) {
-                        session.results.push(...formatted);
+                    if (session && session.results.length < MAX_SEARCH_RESULTS) {
+                        const remaining = MAX_SEARCH_RESULTS - session.results.length;
+                        session.results.push(...formatted.slice(0, remaining));
                     }
                 })
                 .then((result) => {

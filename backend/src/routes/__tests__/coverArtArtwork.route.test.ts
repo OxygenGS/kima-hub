@@ -57,6 +57,7 @@ import request from "supertest";
 import fs from "fs";
 import libraryCoverArtRoutes from "../library/coverArt";
 import { prisma } from "../../utils/db";
+import { redisClient } from "../../utils/redis";
 
 function makeApp() {
     const app = express();
@@ -207,5 +208,46 @@ describe("the cover-art route asks every source", () => {
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ coverUrl: FOUND });
         });
+    });
+});
+
+
+describe("authenticated cover artwork cache policy", () => {
+    const url = "/library/cover-art?url=" + encodeURIComponent(
+        "https://cdn.example.invalid/cover.jpg",
+    );
+    const cachedImage = JSON.stringify({
+        etag: "known-image-etag",
+        contentType: "image/jpeg",
+        data: Buffer.from("synthetic-cover-content").toString("base64"),
+    });
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it("does not expose a token-independent public cache of artist/album artwork", async () => {
+        (redisClient.get as jest.Mock).mockResolvedValueOnce(cachedImage);
+        const res = await request(makeApp()).get(url);
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-cache");
+        expect(res.headers.vary).toContain("Authorization");
+        expect(res.headers.vary).toContain("Cookie");
+        expect(res.headers.etag).toBe("known-image-etag");
+    });
+
+    it("revalidates cached artwork on 304 rather than granting a public immutable cache", async () => {
+        (redisClient.get as jest.Mock).mockResolvedValueOnce(cachedImage);
+        const res = await request(makeApp()).get(url).set("If-None-Match", "known-image-etag");
+        expect(res.status).toBe(304);
+        expect(res.headers["cache-control"]).toBe("private, no-cache");
+        expect(res.headers.vary).toContain("Authorization");
+        expect(res.headers.vary).toContain("Cookie");
+    });
+
+    it("marks unauthorized or failed cover requests as non-public too", async () => {
+        const res = await request(makeApp()).get("/library/cover-art");
+        expect(res.status).toBe(400);
+        expect(res.headers["cache-control"]).toBe("private, no-cache");
     });
 });
