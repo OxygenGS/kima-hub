@@ -151,7 +151,12 @@ function candidateTitle(candidate: LocalCandidate, expectedArtist: string): stri
     }
     const fromRaw = creditedFilenameTitle(original, expectedArtist);
     if (fromRaw) return fromRaw;
-    return original.replace(/^\s*\d{1,3}[\s._-]+/, "").trim() || original;
+    // Strip bare track numbers only from app-owned imports. Ordinary library
+    // titles are intentional metadata, even when prefixed with "02 - ".
+    if (evidence.source !== "artist-folder") {
+        return original.replace(/^\s*\d{1,3}[\s._-]+/, "").trim() || original;
+    }
+    return original;
 }
 
 function sameRecording(a: string | null | undefined, b: string | null): boolean {
