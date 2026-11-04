@@ -6,9 +6,10 @@
  * Account-keyed subtree prevents previous-user results being displayed after
  * logout/login; the backend independently enforces ownership for both feeds.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertCircle, CheckCircle2, Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { getMusicPermissions } from "@/lib/music-permissions";
 import { useLanguage } from "@/lib/i18n/language-context";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { api } from "@/lib/api";
@@ -71,6 +72,17 @@ const remoteLabel: Record<Exclude<DowntifyState, "ready">, TranslationKey> = {
     incompatible: "This Downtify API version is not supported.",
 };
 
+interface SpotifyLinkPreview {
+    provider: "spotify";
+    kind: "track" | "album" | "playlist";
+    canonicalUrl: string;
+    intentKey: string;
+    duplicateCheck: "not_checked";
+    downloadStarted: false;
+    libraryVerification: "not_checked";
+    submissionEnabled: false;
+}
+
 const POLL_MS = 10_000;
 
 export default function DownloadsPage() {
@@ -79,10 +91,10 @@ export default function DownloadsPage() {
     if (isLoading || !isAuthenticated || !user) return null;
 
     // React unmounts the previous account's data as soon as the user changes.
-    return <AccountDownloads key={user.id} />;
+    return <AccountDownloads key={user.id} canPrepareSpotify={getMusicPermissions(user).canDownloadTracks} />;
 }
 
-function AccountDownloads() {
+function AccountDownloads({ canPrepareSpotify }: { canPrepareSpotify: boolean }) {
     const { t, locale } = useLanguage();
     const [kima, setKima] = useState<KimaJobs | null>(null);
     const [downtify, setDowntify] = useState<RemoteJobs | null>(null);
@@ -172,6 +184,8 @@ function AccountDownloads() {
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     {t("Only your own jobs are shown. Completed transfers still need library verification.")}
                 </p>
+
+                {canPrepareSpotify && <SpotifyLinkIntake />}
 
                 <section aria-labelledby="kima-downloads-title" className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
                     <div className="mb-4 flex items-center justify-between gap-3">
@@ -271,5 +285,104 @@ function DownloadRow({ subject, source, phase, date, progress }: {
                 </div>
             )}
         </article>
+    );
+}
+
+
+/**
+ * Preparatory validation only. The backend does NOT look up metadata, query
+ * the library or submit the link to Downtify; there is intentionally no
+ * action button to trigger a download until dedupe and job ownership exist.
+ */
+function SpotifyLinkIntake() {
+    const { t } = useLanguage();
+    const [link, setLink] = useState("");
+    const [result, setResult] = useState<SpotifyLinkPreview | null>(null);
+    const [checking, setChecking] = useState(false);
+    const [error, setError] = useState(false);
+    const requestEpoch = useRef(0);
+
+    useEffect(() => () => { requestEpoch.current++; }, []);
+
+    const kindLabel: Record<SpotifyLinkPreview["kind"], TranslationKey> = {
+        track: "Spotify track",
+        album: "Spotify album",
+        playlist: "Spotify playlist",
+    };
+
+    const check = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!link.trim() || checking) return;
+
+        const epoch = ++requestEpoch.current;
+        setChecking(true);
+        setResult(null);
+        setError(false);
+        try {
+            const response = await api.post<SpotifyLinkPreview>(
+                "/download-manager/spotify/preview", { url: link }
+            );
+            if (requestEpoch.current === epoch) setResult(response);
+        } catch {
+            // The server never echoes the invalid link or an upstream secret.
+            if (requestEpoch.current === epoch) setError(true);
+        } finally {
+            if (requestEpoch.current === epoch) setChecking(false);
+        }
+    };
+
+    return (
+        <section aria-labelledby="spotify-intake-title" className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
+            <h2 id="spotify-intake-title" className="text-lg font-semibold text-white">
+                {t("Check Spotify link")}
+            </h2>
+            <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
+                {t("Preview a track, album or playlist link. Downloads are not available yet.")}
+            </p>
+            <form onSubmit={(event) => { void check(event); }} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                    <label htmlFor="spotify-intake-link" className="mb-2 block text-xs font-medium text-[var(--text-secondary)]">
+                        {t("Spotify track, album or playlist link")}
+                    </label>
+                    <input
+                        id="spotify-intake-link"
+                        type="text"
+                        inputMode="url"
+                        autoComplete="off"
+                        maxLength={2048}
+                        value={link}
+                        onChange={(event) => {
+                            requestEpoch.current++;
+                            setLink(event.target.value);
+                            setResult(null);
+                            setError(false);
+                            setChecking(false);
+                        }}
+                        placeholder="https://open.spotify.com/track/..."
+                        className="w-full rounded-xl border border-white/15 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-[var(--text-muted)] focus:border-brand focus:outline-none"
+                    />
+                </div>
+                <button
+                    type="submit"
+                    disabled={!link.trim() || checking}
+                    className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    {checking ? t("Checking link...") : t("Check link")}
+                </button>
+            </form>
+            <div className="mt-3" role="status" aria-live="polite">
+                {error ? (
+                    <p className="text-sm text-[var(--text-secondary)]">{t("Could not validate this Spotify link.")}</p>
+                ) : result ? (
+                    <div className="space-y-1 rounded-xl border border-white/10 bg-black/10 p-3 text-sm">
+                        <p className="font-medium text-white">{t("Valid Spotify link")}: {t(kindLabel[result.kind])}</p>
+                        <p className="break-all text-xs text-[var(--text-secondary)]">{result.canonicalUrl}</p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                            {t("No download started. Library duplicate detection has not been performed.")}
+                        </p>
+                    </div>
+                ) : null}
+            </div>
+        </section>
     );
 }
