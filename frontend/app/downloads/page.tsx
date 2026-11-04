@@ -383,9 +383,23 @@ function SpotifyLinkIntake() {
     const [libraryEvidence, setLibraryEvidence] = useState<LibraryEvidence | null>(null);
     const [libraryChecking, setLibraryChecking] = useState(false);
     const [libraryError, setLibraryError] = useState(false);
+    const [dispatchCapability, setDispatchCapability] = useState<DispatchCapabilityResponse | null>(null);
+    const [ackUnverified, setAckUnverified] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitAttempted, setSubmitAttempted] = useState(false);
+    const [submission, setSubmission] = useState<DispatchResponse | null>(null);
+    const [submissionError, setSubmissionError] = useState(false);
     const requestEpoch = useRef(0);
 
     useEffect(() => () => { requestEpoch.current++; }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<DispatchCapabilityResponse>("/download-manager/spotify/dispatch-capability")
+            .then(data => { if (active) setDispatchCapability(data); })
+            .catch(() => { if (active) setDispatchCapability(null); });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -417,7 +431,7 @@ function SpotifyLinkIntake() {
 
     const check = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!link.trim() || checking || saving || libraryChecking) return;
+        if (!link.trim() || checking || saving || libraryChecking || submitting) return;
 
         const epoch = ++requestEpoch.current;
         setChecking(true);
@@ -427,6 +441,10 @@ function SpotifyLinkIntake() {
         setSaveError(false);
         setLibraryEvidence(null);
         setLibraryError(false);
+        setAckUnverified(false);
+        setSubmission(null);
+        setSubmissionError(false);
+        setSubmitAttempted(false);
         try {
             const response = await api.post<SpotifyLinkPreview>(
                 "/download-manager/spotify/preview", { url: link }
@@ -441,7 +459,7 @@ function SpotifyLinkIntake() {
     };
 
     const save = async () => {
-        if (!savedList?.enabled || !result || saving || libraryChecking) return;
+        if (!savedList?.enabled || !result || saving || libraryChecking || submitting) return;
         const epoch = ++requestEpoch.current;
         setSaving(true);
         setSaveError(false);
@@ -463,11 +481,15 @@ function SpotifyLinkIntake() {
     };
 
     const verifyLibrary = async () => {
-        if (!result || result.kind !== "track" || libraryChecking || saving || checking) return;
+        if (!result || result.kind !== "track" || libraryChecking || saving || checking || submitting) return;
         const epoch = ++requestEpoch.current;
         setLibraryChecking(true);
         setLibraryEvidence(null);
         setLibraryError(false);
+        setAckUnverified(false);
+        setSubmission(null);
+        setSubmissionError(false);
+        setSubmitAttempted(false);
         try {
             const evidence = await api.post<LibraryEvidence>(
                 "/download-manager/spotify/check-library",
