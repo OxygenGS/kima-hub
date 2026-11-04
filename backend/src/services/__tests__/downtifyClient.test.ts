@@ -15,10 +15,6 @@ const info = {
 const auth = { signed_in: true, via: "device", auth_disabled: false, user: { id: 1, username: "hidden" } };
 const queue = { paused: false, state: "running", active: 2, can_control: false };
 
-function stubGet(...responses: unknown[]) {
-    const get = jest.fn().mockImplementation(async () => ({ data: responses.shift() }));
-    return { get } as unknown as Pick<AxiosInstance, "get">;
-}
 function mockResponse(...responses: unknown[]) {
     const replies = responses.slice();
     const get = jest.fn().mockImplementation(async () => ({ data: replies.shift() }));
