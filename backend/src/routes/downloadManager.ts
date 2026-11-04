@@ -8,7 +8,12 @@ import {
 import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
-import { prepareSpotifyIntent } from "../services/spotifyIntentRegistry";
+import {
+    prepareSpotifyIntent,
+    getSavedSpotifyIntents,
+    MAX_SPOTIFY_INTENT_PAGE_SIZE,
+    MAX_SPOTIFY_INTENT_OFFSET,
+} from "../services/spotifyIntentRegistry";
 
 const router = Router();
 
@@ -88,6 +93,40 @@ router.post(
     }
 );
 
+
+
+/**
+ * Saved-request status is not an engine queue and not proof of library files.
+ * Disabled mode returns an empty capability response without touching Prisma.
+ */
+router.get(
+    "/spotify/intents",
+    requireAuth,
+    (_req, res, next) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (process.env.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
+            return res.json({
+                enabled: false, items: [], displayed: 0, total: 0,
+                limit: 20, offset: 0, hasMore: false, isDownloadQueue: false,
+            });
+        }
+        next();
+    },
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const limit = safeInt(req.query.limit, 20, MAX_SPOTIFY_INTENT_PAGE_SIZE);
+        const offset = safeInt(req.query.offset, 0, MAX_SPOTIFY_INTENT_OFFSET);
+        if (limit === null || offset === null) {
+            return res.status(400).json({ error: "Invalid pagination" });
+        }
+        try {
+            return res.json(await getSavedSpotifyIntents(req.user.id, limit, offset));
+        } catch {
+            return res.status(503).json({ error: "Unable to load prepared requests" });
+        }
+    },
+);
 
 /**
  * Staged, default-OFF durable Spotify request preparation.
