@@ -51,10 +51,17 @@ beforeEach(() => {
         isAuthenticated: true, isLoading: false,
         user: { id: "first-user", role: "user" },
     });
-    mocks.get.mockImplementation(async (path: string) =>
-        path.startsWith("/download-manager/downtify/jobs")
+    mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/intents")) {
+            return {
+                enabled: false, items: [], total: 0,
+                displayed: 0, hasMore: false, isDownloadQueue: false,
+            };
+        }
+        return path.startsWith("/download-manager/downtify/jobs")
             ? remote("Downtify Track")
-            : kima("Kima Track"));
+            : kima("Kima Track");
+    });
     mocks.post.mockReset().mockResolvedValue({
         provider: "spotify", kind: "track",
         canonicalUrl: "https://open.spotify.com/track/0123456789ABCDEFGHIJKL",
@@ -216,5 +223,165 @@ describe("Spotify link preview — no download or import actions", () => {
         });
         expect(host.textContent).toContain("Could not validate this Spotify link.");
         expect(host.textContent).not.toContain("hidden-device-token");
+    });
+});
+
+const savedIntents = (items: unknown[] = [], enabled = true) => ({
+    enabled, items, total: items.length,
+    displayed: items.length, hasMore: false, isDownloadQueue: false,
+});
+const savedTrack = {
+    id: "saved-1", kind: "track",
+    canonicalUrl: "https://open.spotify.com/track/0123456789ABCDEFGHIJKL",
+    requestState: "prepared",
+    libraryDuplicateCheck: "not_checked", engineStatus: "not_checked",
+    createdAt: "2026-11-04T20:00:00.000Z",
+};
+const authorizeSpotifyPreview = () => mocks.auth.mockReturnValue({
+    isAuthenticated: true, isLoading: false,
+    user: { id: "first-user", role: "user", canDownloadTracks: true },
+});
+const clickButtonContaining = async (label: string) => {
+    const button = Array.from(host.querySelectorAll("button"))
+        .find((node) => node.textContent?.includes(label));
+    expect(button).not.toBeUndefined();
+    await act(async () => {
+        button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+};
+
+describe("owner-scoped prepared Spotify request UI", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+
+    it("displays a disabled feature without offering a Save action", async () => {
+        authorizeSpotifyPreview();
+        await mount();
+        expect(host.textContent).toContain("Saving requests is disabled on this server.");
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+            );
+        });
+        expect(host.textContent).toContain("Valid Spotify link");
+        expect(host.textContent).not.toContain("Save prepared request (no download)");
+        expect(mocks.post).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders owner-provided prepared items as non-downloading requests", async () => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) =>
+            path.includes("/spotify/intents")
+                ? savedIntents([savedTrack])
+                : original?.(path),
+        );
+        await mount();
+        expect(host.textContent).toContain("Saved Spotify requests");
+        expect(host.textContent).toContain("Prepared only — not sent for download");
+        expect(host.textContent).toContain(link);
+        expect(host.textContent).toContain("Prepared requests do not confirm a library match");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("saves a prepared request only after preview and backend opt-in", async () => {
+        authorizeSpotifyPreview();
+        let saved = false;
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) =>
+            path.includes("/spotify/intents")
+                ? savedIntents(saved ? [savedTrack] : [])
+                : original?.(path),
+        );
+        const preview = await mocks.post.getMockImplementation()?.("/download-manager/spotify/preview", { url: link });
+        mocks.post.mockImplementation(async (path: string) => {
+            if (path.endsWith("/spotify/intents")) {
+                saved = true;
+                return {
+                    id: "saved-1", alreadyPrepared: false,
+                    submittedByThisRequest: false,
+                    downloadStartedByThisRequest: false,
+                    filesChangedByThisRequest: false,
+                };
+            }
+            return preview;
+        });
+        await mount();
+        expect(host.textContent).toContain("No prepared Spotify requests yet.");
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+            );
+        });
+        expect(host.textContent).toContain("Valid Spotify link");
+        expect(mocks.post).toHaveBeenCalledTimes(1);
+        await clickButtonContaining("Save prepared request (no download)");
+        expect(mocks.post).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents", { url: link },
+        );
+        expect(mocks.post).toHaveBeenCalledTimes(2);
+        expect(host.textContent).toContain("Request saved. No download started.");
+        expect(host.textContent).toContain("Prepared only — not sent for download");
+        expect(host.textContent).not.toContain("Download queued");
+        expect(mocks.get).toHaveBeenCalledWith("/download-manager/spotify/intents?limit=20&offset=0");
+    });
+
+    it("explains that an identical saved request does not start another download", async () => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) =>
+            path.includes("/spotify/intents")
+                ? savedIntents([savedTrack])
+                : original?.(path),
+        );
+        const preview = await mocks.post.getMockImplementation()?.("/download-manager/spotify/preview", { url: link });
+        mocks.post.mockImplementation(async (path: string) =>
+            path.endsWith("/spotify/intents")
+                ? { id: "saved-1", alreadyPrepared: true,
+                    downloadStartedByThisRequest: false, submittedByThisRequest: false,
+                    filesChangedByThisRequest: false }
+                : preview,
+        );
+        await mount();
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+            );
+        });
+        await clickButtonContaining("Save prepared request (no download)");
+        expect(host.textContent).toContain("Request already saved. No new download started.");
+    });
+
+    it("never leaks a failed save response or offers saved rows to a new account", async () => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) =>
+            path.includes("/spotify/intents") ? savedIntents([savedTrack]) : original?.(path),
+        );
+        const preview = await mocks.post.getMockImplementation()?.("/download-manager/spotify/preview", { url: link });
+        mocks.post.mockImplementation(async (path: string) => {
+            if (path.endsWith("/spotify/intents")) throw new Error("private database /music/userB/key");
+            return preview;
+        });
+        await mount();
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+            );
+        });
+        await clickButtonContaining("Save prepared request (no download)");
+        expect(host.textContent).toContain("Could not save the prepared request.");
+        expect(host.textContent).not.toContain("private database");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "other-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Prepared only — not sent for download");
+        expect(host.textContent).not.toContain("Could not save the prepared request.");
     });
 });
