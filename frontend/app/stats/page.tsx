@@ -326,8 +326,8 @@ function Overview({
                 </h1>
 
                 {/* The hours are an estimate and say so; these four counts are exact.
-                    Under 480px four columns cannot hold their labels, so phones get two. */}
-                <dl className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-x-4 gap-y-6 sm:gap-x-8 lg:max-w-[42rem]">
+                    Below 480px phones show two columns; from 480px use available container width, not viewport width, so open sidebars never force four cramped columns. */}
+                <dl className="grid grid-cols-2 min-[480px]:grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-x-4 gap-y-6 sm:gap-x-8 lg:max-w-[42rem]">
                     <Reading value={formatStatsCount(listening.plays, locale)} label={t("plays")} />
                     <Reading value={formatStatsCount(listening.distinctArtists, locale)} label={t("artists")} />
                     <Reading value={formatStatsCount(listening.distinctAlbums, locale)} label={t("albums")} />
