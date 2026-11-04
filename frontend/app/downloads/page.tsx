@@ -366,7 +366,7 @@ function SpotifyLinkIntake() {
 
     const check = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!link.trim() || checking) return;
+        if (!link.trim() || checking || saving) return;
 
         const epoch = ++requestEpoch.current;
         setChecking(true);
@@ -428,6 +428,7 @@ function SpotifyLinkIntake() {
                         inputMode="url"
                         autoComplete="off"
                         maxLength={2048}
+                        disabled={saving}
                         value={link}
                         onChange={(event) => {
                             requestEpoch.current++;
@@ -444,7 +445,7 @@ function SpotifyLinkIntake() {
                 </div>
                 <button
                     type="submit"
-                    disabled={!link.trim() || checking}
+                    disabled={!link.trim() || checking || saving}
                     className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {checking ? t("Checking link...") : t("Check link")}
