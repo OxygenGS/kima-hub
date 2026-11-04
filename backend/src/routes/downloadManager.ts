@@ -6,6 +6,7 @@ import {
     MAX_DOWNLOAD_PAGE_SIZE,
 } from "../services/unifiedDownloadOverview";
 import { logger } from "../utils/logger";
+import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 
 const router = Router();
 
@@ -35,6 +36,23 @@ router.get("/jobs", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Unable to load scoped download overview:", error);
         return res.status(500).json({ error: "Unable to load download overview" });
+    }
+});
+
+
+/**
+ * Single-bound-user, read-only remote queue. If no verified mapping exists,
+ * nothing about other Downtify accounts or their jobs is returned.
+ */
+router.get("/downtify/jobs", requireAuth, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+    try {
+        return res.json(await getBoundDowntifyQueue(req.user.id));
+    } catch {
+        return res.status(503).json({
+            state: "unavailable", items: [], displayed: 0, hasMore: false,
+        });
     }
 });
 
