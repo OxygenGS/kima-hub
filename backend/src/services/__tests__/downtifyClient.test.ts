@@ -66,9 +66,14 @@ describe("Downtify read-only backend configuration", () => {
             "http://downtify:8000/api/auth/status",
             "http://downtify:8000/api/queue/state",
         ]);
-        for (const [url, options] of calls) {
+        for (const [index, [url, options]] of calls.entries()) {
             expect(url).not.toContain(DEVICE_TOKEN);
-            expect(options.headers.Authorization).toBe(`Bearer ${DEVICE_TOKEN}`);
+            // Public identity probe must never disclose the paired-device secret.
+            if (index === 0) {
+                expect(options.headers.Authorization).toBeUndefined();
+            } else {
+                expect(options.headers.Authorization).toBe(`Bearer ${DEVICE_TOKEN}`);
+            }
             expect(options.maxRedirects).toBe(0);
             expect(options.maxContentLength).toBeLessThanOrEqual(16 * 1024);
             expect(options.timeout).toBeLessThanOrEqual(4000);
@@ -83,6 +88,7 @@ describe("Downtify read-only backend configuration", () => {
         const http = mockResponse({ ...info, product: "AnotherServer" }, auth, queue);
         expect(await probeDowntify(config(), http)).toMatchObject({ state: "incompatible" });
         expect(http.get).toHaveBeenCalledTimes(1);
+        expect((http.get as jest.Mock).mock.calls[0][1].headers.Authorization).toBeUndefined();
         const other = mockResponse({ ...info, api_version: 2 }, auth, queue);
         expect(await probeDowntify(config(), other)).toMatchObject({ state: "incompatible" });
         expect(other.get).toHaveBeenCalledTimes(1);
