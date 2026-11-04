@@ -1,10 +1,10 @@
 # Install OxygenGS Kima Hub
 
-**Current published fork release:** [v1.17.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) — Library Intelligence and reversible album corrections
+**Current published fork release:** [v1.17.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) — Upstream Polish, Library Intelligence and reliability fixes
 
-The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.17.0`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.17.0 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) has been published and the Docker publication workflow has completed successfully.
+The published all-in-one Docker image is `ghcr.io/oxygengs/kima-hub:v1.17.1`, with native **linux/amd64** and **linux/arm64** support. The [v1.17.1 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) and both native Docker publication workflows have completed successfully.
 
-**v1.17.1 is an unpublished source candidate, not a published image.** The currently published stable image is v1.17.0. v1.17.1 adds no new PostgreSQL migration or audio re-enrichment, but the stable v1.17.0 release already contains a database migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify an independent restore and keep `/music` mounted exactly as before. Never point an older image at a migrated database; restore the matching pre-upgrade `/data` backup when rolling back across a migration.
+**v1.17.1 is a published stable release.** It adds no new PostgreSQL migration or music re-enrichment, but v1.17.0 introduced a database migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify an independent restore and keep `/music` mounted exactly as before. Never point an older image at a migrated database; restore the matching pre-upgrade `/data` backup when rolling back across a migration.
 
 Kima runs the web app, API, PostgreSQL, Redis and bundled analysis services in one container. Your music and persistent application data remain on volumes you control.
 
@@ -19,7 +19,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.17.0
+  ghcr.io/oxygengs/kima-hub:v1.17.1
 ```
 
 Open `http://localhost:3030` on the Docker host, finish setup and create the administrator account. If connecting from a different computer, use your server's appropriate address.
@@ -39,7 +39,7 @@ Use the repository's [production Compose file](../docker-compose.prod.yml) for t
 Set the version **explicitly**. The checked-in Compose files deliberately retain an older conservative fallback, so leaving `VERSION` unset does **not** select the current release:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.1 docker compose -f docker-compose.prod.yml up -d
 ```
 
 Minimal standalone Compose example:
@@ -47,7 +47,7 @@ Minimal standalone Compose example:
 ```yaml
 services:
   kima:
-    image: ghcr.io/oxygengs/kima-hub:v1.17.0
+    image: ghcr.io/oxygengs/kima-hub:v1.17.1
     ports:
       - "3030:3030"
     volumes:
@@ -68,7 +68,7 @@ For source development use [development.md](development.md); the general `docker
 1. Privately record the running image version, deployment configuration, Compose project name and volume mounts. Never post installation-specific values to this repository.
 2. Stop the current stack and make a **cold, complete backup** of its original `/data` volume, including secrets, plus the Compose/environment configuration.
 3. Verify an independent restore into a **different** volume. Keep the pre-upgrade original and backup intact for rollback.
-4. Select `ghcr.io/oxygengs/kima-hub:v1.17.0` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.
+4. Select `ghcr.io/oxygengs/kima-hub:v1.17.1` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.
 5. After updating, verify accounts, music playback/seek, playlists, user permissions, client authentication and language settings. If rolling back after a migration, restore the independent **pre-upgrade data backup** before starting the older image.
 
 **Database migration note:** v1.17.0 introduced a PostgreSQL migration for reversible album links, and v1.17.1 adds no new one. When upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` extension and three search indexes may still need to be created. Allow disk space and I/O time, particularly with large libraries.
@@ -94,7 +94,7 @@ Create a new API key under **Settings → Native Apps** for each client; use the
 
 | Channel | Image | Recommendation |
 | :--- | :--- | :--- |
-| Stable | `ghcr.io/oxygengs/kima-hub:v1.17.0` | Versioned production release; pin a tag or immutable digest. |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.17.1` | Versioned production release; pin a tag or immutable digest. |
 | Pre-release | Explicit published `prerelease-…` tag or digest | Testing only. |
 | `:latest` | Not automatically promoted | Avoid for controlled updates. |
 

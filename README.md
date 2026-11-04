@@ -19,15 +19,15 @@ A modern, self-hosted music experience for the collection you own. Stream your l
 
 ---
 
-## Development candidate: v1.17.1 (unpublished)
+## Latest stable release: v1.17.1
 
-Nine selectively integrated upstream v1.12.2 refinements are under release review. v1.17.1 has not been published or deployed. The latest stable image remains v1.17.0.
+**Upstream Polish.** Nine carefully selected improvements from official Kima 1.12: faster home loading, responsive protected artwork, adaptive mix covers, Release Radar navigation, stronger AIO health checks and better accessibility. Library Intelligence, Soulseek fixes and modern Symfonium/Feishin authentication remain intact.
 
-## Latest stable release: v1.17.0
+[See what's new in v1.17.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) · [View the changelog](CHANGELOG.md)
 
-**Library Intelligence.** v1.17.0 adds Library Doctor, a Smart Download Inbox and reviewed, reversible album corrections. It also preserves the privacy, Soulseek and modern OpenSubsonic improvements from earlier releases.
+## In development: v1.18.0 — Unified Download Manager
 
-[See what's new in v1.17.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) · [View the changelog](CHANGELOG.md)
+Downtify and Soulseek in one future interface. This development work is not yet a published release; the existing external Downtify importer remains in place until its tested replacement is ready.
 
 ## Everything in one place
 
@@ -72,7 +72,7 @@ The fork retains the upstream music server, playback functionality and existing 
 
 ## Get started
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.17.0`
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.17.1`
 **Platforms:** `linux/amd64` and `linux/arm64`  
 **Web and client API:** port `3030`
 
@@ -85,7 +85,7 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.17.0
+  ghcr.io/oxygengs/kima-hub:v1.17.1
 ```
 
 Replace `/absolute/path/to/music` with your music directory, then open `http://localhost:3030` on your Docker host and complete first-run setup.
@@ -101,12 +101,12 @@ Replace `/absolute/path/to/music` with your music directory, then open `http://l
 Use the [production Compose example](docker-compose.prod.yml) with an explicit version:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.1 docker compose -f docker-compose.prod.yml up -d
 ```
 
 The example Compose files retain a conservative fallback image and do not automatically follow the newest release. The `:latest` tag is **not** automatically promoted. Pin a published version or immutable digest.
 
-**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations. The published v1.17.0 release introduced a PostgreSQL migration for reversible album links. v1.17.1 adds no further schema migration; always back up /data and verify a restore. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
+**Already running Kima?** Back up all persistent `/data` contents and verify a separate restore *before* upgrading. Keep the same volumes, mounts, and Compose project. Earlier releases may contain database migrations. v1.17.1 adds no new PostgreSQL migration; v1.17.0 introduced reversible album-link storage. Always back up the complete persistent `/data` and verify an independent restore before upgrading. Follow the [safe upgrade and rollback guide](docs/safe-aio-updates.md).
 
 [Full installation guide](docs/install.md) · [Safe upgrades](docs/safe-aio-updates.md)
 
