@@ -342,3 +342,49 @@ automatically turn on the feature in production. Before any actual
 downloader submission, prove installed Downtify version/contracts,
 ownership/consent, safe retries, actual library/file identity, metadata
 matching and SSD-to-DAS import/hardlink behavior.
+
+## Phase C1: proof-backed local recording verification (this PR)
+
+**Read-only, user-initiated** `POST /api/download-manager/spotify/check-library`
+accepts one canonicalizable Spotify track, album or playlist link. Kima
+requires the active Kima session and persisted `canDownloadTracks` permission.
+The button is only offered for a successfully validated **single track** on
+`/downloads` and is never called on input change or periodic status refresh.
+
+For an individual track, the service obtains Spotify track metadata using
+Kima's existing anonymous Spotify metadata client. It requires an exact
+returned Spotify ID, a syntactically valid 12-character ISRC, and a
+plausible duration. Only then does it search at most 25 Kima `Track` rows
+where the ISRC matches case-insensitively, the album's location is
+`LIBRARY`, `missingSince` is null and `corrupt` is false.
+
+A candidate can be a **recording_match_on_disk** only when its duration is
+within 4 seconds of Spotify's and the backend freshly verifies a **non-empty
+regular file** below the configured `MUSIC_PATH`. File verification uses a
+normalized relative scanner-owned path, checks canonical paths via
+`realpath`, and rejects traversal, symlink escapes and missing DAS mounts.
+
+Returned data is minimal: status, whether the ISRC+duration+file test passed,
+optional Kima track ID, and the explicit `audioDecoded: false`,
+`albumEditionVerified: false` and `downloadStarted: false` disclaimers.
+Never return filesystem paths, raw Spotify metadata, access tokens or
+provider error messages. A positive result means a *matching recorded
+performance and real local file*, **not** identical master/edition, verified
+audio decode, or a guarantee of full playback.
+
+Unknown/uncertain results remain uncertain:
+
+- `metadata_unavailable`: Spotify metadata lookup failed (never "absent").
+- `identity_unavailable`: no validated Spotify ID/ISRC/duration.
+- `no_verified_match`: no matching ISRC in the eligible catalog. This
+  does **not** prove the song is absent, because local files may lack an ISRC.
+- `catalog_recording_unverified`: a local ISRC exists but an appropriate
+  physical file and duration were not proven.
+- `not_supported`: whole album/playlist completeness is not checked by a
+  single-track ISRC lookup.
+
+This phase issues no Downtify job, has no metadata-writing fallback,
+makes no library changes, does not decode audio, and leaves Importer v5
+and production mounts untouched. Future download submission must recheck
+the recording/file identity immediately before scheduling rather than
+trusting a stale browser result.
