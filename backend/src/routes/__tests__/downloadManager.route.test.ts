@@ -6,6 +6,7 @@ const mockBoundQueue = jest.fn();
 const mockPermissionUser = jest.fn();
 const mockPrepareIntent = jest.fn();
 const mockListSavedIntents = jest.fn();
+const mockLibraryEvidence = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -13,6 +14,9 @@ jest.mock("../../services/unifiedDownloadOverview", () => ({
     MAX_DOWNLOAD_PAGE_SIZE: 100,
     MAX_DOWNLOAD_OFFSET: 1000,
     getUnifiedDownloadOverview: (...args: unknown[]) => mockOverview(...args),
+}));
+jest.mock("../../services/spotifyLibraryEvidence", () => ({
+    checkSpotifyLibraryEvidence: (...args: unknown[]) => mockLibraryEvidence(...args),
 }));
 jest.mock("../../services/spotifyIntentRegistry", () => ({
     prepareSpotifyIntent: (...args: unknown[]) => mockPrepareIntent(...args),
@@ -48,6 +52,12 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
 
 beforeEach(() => {
     delete process.env.KIMA_SPOTIFY_INTENTS_ENABLED;
+    mockLibraryEvidence.mockReset().mockResolvedValue({
+        provider: "spotify", kind: "track", status: "recording_match_on_disk",
+        evidence: "isrc_duration_and_file", recordingMatch: true,
+        audioDecoded: false, albumEditionVerified: false,
+        matchedTrackId: "track-on-disk", downloadStarted: false,
+    });
     mockListSavedIntents.mockReset().mockResolvedValue({
         enabled: true, items: [], total: 0, displayed: 0,
         limit: 20, offset: 0, hasMore: false, isDownloadQueue: false,
@@ -398,5 +408,83 @@ describe("saved Spotify preparation listing", () => {
         expect((await request(app).patch("/api/download-manager/spotify/intents/x")).status).toBe(404);
         expect((await request(app).delete("/api/download-manager/spotify/intents/x")).status).toBe(404);
         expect(mockListSavedIntents).not.toHaveBeenCalled();
+    });
+});
+
+describe("read-only Spotify ISRC/on-disk library verification", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+    const post = (body: object = { url: link }) => request(app)
+        .post("/api/download-manager/spotify/check-library")
+        .set("Authorization", "Bearer synthetic-test-token")
+        .set("X-Test-User", "current-user").send(body);
+
+    it("requires a signed-in Kima user before any Spotify lookup", async () => {
+        const response = await request(app)
+            .post("/api/download-manager/spotify/check-library").send({ url: link });
+        expect(response.status).toBe(401);
+        expect(mockLibraryEvidence).not.toHaveBeenCalled();
+    });
+
+    it("requires persisted track-download permission, not forged request flags", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        const result = await post({ url: link, userId: "victim", role: "admin", canDownloadTracks: true });
+        expect(result.status).toBe(403);
+        expect(mockLibraryEvidence).not.toHaveBeenCalled();
+        expect(mockPermissionUser).toHaveBeenCalledWith({
+            where: { id: "current-user" },
+            select: { role: true, canRequestAlbums: true, canDownloadTracks: true },
+        });
+    });
+
+    it("returns only the conservative recording evidence on explicit request", async () => {
+        const response = await post({ url: link, userId: "ignored" });
+        expect(response.status).toBe(200);
+        expect(mockLibraryEvidence).toHaveBeenCalledWith(link);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(response.body).toEqual({
+            provider: "spotify", kind: "track", status: "recording_match_on_disk",
+            evidence: "isrc_duration_and_file", recordingMatch: true,
+            audioDecoded: false, albumEditionVerified: false,
+            matchedTrackId: "track-on-disk", downloadStarted: false,
+        });
+        expect(mockPrepareIntent).not.toHaveBeenCalled();
+        expect(mockBoundQueue).not.toHaveBeenCalled();
+    });
+
+    it("does not convert a missing Spotify metadata response into proof of absence", async () => {
+        mockLibraryEvidence.mockResolvedValue({
+            provider: "spotify", kind: "track", status: "metadata_unavailable",
+            evidence: "not_proven", recordingMatch: false,
+            audioDecoded: false, albumEditionVerified: false,
+            matchedTrackId: null, downloadStarted: false,
+        });
+        const response = await post();
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe("metadata_unavailable");
+        expect(response.body.recordingMatch).toBe(false);
+    });
+
+    it("returns a generic error on a provider outage rather than leaking its source", async () => {
+        mockLibraryEvidence.mockRejectedValue(new Error("secret Spotify bearer /music/private.flac"));
+        const response = await post();
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({ error: "Library verification unavailable" });
+        expect(JSON.stringify(response.body)).not.toContain("private");
+    });
+
+    it("rejects an invalid link and does not create a download request", async () => {
+        mockLibraryEvidence.mockResolvedValue(null);
+        const response = await post({ url: "https://wrong-spotify.example/item" });
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: "Unsupported Spotify link" });
+        expect(mockPrepareIntent).not.toHaveBeenCalled();
+    });
+
+    it("has no delete, download or engine submission endpoint on the verification route", async () => {
+        expect((await request(app).delete("/api/download-manager/spotify/check-library")).status).toBe(404);
+        expect((await request(app).put("/api/download-manager/spotify/check-library").send({})).status).toBe(404);
+        expect(mockLibraryEvidence).not.toHaveBeenCalled();
     });
 });

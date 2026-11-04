@@ -385,3 +385,127 @@ describe("owner-scoped prepared Spotify request UI", () => {
         expect(host.textContent).not.toContain("Could not save the prepared request.");
     });
 });
+
+describe("explicit Spotify local recording evidence", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+    const authorize = () => mocks.auth.mockReturnValue({
+        isAuthenticated: true, isLoading: false,
+        user: { id: "first-user", role: "user", canDownloadTracks: true },
+    });
+    const preview = async () => {
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(new Event(
+                "submit", { bubbles: true, cancelable: true }
+            ));
+        });
+    };
+
+    it("does not automatically contact Spotify or examine local files on preview", async () => {
+        authorize();
+        await mount();
+        await preview();
+        expect(host.textContent).toContain("Check local recording");
+        expect(mocks.post).toHaveBeenCalledTimes(1);
+        expect(mocks.post).not.toHaveBeenCalledWith(
+            "/download-manager/spotify/check-library", expect.anything()
+        );
+    });
+
+    it("reports a proof-backed local recording match without falsely claiming decoded audio", async () => {
+        authorize();
+        const original = await mocks.post.getMockImplementation()?.(
+            "/download-manager/spotify/preview", { url: link }
+        );
+        mocks.post.mockImplementation(async (path: string) =>
+            path.endsWith("/spotify/check-library")
+                ? {
+                    provider: "spotify", kind: "track",
+                    status: "recording_match_on_disk", evidence: "isrc_duration_and_file",
+                    recordingMatch: true, audioDecoded: false,
+                    albumEditionVerified: false, matchedTrackId: "own-library-track",
+                    downloadStarted: false,
+                }
+                : original
+        );
+        await mount();
+        await preview();
+        await clickButtonContaining("Check local recording");
+        expect(mocks.post).toHaveBeenCalledWith(
+            "/download-manager/spotify/check-library", { url: link }
+        );
+        expect(host.textContent).toContain(
+            "Recording match found in indexed local file (audio not decoded)."
+        );
+        expect(host.textContent).not.toContain("Audio decoded successfully");
+    });
+
+    it("does not turn missing metadata into proof that a track is absent", async () => {
+        authorize();
+        const original = await mocks.post.getMockImplementation()?.(
+            "/download-manager/spotify/preview", { url: link }
+        );
+        mocks.post.mockImplementation(async (path: string) =>
+            path.endsWith("/spotify/check-library")
+                ? {
+                    status: "metadata_unavailable", recordingMatch: false,
+                    evidence: "not_proven", matchedTrackId: null,
+                    audioDecoded: false, albumEditionVerified: false,
+                    downloadStarted: false,
+                }
+                : original
+        );
+        await mount();
+        await preview();
+        await clickButtonContaining("Check local recording");
+        expect(host.textContent).toContain(
+            "Spotify metadata is unavailable. Local presence is unknown."
+        );
+    });
+
+    it("does not leak filesystem or Spotify errors to the browser", async () => {
+        authorize();
+        const original = await mocks.post.getMockImplementation()?.(
+            "/download-manager/spotify/preview", { url: link }
+        );
+        mocks.post.mockImplementation(async (path: string) => {
+            if (path.endsWith("/spotify/check-library")) {
+                throw new Error("private mount /music/secret-track.flac");
+            }
+            return original;
+        });
+        await mount();
+        await preview();
+        await clickButtonContaining("Check local recording");
+        expect(host.textContent).toContain("Library check failed. Presence remains unknown.");
+        expect(host.textContent).not.toContain("secret-track.flac");
+    });
+
+    it("clears recording evidence after the signed-in user changes", async () => {
+        authorize();
+        const original = await mocks.post.getMockImplementation()?.(
+            "/download-manager/spotify/preview", { url: link }
+        );
+        mocks.post.mockImplementation(async (path: string) =>
+            path.endsWith("/spotify/check-library")
+                ? {
+                    status: "recording_match_on_disk", evidence: "isrc_duration_and_file",
+                    recordingMatch: true, audioDecoded: false,
+                    albumEditionVerified: false, matchedTrackId: "own-library-track",
+                    downloadStarted: false,
+                }
+                : original
+        );
+        await mount();
+        await preview();
+        await clickButtonContaining("Check local recording");
+        expect(host.textContent).toContain("Recording match found in indexed local file");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "next-user", role: "user", canDownloadTracks: false },
+        });
+        await mount();
+        expect(host.textContent).not.toContain("Recording match found in indexed local file");
+        expect(host.querySelector("#spotify-intake-link")).toBeNull();
+    });
+});

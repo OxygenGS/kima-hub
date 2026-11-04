@@ -109,6 +109,30 @@ interface PreparedSpotifyIntentResponse {
     filesChangedByThisRequest: false;
 }
 
+type LibraryEvidenceStatus =
+    | "recording_match_on_disk" | "catalog_recording_unverified"
+    | "no_verified_match" | "metadata_unavailable"
+    | "identity_unavailable" | "not_supported";
+interface LibraryEvidence {
+    provider: "spotify";
+    kind: "track" | "album" | "playlist";
+    status: LibraryEvidenceStatus;
+    evidence: "isrc_duration_and_file" | "not_proven";
+    recordingMatch: boolean;
+    audioDecoded: false;
+    albumEditionVerified: false;
+    matchedTrackId: string | null;
+    downloadStarted: false;
+}
+const evidenceLabels: Record<LibraryEvidenceStatus, TranslationKey> = {
+    recording_match_on_disk: "Recording match found in indexed local file (audio not decoded).",
+    catalog_recording_unverified: "Catalog recording match exists, but its audio file was not verified.",
+    no_verified_match: "No proven local recording match. This does not prove the song is absent.",
+    metadata_unavailable: "Spotify metadata is unavailable. Local presence is unknown.",
+    identity_unavailable: "Recording identity could not be verified.",
+    not_supported: "Library evidence currently supports individual tracks only.",
+};
+
 const POLL_MS = 10_000;
 
 export default function DownloadsPage() {
@@ -332,6 +356,9 @@ function SpotifyLinkIntake() {
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState(false);
     const [savedResult, setSavedResult] = useState<PreparedSpotifyIntentResponse | null>(null);
+    const [libraryEvidence, setLibraryEvidence] = useState<LibraryEvidence | null>(null);
+    const [libraryChecking, setLibraryChecking] = useState(false);
+    const [libraryError, setLibraryError] = useState(false);
     const requestEpoch = useRef(0);
 
     useEffect(() => () => { requestEpoch.current++; }, []);
@@ -366,7 +393,7 @@ function SpotifyLinkIntake() {
 
     const check = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!link.trim() || checking || saving) return;
+        if (!link.trim() || checking || saving || libraryChecking) return;
 
         const epoch = ++requestEpoch.current;
         setChecking(true);
@@ -374,6 +401,8 @@ function SpotifyLinkIntake() {
         setError(false);
         setSavedResult(null);
         setSaveError(false);
+        setLibraryEvidence(null);
+        setLibraryError(false);
         try {
             const response = await api.post<SpotifyLinkPreview>(
                 "/download-manager/spotify/preview", { url: link }
@@ -388,7 +417,7 @@ function SpotifyLinkIntake() {
     };
 
     const save = async () => {
-        if (!savedList?.enabled || !result || saving) return;
+        if (!savedList?.enabled || !result || saving || libraryChecking) return;
         const epoch = ++requestEpoch.current;
         setSaving(true);
         setSaveError(false);
@@ -406,6 +435,25 @@ function SpotifyLinkIntake() {
             if (requestEpoch.current === epoch) setSaveError(true);
         } finally {
             if (requestEpoch.current === epoch) setSaving(false);
+        }
+    };
+
+    const verifyLibrary = async () => {
+        if (!result || result.kind !== "track" || libraryChecking || saving || checking) return;
+        const epoch = ++requestEpoch.current;
+        setLibraryChecking(true);
+        setLibraryEvidence(null);
+        setLibraryError(false);
+        try {
+            const evidence = await api.post<LibraryEvidence>(
+                "/download-manager/spotify/check-library",
+                { url: result.canonicalUrl }
+            );
+            if (requestEpoch.current === epoch) setLibraryEvidence(evidence);
+        } catch {
+            if (requestEpoch.current === epoch) setLibraryError(true);
+        } finally {
+            if (requestEpoch.current === epoch) setLibraryChecking(false);
         }
     };
 
@@ -428,7 +476,7 @@ function SpotifyLinkIntake() {
                         inputMode="url"
                         autoComplete="off"
                         maxLength={2048}
-                        disabled={saving}
+                        disabled={saving || libraryChecking}
                         value={link}
                         onChange={(event) => {
                             requestEpoch.current++;
@@ -437,6 +485,8 @@ function SpotifyLinkIntake() {
                             setError(false);
                             setSavedResult(null);
                             setSaveError(false);
+                            setLibraryEvidence(null);
+                            setLibraryError(false);
                             setChecking(false);
                         }}
                         placeholder="https://open.spotify.com/track/..."
@@ -445,7 +495,7 @@ function SpotifyLinkIntake() {
                 </div>
                 <button
                     type="submit"
-                    disabled={!link.trim() || checking || saving}
+                    disabled={!link.trim() || checking || saving || libraryChecking}
                     className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {checking ? t("Checking link...") : t("Check link")}
@@ -461,10 +511,30 @@ function SpotifyLinkIntake() {
                         <p className="text-xs text-[var(--text-muted)]">
                             {t("No download started. Library duplicate detection has not been performed.")}
                         </p>
+                        {result.kind === "track" && (
+                            <button
+                                type="button"
+                                disabled={libraryChecking || saving || checking}
+                                onClick={() => { void verifyLibrary(); }}
+                                className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                            >
+                                {libraryChecking ? t("Checking library recording...") : t("Check local recording")}
+                            </button>
+                        )}
+                        {libraryEvidence && (
+                            <p role="status" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {t(evidenceLabels[libraryEvidence.status])}
+                            </p>
+                        )}
+                        {libraryError && (
+                            <p role="alert" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {t("Library check failed. Presence remains unknown.")}
+                            </p>
+                        )}
                         {savedList?.enabled && (
                             <button
                                 type="button"
-                                disabled={saving || checking}
+                                disabled={saving || checking || libraryChecking}
                                 onClick={() => { void save(); }}
                                 className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                             >

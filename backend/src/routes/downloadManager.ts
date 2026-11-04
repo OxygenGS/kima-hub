@@ -8,6 +8,7 @@ import {
 import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
+import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -94,6 +95,33 @@ router.post(
 );
 
 
+
+
+/**
+ * Explicit, read-only recording check: one Spotify track ID -> provider ISRC
+ * -> indexed LIBRARY track -> real, non-empty file within MUSIC_PATH.
+ * Album and playlist links report not_supported, not "not in library".
+ * Do not expose raw upstream metadata, full paths or filesystem errors.
+ */
+router.post(
+    "/spotify/check-library",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const input = req.body !== null && typeof req.body === "object" &&
+            !Array.isArray(req.body) ? req.body.url : undefined;
+        try {
+            const result = await checkSpotifyLibraryEvidence(input);
+            if (!result) return res.status(400).json({ error: "Unsupported Spotify link" });
+            return res.json(result);
+        } catch {
+            // A provider/db/filesystem outage is not proof a recording is absent.
+            return res.status(503).json({ error: "Library verification unavailable" });
+        }
+    }
+);
 
 /**
  * Saved-request status is not an engine queue and not proof of library files.
