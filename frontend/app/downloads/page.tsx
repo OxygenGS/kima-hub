@@ -389,6 +389,7 @@ function SpotifyLinkIntake() {
     const [submitAttempted, setSubmitAttempted] = useState(false);
     const [submission, setSubmission] = useState<DispatchResponse | null>(null);
     const [submissionError, setSubmissionError] = useState(false);
+    const attemptedIntentIds = useRef(new Set<string>());
     const requestEpoch = useRef(0);
 
     useEffect(() => () => { requestEpoch.current++; }, []);
@@ -515,13 +516,14 @@ function SpotifyLinkIntake() {
         : preparedOnPage?.id ?? null;
     const canDispatch = dispatchCapability?.canSubmit === true &&
         result?.kind === "track" && libraryEvidence?.status === "no_verified_match" &&
-        !!preparedId && !submitAttempted;
+        !!preparedId && !submitAttempted && !attemptedIntentIds.current.has(preparedId);
 
     const submitTrack = async () => {
         if (!canDispatch || !ackUnverified || !preparedId || submitting ||
             saving || checking || libraryChecking) return;
         const epoch = ++requestEpoch.current;
         setSubmitting(true);
+        attemptedIntentIds.current.add(preparedId);
         setSubmitAttempted(true); // lost HTTP reply must never auto-retry
         setSubmission(null);
         setSubmissionError(false);
