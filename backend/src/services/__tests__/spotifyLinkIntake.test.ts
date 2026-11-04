@@ -53,7 +53,7 @@ describe("Spotify link intake — pure, non-downloading preview", () => {
         "spotify:artist:" + TRACK,
         "spotify:track:too-short",
         "spotify:track:" + TRACK + "?si=bad",
-        "spotify:playlist:" + PLAYLIST + "\n",
+        "spotify:playlist:" + PLAYLIST + "\nextra",
         "https://open.spotify.com/track/" + TRACK + "?si=" + "X".repeat(2100),
         "https://open.spotify.com\\track\\" + TRACK,
         null,
