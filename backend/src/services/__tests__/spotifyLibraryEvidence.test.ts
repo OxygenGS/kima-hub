@@ -6,7 +6,9 @@ jest.mock("../spotify", () => ({ spotifyService: { getTrackBySpotifyId: jest.fn(
 
 const ID = "0123456789ABCDEFGHIJKL";
 const trackLink = "https://open.spotify.com/track/" + ID;
-const source = { spotifyId: ID, isrc: "USRC17607839", durationMs: 183000 };
+const source: { spotifyId: string; isrc: string | null; durationMs: number } = {
+    spotifyId: ID, isrc: "USRC17607839", durationMs: 183000,
+};
 const candidate = {
     id: "library-track-A",
     filePath: "Artist/Album/01 Track.flac",
