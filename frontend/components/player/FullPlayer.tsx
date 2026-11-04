@@ -67,7 +67,7 @@ export function FullPlayer() {
     const volumePercent = Math.round(volume * 100);
 
     return (
-        <section className={styles.shell} aria-label={t("Playback controls")} data-player-dock>
+        <section className={styles.shell} aria-label={t("Now Playing")} data-player-dock>
             <div className={styles.dock}>
                 <div className={styles.media}>
                     <PlayerCover href={mediaLink} coverUrl={coverUrl} title={title}
