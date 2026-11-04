@@ -23,9 +23,9 @@ export interface PreparedSpotifyIntent {
     alreadyPrepared: boolean;
     duplicateScope: "this_users_prepared_intents_only";
     libraryDuplicateCheck: "not_checked";
-    submittedToDowntify: false;
-    downloadStarted: false;
-    filesChanged: false;
+    submittedByThisRequest: false;
+    downloadStartedByThisRequest: false;
+    filesChangedByThisRequest: false;
 }
 
 function knownStatus(status: string): SpotifyIntentStatus {
@@ -93,8 +93,8 @@ export async function prepareSpotifyIntent(
         alreadyPrepared,
         duplicateScope: "this_users_prepared_intents_only",
         libraryDuplicateCheck: "not_checked",
-        submittedToDowntify: false,
-        downloadStarted: false,
-        filesChanged: false,
+        submittedByThisRequest: false,
+        downloadStartedByThisRequest: false,
+        filesChangedByThisRequest: false,
     };
 }
