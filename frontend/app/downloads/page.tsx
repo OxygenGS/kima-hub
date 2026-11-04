@@ -644,6 +644,44 @@ function SpotifyLinkIntake() {
                                 {t("Could not save the prepared request.")}
                             </p>
                         )}
+                        {canDispatch && (
+                            <div className="mt-3 space-y-3 rounded-lg border border-white/15 p-3">
+                                <p className="text-xs text-[var(--text-secondary)]">
+                                    {t("No verified match was found; this does not prove the track is absent.")}
+                                </p>
+                                <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                    <input
+                                        type="checkbox"
+                                        checked={ackUnverified}
+                                        onChange={event => setAckUnverified(event.target.checked)}
+                                        className="mt-0.5"
+                                    />
+                                    <span>{t("I understand a duplicate may exist and want to request this track.")}</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    disabled={!ackUnverified || submitting}
+                                    onClick={() => { void submitTrack(); }}
+                                    className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                >
+                                    {submitting ? t("Submitting to Downtify...") : t("Submit track to Downtify")}
+                                </button>
+                            </div>
+                        )}
+                        {submission && (
+                            <p role="status" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {submission.state === "submitted"
+                                    ? t("Downtify accepted the track. Library import is not yet verified.")
+                                    : submission.state === "already_in_remote_queue"
+                                        ? t("Track already belongs to your Downtify queue; no new request sent.")
+                                        : t("Submission is uncertain. Do not resend until the queue is checked.")}
+                            </p>
+                        )}
+                        {submissionError && (
+                            <p role="alert" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {t("Submission could not be verified. Do not retry automatically.")}
+                            </p>
+                        )}
                     </div>
                 ) : null}
             </div>
