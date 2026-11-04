@@ -2,10 +2,14 @@ import express, { type NextFunction, type Request, type Response } from "express
 import request from "supertest";
 
 const mockOverview = jest.fn();
+const mockBoundQueue = jest.fn();
 jest.mock("../../services/unifiedDownloadOverview", () => ({
     MAX_DOWNLOAD_PAGE_SIZE: 100,
     MAX_DOWNLOAD_OFFSET: 1000,
     getUnifiedDownloadOverview: (...args: unknown[]) => mockOverview(...args),
+}));
+jest.mock("../../services/downtifyBoundQueue", () => ({
+    getBoundDowntifyQueue: (...args: unknown[]) => mockBoundQueue(...args),
 }));
 jest.mock("../../utils/logger", () => ({
     logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
@@ -29,6 +33,9 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockBoundQueue.mockReset().mockResolvedValue({
+        state: "unbound", items: [], displayed: 0, hasMore: false,
+    });
     mockOverview.mockReset().mockResolvedValue({
         items: [], total: 0, displayed: 0, limit: 50, offset: 0,
         hasMore: false, pageCounts: {
@@ -82,5 +89,38 @@ describe("read-only unified job feed", () => {
         expect((await request(app).patch("/api/download-manager/jobs/any").send({})).status).toBe(404);
         expect((await request(app).delete("/api/download-manager/jobs/any")).status).toBe(404);
         expect(mockOverview).not.toHaveBeenCalled();
+    });
+});
+
+describe("owner-bound Downtify read-only route", () => {
+    it("requires authentication before remote lookup", async () => {
+        const response = await request(app).get("/api/download-manager/downtify/jobs");
+        expect(response.status).toBe(401);
+        expect(mockBoundQueue).not.toHaveBeenCalled();
+    });
+
+    it("uses only the authenticated Kima user, never a query-supplied owner", async () => {
+        const response = await read("my-kima-id", "/api/download-manager/downtify/jobs?userId=other&admin=true");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(mockBoundQueue).toHaveBeenCalledWith("my-kima-id");
+        expect(response.body).toEqual({ state: "unbound", items: [], displayed: 0, hasMore: false });
+    });
+
+    it("does not return upstream errors or secrets", async () => {
+        mockBoundQueue.mockRejectedValue(new Error("secret=private path=/music/personal"));
+        const response = await read("my-kima-id", "/api/download-manager/downtify/jobs");
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({
+            state: "unavailable", items: [], displayed: 0, hasMore: false,
+        });
+    });
+
+    it("provides no create, cancel or delete actions", async () => {
+        const endpoint = "/api/download-manager/downtify/jobs";
+        expect((await request(app).post(endpoint).send({})).status).toBe(404);
+        expect((await request(app).delete(endpoint)).status).toBe(404);
+        expect((await request(app).patch(endpoint).send({})).status).toBe(404);
+        expect(mockBoundQueue).not.toHaveBeenCalled();
     });
 });
