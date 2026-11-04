@@ -50,6 +50,25 @@ describe("release radar navigation", () => {
         expect(isNavigationActive("/releases-old", "/releases")).toBe(false);
     });
 
+    it("links the Download Manager on desktop without confusing the playback queue", async () => {
+        await act(async () => root.render(
+            <DesktopNavigation pathname="/downloads" audiobookshelfEnabled={true} />
+        ));
+        const link = host.querySelector('a[href="/downloads"]');
+        expect(link?.textContent).toContain("Download Manager");
+        expect(link?.getAttribute("aria-current")).toBe("page");
+        expect(isNavigationActive("/downloads/future", "/downloads")).toBe(true);
+        expect(isNavigationActive("/downloads-old", "/downloads")).toBe(false);
+        expect(host.querySelector('a[href="/queue"]')).not.toBeNull();
+    });
+
+    it("links the new read-only Download Manager from the mobile sidebar", async () => {
+        await act(async () => root.render(<MobileSidebar isOpen={true} onClose={vi.fn()} />));
+        const link = host.querySelector('a[href="/downloads"]');
+        expect(link?.textContent).toContain("Download Manager");
+        expect(host.textContent).toContain("Custom Library");
+    });
+
     it("offers the same page on mobile while keeping customized branding", async () => {
         await act(async () => root.render(<MobileSidebar isOpen={true} onClose={vi.fn()} />));
         const link = host.querySelector('a[href="/releases"]');

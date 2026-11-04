@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Settings, RefreshCw, LogOut, Compass, CalendarDays, X, Radio, ChartNoAxesColumn } from "lucide-react";
+import { Settings, RefreshCw, LogOut, Compass, CalendarDays, Download, X, Radio, ChartNoAxesColumn } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -144,6 +144,21 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                         >
                             <CalendarDays className="w-5 h-5" aria-hidden="true" />
                             <span className="text-sm font-medium">{t("Release Radar")}</span>
+                        </Link>
+
+                        <Link
+                            href="/downloads"
+                            aria-current={pathname === "/downloads" ? "page" : undefined}
+                            aria-label={t("Download Manager")}
+                            className={cn(
+                                "flex items-center gap-3 px-3 py-3 rounded-lg transition-colors duration-200",
+                                pathname === "/downloads"
+                                    ? "bg-white/10 text-white"
+                                    : "text-[var(--text-secondary)] hover:text-white hover:bg-white/5",
+                            )}
+                        >
+                            <Download className="w-5 h-5" aria-hidden="true" />
+                            <span className="text-sm font-medium">{t("Download Manager")}</span>
                         </Link>
 
                         <Link
