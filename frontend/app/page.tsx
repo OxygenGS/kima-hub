@@ -32,19 +32,28 @@ export default function HomePage() {
         recentAudiobooks,
         featuredPlaylists,
         isLoading,
+        sectionLoading,
         isRefreshingMixes,
         isBrowseLoading,
         handleRefreshMixes,
     } = useHomeData();
 
+    // Authentication can still gate the page to avoid cross-account flash;
+    // independent library requests only gate their own card rows.
     if (isLoading) {
         return <LoadingScreen />;
     }
+    const row = (loading: boolean, count: number, content: React.ReactNode) =>
+        loading && count === 0 ? (
+            <div role="status" aria-label={t("Loading...")}>
+                <FeaturedPlaylistsSkeleton />
+            </div>
+        ) : content;
 
     return (
         <div className="min-h-screen">
             <div className="relative">
-                <HomeHero artists={recentlyAdded} />
+                <HomeHero artists={recentlyAdded} loading={sectionLoading.recentlyAdded} />
 
                 <div className="section-stack relative page-shell pb-32 pt-2">
                 {/* Sections rise in staggered order on mount. Only the first 8 visible sections animate;
@@ -57,19 +66,19 @@ export default function HomePage() {
                                 <LibraryRadioStations />
                             </section>
                         )},
-                        { key: "continue-listening", visible: recentlyListened.length > 0, content: (
+                        { key: "continue-listening", visible: sectionLoading.recentlyListened || recentlyListened.length > 0, content: (
                             <section data-tv-section="continue-listening">
                                 <SectionHeader title={t("Continue Listening")} showAllHref="/collection?tab=artists" type="featured" />
-                                <ContinueListening items={recentlyListened} />
+                                {row(sectionLoading.recentlyListened, recentlyListened.length, <ContinueListening items={recentlyListened} />)}
                             </section>
                         )},
-                        { key: "recently-added", visible: recentlyAdded.length > 0, content: (
+                        { key: "recently-added", visible: sectionLoading.recentlyAdded || recentlyAdded.length > 0, content: (
                             <section data-tv-section="recently-added">
                                 <SectionHeader title={t("Recently Added")} showAllHref="/collection?tab=artists" type="artist" />
-                                <ArtistsGrid artists={recentlyAdded} />
+                                {row(sectionLoading.recentlyAdded, recentlyAdded.length, <ArtistsGrid artists={recentlyAdded} />)}
                             </section>
                         )},
-                        { key: "made-for-you", visible: mixes.length > 0, content: (
+                        { key: "made-for-you", visible: sectionLoading.mixes || mixes.length > 0, content: (
                             <section data-tv-section="made-for-you">
                                 <SectionHeader
                                     title={t("Made For You")}
@@ -88,7 +97,7 @@ export default function HomePage() {
                                                 variant="secondary"
                                                 size="sm"
                                                 onClick={handleRefreshMixes}
-                                                disabled={isRefreshingMixes}
+                                                disabled={isRefreshingMixes || sectionLoading.mixes}
                                                 aria-label={t("Refresh mixes")}
                                             >
                                                 {isRefreshingMixes ? (
@@ -103,19 +112,19 @@ export default function HomePage() {
                                         </div>
                                     }
                                 />
-                                <MixesGrid mixes={mixes} />
+                                {row(sectionLoading.mixes, mixes.length, <MixesGrid mixes={mixes} />)}
                             </section>
                         )},
-                        { key: "recommended", visible: recommended.length > 0, content: (
+                        { key: "recommended", visible: sectionLoading.recommended || recommended.length > 0, content: (
                             <section data-tv-section="recommended">
                                 <SectionHeader title={t("Recommended")} showAllHref="/discover" badge={t("Local Engine")} type="artist" />
-                                <ArtistsGrid artists={recommended} />
+                                {row(sectionLoading.recommended, recommended.length, <ArtistsGrid artists={recommended} />)}
                             </section>
                         )},
-                        { key: "popular-artists", visible: popularArtists.length > 0, content: (
+                        { key: "popular-artists", visible: sectionLoading.popularArtists || popularArtists.length > 0, content: (
                             <section data-tv-section="popular-artists">
                                 <SectionHeader title={t("Popular Artists")} badge="ListenBrainz" type="artist" />
-                                <PopularArtistsGrid artists={popularArtists} />
+                                {row(sectionLoading.popularArtists, popularArtists.length, <PopularArtistsGrid artists={popularArtists} />)}
                             </section>
                         )},
                         { key: "featured-playlists", visible: isBrowseLoading || featuredPlaylists.length > 0, content: (
@@ -128,16 +137,16 @@ export default function HomePage() {
                                 )}
                             </section>
                         )},
-                        { key: "popular-podcasts", visible: recentPodcasts.length > 0, content: (
+                        { key: "popular-podcasts", visible: sectionLoading.recentPodcasts || recentPodcasts.length > 0, content: (
                             <section data-tv-section="popular-podcasts">
                                 <SectionHeader title={t("Popular Podcasts")} showAllHref="/podcasts" type="podcast" />
-                                <PodcastsGrid podcasts={recentPodcasts} />
+                                {row(sectionLoading.recentPodcasts, recentPodcasts.length, <PodcastsGrid podcasts={recentPodcasts} />)}
                             </section>
                         )},
-                        { key: "audiobooks", visible: recentAudiobooks.length > 0, content: (
+                        { key: "audiobooks", visible: sectionLoading.recentAudiobooks || recentAudiobooks.length > 0, content: (
                             <section data-tv-section="audiobooks">
                                 <SectionHeader title={t("Audiobooks")} showAllHref="/audiobooks" type="audiobook" />
-                                <AudiobooksGrid audiobooks={recentAudiobooks} />
+                                {row(sectionLoading.recentAudiobooks, recentAudiobooks.length, <AudiobooksGrid audiobooks={recentAudiobooks} />)}
                             </section>
                         )},
                     ];
