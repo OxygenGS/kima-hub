@@ -4,6 +4,7 @@ import request from "supertest";
 const mockOverview = jest.fn();
 const mockBoundQueue = jest.fn();
 const mockPermissionUser = jest.fn();
+const mockPrepareIntent = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -11,6 +12,9 @@ jest.mock("../../services/unifiedDownloadOverview", () => ({
     MAX_DOWNLOAD_PAGE_SIZE: 100,
     MAX_DOWNLOAD_OFFSET: 1000,
     getUnifiedDownloadOverview: (...args: unknown[]) => mockOverview(...args),
+}));
+jest.mock("../../services/spotifyIntentRegistry", () => ({
+    prepareSpotifyIntent: (...args: unknown[]) => mockPrepareIntent(...args),
 }));
 jest.mock("../../services/downtifyBoundQueue", () => ({
     getBoundDowntifyQueue: (...args: unknown[]) => mockBoundQueue(...args),
@@ -39,6 +43,15 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    delete process.env.KIMA_SPOTIFY_INTENTS_ENABLED;
+    mockPrepareIntent.mockReset().mockResolvedValue({
+        id: "saved-intent-1", provider: "spotify", kind: "track",
+        canonicalUrl: "https://open.spotify.com/track/0123456789ABCDEFGHIJKL",
+        status: "prepared", alreadyPrepared: false,
+        duplicateScope: "this_users_prepared_intents_only",
+        libraryDuplicateCheck: "not_checked", submittedByThisRequest: false,
+        downloadStartedByThisRequest: false, filesChangedByThisRequest: false,
+    });
     mockPermissionUser.mockReset().mockResolvedValue({
         role: "user", canRequestAlbums: false, canDownloadTracks: true,
     });
@@ -221,5 +234,92 @@ describe("Spotify link intake preview, no downloads submitted", () => {
         const response = await post();
         expect(response.status).toBe(500);
         expect(JSON.stringify(response.body)).not.toContain("private database failure");
+    });
+});
+
+
+describe("staged Spotify preparation — durable owner-scoped intents only", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+    const postIntent = (body: object = { url: link }, account = "user-A") =>
+        request(app).post("/api/download-manager/spotify/intents")
+            .set("Authorization", "Bearer synthetic-test-token")
+            .set("X-Test-User", account).send(body);
+
+    it("is disabled by default and cannot create intents", async () => {
+        const response = await postIntent();
+        expect(response.status).toBe(404);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(mockPrepareIntent).not.toHaveBeenCalled();
+        expect(mockPermissionUser).not.toHaveBeenCalled();
+    });
+
+    it("requires Kima authentication even when optional intake is enabled", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        const response = await request(app).post("/api/download-manager/spotify/intents")
+            .send({ url: link });
+        expect(response.status).toBe(401);
+        expect(mockPrepareIntent).not.toHaveBeenCalled();
+    });
+
+    it("uses stored download permission, never forged admin/user flags", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        const response = await postIntent({ url: link, role: "admin", userId: "victim" });
+        expect(response.status).toBe(403);
+        expect(mockPrepareIntent).not.toHaveBeenCalled();
+        expect(mockPermissionUser).toHaveBeenCalledWith({
+            where: { id: "user-A" },
+            select: { role: true, canRequestAlbums: true, canDownloadTracks: true },
+        });
+    });
+
+    it("creates a prepared-only intent as the signed-in account", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        const response = await postIntent({ url: link, userId: "different-user" });
+        expect(response.status).toBe(201);
+        expect(response.body).toMatchObject({
+            status: "prepared", alreadyPrepared: false,
+            duplicateScope: "this_users_prepared_intents_only",
+            libraryDuplicateCheck: "not_checked",
+            submittedByThisRequest: false,
+            downloadStartedByThisRequest: false,
+            filesChangedByThisRequest: false,
+        });
+        expect(mockPrepareIntent).toHaveBeenCalledWith("user-A", link);
+        expect(mockBoundQueue).not.toHaveBeenCalled();
+    });
+
+    it("returns an existing intent without another preparation", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockPrepareIntent.mockResolvedValue({
+            id: "existing", provider: "spotify", kind: "track",
+            status: "prepared", alreadyPrepared: true,
+            libraryDuplicateCheck: "not_checked",
+            submittedByThisRequest: false,
+        });
+        const response = await postIntent();
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe("existing");
+        expect(response.body.alreadyPrepared).toBe(true);
+        expect(mockPrepareIntent).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects invalid links, not silently treated as saved tasks", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockPrepareIntent.mockResolvedValue(null);
+        const response = await postIntent({ url: "http://evil.example/" });
+        expect(response.status).toBe(400);
+        expect(response.body.error).toBe("Unsupported Spotify track, album or playlist link");
+    });
+
+    it("does not leak database errors or private file paths", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockPrepareIntent.mockRejectedValue(new Error("secret database /music/private"));
+        const response = await postIntent();
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({ error: "Unable to prepare Spotify request" });
+        expect(JSON.stringify(response.body)).not.toContain("/music/private");
     });
 });
