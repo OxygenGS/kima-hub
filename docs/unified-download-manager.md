@@ -289,10 +289,56 @@ metadata contract does not promise ISRC/recording identity. No fabricated
 cross-provider file deduplication occurs here. Albums and playlists are
 never marked complete because one matching track was found.
 
-This phase has no end-user **Save** button yet: the default-off backend
-endpoint and additive migration are a controlled staging foundation.
-Future PRs will add a truthful user-facing saved-intent view, trusted
-metadata evidence and a per-user engine submission state machine.
+The preparation endpoint and additive migration first shipped as a
+controlled staging foundation. Phase B5 below adds a Save-prepared-request
+button **only when the backend operator enables the feature flag**.
+Future PRs will add trusted metadata evidence and a per-user engine
+submission state machine.
 Before any real engine writes, verify the installed Downtify API version,
 permission mapping, existing file availability, Importer v5 handoff,
 idempotent retries and safe SSD-to-DAS cross-filesystem movement.
+
+## Phase B5: safe saved-request overview and explicit preparation (this PR)
+
+The first version of the **/downloads** prepared-Spotify-request panel is
+separate from the running Kima/Soulseek and Downtify queue views:
+
+- `GET /api/download-manager/spotify/intents?limit=20&offset=0` requires a
+  Kima login. When the feature flag is **OFF** it returns
+  `enabled: false, items: []` without reading the new table or the
+  permissions store. When ON it also checks persisted track-download
+  permission, and both its count and selection are strictly filtered by the
+  **authenticated** Kima user ID (including admins). Pagination is limited
+  to 1–50 records per page and offsets 0–1000.
+- Results are deliberately labeled **saved requests**, not downloads:
+  normalized resource type, validated canonical Spotify URL (or null if a
+  historical row is invalid), request status, timestamp and the explicit
+  indicators `libraryDuplicateCheck: "not_checked"` and
+  `engineStatus: "not_checked"`. The list never serializes remote
+  credentials, full metadata, download file paths or other users' IDs.
+  A future status other than `prepared` is shown as **not independently
+  verified** instead of an unsupported claim of audio availability.
+- The English/Dutch form continues to support no-network link preview.
+  Only when the backend advertises `enabled: true` does it additionally
+  display **Save prepared request (no download)**. That button makes exactly
+  one permission-checked `POST /api/download-manager/spotify/intents`
+  call on user click. The **database unique key** returns the same saved
+  request on repeated clicks or concurrent submissions; the UI describes
+  both first save and already-saved cases honestly.
+- Saved requests are fetched on mount and after saving. A changed Kima
+  account causes the previous React subtree and its pending responses to
+  be discarded. The form is not accessible to users lacking track-download
+  permission. Failures show generic messages without upstream error text,
+  private paths or bearer tokens.
+- **No remote download submission, no cancel/retry, no library scan and
+  no filesystem change** is possible through this new UI. Saved requests
+  are not scheduled jobs, and existing Soulseek, Downtify and Importer v5
+  workflows do not poll the intent table. Stable v1.17.1 remains unchanged.
+
+Enabling `KIMA_SPOTIFY_INTENTS_ENABLED=true` is a **separate, operator-owned
+staging decision**. Run and validate the additive schema migration first.
+Do not add this variable to a public Compose example, commit tokens, or
+automatically turn on the feature in production. Before any actual
+downloader submission, prove installed Downtify version/contracts,
+ownership/consent, safe retries, actual library/file identity, metadata
+matching and SSD-to-DAS import/hardlink behavior.

@@ -5,6 +5,7 @@ const mockOverview = jest.fn();
 const mockBoundQueue = jest.fn();
 const mockPermissionUser = jest.fn();
 const mockPrepareIntent = jest.fn();
+const mockListSavedIntents = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -15,6 +16,9 @@ jest.mock("../../services/unifiedDownloadOverview", () => ({
 }));
 jest.mock("../../services/spotifyIntentRegistry", () => ({
     prepareSpotifyIntent: (...args: unknown[]) => mockPrepareIntent(...args),
+    getSavedSpotifyIntents: (...args: unknown[]) => mockListSavedIntents(...args),
+    MAX_SPOTIFY_INTENT_PAGE_SIZE: 50,
+    MAX_SPOTIFY_INTENT_OFFSET: 1000,
 }));
 jest.mock("../../services/downtifyBoundQueue", () => ({
     getBoundDowntifyQueue: (...args: unknown[]) => mockBoundQueue(...args),
@@ -44,6 +48,10 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
 
 beforeEach(() => {
     delete process.env.KIMA_SPOTIFY_INTENTS_ENABLED;
+    mockListSavedIntents.mockReset().mockResolvedValue({
+        enabled: true, items: [], total: 0, displayed: 0,
+        limit: 20, offset: 0, hasMore: false, isDownloadQueue: false,
+    });
     mockPrepareIntent.mockReset().mockResolvedValue({
         id: "saved-intent-1", provider: "spotify", kind: "track",
         canonicalUrl: "https://open.spotify.com/track/0123456789ABCDEFGHIJKL",
@@ -321,5 +329,74 @@ describe("staged Spotify preparation — durable owner-scoped intents only", () 
         expect(response.status).toBe(503);
         expect(response.body).toEqual({ error: "Unable to prepare Spotify request" });
         expect(JSON.stringify(response.body)).not.toContain("/music/private");
+    });
+});
+
+describe("saved Spotify preparation listing", () => {
+    const readSaved = (url = "/api/download-manager/spotify/intents", account = "owner-A") =>
+        request(app).get(url).set("Authorization", "Bearer synthetic-test-token")
+            .set("X-Test-User", account);
+
+    it("requires login even when the feature is disabled", async () => {
+        const response = await request(app).get("/api/download-manager/spotify/intents");
+        expect(response.status).toBe(401);
+        expect(mockListSavedIntents).not.toHaveBeenCalled();
+    });
+
+    it("returns disabled capability without database or rights lookup if OFF", async () => {
+        const response = await readSaved();
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(response.body).toEqual({
+            enabled: false, items: [], displayed: 0, total: 0,
+            limit: 20, offset: 0, hasMore: false, isDownloadQueue: false,
+        });
+        expect(mockListSavedIntents).not.toHaveBeenCalled();
+        expect(mockPermissionUser).not.toHaveBeenCalled();
+    });
+
+    it("checks database download permission and refuses unauthorized users", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const response = await readSaved("/api/download-manager/spotify/intents?userId=other");
+        expect(response.status).toBe(403);
+        expect(mockListSavedIntents).not.toHaveBeenCalled();
+    });
+
+    it("uses only the signed-in owner even with forged query userId and role", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        const response = await readSaved("/api/download-manager/spotify/intents?limit=12&offset=3&userId=victim&role=admin", "owner-A");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(mockListSavedIntents).toHaveBeenCalledWith("owner-A", 12, 3);
+    });
+
+    it.each([
+        "?limit=0", "?limit=51", "?limit=-1", "?limit=1.25",
+        "?limit=invalid", "?limit[]=1", "?offset=-1", "?offset=1001",
+        "?offset[]=3",
+    ])("rejects %s without querying saved requests", async (qs) => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        const response = await readSaved("/api/download-manager/spotify/intents" + qs);
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: "Invalid pagination" });
+        expect(mockListSavedIntents).not.toHaveBeenCalled();
+    });
+
+    it("does not return database errors or private URLs", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        mockListSavedIntents.mockRejectedValue(new Error("private /music/userB/key"));
+        const response = await readSaved();
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({ error: "Unable to load prepared requests" });
+    });
+
+    it("never exposes update, cancel, delete or engine submission routes", async () => {
+        process.env.KIMA_SPOTIFY_INTENTS_ENABLED = "true";
+        expect((await request(app).patch("/api/download-manager/spotify/intents/x")).status).toBe(404);
+        expect((await request(app).delete("/api/download-manager/spotify/intents/x")).status).toBe(404);
+        expect(mockListSavedIntents).not.toHaveBeenCalled();
     });
 });

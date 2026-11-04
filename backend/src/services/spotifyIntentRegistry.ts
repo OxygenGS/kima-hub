@@ -98,3 +98,92 @@ export async function prepareSpotifyIntent(
         filesChangedByThisRequest: false,
     };
 }
+
+/**
+ * Bound, read-only view of saved *requests*. This never consults the
+ * downloader, and does not claim the requested audio exists in the library.
+ */
+export interface SavedSpotifyIntent {
+    id: string;
+    provider: "spotify";
+    kind: SpotifyDownloadKind | "unknown";
+    canonicalUrl: string | null;
+    requestState: SpotifyIntentStatus;
+    createdAt: string;
+    libraryDuplicateCheck: "not_checked";
+    engineStatus: "not_checked";
+}
+
+export interface SavedSpotifyIntentPage {
+    enabled: true;
+    items: SavedSpotifyIntent[];
+    total: number;
+    displayed: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+    isDownloadQueue: false;
+}
+
+export const MAX_SPOTIFY_INTENT_PAGE_SIZE = 50;
+export const MAX_SPOTIFY_INTENT_OFFSET = 1000;
+
+export async function getSavedSpotifyIntents(
+    userId: string,
+    limit = 20,
+    offset = 0,
+): Promise<SavedSpotifyIntentPage> {
+    if (!userId || !Number.isSafeInteger(limit) || limit < 1 ||
+        limit > MAX_SPOTIFY_INTENT_PAGE_SIZE ||
+        !Number.isSafeInteger(offset) || offset < 0 ||
+        offset > MAX_SPOTIFY_INTENT_OFFSET) {
+        throw new Error("Invalid Spotify intent listing");
+    }
+
+    // Both the count and selection are mandatory user-scoped. Even an admin
+    // has no implicit permission to browse other accounts' saved requests.
+    const where = { userId };
+    const [total, rows] = await Promise.all([
+        prisma.spotifyDownloadIntent.count({ where }),
+        prisma.spotifyDownloadIntent.findMany({
+            where,
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            skip: offset,
+            take: limit,
+            select: {
+                id: true,
+                kind: true,
+                spotifyId: true,
+                canonicalUrl: true,
+                status: true,
+                createdAt: true,
+            },
+        }),
+    ]);
+
+    const items: SavedSpotifyIntent[] = rows.map((row) => {
+        // DB rows are not an authorization source for showing arbitrary URLs.
+        // Re-parse and verify the stored canonical resource identity before
+        // returning a URL that the UI might render.
+        const parsed = parseSpotifyDownloadLink(row.canonicalUrl);
+        const valid = parsed !== null &&
+            parsed.intentKey === `spotify:${row.kind}:${row.spotifyId}` &&
+            parsed.canonicalUrl === row.canonicalUrl;
+        return {
+            id: row.id,
+            provider: "spotify",
+            kind: valid ? parsed.kind : "unknown",
+            canonicalUrl: valid ? parsed.canonicalUrl : null,
+            requestState: knownStatus(row.status),
+            createdAt: row.createdAt.toISOString(),
+            libraryDuplicateCheck: "not_checked",
+            engineStatus: "not_checked",
+        };
+    });
+
+    return {
+        enabled: true, items, total, displayed: items.length,
+        limit, offset, hasMore: offset + items.length < total,
+        isDownloadQueue: false,
+    };
+}
