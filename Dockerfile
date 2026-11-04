@@ -444,7 +444,7 @@ RUN chmod 644 /app/nonroot-services.py \
 WORKDIR /app
 
 # Copy healthcheck script
-COPY frontend/healthcheck.js /app/healthcheck.js
+COPY backend/healthcheck-stack.js /app/healthcheck.js
 
 # The AIO supervisor needs database/session credentials for backend startup.
 # Do not pass those inherited values into postgres, redis, frontend, or the
@@ -838,7 +838,7 @@ RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 EXPOSE 3030
 
 # Health check using Node.js (no wget)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
     CMD ["node", "/app/healthcheck.js"]
 
 # Volumes
