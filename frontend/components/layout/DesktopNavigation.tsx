@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, BookOpen, Compass, Home, Library, ListMusic, Podcast, Radio, Search, Sparkles } from "lucide-react";
+import { BarChart3, BookOpen, CalendarDays, Compass, Home, Library, ListMusic, Podcast, Radio, Search, Sparkles } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/language-context";
 import styles from "./DesktopNavigation.module.css";
 
@@ -11,6 +11,7 @@ const navigation = [
     { label: "Queue", href: "/queue", Icon: ListMusic, group: "library" },
     { label: "Radio", href: "/radio", Icon: Radio, group: "explore" },
     { label: "Discovery", href: "/discover", Icon: Compass, group: "explore" },
+    { label: "Release Radar", href: "/releases", Icon: CalendarDays, group: "explore" },
     { label: "Vibe", href: "/vibe", Icon: Sparkles, group: "explore" },
     { label: "Browse", href: "/browse/playlists", Icon: Search, group: "explore" },
     { label: "Podcasts", href: "/podcasts", Icon: Podcast, group: "explore" },
