@@ -201,3 +201,47 @@ untouched until a fully validated single-writer replacement exists. Next
 stages will add multi-account pairing and verified user-owned download jobs
 before exposing mutation actions, then the import/indexing pipeline and safe
 cross-filesystem file placement.
+
+
+## Phase B3: canonical Spotify link intake — preview only
+
+The next step adds a pure, no-network Spotify share-link validator and a
+permission-protected backend endpoint:
+
+\`POST /api/download-manager/spotify/preview\` with JSON
+\`{ "url": "https://open.spotify.com/track/<22-character-id>" }\`.
+
+- Requires Kima authentication **and the currently stored**
+  \`canDownloadTracks\` right, even though this step does not create a download.
+  The frontend only offers the form to permitted users; server authorization
+  remains the enforcement boundary.
+- Accepts \`https://open.spotify.com/{track|album|playlist}/{base62-id}\`,
+  supported \`intl-xx\` variants and native \`spotify:track:...\`,
+  \`spotify:album:...\`, \`spotify:playlist:...\` URIs. IDs must contain exactly
+  22 base62 characters; artist/episode/show links and URL shorteners are not
+  silently treated as track downloads. A short link must first be expanded by
+  the owner outside this endpoint.
+- Rejects insecure or non-Spotify hosts, credential-bearing links, fragments,
+  path injection, custom ports, malformed IDs and inputs over 2048 characters.
+  Validation performs **no redirect, DNS lookup, Spotify request, Downtify API
+  call, library scan or data write**.
+- Drops query/UTM tracking parameters and returns the canonical URL, immutable
+  resource kind and a stable \`spotify:{kind}:{id}\` **identity key** as a
+  building block for future owner-scoped deduplication. This key is not a
+  duplicate detection result and is not persisted to a job table yet.
+- Every accepted response explicitly returns
+  \`{ duplicateCheck: "not_checked", downloadStarted: false,
+  libraryVerification: "not_checked", submissionEnabled: false }\`.
+  These flags are truthful: an accepted link **is not queued, downloaded,
+  imported, indexed or checked for prior copies**.
+- The localized \`/downloads\` interface has an optional link-check form for
+  users with download permission, with a readable resource type and a clear
+  **no download started** warning. Invalid inputs never cause remote requests.
+
+The follow-up submission implementation must revalidate the canonical
+resource and current permissions on the server; create an atomic,
+idempotent per-Kima-user intent; check reliable library and existing-job
+identities; and verify the real installed Downtify download contract before
+enabling any actual POST to the remote engine. An accepted preview alone
+**must not** become a bypass around the future duplicate, ownership, quota,
+single-writer import or integrity checks.

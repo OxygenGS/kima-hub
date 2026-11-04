@@ -5,9 +5,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
     auth: vi.fn(),
     get: vi.fn(),
+    post: vi.fn(),
 }));
 vi.mock("@/lib/auth-context", () => ({ useAuth: mocks.auth }));
-vi.mock("@/lib/api", () => ({ api: { get: mocks.get } }));
+vi.mock("@/lib/api", () => ({ api: { get: mocks.get, post: mocks.post } }));
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "nl", t: (key: string) => key }),
 }));
@@ -54,6 +55,13 @@ beforeEach(() => {
         path.startsWith("/download-manager/downtify/jobs")
             ? remote("Downtify Track")
             : kima("Kima Track"));
+    mocks.post.mockReset().mockResolvedValue({
+        provider: "spotify", kind: "track",
+        canonicalUrl: "https://open.spotify.com/track/0123456789ABCDEFGHIJKL",
+        intentKey: "spotify:track:0123456789ABCDEFGHIJKL",
+        duplicateCheck: "not_checked", downloadStarted: false,
+        libraryVerification: "not_checked", submissionEnabled: false,
+    });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -122,5 +130,91 @@ describe("first Unified Download Manager page", () => {
         await mount();
         expect(host.querySelector("h1")).toBeNull();
         expect(host.textContent).not.toContain("Kima Track");
+    });
+});
+
+
+async function enterSpotifyLink(value: string) {
+    const input = host.querySelector<HTMLInputElement>("#spotify-intake-link");
+    expect(input).not.toBeNull();
+    await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, "value"
+        )?.set;
+        setter?.call(input, value);
+        input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+}
+
+describe("Spotify link preview — no download or import actions", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+
+    it("hides link intake from listeners without track download permission", async () => {
+        await mount();
+        expect(host.querySelector("#spotify-intake-link")).toBeNull();
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("shows a non-downloading link preview form to permitted users", async () => {
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "first-user", role: "user", canDownloadTracks: true },
+        });
+        await mount();
+        expect(host.textContent).toContain("Check Spotify link");
+        expect(host.textContent).toContain("Downloads are not available yet.");
+        expect(host.querySelector("#spotify-intake-link")).not.toBeNull();
+        expect(host.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("validates a link through only the dedicated preview endpoint", async () => {
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "first-user", role: "user", canDownloadTracks: true },
+        });
+        await mount();
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(new Event("submit", {
+                bubbles: true, cancelable: true,
+            }));
+        });
+        expect(mocks.post).toHaveBeenCalledWith("/download-manager/spotify/preview", { url: link });
+        expect(mocks.post).toHaveBeenCalledTimes(1);
+        expect(host.textContent).toContain("Valid Spotify link");
+        expect(host.textContent).toContain("No download started.");
+    });
+
+    it("clears a permitted user's preview when account or rights change", async () => {
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "first-user", role: "admin" },
+        });
+        await mount();
+        expect(host.querySelector("#spotify-intake-link")).not.toBeNull();
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "next-user", role: "user", canDownloadTracks: false },
+        });
+        await mount();
+        expect(host.querySelector("#spotify-intake-link")).toBeNull();
+    });
+
+    it("does not echo error internals if the validation endpoint fails", async () => {
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "first-user", role: "admin" },
+        });
+        mocks.post.mockRejectedValue(new Error("hidden-device-token: never-render"));
+        await mount();
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(new Event("submit", {
+                bubbles: true, cancelable: true,
+            }));
+        });
+        expect(host.textContent).toContain("Could not validate this Spotify link.");
+        expect(host.textContent).not.toContain("hidden-device-token");
     });
 });

@@ -3,6 +3,17 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Check Spotify link": "Check Spotify link",
+    "Preview a track, album or playlist link. Downloads are not available yet.": "Preview a track, album or playlist link. Downloads are not available yet.",
+    "Spotify track, album or playlist link": "Spotify track, album or playlist link",
+    "Checking link...": "Checking link...",
+    "Check link": "Check link",
+    "Could not validate this Spotify link.": "Could not validate this Spotify link.",
+    "Valid Spotify link": "Valid Spotify link",
+    "No download started. Library duplicate detection has not been performed.": "No download started. Library duplicate detection has not been performed.",
+    "Spotify track": "Spotify track",
+    "Spotify album": "Spotify album",
+    "Spotify playlist": "Spotify playlist",
     "Download Manager": "Download Manager",
     "Read-only preview": "Read-only preview",
     "Follow your downloads. No downloads, imports or files are changed here.": "Follow your downloads. No downloads, imports or files are changed here.",
@@ -2004,6 +2015,17 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Check Spotify link": "Spotify-link controleren",
+    "Preview a track, album or playlist link. Downloads are not available yet.": "Bekijk een nummer-, album- of afspeellijstlink. Downloaden is nog niet beschikbaar.",
+    "Spotify track, album or playlist link": "Spotify-link naar nummer, album of afspeellijst",
+    "Checking link...": "Link controleren...",
+    "Check link": "Link controleren",
+    "Could not validate this Spotify link.": "Deze Spotify-link kon niet worden gecontroleerd.",
+    "Valid Spotify link": "Geldige Spotify-link",
+    "No download started. Library duplicate detection has not been performed.": "Er is geen download gestart. De bibliotheek is nog niet op dubbele nummers gecontroleerd.",
+    "Spotify track": "Spotify-nummer",
+    "Spotify album": "Spotify-album",
+    "Spotify playlist": "Spotify-afspeellijst",
     "Download Manager": "Downloadbeheer",
     "Read-only preview": "Voorbeeld zonder wijzigingen",
     "Follow your downloads. No downloads, imports or files are changed here.": "Volg je downloads. Hier worden geen downloads, imports of bestanden gewijzigd.",
