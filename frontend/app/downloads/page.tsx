@@ -57,7 +57,7 @@ interface RemoteJobs {
 const phaseLabel: Record<Phase, TranslationKey> = {
     queued: "Queued",
     processing: "Processing",
-    downloaded: "Downloaded (not indexed)",
+    downloaded: "Download complete (index not checked)",
     failed: "Failed",
     cancelled: "Cancelled",
     unknown: "Unknown status",
