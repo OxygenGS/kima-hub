@@ -285,6 +285,24 @@ model DislikedEntity {
   @@index([userId, entityType])
 }
 
+// OxygenGS v1.18 — durable owner-scoped PREPARATION, not a download queue.
+// A prepared intent never triggers any scheduler, importer or file operation.
+model SpotifyDownloadIntent {
+  id            String   @id @default(cuid())
+  userId        String
+  kind          String
+  spotifyId     String
+  canonicalUrl  String
+  status        String   @default("prepared")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Atomic deduplication; identical links shared by two Kima users remain separate.
+  @@unique([userId, kind, spotifyId])
+  @@index([userId, createdAt])
+}
+
 model DownloadJob {
   id               String          @id @default(cuid())
   correlationId    String?         @unique
@@ -919,6 +937,7 @@ model User {
   discoveryBatches       DiscoveryBatch[]
   dislikedEntities       DislikedEntity[]
   downloadJobs           DownloadJob[]
+  spotifyDownloadIntents  SpotifyDownloadIntent[]
   hiddenPlaylists        HiddenPlaylist[]
   likedTracks            LikedTrack[]
   notifications          Notification[]
