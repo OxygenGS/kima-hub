@@ -503,13 +503,54 @@ function SpotifyLinkIntake() {
         }
     };
 
+
+    // A prepared request is not a job. The server rechecks all identities,
+    // proof and permissions immediately before any external submission.
+    const preparedOnPage = savedList?.items.find(item =>
+        item.kind === "track" && item.canonicalUrl === result?.canonicalUrl &&
+        item.requestState === "prepared"
+    );
+    const preparedId = savedResult
+        ? (savedResult.status === "prepared" ? savedResult.id : null)
+        : preparedOnPage?.id ?? null;
+    const canDispatch = dispatchCapability?.canSubmit === true &&
+        result?.kind === "track" && libraryEvidence?.status === "no_verified_match" &&
+        !!preparedId && !submitAttempted;
+
+    const submitTrack = async () => {
+        if (!canDispatch || !ackUnverified || !preparedId || submitting ||
+            saving || checking || libraryChecking) return;
+        const epoch = ++requestEpoch.current;
+        setSubmitting(true);
+        setSubmitAttempted(true); // lost HTTP reply must never auto-retry
+        setSubmission(null);
+        setSubmissionError(false);
+        try {
+            const response = await api.post<DispatchResponse>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(preparedId) + "/submit",
+                { acknowledgeUnverified: true }
+            );
+            if (requestEpoch.current === epoch) {
+                setSubmission(response);
+                setListReload(n => n + 1);
+            }
+        } catch {
+            if (requestEpoch.current === epoch) {
+                setSubmissionError(true);
+                setListReload(n => n + 1);
+            }
+        } finally {
+            if (requestEpoch.current === epoch) setSubmitting(false);
+        }
+    };
+
     return (
         <section aria-labelledby="spotify-intake-title" className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
             <h2 id="spotify-intake-title" className="text-lg font-semibold text-white">
                 {t("Check Spotify link")}
             </h2>
             <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
-                {t("Preview a track, album or playlist link. Downloads are not available yet.")}
+                {t("Preview Spotify links. Track submission requires an explicitly configured Downtify connection.")}
             </p>
             <form onSubmit={(event) => { void check(event); }} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="min-w-0 flex-1">
@@ -522,7 +563,7 @@ function SpotifyLinkIntake() {
                         inputMode="url"
                         autoComplete="off"
                         maxLength={2048}
-                        disabled={saving || libraryChecking}
+                        disabled={saving || libraryChecking || submitting}
                         value={link}
                         onChange={(event) => {
                             requestEpoch.current++;
@@ -533,6 +574,10 @@ function SpotifyLinkIntake() {
                             setSaveError(false);
                             setLibraryEvidence(null);
                             setLibraryError(false);
+                            setAckUnverified(false);
+                            setSubmission(null);
+                            setSubmissionError(false);
+                            setSubmitAttempted(false);
                             setChecking(false);
                         }}
                         placeholder="https://open.spotify.com/track/..."
@@ -541,7 +586,7 @@ function SpotifyLinkIntake() {
                 </div>
                 <button
                     type="submit"
-                    disabled={!link.trim() || checking || saving || libraryChecking}
+                    disabled={!link.trim() || checking || saving || libraryChecking || submitting}
                     className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {checking ? t("Checking link...") : t("Check link")}
@@ -560,7 +605,7 @@ function SpotifyLinkIntake() {
                         {result.kind === "track" && (
                             <button
                                 type="button"
-                                disabled={libraryChecking || saving || checking}
+                                disabled={libraryChecking || saving || checking || submitting}
                                 onClick={() => { void verifyLibrary(); }}
                                 className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                             >
@@ -580,7 +625,7 @@ function SpotifyLinkIntake() {
                         {savedList?.enabled && (
                             <button
                                 type="button"
-                                disabled={saving || checking || libraryChecking}
+                                disabled={saving || checking || libraryChecking || submitting}
                                 onClick={() => { void save(); }}
                                 className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                             >
@@ -625,9 +670,7 @@ function SpotifyLinkIntake() {
                                         {item.kind === "unknown" ? t("Unknown source") : t(kindLabel[item.kind])}
                                     </span>
                                     <span className="text-xs text-[var(--text-muted)]">
-                                        {item.requestState === "prepared"
-                                            ? t("Prepared only — not sent for download")
-                                            : t("Request state not independently verified")}
+                                        {t(savedRequestLabel[item.requestState])}
                                     </span>
                                 </div>
                                 <p className="mt-1 break-all text-xs text-[var(--text-secondary)]">
