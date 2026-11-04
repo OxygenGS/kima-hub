@@ -329,9 +329,25 @@ img {
     color: transparent;
 }
 
+/* Match browser-owned inputs, date pickers and scrollbars to our dark UI. */
+:root {
+    color-scheme: dark;
+    accent-color: var(--color-brand);
+}
+/* Firefox: avoid overriding the custom WebKit scrollbar in Chromium. */
+@supports not selector(::-webkit-scrollbar) {
+    :root {
+        scrollbar-color: var(--bg-hover) transparent;
+    }
+}
+::selection {
+    background: color-mix(in oklab, var(--color-brand) 35%, transparent);
+}
+
 body {
     background: var(--bg-primary);
     color: #e5e5e5;
+    caret-color: var(--color-brand);
     font-family: var(--font-montserrat), -apple-system, BlinkMacSystemFont,
         "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     min-height: 100vh;
