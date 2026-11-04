@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireMusicPermission } from "../middleware/auth";
 import {
     getUnifiedDownloadOverview,
     MAX_DOWNLOAD_OFFSET,
@@ -7,6 +7,7 @@ import {
 } from "../services/unifiedDownloadOverview";
 import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
+import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
 
 const router = Router();
 
@@ -55,5 +56,35 @@ router.get("/downtify/jobs", requireAuth, async (req, res) => {
         });
     }
 });
+
+
+/**
+ * Preview a Spotify link without resolving media or creating a download.
+ * Require persisted track download permission even for the preparatory step.
+ * This endpoint will never accept a user-supplied engine server address.
+ */
+router.post(
+    "/spotify/preview",
+    (req, res, next) => {
+        res.setHeader("Cache-Control", "no-store");
+        next();
+    },
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        const input = req.body !== null && typeof req.body === "object" &&
+            !Array.isArray(req.body) ? req.body.url : undefined;
+        const preview = parseSpotifyDownloadLink(input);
+        if (!preview) {
+            return res.status(400).json({
+                error: "Unsupported Spotify track, album or playlist link",
+            });
+        }
+
+        // Nothing was checked against a music library or remote download queue.
+        // No network request, queue entry or filesystem operation occurs here.
+        return res.json(preview);
+    }
+);
 
 export default router;
