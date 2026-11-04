@@ -207,7 +207,7 @@ describe("prepared Spotify request owner-scoped feed", () => {
             ["owner", 20, -1], ["owner", 20, 1001], ["owner", 0.5, 0],
             ["owner", 20, Number.NaN],
         ] as const) {
-            await expect(getSavedSpotifyIntents(...args)).rejects.toThrow("Invalid Spotify intent listing");
+            await expect(getSavedSpotifyIntents(args[0], args[1], args[2])).rejects.toThrow("Invalid Spotify intent listing");
         }
         expect(mockCount).not.toHaveBeenCalled();
         expect(mockFindMany).not.toHaveBeenCalled();
