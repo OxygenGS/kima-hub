@@ -137,7 +137,7 @@ describe("owner-bound Downtify read-only route", () => {
 
 describe("Spotify link intake preview, no downloads submitted", () => {
     const id = "0123456789ABCDEFGHIJKL";
-    const post = (body: unknown = { url: "https://open.spotify.com/track/" + id }) =>
+    const post = (body: object | string = { url: "https://open.spotify.com/track/" + id }) =>
         request(app).post("/api/download-manager/spotify/preview")
             .set("Authorization", "Bearer synthetic-test-token")
             .set("X-Test-User", "account-A").send(body);
