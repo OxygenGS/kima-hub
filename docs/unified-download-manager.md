@@ -67,6 +67,30 @@ Leave `KIMA_DOWNTIFY_ENABLED` unset to disable all outbound requests. No
 configuration is changed automatically on an installed server. The endpoint
 is not yet a user-facing Download Manager.
 
+## Phase B1: user-scoped Kima download overview (this follow-up PR)
+
+The first shared status schema is read-only:
+`GET /api/download-manager/jobs?limit=50&offset=0` requires an authenticated
+Kima session/token and always filters existing non-cleared `DownloadJob`
+records by the **authenticated** `userId`. There is no request field to
+choose a different user, not even for administrators. The maximum page size
+is 100 and the maximum offset is 1000; results have stable newest-first order.
+
+Recognized Kima job types are `soulseek-search` (Soulseek) and
+`artist`/`album` (Lidarr). Unrecognized job types remain `unknown`, never
+silently attributed to Downtify. Known statuses are normalized to queued,
+processing, downloaded, failed or cancelled; unknown states remain unknown.
+A completed download reports **libraryVerification: "not_checked"**, not
+"indexed" or "playable". Progress is `null` until it comes from a validated
+engine status. The response does not reveal source paths, peer identities,
+raw errors, Kima user IDs, upstream addresses, auth tokens or metadata.
+
+**Downtify per-job data is intentionally excluded** (`downtifyJobsIncluded:
+false`) while owner mapping and live-version API capabilities remain
+unverified. The admin-only Downtify capability probe from Phase A is separate.
+This initial overview is a backend contract for a future shared UI, not a
+fully functional download dashboard. It creates no jobs and touches no music.
+
 ## Phases B–F (separate PRs after the running server contract is confirmed)
 
 1. **Safe queues and identity:** map Downtify jobs and Soulseek downloads to
