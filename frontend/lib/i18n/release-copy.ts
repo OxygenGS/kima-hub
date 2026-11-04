@@ -49,6 +49,62 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.17.1
+    "1.17.1": {
+        "titles": {
+            "Kima Hub 1.17.1 \u2014 Upstream Polish": "Kima Hub 1.17.1 \u2014 Upstream-verbeteringen"
+        },
+        "summaries": {
+            "Faster home loading, sharper protected covers, Release Radar navigation, better Docker health and more polished controls.": "Een sneller startscherm, scherpere beveiligde hoezen, Release Radar in het menu, betere Docker-controle en verfijnde bediening."
+        },
+        "items": {
+            "fork.1171.health": {
+                "title": "Betrouwbare controle van de volledige Docker-container",
+                "summary": "De container is pas gezond als web, API, database, Redis en benodigde analyzers werken.",
+                "body": "De alles-in-\u00e9\u00e9n-container controleert nu het startscherm, de backend, PostgreSQL en Redis en ook MusiCNN en CLAP, tenzij CLAP is uitgeschakeld. Een opstartmarge van vijf minuten voorkomt foutieve meldingen tijdens het starten. Problemen worden met een duidelijke oorzaak in het Docker-gezondheidslog gemeld.",
+                "links": {}
+            },
+            "fork.1171.home": {
+                "title": "Het startscherm laadt onderdelen afzonderlijk",
+                "summary": "Bekijk beschikbare aanbevelingen en collecties zonder op de langzaamste aanvraag te wachten.",
+                "body": "Recent beluisterde muziek, nieuwe toevoegingen, aanbevelingen, mixes, populaire artiesten, podcasts en luisterboeken laden onafhankelijk. Alleen onderdelen die nog laden krijgen een tijdelijke weergave; de beveiliging bij accountwisselingen blijft intact. Statistieken passen zich bovendien aan de beschikbare breedte aan wanneer zijpanelen geopend zijn.",
+                "links": {
+                    "/": "Open startscherm",
+                    "/stats": "Bekijk statistieken"
+                }
+            },
+            "fork.1171.artwork": {
+                "title": "Scherpere albumhoezen en minder lege afbeeldingen",
+                "summary": "Krijg geschikte afbeeldingsgroottes op scherpe schermen en blader zonder snelle limietoverschrijding.",
+                "body": "De browser kiest voortaan een passende afbeeldingsgrootte voor bibliotheekhoezen, met een bestaande maximale breedte van 2048 pixels. Beveiligde afbeelding-URL's, controle per aanvraag en afbeeldingen van andere bronnen blijven ongewijzigd. De limiet voor albumhoezen gaat van 500 naar 3000 aanvragen per minuut per IP-adres; alle andere API-, login- en webhooklimieten blijven gelijk.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            },
+            "fork.1171.radar": {
+                "title": "Release Radar in het menu op desktop en mobiel",
+                "summary": "Open nieuwe en binnenkort verschijnende albums rechtstreeks via de navigatie.",
+                "body": "De al bestaande pagina Release Radar staat nu in het desktopmenu onder Verkennen en bij de snelle links op mobiel. De gegevens van gevolgde artiesten en de bestaande bevoegdheden voor albumaanvragen blijven ongewijzigd. Engelse en Nederlandse labels volgen de gekozen interfacetaal.",
+                "links": {
+                    "/releases": "Open Release Radar"
+                }
+            },
+            "fork.1171.mosaics": {
+                "title": "Nettere hoezen voor mixes en afspeellijsten",
+                "summary": "Vul de afbeeldingsruimte zonder dubbele hoezen of lege vlakken.",
+                "body": "Bij twee hoezen staan ze naast elkaar, bij drie staat \u00e9\u00e9n grote naast twee kleinere en vier hoezen vullen een raster van twee bij twee. Dubbele afbeeldingen verdwijnen en een mislukte hoes laat geen leeg vlak achter. Nederlandse knoppen, afspeellijsten, toetsenbordbediening, voortgang en toegangsrechten blijven behouden.",
+                "links": {
+                    "/browse/playlists": "Bekijk afspeellijsten"
+                }
+            },
+            "fork.1171.polish": {
+                "title": "Donkere systeembediening en toegankelijke speler",
+                "summary": "Verbeter invoervelden, tekstselectie en herkenning van Nu afspelen voor schermlezers.",
+                "body": "De eigen invoervelden, datumkiezers, geselecteerde tekst, invoercursor en Firefox-schuifbalken volgen beter de donkere vormgeving. Schermlezers herkennen de speler op desktop en mobiel als Nu afspelen; de afspeelknoppen houden een afzonderlijke naam. De audio-engine, wachtrij, OpenSubsonic-inlogmethode en database blijven ongewijzigd.",
+                "links": {}
+            }
+        }
+    },
     // release-candidate:1.17.0
     "1.17.0": {
         "titles": {

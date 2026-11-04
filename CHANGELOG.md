@@ -1,6 +1,30 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.17.0 — release preparation (unpublished)
+## OxygenGS fork v1.17.1 — release preparation (unpublished)
+
+Kima Hub v1.17.1 selectively integrates nine independently tested reliability, UI and accessibility backports from official upstream Kima v1.12.2, while preserving OxygenGS Library Intelligence and modern native-client authentication.
+
+### Faster and more reliable operation
+- PR #180: replace the frontend-only AIO health check with the complete web, backend, PostgreSQL, Redis and optional analyzer readiness probe; allow 300 seconds for cold startup.
+- PR #182: display each Home shelf as soon as its own query completes without leaking data across account changes.
+- PR #181: make Stats figures fit their real container width with both sidebars open.
+
+### Artwork and navigation
+- PR #183: use browser-selected responsive variants for authenticated library cover art, respecting the existing 2048px resize cap and protected cache behavior.
+- PR #185: draw distinct mix/playlist covers as adaptive one-, two-, three- or four-tile mosaics; remove broken images and reflow the remaining tiles.
+- PR #186: raise only the authenticated artwork rate budget from 500 to 3000 requests per IP per minute; keep every other API, login and webhook limit unchanged.
+- PR #184: expose the existing Release Radar in the desktop and mobile navigation without changing its API or download permissions.
+
+### Interface and accessibility
+- PR #187: match native browser controls, text selection, typing caret and Firefox scrollbars to the dark theme.
+- PR #188: label desktop/mobile player landmarks as Now Playing while retaining the separate Playback controls group and established player behaviors.
+
+### Upgrade and security safeguards
+- No new PostgreSQL migration, music file move, new dependency, native-client authentication change, new LAION-CLAP music model or automatic re-enrichment is included. The existing v1.17.0 library database migration still requires careful backup and compatible rollback planning.
+- Independently back up the entire persistent /data volume and verify a restore before upgrading. Preserve existing /music mounts, collection permissions and the dedicated Soulseek import folder.
+- This is an unpublished source candidate, not a Docker image or permission to deploy. After its CI passes, separately run a native AMD64/ARM64 preflight on the exact main SHA, compare residual security findings with the previously reviewed baseline, and obtain explicit approval before any stable tag or image publication.
+
+## OxygenGS fork v1.17.0 — released 2026-11-04
 
 Kima Hub v1.17.0 introduces Library Intelligence and the privacy and Soulseek fixes merged from PRs #175 and #176.
 
@@ -24,9 +48,9 @@ Kima Hub v1.17.0 introduces Library Intelligence and the privacy and Soulseek fi
 - This release introduces a PostgreSQL migration and a manual album override trigger. Back up the entire persistent /data volume and independently verify restore before upgrading; keep /music mount points and ownership unchanged.
 - A tag downgrade alone does not reverse migrated data; rollback requires a tested pre-upgrade backup when necessary.
 - Upstream Kima v1.12 audio-model replacement and background re-enrichment are not included.
-- This is an unpublished source candidate. Native security review, release preflight and explicit stable publication approval are separate gates.
+- This version was published after native AMD64/ARM64 preflight and separate stable-release approval. The previously reviewed residual image advisories remain documented in docs/image-security.md.
 
-## OxygenGS fork v1.16.2 — release preparation (unpublished)
+## OxygenGS fork v1.16.2 — released 2026-10-31
 
 Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles on artist and MusicBrainz album pages after the published v1.16.1 download-permission hotfix.
 
@@ -41,7 +65,7 @@ Kima Hub v1.16.2 restores accurate per-track availability for Soulseek singles o
 - Includes backend catalog matching, cached-release and scanner regression coverage plus frontend mixed-availability tests. PR #173 passed backend/frontend tests, typechecks, security/privacy guards, AIO smoke and native no-push builds.
 - No schema migration, music file movement or retagging, new download permission, Soulseek transport change, authentication change or artwork recovery change.
 - Back up persistent `/data` and independently verify restore before upgrading; keep the existing `/music` mount and dedicated Soulseek import folder permissions unchanged.
-- This source candidate is not a published image or installation instruction. Native AMD64/ARM64 preflight and review of remaining HIGH/CRITICAL advisories are required; a separate explicit approval is needed before a stable tag and Docker publication.
+- The v1.16.2 stable image was published on 2026-10-31; native image checks and any subsequent upgrades are governed by the documented release safeguards.
 
 ## OxygenGS fork v1.16.1 — released 2026-10-30
 
