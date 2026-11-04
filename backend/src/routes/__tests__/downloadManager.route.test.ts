@@ -7,6 +7,8 @@ const mockPermissionUser = jest.fn();
 const mockPrepareIntent = jest.fn();
 const mockListSavedIntents = jest.fn();
 const mockLibraryEvidence = jest.fn();
+const mockDispatchCapability = jest.fn();
+const mockDispatchRequest = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -14,6 +16,10 @@ jest.mock("../../services/unifiedDownloadOverview", () => ({
     MAX_DOWNLOAD_PAGE_SIZE: 100,
     MAX_DOWNLOAD_OFFSET: 1000,
     getUnifiedDownloadOverview: (...args: unknown[]) => mockOverview(...args),
+}));
+jest.mock("../../services/downtifyTrackDispatch", () => ({
+    getDispatchCapability: (...args: unknown[]) => mockDispatchCapability(...args),
+    dispatchPreparedSpotifyTrack: (...args: unknown[]) => mockDispatchRequest(...args),
 }));
 jest.mock("../../services/spotifyLibraryEvidence", () => ({
     checkSpotifyLibraryEvidence: (...args: unknown[]) => mockLibraryEvidence(...args),
@@ -51,6 +57,13 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockDispatchCapability.mockReset().mockReturnValue({
+        state: "disabled", canSubmit: false, singleTrackOnly: true,
+    });
+    mockDispatchRequest.mockReset().mockResolvedValue({
+        state: "submitted", libraryVerified: false,
+        downloadInKimaVerified: false, remotePostSent: true,
+    });
     delete process.env.KIMA_SPOTIFY_INTENTS_ENABLED;
     mockLibraryEvidence.mockReset().mockResolvedValue({
         provider: "spotify", kind: "track", status: "recording_match_on_disk",
@@ -486,5 +499,114 @@ describe("read-only Spotify ISRC/on-disk library verification", () => {
         expect((await request(app).delete("/api/download-manager/spotify/check-library")).status).toBe(404);
         expect((await request(app).put("/api/download-manager/spotify/check-library").send({})).status).toBe(404);
         expect(mockLibraryEvidence).not.toHaveBeenCalled();
+    });
+});
+
+
+describe("pinned, default-off single-track Downtify submission route", () => {
+    const id = "intent-abc123";
+    const post = (body: object = { acknowledgeUnverified: true }, owner = "owner-1") =>
+        request(app).post("/api/download-manager/spotify/intents/" + id + "/submit")
+            .set("Authorization", "Bearer synthetic-test-token")
+            .set("X-Test-User", owner)
+            .send(body);
+    const capability = (owner = "owner-1") => request(app)
+        .get("/api/download-manager/spotify/dispatch-capability")
+        .set("Authorization", "Bearer synthetic-test-token")
+        .set("X-Test-User", owner);
+
+    it("requires a Kima session for capability and submission", async () => {
+        expect((await request(app).get("/api/download-manager/spotify/dispatch-capability")).status).toBe(401);
+        expect((await request(app).post("/api/download-manager/spotify/intents/" + id + "/submit").send({})).status).toBe(401);
+        expect(mockDispatchCapability).not.toHaveBeenCalled();
+        expect(mockDispatchRequest).not.toHaveBeenCalled();
+    });
+
+    it("is disabled by default and cannot reach a remote engine", async () => {
+        const status = await capability();
+        expect(status.status).toBe(200);
+        expect(status.headers["cache-control"]).toBe("no-store");
+        expect(status.body).toEqual({ state: "disabled", canSubmit: false, singleTrackOnly: true });
+        const response = await post();
+        expect(response.status).toBe(404);
+        expect(response.body.error).toBe("Downtify submission not available");
+        expect(mockDispatchRequest).not.toHaveBeenCalled();
+    });
+
+    it("denies the latest DB permissions even for a forged admin request", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        const response = await post({
+            acknowledgeUnverified: true, role: "admin",
+            userId: "victim", remoteBase: "http://evil.example", deviceToken: "secret",
+        });
+        expect(response.status).toBe(403);
+        expect(mockDispatchRequest).not.toHaveBeenCalled();
+        expect(mockDispatchCapability).not.toHaveBeenCalled();
+    });
+
+    it("ignores client-supplied users, remote URLs, tokens and song objects", async () => {
+        mockDispatchCapability.mockReturnValue({ state: "available", canSubmit: true, singleTrackOnly: true });
+        const res = await post({
+            acknowledgeUnverified: true, userId: "victim",
+            downtifyUserId: 77, server: "https://evil.example",
+            song: { song_id: "wrong" },
+        });
+        expect(res.status).toBe(202);
+        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, true);
+        expect(JSON.stringify(res.body)).not.toContain("evil.example");
+        expect(JSON.stringify(res.body)).not.toContain("victim");
+        expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    it("requires explicit real boolean acknowledgement, never a string truthy value", async () => {
+        mockDispatchCapability.mockReturnValue({ state: "available", canSubmit: true, singleTrackOnly: true });
+        mockDispatchRequest.mockResolvedValue({
+            state: "confirmation_required", libraryVerified: false,
+            downloadInKimaVerified: false, remotePostSent: false,
+        });
+        const response = await post({ acknowledgeUnverified: "true" });
+        expect(response.status).toBe(400);
+        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, false);
+    });
+
+    it("returns conservative states without retries for remote timeouts or local matches", async () => {
+        mockDispatchCapability.mockReturnValue({ state: "available", canSubmit: true, singleTrackOnly: true });
+        for (const [state, status] of [
+            ["dispatch_unknown", 202],
+            ["library_present", 409],
+            ["needs_library_review", 409],
+            ["already_attempted", 409],
+            ["already_claimed", 409],
+            ["remote_unavailable", 503],
+            ["remote_unauthorized", 503],
+            ["remote_incompatible", 503],
+            ["already_in_remote_queue", 200],
+        ] as const) {
+            mockDispatchRequest.mockResolvedValue({
+                state, libraryVerified: false,
+                downloadInKimaVerified: false, remotePostSent: false,
+            });
+            const response = await post();
+            expect(response.status).toBe(status);
+            expect(response.body.state).toBe(state);
+        }
+    });
+
+    it("redacts unexpected database errors and never authorizes an automatic retry", async () => {
+        mockDispatchCapability.mockReturnValue({ state: "available", canSubmit: true, singleTrackOnly: true });
+        mockDispatchRequest.mockRejectedValue(new Error("/music/private secret device token"));
+        const response = await post();
+        expect(response.status).toBe(503);
+        expect(response.body.error).toContain("do not retry automatically");
+        expect(JSON.stringify(response.body)).not.toContain("private");
+        expect(JSON.stringify(response.body)).not.toContain("token");
+    });
+
+    it("has no cancel/delete/queue clear actions", async () => {
+        expect((await request(app).delete("/api/download-manager/spotify/intents/" + id + "/submit")).status).toBe(404);
+        expect((await request(app).patch("/api/download-manager/spotify/intents/" + id + "/submit").send({})).status).toBe(404);
+        expect(mockDispatchRequest).not.toHaveBeenCalled();
     });
 });
