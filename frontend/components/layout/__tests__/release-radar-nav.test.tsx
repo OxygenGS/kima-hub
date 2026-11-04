@@ -4,7 +4,7 @@ import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/releases" }));
 vi.mock("next/link", () => ({
-    default: (p: { href: string; children: React.ReactNode; "aria-current"?: string }) =>
+    default: (p: React.ComponentProps<"a">) =>
         <a href={p.href} aria-current={p["aria-current"]}>{p.children}</a>,
 }));
 vi.mock("@/lib/i18n/language-context", () => ({
