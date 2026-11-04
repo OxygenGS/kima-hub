@@ -65,7 +65,7 @@ router.get("/downtify/jobs", requireAuth, async (req, res) => {
  */
 router.post(
     "/spotify/preview",
-    (req, res, next) => {
+    (_req, res, next) => {
         res.setHeader("Cache-Control", "no-store");
         next();
     },
