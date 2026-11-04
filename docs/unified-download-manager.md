@@ -3,7 +3,7 @@
 **Status:** development; **not in published v1.17.1**. The existing Downtify
 Importer v5 and its systemd service/timer are **not replaced** by this change.
 Downtify continues to run independently; Kima is the future orchestration UI.
-The first phase adds only read-only diagnostics with no filesystem or queue writes.
+The current backend stages add read-only diagnostics, a caller-scoped Kima job feed and a narrowly bound Downtify queue. No filesystem or queue writes are included.
 
 ## Source contracts and boundaries
 
@@ -174,3 +174,30 @@ Do not change Soulseek's restricted write directory. Keep the future work
 separated from upstream Kima internals so newer upstream releases remain
 mergeable. Release publication remains gated behind CI, native
 AMD64/ARM64 security preflight and explicit version-specific approval.
+
+## Phase D1: first Download Manager screen (this PR)
+
+The responsive **/downloads** page is a read-only overview, linked from the
+desktop library navigation and the mobile quick links in both English and
+Dutch. The Kima section reads only the caller's recent 50 DownloadJob records
+from the authenticated backend endpoint. The separate Downtify section reads
+the optional, verified one-owner queue from Phase B2. Disabled, unbound,
+unavailable, incompatible and unauthorized remote states show explanatory
+text rather than implied successful downloads. No unbound user's remote jobs
+are exposed, including when the paired remote account is an administrator.
+
+Rows show conservative transfer stages, only actual remote percentage values,
+and **do not** claim a completed transfer is indexed in the Kima library.
+The page refreshes its two independent sources every ten seconds **only while
+the browser tab is visible**. An in-flight request from a previous Kima account
+cannot populate the next user's page because the subtree is keyed by account
+and unmounted requests are ignored. A failed engine does not hide the working
+engine's results. Existing Soulseek and Library Intelligence views remain
+available.
+
+This is **not** a command console yet: no URL submission, search/download,
+cancel/retry, playlist imports or staging cleanup. The old importer continues
+untouched until a fully validated single-writer replacement exists. Next
+stages will add multi-account pairing and verified user-owned download jobs
+before exposing mutation actions, then the import/indexing pipeline and safe
+cross-filesystem file placement.
