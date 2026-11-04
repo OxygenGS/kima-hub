@@ -91,6 +91,49 @@ unverified. The admin-only Downtify capability probe from Phase A is separate.
 This initial overview is a backend contract for a future shared UI, not a
 fully functional download dashboard. It creates no jobs and touches no music.
 
+## Phase B2: read-only, single-account Downtify queue binding
+
+**Important:** Downtify's `GET /api/queue` returns **every user** when the
+paired Downtify account is an administrator, although regular users see only
+their own jobs. A device token alone does not establish a Kima user's rights.
+Downtify also merges shared downloads into one row with a `user_ids` array.
+
+The optional `GET /api/download-manager/downtify/jobs` endpoint therefore
+uses a narrow, explicitly operator-configured identity binding. The Kima
+backend must have the existing three Phase A variables **plus**:
+
+```dotenv
+# Optional owner binding, only for the trusted and separately paired account.
+# These are placeholders, not values to copy literally.
+KIMA_DOWNTIFY_OWNER_KIMA_USER_ID=<Kima user database id>
+KIMA_DOWNTIFY_EXPECTED_USERNAME=<paired Downtify account username>
+```
+
+The bound Kima user ID comes from the authenticated Kima session and **must
+match exactly**; query parameters cannot override it. The adapter first
+verifies the public Downtify server identity with **no device token**, then
+validates the remote device's authenticated account and expected username.
+Only jobs whose `user_ids` explicitly contain the authenticated Downtify
+user's numeric ID are included. This check is necessary **even for remote
+administrators**, who can otherwise read other accounts' jobs.
+
+The endpoint returns at most 100 minimal, sanitized job rows: opaque hashed
+ID, track title, stage (queued, processing, downloaded, failed, unknown) and
+validated 0–100% transfer progress where provided by Downtify. It does **not**
+return the remote song IDs/links, other users, file paths, raw errors, Spotify
+metadata, tokens, Downtify usernames or external filesystem paths. Every
+result uses `libraryVerification: "not_checked"` because an upstream done
+state does not prove that Kima has indexed the correct usable track.
+Misconfigured, disabled or unbound access returns no jobs. Requests do not
+write to the Downtify queue and do not touch the existing importer.
+
+This **single-user binding is a deliberately limited interim safety measure**,
+not full multi-user account pairing. It cannot support multiple simultaneous
+Kima↔Downtify account mappings. Extend it with per-user encrypted credentials,
+revocation and explicit user consent in a later isolated PR before advertising
+fully shared multi-user download management. Do not enable this optional
+feature for everyone by reusing an unrestricted administrator token.
+
 ## Phases B–F (separate PRs after the running server contract is confirmed)
 
 1. **Safe queues and identity:** map Downtify jobs and Soulseek downloads to
