@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.17.1 — release preparation (unpublished)
+## OxygenGS fork v1.17.1 — released 2026-11-04
 
 Kima Hub v1.17.1 selectively integrates nine independently tested reliability, UI and accessibility backports from official upstream Kima v1.12.2, while preserving OxygenGS Library Intelligence and modern native-client authentication.
 
@@ -22,7 +22,7 @@ Kima Hub v1.17.1 selectively integrates nine independently tested reliability, U
 ### Upgrade and security safeguards
 - No new PostgreSQL migration, music file move, new dependency, native-client authentication change, new LAION-CLAP music model or automatic re-enrichment is included. The existing v1.17.0 library database migration still requires careful backup and compatible rollback planning.
 - Independently back up the entire persistent /data volume and verify a restore before upgrading. Preserve existing /music mounts, collection permissions and the dedicated Soulseek import folder.
-- This is an unpublished source candidate, not a Docker image or permission to deploy. After its CI passes, separately run a native AMD64/ARM64 preflight on the exact main SHA, compare residual security findings with the previously reviewed baseline, and obtain explicit approval before any stable tag or image publication.
+- The v1.17.1 source was approved and published after native AMD64/ARM64 preflight #41838331069, documented residual-vulnerability review, stable-release gate #41841115999 and native Docker image publication #41841145420. The existing known image advisories remain documented in docs/image-security.md. Live installations must still be backed up and upgraded separately.
 
 ## OxygenGS fork v1.17.0 — released 2026-11-04
 
