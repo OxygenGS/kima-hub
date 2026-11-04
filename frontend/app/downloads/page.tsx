@@ -2,7 +2,8 @@
 
 /**
  * v1.18.0 Download Manager preview.
- * Read-only: no download submission, file moves, imports or remote mutations.
+ * Request preparation is a feature-gated database write only. No download
+ * submission, file moves, imports or remote mutations.
  * Account-keyed subtree prevents previous-user results being displayed after
  * logout/login; the backend independently enforces ownership for both feeds.
  */
@@ -81,6 +82,31 @@ interface SpotifyLinkPreview {
     downloadStarted: false;
     libraryVerification: "not_checked";
     submissionEnabled: false;
+}
+
+interface SavedSpotifyIntent {
+    id: string;
+    kind: SpotifyLinkPreview["kind"] | "unknown";
+    canonicalUrl: string | null;
+    requestState: "prepared" | "submitted" | "completed" | "failed" | "unknown";
+    createdAt: string;
+    libraryDuplicateCheck: "not_checked";
+    engineStatus: "not_checked";
+}
+interface SavedSpotifyIntentPage {
+    enabled: boolean;
+    items: SavedSpotifyIntent[];
+    total: number;
+    displayed: number;
+    hasMore: boolean;
+    isDownloadQueue: false;
+}
+interface PreparedSpotifyIntentResponse {
+    id: string;
+    alreadyPrepared: boolean;
+    submittedByThisRequest: false;
+    downloadStartedByThisRequest: false;
+    filesChangedByThisRequest: false;
 }
 
 const POLL_MS = 10_000;
@@ -163,9 +189,9 @@ function AccountDownloads({ canPrepareSpotify }: { canPrepareSpotify: boolean })
     return (
         <div className="pb-24">
             <PageHeader
-                eyebrow={t("Read-only preview")}
+                eyebrow={t("Preview and preparation")}
                 title={t("Download Manager")}
-                description={t("Follow your downloads. No downloads, imports or files are changed here.")}
+                description={t("Follow downloads and prepare requests. No downloads, imports or files are changed here.")}
                 actions={
                     <button
                         type="button"
@@ -290,9 +316,9 @@ function DownloadRow({ subject, source, phase, date, progress }: {
 
 
 /**
- * Preparatory validation only. The backend does NOT look up metadata, query
- * the library or submit the link to Downtify; there is intentionally no
- * action button to trigger a download until dedupe and job ownership exist.
+ * Link checking stays read-only. A separate opt-in "Save prepared request"
+ * action persists an owner-scoped intent but never contacts an engine,
+ * imports a file or claims that Spotify media exists in the library.
  */
 function SpotifyLinkIntake() {
     const { t } = useLanguage();
@@ -300,9 +326,37 @@ function SpotifyLinkIntake() {
     const [result, setResult] = useState<SpotifyLinkPreview | null>(null);
     const [checking, setChecking] = useState(false);
     const [error, setError] = useState(false);
+    const [savedList, setSavedList] = useState<SavedSpotifyIntentPage | null>(null);
+    const [listError, setListError] = useState(false);
+    const [listReload, setListReload] = useState(0);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState(false);
+    const [savedResult, setSavedResult] = useState<PreparedSpotifyIntentResponse | null>(null);
     const requestEpoch = useRef(0);
 
     useEffect(() => () => { requestEpoch.current++; }, []);
+
+    useEffect(() => {
+        let active = true;
+        const load = async () => {
+            try {
+                const response = await api.get<SavedSpotifyIntentPage>(
+                    "/download-manager/spotify/intents?limit=20&offset=0"
+                );
+                if (active) {
+                    setSavedList(response);
+                    setListError(false);
+                }
+            } catch {
+                if (active) {
+                    setSavedList(null);
+                    setListError(true);
+                }
+            }
+        };
+        void load();
+        return () => { active = false; };
+    }, [listReload]);
 
     const kindLabel: Record<SpotifyLinkPreview["kind"], TranslationKey> = {
         track: "Spotify track",
@@ -318,6 +372,8 @@ function SpotifyLinkIntake() {
         setChecking(true);
         setResult(null);
         setError(false);
+        setSavedResult(null);
+        setSaveError(false);
         try {
             const response = await api.post<SpotifyLinkPreview>(
                 "/download-manager/spotify/preview", { url: link }
@@ -328,6 +384,28 @@ function SpotifyLinkIntake() {
             if (requestEpoch.current === epoch) setError(true);
         } finally {
             if (requestEpoch.current === epoch) setChecking(false);
+        }
+    };
+
+    const save = async () => {
+        if (!savedList?.enabled || !result || saving) return;
+        const epoch = ++requestEpoch.current;
+        setSaving(true);
+        setSaveError(false);
+        setSavedResult(null);
+        try {
+            const prepared = await api.post<PreparedSpotifyIntentResponse>(
+                "/download-manager/spotify/intents",
+                { url: result.canonicalUrl }
+            );
+            if (requestEpoch.current === epoch) {
+                setSavedResult(prepared);
+                setListReload((n) => n + 1);
+            }
+        } catch {
+            if (requestEpoch.current === epoch) setSaveError(true);
+        } finally {
+            if (requestEpoch.current === epoch) setSaving(false);
         }
     };
 
@@ -356,6 +434,8 @@ function SpotifyLinkIntake() {
                             setLink(event.target.value);
                             setResult(null);
                             setError(false);
+                            setSavedResult(null);
+                            setSaveError(false);
                             setChecking(false);
                         }}
                         placeholder="https://open.spotify.com/track/..."
@@ -380,8 +460,74 @@ function SpotifyLinkIntake() {
                         <p className="text-xs text-[var(--text-muted)]">
                             {t("No download started. Library duplicate detection has not been performed.")}
                         </p>
+                        {savedList?.enabled && (
+                            <button
+                                type="button"
+                                disabled={saving || checking}
+                                onClick={() => { void save(); }}
+                                className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                            >
+                                {saving ? t("Saving prepared request...") : t("Save prepared request (no download)")}
+                            </button>
+                        )}
+                        {savedResult && (
+                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                {savedResult.alreadyPrepared
+                                    ? t("Request already saved. No new download started.")
+                                    : t("Request saved. No download started.")}
+                            </p>
+                        )}
+                        {saveError && (
+                            <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                {t("Could not save the prepared request.")}
+                            </p>
+                        )}
                     </div>
                 ) : null}
+            </div>
+            <div className="mt-5 border-t border-white/10 pt-4">
+                <h3 className="mb-2 text-sm font-semibold text-white">{t("Saved Spotify requests")}</h3>
+                {listError ? (
+                    <p role="status" className="text-sm text-[var(--text-muted)]">
+                        {t("Could not load saved requests.")}
+                    </p>
+                ) : savedList === null ? (
+                    <p role="status" className="text-sm text-[var(--text-muted)]">{t("Loading...")}</p>
+                ) : !savedList.enabled ? (
+                    <p className="text-sm text-[var(--text-muted)]">
+                        {t("Saving requests is disabled on this server.")}
+                    </p>
+                ) : savedList.items.length === 0 ? (
+                    <p className="text-sm text-[var(--text-muted)]">{t("No prepared Spotify requests yet.")}</p>
+                ) : (
+                    <ul className="space-y-2" aria-label={t("Saved Spotify requests")}>
+                        {savedList.items.map((item) => (
+                            <li key={item.id} className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-medium text-white">
+                                        {item.kind === "unknown" ? t("Unknown source") : t(kindLabel[item.kind])}
+                                    </span>
+                                    <span className="text-xs text-[var(--text-muted)]">
+                                        {item.requestState === "prepared"
+                                            ? t("Prepared only — not sent for download")
+                                            : t("Request state not independently verified")}
+                                    </span>
+                                </div>
+                                <p className="mt-1 break-all text-xs text-[var(--text-secondary)]">
+                                    {item.canonicalUrl ?? t("Invalid stored link")}
+                                </p>
+                            </li>
+                        ))}
+                        {savedList.hasMore && (
+                            <li className="text-xs text-[var(--text-muted)]">
+                                {t("Showing up to 20 prepared requests.")}
+                            </li>
+                        )}
+                    </ul>
+                )}
+                <p className="mt-3 text-xs text-[var(--text-muted)]">
+                    {t("Prepared requests do not confirm a library match or start Downtify.")}
+                </p>
             </div>
         </section>
     );
