@@ -37,10 +37,9 @@ function record(v: unknown): v is Record<string, unknown> {
     return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 function cleanText(v: unknown, max: number): string | null {
-    if (typeof v !== "string") return null;
+    if (typeof v !== "string" || /[\u0000-\u001f\u007f]/.test(v)) return null;
     const value = v.trim();
-    return value && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value)
-        ? value : null;
+    return value && value.length <= max ? value : null;
 }
 const outcome = (state: DispatchState, sent = false): DispatchResult => ({
     state, libraryVerified: false, downloadInKimaVerified: false, remotePostSent: sent,
