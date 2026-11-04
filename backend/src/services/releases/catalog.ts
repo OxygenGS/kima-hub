@@ -101,6 +101,87 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.17.1
+    {
+        "version": "1.17.1",
+        "title": "Kima Hub 1.17.1 \u2014 Upstream Polish",
+        "summary": "Faster home loading, sharper protected covers, Release Radar navigation, better Docker health and more polished controls.",
+        "date": "2026-11-04",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1171.health",
+                "title": "Real full-stack Docker health checks",
+                "summary": "Report healthy only when the web, API, database, Redis and required analyzers are ready.",
+                "body": "The all-in-one container now checks the frontend, the backend health endpoint, PostgreSQL and Redis, plus MusiCNN and CLAP unless CLAP is disabled. A five-minute startup grace covers first boot. Failures provide a reason in the container health log instead of a misleading healthy web-only result.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.1171.home",
+                "title": "Home shelves appear as soon as they load",
+                "summary": "Browse ready recommendations and collections without waiting for the slowest request.",
+                "body": "Recently played music, recent additions, recommendations, mixes, popular artists, podcasts and audiobooks load independently. The app keeps placeholders only for pending rows and preserves the cross-account authentication boundary. Stats cards also resize to the actual space left when side panels are open.",
+                "links": [
+                    {
+                        "href": "/",
+                        "label": "Open Home"
+                    },
+                    {
+                        "href": "/stats",
+                        "label": "View stats"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1171.artwork",
+                "title": "Sharper private album artwork and fewer blank covers",
+                "summary": "Pick sharper cover variants on high-density displays and allow cover-heavy navigation.",
+                "body": "Library cover art now offers responsive image widths chosen by the browser, capped at the existing 2048-pixel backend limit. Existing authenticated image URLs, private revalidation and non-library image behavior remain unchanged. The per-IP cover-art request budget is raised from 500 to 3000 per minute; all other API, login and webhook limits stay in place.",
+                "links": [
+                    {
+                        "href": "/collection?tab=albums",
+                        "label": "Browse albums"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1171.radar",
+                "title": "Release Radar in desktop and mobile navigation",
+                "summary": "Open upcoming and recently released albums directly from the menus.",
+                "body": "The existing Release Radar page is now linked from the desktop Explore navigation and mobile quick links. Its monitored-artist data and permission-aware album requests are unchanged. English and Dutch labels follow the selected interface language.",
+                "links": [
+                    {
+                        "href": "/releases",
+                        "label": "Open Release Radar"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1171.mosaics",
+                "title": "Cleaner mix and playlist cover mosaics",
+                "summary": "Use every available cover without duplicate tiles or empty cells.",
+                "body": "Two covers share a row, three show one tall cover beside two smaller images, and four fill a two-by-two grid. Duplicate images are removed and a failed cover no longer leaves an empty tile. Existing localized actions, playlist handling, card focus, progress and permissions remain intact.",
+                "links": [
+                    {
+                        "href": "/browse/playlists",
+                        "label": "Browse playlists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1171.polish",
+                "title": "Dark browser controls and accessible Now Playing",
+                "summary": "Improve native form controls, text selection and player landmarks without changing playback.",
+                "body": "The browser's own input controls, date pickers, selection highlight, caret and Firefox scrollbars now follow Kima's dark design. Screen readers can find the desktop and mobile Now Playing region by name; the inner playback controls keep their separate label. No audio engine, queue, OpenSubsonic authentication or database schema is changed.",
+                "links": []
+            }
+        ]
+    },
     // release-candidate:1.17.0
     {
         "version": "1.17.0",

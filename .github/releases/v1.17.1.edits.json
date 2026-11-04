@@ -1,0 +1,97 @@
+[
+  {
+    "path": "README.md",
+    "before": "## Development candidate: v1.17.0 (unpublished)\n\nLibrary Intelligence is undergoing release review. There is no published v1.17.0 Docker image. The latest published stable release remains v1.16.2.\n\n## Latest stable release: v1.16.2\n\n**Soulseek singles in artist albums.** v1.16.2 makes verified local Soulseek singles playable in the correct artist and album catalogs. The dedicated, limited-write download folder and Artwork Recovery remain available.\n\n[See what's new in v1.16.2](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) · [View the changelog](CHANGELOG.md)",
+    "after": "## Development candidate: v1.17.1 (unpublished)\n\nNine selectively integrated upstream v1.12.2 refinements are under release review. v1.17.1 has not been published or deployed. The latest stable image remains v1.17.0.\n\n## Latest stable release: v1.17.0\n\n**Library Intelligence.** v1.17.0 adds Library Doctor, a Smart Download Inbox and reviewed, reversible album corrections. It also preserves the privacy, Soulseek and modern OpenSubsonic improvements from earlier releases.\n\n[See what's new in v1.17.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) · [View the changelog](CHANGELOG.md)"
+  },
+  {
+    "path": "README.md",
+    "before": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.16.2`",
+    "after": "**Published image:** `ghcr.io/oxygengs/kima-hub:v1.17.0`"
+  },
+  {
+    "path": "README.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.2",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.17.0"
+  },
+  {
+    "path": "README.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.2 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.0 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "README.md",
+    "before": "The v1.16.2 release adds no new schema migration.",
+    "after": "The published v1.17.0 release introduced a PostgreSQL migration for reversible album links. v1.17.1 adds no further schema migration; always back up /data and verify a restore."
+  },
+  {
+    "path": "README.md",
+    "before": "- **Safer Soulseek downloads:** a dedicated `Singles/Kima Downloads` import folder for the non-root backend; existing music folders retain their permissions.",
+    "after": "- **Safer Soulseek downloads:** a dedicated `Singles/Kima Downloads` import folder for the non-root backend; existing music folders retain their permissions.\n- **Library Intelligence:** on-demand Library Doctor reports, a Smart Download Inbox and manually reviewed, reversible album corrections.\n- **Upstream v1.12 refinements (next candidate):** progressive Home rows, responsive protected covers, full-stack health checks, Release Radar navigation and focused interface accessibility improvements."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Current published fork release:** [v1.16.2](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) — Soulseek singles in artist albums",
+    "after": "**Current published fork release:** [v1.17.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) — Library Intelligence and reversible album corrections"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.16.2`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.16.2 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.16.2) has been published and the Docker publication workflow has completed successfully.",
+    "after": "The all-in-one Docker image for this release is `ghcr.io/oxygengs/kima-hub:v1.17.0`, with native **linux/amd64** and **linux/arm64** support. Install it only after the [v1.17.0 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.0) has been published and the Docker publication workflow has completed successfully."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**v1.17.0 is a source-only release candidate, not a published image.** Do not switch a running installation to `v1.17.0` until a signed-off release and native image preflight are complete. Unlike v1.16.2, v1.17.0 contains a PostgreSQL migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify a restore to an independent test instance, and keep the existing `/music` mount unchanged. If rolling back across the migration, restore the pre-upgrade `/data` backup; changing the image tag alone does not downgrade the database.",
+    "after": "**v1.17.1 is an unpublished source candidate, not a published image.** The currently published stable image is v1.17.0. v1.17.1 adds no new PostgreSQL migration or audio re-enrichment, but the stable v1.17.0 release already contains a database migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify an independent restore and keep `/music` mounted exactly as before. Never point an older image at a migrated database; restore the matching pre-upgrade `/data` backup when rolling back across a migration."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "  ghcr.io/oxygengs/kima-hub:v1.16.2",
+    "after": "  ghcr.io/oxygengs/kima-hub:v1.17.0"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.16.2 docker compose -f docker-compose.prod.yml up -d",
+    "after": "MUSIC_PATH=/absolute/path/to/music VERSION=v1.17.0 docker compose -f docker-compose.prod.yml up -d"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "    image: ghcr.io/oxygengs/kima-hub:v1.16.2",
+    "after": "    image: ghcr.io/oxygengs/kima-hub:v1.17.0"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "4. Select `ghcr.io/oxygengs/kima-hub:v1.16.2` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.",
+    "after": "4. Select `ghcr.io/oxygengs/kima-hub:v1.17.0` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Database migration note:** v1.16.2 introduces **no new schema migration**. When upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` extension and three search indexes may still need to be created. Allow disk space and I/O time, particularly with large libraries.",
+    "after": "**Database migration note:** v1.17.0 introduced a PostgreSQL migration for reversible album links, and v1.17.1 adds no new one. When upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` extension and three search indexes may still need to be created. Allow disk space and I/O time, particularly with large libraries."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.16.2` | Versioned production release; pin a tag or immutable digest. |",
+    "after": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.17.0` | Versioned production release; pin a tag or immutable digest. |"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "before": "## OxygenGS fork v1.17.0 — release preparation (unpublished)",
+    "after": "## OxygenGS fork v1.17.0 — released 2026-11-04"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "before": "- This is an unpublished source candidate. Native security review, release preflight and explicit stable publication approval are separate gates.",
+    "after": "- This version was published after native AMD64/ARM64 preflight and separate stable-release approval. The previously reviewed residual image advisories remain documented in docs/image-security.md."
+  },
+  {
+    "path": "CHANGELOG.md",
+    "before": "## OxygenGS fork v1.16.2 — release preparation (unpublished)",
+    "after": "## OxygenGS fork v1.16.2 — released 2026-10-31"
+  },
+  {
+    "path": "CHANGELOG.md",
+    "before": "- This source candidate is not a published image or installation instruction. Native AMD64/ARM64 preflight and review of remaining HIGH/CRITICAL advisories are required; a separate explicit approval is needed before a stable tag and Docker publication.",
+    "after": "- The v1.16.2 stable image was published on 2026-10-31; native image checks and any subsequent upgrades are governed by the documented release safeguards."
+  }
+]
