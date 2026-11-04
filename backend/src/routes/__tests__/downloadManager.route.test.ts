@@ -1,0 +1,86 @@
+import express, { type NextFunction, type Request, type Response } from "express";
+import request from "supertest";
+
+const mockOverview = jest.fn();
+jest.mock("../../services/unifiedDownloadOverview", () => ({
+    MAX_DOWNLOAD_PAGE_SIZE: 100,
+    MAX_DOWNLOAD_OFFSET: 1000,
+    getUnifiedDownloadOverview: (...args: unknown[]) => mockOverview(...args),
+}));
+jest.mock("../../utils/logger", () => ({
+    logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
+}));
+jest.mock("../../middleware/auth", () => ({
+    requireAuth: (req: Request, res: Response, next: NextFunction) => {
+        const id = req.header("x-test-user");
+        if (!id || !req.header("authorization")) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+        req.user = { id, role: "user" } as Request["user"];
+        next();
+    },
+}));
+
+import downloadManagerRoutes from "../downloadManager";
+
+const app = express();
+app.use("/api/download-manager", downloadManagerRoutes);
+const read = (user = "user-A", path = "/api/download-manager/jobs") =>
+    request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
+
+beforeEach(() => {
+    mockOverview.mockReset().mockResolvedValue({
+        items: [], total: 0, displayed: 0, limit: 50, offset: 0,
+        hasMore: false, pageCounts: {
+            queued: 0, processing: 0, downloaded: 0,
+            failed: 0, cancelled: 0, unknown: 0,
+        }, downtifyJobsIncluded: false,
+    });
+});
+
+describe("read-only unified job feed", () => {
+    it("does not query Kima jobs when unauthenticated", async () => {
+        const res = await request(app).get("/api/download-manager/jobs");
+        expect(res.status).toBe(401);
+        expect(mockOverview).not.toHaveBeenCalled();
+    });
+
+    it("uses authenticated identity, ignoring a forged userId or admin claim", async () => {
+        const response = await read("user-A", "/api/download-manager/jobs?userId=user-B&role=admin");
+        expect(response.status).toBe(200);
+        expect(mockOverview).toHaveBeenCalledWith("user-A", 50, 0);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        expect(response.body.downtifyJobsIncluded).toBe(false);
+    });
+
+    it("accepts strictly bounded page size and offset", async () => {
+        const response = await read("user-C", "/api/download-manager/jobs?limit=100&offset=1000");
+        expect(response.status).toBe(200);
+        expect(mockOverview).toHaveBeenCalledWith("user-C", 100, 1000);
+    });
+
+    it.each([
+        "?limit=0", "?limit=101", "?limit=-1", "?limit=1.5", "?limit=abc",
+        "?offset=-1", "?offset=1001", "?offset=abc", "?limit[]=5",
+    ])("rejects %s before touching the database", async (q) => {
+        const response = await read("user-A", "/api/download-manager/jobs" + q);
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: "Invalid pagination" });
+        expect(mockOverview).not.toHaveBeenCalled();
+    });
+
+    it("returns a generic failure without leaking DB errors, paths or secrets", async () => {
+        mockOverview.mockRejectedValue(new Error("secret=never-return /music/private/file.flac"));
+        const response = await read();
+        expect(response.status).toBe(500);
+        expect(response.body).toEqual({ error: "Unable to load download overview" });
+        expect(JSON.stringify(response.body)).not.toContain("never-return");
+    });
+
+    it("has no route for download creation, modification or cancellation", async () => {
+        expect((await request(app).post("/api/download-manager/jobs").send({})).status).toBe(404);
+        expect((await request(app).patch("/api/download-manager/jobs/any").send({})).status).toBe(404);
+        expect((await request(app).delete("/api/download-manager/jobs/any")).status).toBe(404);
+        expect(mockOverview).not.toHaveBeenCalled();
+    });
+});
