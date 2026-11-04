@@ -11,7 +11,7 @@ vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "nl", t: (text: string) => text }),
 }));
 vi.mock("@/lib/branding-context", () => ({
-    useBranding: () => ({ branding: { name: "Chillverse" } }),
+    useBranding: () => ({ branding: { name: "Custom Library" } }),
 }));
 vi.mock("@/lib/auth-context", () => ({
     useAuth: () => ({ logout: vi.fn(async () => {}) }),
@@ -55,6 +55,6 @@ describe("release radar navigation", () => {
         const link = host.querySelector('a[href="/releases"]');
         expect(link?.textContent).toContain("Release Radar");
         expect(link?.getAttribute("aria-current")).toBe("page");
-        expect(host.textContent).toContain("Chillverse");
+        expect(host.textContent).toContain("Custom Library");
     });
 });
