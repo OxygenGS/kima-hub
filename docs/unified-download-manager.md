@@ -245,3 +245,54 @@ identities; and verify the real installed Downtify download contract before
 enabling any actual POST to the remote engine. An accepted preview alone
 **must not** become a bypass around the future duplicate, ownership, quota,
 single-writer import or integrity checks.
+
+
+## Phase B4: atomic prepared Spotify request identities (this PR)
+
+This is an **additive v1.18.0 database migration**, with its own
+\`SpotifyDownloadIntent\` table. Do not confuse these rows with Kima
+\`DownloadJob\` rows. The existing Lidarr/Soulseek scheduling and the
+independent Downtify importer **never consume prepared intents**.
+
+- The Kima user who is currently authenticated owns the row. The database
+  enforces a \`UNIQUE(userId, kind, spotifyId)\` index and a foreign key
+  with account-delete cascade. An identical share URL, a \`spotify:\`
+  URI and a URL with tracking parameters resolve to the **same key**.
+  Track, album and playlist identities remain distinct. Another Kima
+  account has its own independent requests.
+- \`POST /api/download-manager/spotify/intents\` is **disabled by default**.
+  An operator must explicitly set \`KIMA_SPOTIFY_INTENTS_ENABLED=true\`
+  in the Kima backend environment on a staging instance to permit prepared
+  intent registration. When unset, the route returns 404 and writes nothing.
+  This does **not** activate the Downtify engine connection or importer.
+- The route requires a real Kima session and checks the **currently stored**
+  \`canDownloadTracks\` right (administrator exception as in existing
+  Kima acquisition routes). A caller cannot override their \`userId\`.
+  It re-parses the Spotify link server-side before any write.
+- The first request creates a **prepared-only** record and returns HTTP 201.
+  The database uniqueness constraint arbitrates concurrent requests;
+  a duplicate returns the **same id** with \`alreadyPrepared: true\`
+  and HTTP 200 instead of allocating another row. A record that later
+  acquires a richer status is never reset by a repeated prepare call.
+- A successful response states the narrow scope explicitly:
+  \`duplicateScope: this_users_prepared_intents_only\`,
+  \`libraryDuplicateCheck: not_checked\`,
+  \`submittedByThisRequest: false\`, \`downloadStartedByThisRequest:
+  false\` and \`filesChangedByThisRequest: false\`.
+
+**Critical distinction:** "already prepared" is proof of a duplicate
+request **for one Kima account**, not proof that the track is present in
+the music library, already downloaded via Soulseek, or imported via
+Downtify. The current Kima \`Track\` model has ISRC and MusicBrainz
+recording IDs but **no verified Spotify ID map**; Downtify's published
+metadata contract does not promise ISRC/recording identity. No fabricated
+cross-provider file deduplication occurs here. Albums and playlists are
+never marked complete because one matching track was found.
+
+This phase has no end-user **Save** button yet: the default-off backend
+endpoint and additive migration are a controlled staging foundation.
+Future PRs will add a truthful user-facing saved-intent view, trusted
+metadata evidence and a per-user engine submission state machine.
+Before any real engine writes, verify the installed Downtify API version,
+permission mapping, existing file availability, Importer v5 handoff,
+idempotent retries and safe SSD-to-DAS cross-filesystem movement.

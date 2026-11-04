@@ -8,6 +8,7 @@ import {
 import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
+import { prepareSpotifyIntent } from "../services/spotifyIntentRegistry";
 
 const router = Router();
 
@@ -84,6 +85,44 @@ router.post(
         // Nothing was checked against a music library or remote download queue.
         // No network request, queue entry or filesystem operation occurs here.
         return res.json(preview);
+    }
+);
+
+
+/**
+ * Staged, default-OFF durable Spotify request preparation.
+ *
+ * A prepared intent is not a job. No downloader is called, even when a
+ * request already exists; atomic uniqueness only prevents duplicate
+ * preparation rows for the SAME user and SAME Spotify resource.
+ */
+router.post(
+    "/spotify/intents",
+    requireAuth,
+    (_req, res, next) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (process.env.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
+            return res.status(404).json({ error: "Spotify intent preparation unavailable" });
+        }
+        next();
+    },
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const input = req.body !== null && typeof req.body === "object" &&
+            !Array.isArray(req.body) ? req.body.url : undefined;
+        try {
+            const prepared = await prepareSpotifyIntent(req.user.id, input);
+            if (!prepared) {
+                return res.status(400).json({
+                    error: "Unsupported Spotify track, album or playlist link",
+                });
+            }
+            return res.status(prepared.alreadyPrepared ? 200 : 201).json(prepared);
+        } catch {
+            // Never reflect database errors, bearer tokens, SQL, or private URLs.
+            return res.status(503).json({ error: "Unable to prepare Spotify request" });
+        }
     }
 );
 
