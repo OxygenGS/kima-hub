@@ -115,11 +115,11 @@ export async function probeDowntify(
         configured: true,
     };
 
-    const request = async (path: string): Promise<unknown> => {
+    const request = async (path: string, authenticated: boolean): Promise<unknown> => {
         const response = await http.get<unknown>(new URL(path, config.base).toString(), {
             headers: {
-                Authorization: `Bearer ${config.token}`,
                 Accept: "application/json",
+                ...(authenticated ? { Authorization: `Bearer ${config.token}` } : {}),
             },
             timeout: REQUEST_TIMEOUT_MS,
             maxContentLength: MAX_RESPONSE_BYTES,
@@ -132,20 +132,20 @@ export async function probeDowntify(
     try {
         // Identity check first: do not send another request if this is not an
         // authenticated Downtify instance with compatible mobile API.
-        const info = await request("/api/server/info");
+        const info = await request("/api/server/info", false);
         if (!validRecord(info) || info.product !== "Downtify" ||
             info.api_version !== 1 || info.require_sign_in !== true) {
             return { ...base, state: "incompatible" };
         }
 
         const version = safeVersion(info.version);
-        const auth = await request("/api/auth/status");
+        const auth = await request("/api/auth/status", true);
         if (!validRecord(auth) || auth.signed_in !== true ||
             auth.via !== "device" || auth.auth_disabled !== false) {
             return { ...base, state: "unauthorized", version };
         }
 
-        const queue = await request("/api/queue/state");
+        const queue = await request("/api/queue/state", true);
         if (!validRecord(queue) ||
             typeof queue.paused !== "boolean" ||
             !["running", "pausing", "paused"].includes(String(queue.state)) ||
