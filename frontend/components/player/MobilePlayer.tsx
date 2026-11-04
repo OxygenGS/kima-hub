@@ -54,7 +54,7 @@ export function MobilePlayer() {
     );
 
     return (
-        <section className={styles.shell} aria-label={t("Playback controls")} data-mobile-player>
+        <section className={styles.shell} aria-label={t("Now Playing")} data-mobile-player>
             <div className={styles.card} {...swipe}>
                 <div className={styles.progress} aria-hidden="true">
                     <span style={{ width: `${boundedProgress(progress)}%` }} />
