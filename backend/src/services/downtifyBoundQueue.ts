@@ -109,7 +109,7 @@ export async function getBoundDowntifyQueue(
         const auth = await get("/api/auth/status", true);
         if (!record(auth) || auth.signed_in !== true || auth.via !== "device" ||
             auth.auth_disabled !== false || !record(auth.user) ||
-            !Number.isSafeInteger(auth.user.id) || (auth.user.id as number) < 1 ||
+            typeof auth.user.id !== "number" || !Number.isSafeInteger(auth.user.id) || auth.user.id < 1 ||
             typeof auth.user.username !== "string" ||
             auth.user.username.toLowerCase() !== remoteUsername.toLowerCase()) {
             return result("unauthorized");
