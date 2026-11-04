@@ -96,7 +96,7 @@ is not yet a user-facing Download Manager.
    missing mount, cross-filesystem moves and rollback on a copied test library.
    Maintain a tested cold `/data` restore. Only when the integrated pipeline
    works should the owner authorize disabling and deleting the existing
-   `chillverse-downtify-import.service`, timer and Importer v5 scripts.
+   legacy external-import systemd service, timer and Importer v5 scripts.
 
 ## Existing deployment invariants
 
