@@ -57,23 +57,64 @@ function stop(handler: () => void) {
     };
 }
 
-function Cover({ imageUrl, title, sizes, FallbackIcon }: {
+/**
+ * Reusable mosaic: one cover fills the card, two split into columns, three put
+ * one tall tile beside two smaller tiles, and four fill a 2x2 grid.
+ * Bad or duplicate URLs do not leave blank cells behind.
+ */
+export function CoverArt({ imageUrl, title, sizes, FallbackIcon }: {
     imageUrl?: string | string[] | null;
     title: string;
     sizes: string;
     FallbackIcon: LucideIcon;
 }) {
-    const [broken, setBroken] = useState(false);
-    const urls = (Array.isArray(imageUrl) ? imageUrl : [imageUrl]).filter((url): url is string => !!url);
-    if (urls.length === 0 || broken) return <FallbackIcon className="w-10 h-10 text-[var(--text-muted)]" />;
-    if (urls.length === 1) {
-        return <CachedImage src={urls[0]} alt={title} fill sizes={sizes} className="object-cover cover-zoom" onError={() => setBroken(true)} />;
+    const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+    const fail = (url: string) => setFailed((prev) => new Set(prev).add(url));
+    const urls = [
+        ...new Set((Array.isArray(imageUrl) ? imageUrl : [imageUrl])
+            .filter((url): url is string => !!url)),
+    ].filter((url) => !failed.has(url)).slice(0, 4);
+
+    if (urls.length === 0) {
+        return <FallbackIcon className="w-10 h-10 text-[var(--text-muted)]" />;
     }
+
+    if (urls.length === 1) {
+        return (
+            <CachedImage
+                key={urls[0]}
+                src={urls[0]}
+                alt={title}
+                fill
+                sizes={sizes}
+                className="object-cover cover-zoom"
+                onError={() => fail(urls[0])}
+            />
+        );
+    }
+
     return (
-        <div className="grid grid-cols-2 w-full h-full cover-zoom">
-            {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className="relative flex items-center justify-center">
-                    {urls[i] ? <CachedImage src={urls[i]} alt="" fill sizes="100px" className="object-cover" /> : <FallbackIcon className="w-6 h-6 text-[var(--text-muted)]" />}
+        <div
+            data-cover-count={urls.length}
+            className={cn("grid grid-cols-2 w-full h-full cover-zoom", urls.length > 2 && "grid-rows-2")}
+        >
+            {urls.map((url, index) => (
+                <div
+                    key={url}
+                    data-cover-cell
+                    className={cn(
+                        "relative bg-[#181818]",
+                        urls.length === 3 && index === 0 && "row-span-2",
+                    )}
+                >
+                    <CachedImage
+                        src={url}
+                        alt=""
+                        fill
+                        sizes={urls.length === 2 || (urls.length === 3 && index === 0) ? sizes : "100px"}
+                        className="object-cover"
+                        onError={() => fail(url)}
+                    />
                 </div>
             ))}
         </div>
@@ -97,7 +138,7 @@ export const MediaCard = memo(function MediaCard({
                 "rounded-lg ring-1 ring-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.35)]",
                 aspect === "portrait" ? "aspect-[2/3]" : "aspect-square", cardStyles.art,
             )}>
-                <Cover key={String(imageUrl)} imageUrl={imageUrl} title={title} sizes={sizes} FallbackIcon={fallbackIcon} />
+                <CoverArt key={String(imageUrl)} imageUrl={imageUrl} title={title} sizes={sizes} FallbackIcon={fallbackIcon} />
                 {badge && <div className="absolute top-2 left-2">{badge}</div>}
                 {corner && <div className="absolute top-2 right-2">{corner}</div>}
                 {progress !== undefined && progress > 0 && (
