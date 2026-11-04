@@ -9,6 +9,7 @@ import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
 import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence";
+import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services/downtifyTrackDispatch";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -191,6 +192,63 @@ router.post(
             return res.status(503).json({ error: "Unable to prepare Spotify request" });
         }
     }
+);
+
+
+/**
+ * Read-only dispatch capability. This reveals no token, remote account ID,
+ * server address, music path or matching user's identity.
+ */
+router.get(
+    "/spotify/dispatch-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getDispatchCapability(req.user.id));
+    },
+);
+
+/**
+ * Explicit single-track submission only. Default OFF; operator must pin the
+ * exact Downtify server ID and remote user's numeric ID before any write.
+ * A caller cannot supply a Downtify URL, other user's ID, or arbitrary song.
+ */
+router.post(
+    "/spotify/intents/:intentId/submit",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        const capability = getDispatchCapability(req.user.id);
+        if (!capability.canSubmit) {
+            return res.status(404).json({ error: "Downtify submission not available" });
+        }
+
+        const body = req.body && typeof req.body === "object" &&
+            !Array.isArray(req.body) ? req.body : {};
+        const ack = body.acknowledgeUnverified === true;
+        try {
+            const result = await dispatchPreparedSpotifyTrack(req.user.id, req.params.intentId, ack);
+            if (result.state === "submitted") return res.status(202).json(result);
+            if (result.state === "already_in_remote_queue") return res.status(200).json(result);
+            // A timed-out HTTP response does NOT prove the remote job absent.
+            // Return a non-retriable application status and preserve DB claim.
+            if (result.state === "dispatch_unknown") return res.status(202).json(result);
+            if (result.state === "confirmation_required") return res.status(400).json(result);
+            if (result.state === "not_found") return res.status(404).json(result);
+            if (result.state === "remote_unavailable" ||
+                result.state === "remote_unauthorized" ||
+                result.state === "remote_incompatible") return res.status(503).json(result);
+            return res.status(409).json(result);
+        } catch {
+            // An unexpected storage error might happen after a remote POST.
+            // Never echo secrets, errors or paths and never advertise retry.
+            return res.status(503).json({ error: "Submission state unavailable; do not retry automatically" });
+        }
+    },
 );
 
 export default router;
