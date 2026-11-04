@@ -3,6 +3,15 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Recording match found in indexed local file (audio not decoded).": "Recording match found in indexed local file (audio not decoded).",
+    "Catalog recording match exists, but its audio file was not verified.": "Catalog recording match exists, but its audio file was not verified.",
+    "No proven local recording match. This does not prove the song is absent.": "No proven local recording match. This does not prove the song is absent.",
+    "Spotify metadata is unavailable. Local presence is unknown.": "Spotify metadata is unavailable. Local presence is unknown.",
+    "Recording identity could not be verified.": "Recording identity could not be verified.",
+    "Library evidence currently supports individual tracks only.": "Library evidence currently supports individual tracks only.",
+    "Checking library recording...": "Checking library recording...",
+    "Check local recording": "Check local recording",
+    "Library check failed. Presence remains unknown.": "Library check failed. Presence remains unknown.",
     "Preview and preparation": "Preview and preparation",
     "Follow downloads and prepare requests. No downloads, imports or files are changed here.": "Follow downloads and prepare requests. No downloads, imports or files are changed here.",
     "Saved Spotify requests": "Saved Spotify requests",
@@ -2031,6 +2040,15 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Recording match found in indexed local file (audio not decoded).": "Overeenkomstige opname gevonden in een geïndexeerd lokaal bestand (audio niet gedecodeerd).",
+    "Catalog recording match exists, but its audio file was not verified.": "Er staat een overeenkomstige opname in de catalogus, maar het audiobestand is niet geverifieerd.",
+    "No proven local recording match. This does not prove the song is absent.": "Geen bewezen lokale opnamematch. Dit bewijst niet dat het nummer ontbreekt.",
+    "Spotify metadata is unavailable. Local presence is unknown.": "Spotify-metadata is niet beschikbaar. Lokale aanwezigheid is onbekend.",
+    "Recording identity could not be verified.": "De opname-identiteit kon niet worden geverifieerd.",
+    "Library evidence currently supports individual tracks only.": "Bibliotheekverificatie ondersteunt momenteel alleen losse nummers.",
+    "Checking library recording...": "Lokale opname controleren...",
+    "Check local recording": "Lokale opname controleren",
+    "Library check failed. Presence remains unknown.": "Bibliotheekcontrole mislukt. Aanwezigheid blijft onbekend.",
     "Preview and preparation": "Voorbeeld en voorbereiding",
     "Follow downloads and prepare requests. No downloads, imports or files are changed here.": "Volg downloads en bereid aanvragen voor. Er worden geen downloads, imports of bestanden gewijzigd.",
     "Saved Spotify requests": "Opgeslagen Spotify-aanvragen",
