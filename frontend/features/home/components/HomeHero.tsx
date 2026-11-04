@@ -17,7 +17,7 @@ const getGreeting = (): "Good morning" | "Good afternoon" | "Good evening" => {
 };
 
 /** Uses the existing Home response: no new requests, playback state or permission rules. */
-export function HomeHero({ artists = [] }: { artists?: Artist[] }) {
+export function HomeHero({ artists = [], loading = false }: { artists?: Artist[]; loading?: boolean }) {
     const { t, locale } = useLanguage();
     const copy = getHomeCopy(locale);
     const seen = new Set<string>();
@@ -80,6 +80,10 @@ export function HomeHero({ artists = [] }: { artists?: Artist[] }) {
                                 ))}
                             </div>
                         </>
+                    ) : loading ? (
+                        <div className={styles.empty} role="status" aria-label={t("Loading...")}>
+                            <div className={`${styles.record} animate-pulse`} aria-hidden="true"><span /></div>
+                        </div>
                     ) : (
                         <div className={styles.empty}>
                             <div className={styles.record} aria-hidden="true"><span /></div>

@@ -27,6 +27,16 @@ import {
     queryKeys,
 } from "@/hooks/useQueries";
 
+/** Each home row loads independently; a slow source must not hide ready rows. */
+export interface HomeSectionLoading {
+    recentlyListened: boolean;
+    recentlyAdded: boolean;
+    recommended: boolean;
+    mixes: boolean;
+    popularArtists: boolean;
+    recentPodcasts: boolean;
+    recentAudiobooks: boolean;
+}
 export interface UseHomeDataReturn {
     // Data sections
     recentlyListened: ListenedItem[];
@@ -38,8 +48,9 @@ export interface UseHomeDataReturn {
     recentAudiobooks: Audiobook[];
     featuredPlaylists: PlaylistPreview[];
 
-    // Loading states
+    // Guard authentication only; loading content queries must not blank ready rows.
     isLoading: boolean;
+    sectionLoading: HomeSectionLoading;
     isRefreshingMixes: boolean;
     isBrowseLoading: boolean;
 
@@ -101,16 +112,18 @@ export function useHomeData(): UseHomeDataReturn {
     // Process recently listened data - can contain artists, podcasts, or audiobooks
     const items = recentlyListenedData?.items || [];
 
-    // Calculate overall loading state - true if any query is loading
-    const isLoading =
-        !isAuthenticated ||
-        isLoadingListened ||
-        isLoadingAdded ||
-        isLoadingRecommended ||
-        isLoadingMixes ||
-        isLoadingPopular ||
-        isLoadingPodcasts ||
-        isLoadingAudiobooks;
+    // Preserve account isolation while authentication is unresolved.
+    const isLoading = !isAuthenticated;
+
+    const sectionLoading: HomeSectionLoading = {
+        recentlyListened: isLoadingListened,
+        recentlyAdded: isLoadingAdded,
+        recommended: isLoadingRecommended,
+        mixes: isLoadingMixes,
+        popularArtists: isLoadingPopular,
+        recentPodcasts: isLoadingPodcasts,
+        recentAudiobooks: isLoadingAudiobooks,
+    };
 
     return {
         recentlyListened: items,
@@ -126,6 +139,7 @@ export function useHomeData(): UseHomeDataReturn {
             : [],
         featuredPlaylists: browseData?.playlists || [],
         isLoading,
+        sectionLoading,
         isRefreshingMixes,
         isBrowseLoading,
         handleRefreshMixes,
