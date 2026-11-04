@@ -101,6 +101,80 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.17.0
+    {
+        "version": "1.17.0",
+        "title": "Kima Hub 1.17.0 \u2014 Library Intelligence",
+        "summary": "Check library health and Soulseek imports, preview possible matches, and confirm reversible album corrections.",
+        "date": "2026-11-03",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.117.doctor",
+                "title": "Library Doctor: safe health report",
+                "summary": "Inspect missing tracks, damaged files, absent artwork and possible import problems.",
+                "body": "Administrators can run an on-demand, read-only report from Settings. It summarizes indexed missing or corrupt tracks, missing album covers and artist images, and possible Soulseek import problems. No full rescan, file move or metadata change is started.",
+                "links": [
+                    {
+                        "href": "/settings",
+                        "label": "Open settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.117.inbox",
+                "title": "Smart Download Inbox",
+                "summary": "Distinguish completed Soulseek transfers from successfully indexed library files.",
+                "body": "The administrator-only inbox inspects up to 25 of the signed-in administrator's own recent Soulseek jobs. A sanitized music-root-relative path allows new imports to be matched to an exact indexed track. Older downloads without trustworthy path evidence remain unverified. Failed, unindexed, unavailable and suspect imports stay distinct.",
+                "links": [
+                    {
+                        "href": "/settings",
+                        "label": "Check Soulseek imports"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.117.suggestions",
+                "title": "Conservative artist and album suggestions",
+                "summary": "Compare evidence before linking a downloaded track to an existing artist or album.",
+                "body": "For eligible imports, the app proposes existing library artists and, only when unambiguous, existing albums from folder identity or an exact title with compatible duration. A conflicting artist, duplicate release or missing file never produces an actionable album correction. A preview cannot modify your library.",
+                "links": [
+                    {
+                        "href": "/collection?tab=artists",
+                        "label": "Browse artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.117.repair",
+                "title": "Reversible album links with explicit confirmation",
+                "summary": "Correct a reviewed database album assignment, keep an audit trail, and undo safely.",
+                "body": "A two-step confirmation checks the job owner, indexed track, source and target album, file size and modification timestamp again inside a serializable database transaction. Only the track's database album link changes; both artists' counts update and a scanner guard preserves the decision. Undo restores the original link when safe. No audio files are moved, retagged or deleted. This release adds a PostgreSQL migration: take a restorable /data backup before updating.",
+                "links": [
+                    {
+                        "href": "/settings",
+                        "label": "Open Smart Inbox"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.117.hardening",
+                "title": "Privacy and Soulseek catalog corrections",
+                "summary": "Improve account isolation, private images, live reconnects and playable single recognition.",
+                "body": "Privacy hardening from PR #175 protects account and private-artwork access, improves SSE reconnection and prevents duplicate Soulseek actions. The catalog fix from PR #176 correctly recognizes playable locally indexed Soulseek singles without marking an entire release owned, preserving real local track IDs. Modern Symfonium and Feishin authentication remains intact. The upstream Kima v1.12 audio model and automatic re-enrichment are not included.",
+                "links": [
+                    {
+                        "href": "/collection?tab=albums",
+                        "label": "Browse albums"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.16.2
     {
         "version": "1.16.2",

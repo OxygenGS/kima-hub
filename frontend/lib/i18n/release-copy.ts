@@ -49,6 +49,57 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.17.0
+    "1.17.0": {
+        "titles": {
+            "Kima Hub 1.17.0 \u2014 Library Intelligence": "Kima Hub 1.17.0 \u2014 Bibliotheekintelligentie"
+        },
+        "summaries": {
+            "Check library health and Soulseek imports, preview possible matches, and confirm reversible album corrections.": "Controleer de bibliotheek en Soulseek-imports, bekijk mogelijke koppelingen en bevestig herstelbare albumcorrecties."
+        },
+        "items": {
+            "fork.117.doctor": {
+                "title": "Library Doctor: veilige bibliotheekcontrole",
+                "summary": "Controleer ontbrekende nummers, beschadigde bestanden, missend artwork en mogelijke importproblemen.",
+                "body": "Beheerders kunnen in Instellingen een rapport op aanvraag starten. Het toont volgens de bestaande bibliotheekindex ontbrekende of beschadigde nummers, ontbrekende albumhoezen en artiestenfoto's en mogelijke problemen met Soulseek-imports. Er start geen volledige scan, bestandsverplaatsing of metadatawijziging.",
+                "links": {
+                    "/settings": "Open instellingen"
+                }
+            },
+            "fork.117.inbox": {
+                "title": "Slimme downloadinbox",
+                "summary": "Maak onderscheid tussen voltooide Soulseek-downloads en nummers die echt zijn ge\u00efndexeerd.",
+                "body": "De alleen voor beheerders beschikbare inbox controleert maximaal 25 recente eigen Soulseek-downloadtaken. Met een veilig relatief pad onder de muziekmap kunnen nieuwe imports exact aan een ge\u00efndexeerd nummer worden gekoppeld. Oude downloads zonder betrouwbaar bestandsbewijs blijven ongeverifieerd. Mislukte, nog niet ge\u00efndexeerde, ontbrekende en verdachte imports krijgen afzonderlijke statussen.",
+                "links": {
+                    "/settings": "Controleer Soulseek-imports"
+                }
+            },
+            "fork.117.suggestions": {
+                "title": "Voorstellen voor artiest en album vergelijken",
+                "summary": "Bekijk de aanwijzingen voordat je een gedownload nummer aan een bestaande artiest of album koppelt.",
+                "body": "Bij geschikte imports stelt de app bestaande bibliotheekartiesten en, alleen wanneer de gegevens ondubbelzinnig zijn, een bestaand album voor op basis van de mapnaam of exacte titel en vergelijkbare speelduur. Een tegenstrijdige artiest, dubbele release of ontbrekend bestand levert geen uitvoerbare correctie op. Een voorbeeldweergave wijzigt niets.",
+                "links": {
+                    "/collection?tab=artists": "Bekijk artiesten"
+                }
+            },
+            "fork.117.repair": {
+                "title": "Albumkoppelingen bevestigen en terugdraaien",
+                "summary": "Corrigeer na controle een albumkoppeling met een herstelrecord en maak de wijziging veilig ongedaan.",
+                "body": "Bij een bevestiging in twee stappen controleert de server binnen \u00e9\u00e9n database-transactie opnieuw de eigenaar, het ge\u00efndexeerde nummer, bron- en doelalbum, bestandsgrootte en wijzigingsdatum. Alleen de albumkoppeling in de database verandert; artiestenaantallen worden bijgewerkt en de scanner kan de handmatige keuze niet ongemerkt overschrijven. Herstellen brengt de oorspronkelijke koppeling veilig terug. Audiobestanden worden niet verplaatst, opnieuw getagd of verwijderd. Deze release bevat een PostgreSQL-migratie: maak v\u00f3\u00f3r de update een afzonderlijk herstelbare /data-back-up.",
+                "links": {
+                    "/settings": "Open downloadinbox"
+                }
+            },
+            "fork.117.hardening": {
+                "title": "Privacy en verbeterde Soulseek-herkenning",
+                "summary": "Verbeter accountisolatie, priv\u00e9afbeeldingen, live verbindingen en herkenning van afspeelbare singles.",
+                "body": "De privacyfix uit PR #175 beschermt accountgegevens en priv\u00e9afbeeldingen, herstelt SSE-verbindingen en voorkomt dubbele Soulseek-acties. De catalogusfix uit PR #176 herkent lokaal ge\u00efndexeerde afspeelbare Soulseek-singles zonder te beweren dat het hele album aanwezig is; echte lokale nummer-ID's blijven behouden. Moderne authenticatie voor Symfonium en Feishin blijft werken. Het nieuwe upstream muziekmodel uit Kima v1.12 en automatische heranalyse maken geen deel uit van deze versie.",
+                "links": {
+                    "/collection?tab=albums": "Bekijk albums"
+                }
+            }
+        }
+    },
     // release-candidate:1.16.2
     "1.16.2": {
         "titles": {
