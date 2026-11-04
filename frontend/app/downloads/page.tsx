@@ -219,7 +219,7 @@ function AccountDownloads() {
                                     phase={job.phase} progress={job.progress}
                                 />
                             ))}
-                            {downtify.hasMore && <p className="pt-2 text-xs text-[var(--text-muted)]">{t("Showing the newest 100 Downtify jobs.")}</p>}
+                            {downtify.hasMore && <p className="pt-2 text-xs text-[var(--text-muted)]">{t("Showing up to 100 Downtify jobs.")}</p>}
                         </div>
                     )}
                 </section>
