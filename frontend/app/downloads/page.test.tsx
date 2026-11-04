@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/dispatch-capability")) {
+            return { state: "disabled", canSubmit: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/intents")) {
             return {
                 enabled: false, items: [], total: 0,
@@ -169,7 +172,7 @@ describe("Spotify link preview — no download or import actions", () => {
         });
         await mount();
         expect(host.textContent).toContain("Check Spotify link");
-        expect(host.textContent).toContain("Downloads are not available yet.");
+        expect(host.textContent).toContain("Track submission requires an explicitly configured Downtify connection.");
         expect(host.querySelector("#spotify-intake-link")).not.toBeNull();
         expect(host.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
         expect(mocks.post).not.toHaveBeenCalled();
