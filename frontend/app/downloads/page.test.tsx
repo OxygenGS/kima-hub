@@ -69,7 +69,7 @@ describe("first Unified Download Manager page", () => {
         expect(host.querySelector("h1")?.textContent).toBe("Download Manager");
         expect(host.querySelector('[aria-labelledby="kima-downloads-title"]')?.textContent).toContain("Kima Track");
         expect(host.querySelector('[aria-labelledby="downtify-downloads-title"]')?.textContent).toContain("Downtify Track");
-        expect(host.textContent).toContain("Downloaded (not indexed)");
+        expect(host.textContent).toContain("Download complete (index not checked)");
         expect(host.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("42.5");
         expect(host.querySelector('button[aria-label="Refresh download status"]')).not.toBeNull();
         expect(mocks.get).toHaveBeenCalledWith("/download-manager/jobs?limit=50&offset=0");
