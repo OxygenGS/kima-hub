@@ -2,8 +2,8 @@
 
 /**
  * v1.18.0 Download Manager preview.
- * Request preparation is a feature-gated database write only. No download
- * submission, file moves, imports or remote mutations.
+ * Preparation and single-track Downtify submission are separate, opt-in
+ * operations. No submission happens automatically when this page loads.
  * Account-keyed subtree prevents previous-user results being displayed after
  * logout/login; the backend independently enforces ownership for both feeds.
  */
@@ -88,7 +88,8 @@ interface SavedSpotifyIntent {
     id: string;
     kind: SpotifyLinkPreview["kind"] | "unknown";
     canonicalUrl: string | null;
-    requestState: "prepared" | "submitted" | "completed" | "failed" | "unknown";
+    requestState: "prepared" | "dispatching" | "dispatch_unknown" |
+        "submitted" | "completed" | "failed" | "unknown";
     createdAt: string;
     libraryDuplicateCheck: "not_checked";
     engineStatus: "not_checked";
@@ -103,6 +104,7 @@ interface SavedSpotifyIntentPage {
 }
 interface PreparedSpotifyIntentResponse {
     id: string;
+    status?: SavedSpotifyIntent["requestState"];
     alreadyPrepared: boolean;
     submittedByThisRequest: false;
     downloadStartedByThisRequest: false;
@@ -124,6 +126,28 @@ interface LibraryEvidence {
     matchedTrackId: string | null;
     downloadStarted: false;
 }
+interface DispatchCapabilityResponse {
+    state: "disabled" | "unbound" | "misconfigured" | "available";
+    canSubmit: boolean;
+    singleTrackOnly: true;
+}
+type DispatchState = "submitted" | "already_in_remote_queue" | "dispatch_unknown";
+interface DispatchResponse {
+    state: DispatchState;
+    remotePostSent: boolean;
+    libraryVerified: false;
+    downloadInKimaVerified: false;
+}
+const savedRequestLabel: Record<SavedSpotifyIntent["requestState"], TranslationKey> = {
+    prepared: "Prepared only — not sent for download",
+    dispatching: "Dispatch started; do not send again until verified.",
+    dispatch_unknown: "Remote submission uncertain. Do not retry automatically.",
+    submitted: "Sent to Downtify; Kima library import not verified.",
+    completed: "Request marked complete; local file not verified.",
+    failed: "Request marked failed; review before resending.",
+    unknown: "Request state not independently verified",
+};
+
 const evidenceLabels: Record<LibraryEvidenceStatus, TranslationKey> = {
     recording_match_on_disk: "Recording match found in indexed local file (audio not decoded).",
     catalog_recording_unverified: "Catalog recording match exists, but its audio file was not verified.",
@@ -215,7 +239,7 @@ function AccountDownloads({ canPrepareSpotify }: { canPrepareSpotify: boolean })
             <PageHeader
                 eyebrow={t("Preview and preparation")}
                 title={t("Download Manager")}
-                description={t("Follow downloads and prepare requests. No downloads, imports or files are changed here.")}
+                description={t("Follow downloads and manage staged Spotify requests.")}
                 actions={
                     <button
                         type="button"
