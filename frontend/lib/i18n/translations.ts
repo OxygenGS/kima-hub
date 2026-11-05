@@ -3,6 +3,14 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Check Downtify job": "Check Downtify job",
+    "Checking Downtify job...": "Checking Downtify job...",
+    "Remote status": "Remote status",
+    "Remote transfer status is unknown.": "Remote transfer status is unknown.",
+    "No owned Downtify job verified. Do not retry automatically.": "No owned Downtify job verified. Do not retry automatically.",
+    "Multiple owned Downtify jobs matched. Manual review required.": "Multiple owned Downtify jobs matched. Manual review required.",
+    "A remote transfer does not confirm Kima library import or playable audio.": "A remote transfer does not confirm Kima library import or playable audio.",
+    "The remote status check failed. Do not retry automatically.": "The remote status check failed. Do not retry automatically.",
     "Follow downloads and manage staged Spotify requests.": "Follow downloads and manage staged Spotify requests.",
     "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.": "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.",
     "Dispatch started; do not send again until verified.": "Dispatch started; do not send again until verified.",
@@ -2055,6 +2063,14 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Check Downtify job": "Downtify-taak controleren",
+    "Checking Downtify job...": "Downtify-taak controleren...",
+    "Remote status": "Externe status",
+    "Remote transfer status is unknown.": "Status van externe overdracht is onbekend.",
+    "No owned Downtify job verified. Do not retry automatically.": "Geen Downtify-taak van dit account bevestigd. Niet automatisch opnieuw proberen.",
+    "Multiple owned Downtify jobs matched. Manual review required.": "Meerdere Downtify-taken van dit account komen overeen. Handmatige controle vereist.",
+    "A remote transfer does not confirm Kima library import or playable audio.": "Een externe overdracht bevestigt geen import in Kima of afspeelbaar audiobestand.",
+    "The remote status check failed. Do not retry automatically.": "Externe statuscontrole mislukt. Niet automatisch opnieuw proberen.",
     "Follow downloads and manage staged Spotify requests.": "Volg downloads en beheer voorbereide Spotify-aanvragen.",
     "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.": "Controleer Spotify-links. Nummers verzenden vereist een expliciet ingestelde Downtify-koppeling.",
     "Dispatch started; do not send again until verified.": "Verzending gestart; niet opnieuw verzenden zonder controle.",
