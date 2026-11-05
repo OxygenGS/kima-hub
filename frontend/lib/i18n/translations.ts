@@ -3,6 +3,16 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Another full audio inspection is running.": "Another full audio inspection is running.",
+    "Could not read the full source audio.": "Could not read the full source audio.",
+    "Audio file exceeds the inspection size limit.": "Audio file exceeds the inspection size limit.",
+    "Audio header could not be verified for full decoding.": "Audio header could not be verified for full decoding.",
+    "Full audio read was incomplete. Integrity is unknown.": "Full audio read was incomplete. Integrity is unknown.",
+    "Full audio decode failed. Do not retry the download.": "Full audio decode failed. Do not retry the download.",
+    "Full audio decoded and SHA-256 calculated; recording and import are not verified.": "Full audio decoded and SHA-256 calculated; recording and import are not verified.",
+    "Decoding full audio...": "Decoding full audio...",
+    "Verify full audio stream": "Verify full audio stream",
+    "Full audio check unavailable. Do not resubmit.": "Full audio check unavailable. Do not resubmit.",
     "Source file was not verified for an audio header check.": "Source file was not verified for an audio header check.",
     "The file changed during the check. No audio verification was made.": "The file changed during the check. No audio verification was made.",
     "Could not read the source audio header.": "Could not read the source audio header.",
@@ -2083,6 +2093,16 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Another full audio inspection is running.": "Er loopt al een volledige audiocontrole.",
+    "Could not read the full source audio.": "Het volledige bronbestand kon niet worden gelezen.",
+    "Audio file exceeds the inspection size limit.": "Het audiobestand is te groot voor deze controle.",
+    "Audio header could not be verified for full decoding.": "De bestandsindeling kon niet worden bevestigd voor volledige decodering.",
+    "Full audio read was incomplete. Integrity is unknown.": "Het volledige audiobestand kon niet worden gelezen. De integriteit is onbekend.",
+    "Full audio decode failed. Do not retry the download.": "Volledige audiodecodering mislukt. Start de download niet opnieuw.",
+    "Full audio decoded and SHA-256 calculated; recording and import are not verified.": "De audio is volledig gedecodeerd en SHA-256 is berekend; opname en import zijn niet geverifieerd.",
+    "Decoding full audio...": "Volledige audio decoderen...",
+    "Verify full audio stream": "Volledige audiostream controleren",
+    "Full audio check unavailable. Do not resubmit.": "Volledige audiocontrole niet beschikbaar. Verzend niet opnieuw.",
     "Source file was not verified for an audio header check.": "Het bronbestand is niet voldoende geverifieerd voor een audiocontrole.",
     "The file changed during the check. No audio verification was made.": "Het bestand is tijdens de controle gewijzigd. Geen audioverificatie uitgevoerd.",
     "Could not read the source audio header.": "De audiokop van het bronbestand kon niet worden gelezen.",
