@@ -12,6 +12,7 @@ import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence"
 import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services/downtifyTrackDispatch";
 import { getReconciliationCapability, verifyRemoteSpotifyIntent } from "../services/downtifyDispatchReconciliation";
 import { getSourceFileCapability, inspectDowntifySourceFile } from "../services/downtifySourceFileEvidence";
+import { getAudioHeaderCapability, inspectDowntifyAudioHeader } from "../services/downtifyAudioHeaderEvidence";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -265,6 +266,42 @@ router.get(
             return res.json(result);
         } catch {
             return res.status(503).json({ error: "Source file inspection unavailable" });
+        }
+    },
+);
+
+/**
+ * D6: manual 64-byte audio signature observation. After the D3/D4/D5
+ * owner/path proofs, the service opens only the same inode read-only.
+ * This neither decodes audio nor proves the recording or library import.
+ */
+router.get(
+    "/spotify/audio-header-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getAudioHeaderCapability(req.user.id));
+    },
+);
+
+router.get(
+    "/spotify/intents/:intentId/audio-header",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        if (!getAudioHeaderCapability(req.user.id).canCheck) {
+            return res.status(404).json({ error: "Audio header inspection unavailable" });
+        }
+        try {
+            const result = await inspectDowntifyAudioHeader(req.user.id, req.params.intentId);
+            if (result.state === "not_found") return res.status(404).json(result);
+            return res.json(result);
+        } catch {
+            return res.status(503).json({ error: "Audio header inspection unavailable" });
         }
     },
 );
