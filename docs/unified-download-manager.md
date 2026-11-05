@@ -674,3 +674,68 @@ without changing them, define immutable staging-to-DAS delivery proofs,
 then design controlled atomic copy/rename, Kima index verification, importer
 single-writer handoff and safe rollback. Keep existing Importer v5 running
 until an explicit cutover is proven safe on an isolated staging instance.
+
+
+## Phase D6: bounded, inode-bound audio container header evidence
+
+D5 proves only that a non-empty regular file was observed under the trusted
+staging root. D6 adds a **separate user-initiated, read-only 64-byte check**
+to make accidental non-audio files and mismatched extensions visible before
+any future importer or library scanner runs.
+
+The operator-only staging gate remains **OFF by default**. It requires all
+the independent D3/D4/D5 flags and pins (the Kima user, persistent Downtify
+server ID, paired remote username and numeric account ID, device token,
+and *read-only* staging mount), plus:
+
+    KIMA_DOWNTIFY_AUDIO_HEADER_ENABLED=true
+
+Do not enable in production or alter existing Docker mounts, Importer v5,
+systemd units or the music library as part of this source-only development PR.
+
+- `GET /api/download-manager/spotify/audio-header-capability` checks
+  whether the authenticated and currently permitted Kima track downloader
+  is eligible. This is a no-I/O, no-secrets capability response.
+- `GET /api/download-manager/spotify/intents/:intentId/audio-header`
+  requires the same current Kima `canDownloadTracks` permission and repeats
+  D3 exact remote user and Spotify track ownership, D4 root topology and D5
+  safe relative-file path checks. Client parameters cannot specify a path,
+  token, device identity or another user.
+- D5 then invokes a **private internal observation hook** only after its
+  existing owner/path checks pass. The callback records the observed device,
+  inode and file size *inside the backend*; they never enter HTTP output.
+  D6 opens that exact candidate using `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`,
+  checks its `fstat` device/inode/size before reading and checks file identity,
+  size and mtime/ctime after reading. Changed files or symlink swaps never
+  yield a positive result.
+- The probe reads at most **64 bytes at offset zero**. It does not execute
+  ffmpeg, ffprobe or subprocesses; never fetches external URLs; never scans
+  an entire file or sends contents to the browser. It recognizes only a
+  plausible FLAC, MP3/ID3, MP4/M4A, Ogg/Opus or RIFF/WAVE signature and
+  checks against the allowed source-file extension. An Ogg Opus file must
+  contain its `OpusHead` marker in that initial sample.
+- A recognized header returns `state: header_observed_unverified` and a
+  narrow container enum. A mismatch, unknown header, unreadable file, or
+  file that changed during the check returns a conservative non-success
+  state. No paths, file size, inode, timestamps, tags or audio bytes appear
+  in HTTP results. The file handle is always closed.
+- The EN/NL Download Manager reveals a third explicit **Check audio header**
+  button only after the user has manually established that an owned remote
+  task is done (D3) and a staging file was observed (D5). All backend
+  guards are repeated on every request. Controls for those checks cannot
+  overlap.
+
+**Limits:** A header match is NOT proof that the file contains decodable
+audio, the intended Spotify recording, complete bytes, an intact checksum,
+or a stable physical mount; it does not establish an import or playback.
+Every D6 result has `audioDecoded:false`, `recordingVerified:false`,
+`wholeFileIntegrityVerified:false`, `stableMountVerified:false`,
+`libraryImportVerified:false`, `filesChanged:false` and
+`retryAllowed:false`. There is no remote write, DB mutation, file
+movement, deletion, retry, new Docker release or import cutover.
+
+A later, separately gated phase must validate a complete audio stream
+with a bounded decoder, tie the file's recording identity to trusted
+metadata, and prove a source/destination hash before copy/rename into
+the DAS. A single-writer handoff from Importer v5 requires staging
+end-to-end and rollback tests before any release can replace it.
