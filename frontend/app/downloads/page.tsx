@@ -14,6 +14,9 @@ import { getMusicPermissions } from "@/lib/music-permissions";
 import { useLanguage } from "@/lib/i18n/language-context";
 import type { TranslationKey } from "@/lib/i18n/translations";
 import { api } from "@/lib/api";
+import {
+    verifySavedSpotifyTrack, type VerificationOutcome, type VerificationStep,
+} from "@/lib/downloadManager/unifiedVerification";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 type Phase = "queued" | "processing" | "downloaded" | "failed" | "cancelled" | "unknown";
@@ -232,6 +235,13 @@ interface RecordingTagEvidence {
     filesChanged: false;
     retryAllowed: false;
 }
+const unifiedStepLabels: Record<VerificationStep, TranslationKey> = {
+    remote: "Checking Downtify job...",
+    source: "Checking downloaded source file...",
+    header: "Checking audio header...",
+    decode: "Decoding full audio...",
+    tags: "Checking recording tags...",
+};
 const recordingTagLabels: Record<RecordingTagState, TranslationKey> = {
     disabled: "Downtify integration is disabled.",
     unbound: "No Downtify account is linked to this user.",
@@ -583,6 +593,11 @@ function SpotifyLinkIntake() {
     const [recordingTagResults, setRecordingTagResults] = useState<Record<string, RecordingTagEvidence>>({});
     const [recordingTagErrors, setRecordingTagErrors] = useState<Record<string, boolean>>({});
     const [recordingTagCheckingId, setRecordingTagCheckingId] = useState<string | null>(null);
+    const [unifiedCheckingId, setUnifiedCheckingId] = useState<string | null>(null);
+    const [unifiedSteps, setUnifiedSteps] = useState<Record<string, VerificationStep>>({});
+    const [unifiedResults, setUnifiedResults] = useState<Record<string, VerificationOutcome>>({});
+    const unifiedInFlight = useRef(false);
+    const unifiedEpoch = useRef(0);
     const recordingTagInFlight = useRef(false);
     const recordingTagEpoch = useRef(0);
     const fullAudioCheckInFlight = useRef(false);
@@ -608,6 +623,7 @@ function SpotifyLinkIntake() {
         audioEpoch.current++;
         fullAudioEpoch.current++;
         recordingTagEpoch.current++;
+        unifiedEpoch.current++;
     }, []);
 
     useEffect(() => {
@@ -808,12 +824,23 @@ function SpotifyLinkIntake() {
             ? t("Remote status") + ": " + t(remoteTransferLabel[value.remotePhase])
             : t(reconciliationLabel[value.state]);
 
+    const clearUnifiedResult = (id: string) => {
+        unifiedEpoch.current++;
+        setUnifiedResults(previous => {
+            const copy = { ...previous };
+            delete copy[id];
+            return copy;
+        });
+    };
+
     // Only a deliberate click reads an intent's remote queue state.
     // A missing or failed check NEVER resets the saved request for retry.
     const checkRemote = async (id: string) => {
         if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current ||
             sourceCheckInFlight.current || audioCheckInFlight.current ||
-            fullAudioCheckInFlight.current || recordingTagInFlight.current) return;
+            fullAudioCheckInFlight.current || recordingTagInFlight.current ||
+            unifiedInFlight.current) return;
+        clearUnifiedResult(id);
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
         // Any prior source-file observation is stale after a new remote check.
@@ -872,7 +899,9 @@ function SpotifyLinkIntake() {
         if (!sourceCapability?.canCheck || sourceCheckInFlight.current ||
             audioCheckInFlight.current || remoteCheckInFlight.current ||
             fullAudioCheckInFlight.current || recordingTagInFlight.current ||
+            unifiedInFlight.current ||
             verified?.state !== "verified" || verified.remotePhase !== "downloaded") return;
+        clearUnifiedResult(id);
         sourceCheckInFlight.current = true;
         const epoch = ++sourceCheckEpoch.current;
         audioEpoch.current++;
@@ -924,9 +953,11 @@ function SpotifyLinkIntake() {
         if (!audioCapability?.canCheck || audioCheckInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
             fullAudioCheckInFlight.current || recordingTagInFlight.current ||
+            unifiedInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified") return;
+        clearUnifiedResult(id);
         audioCheckInFlight.current = true;
         const epoch = ++audioEpoch.current;
         fullAudioEpoch.current++;
@@ -972,10 +1003,12 @@ function SpotifyLinkIntake() {
         if (!fullAudioCapability?.canCheck || fullAudioCheckInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
             audioCheckInFlight.current || recordingTagInFlight.current ||
+            unifiedInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified" ||
             audioResults[id]?.state !== "header_observed_unverified") return;
+        clearUnifiedResult(id);
         fullAudioCheckInFlight.current = true;
         const epoch = ++fullAudioEpoch.current;
         recordingTagEpoch.current++;
@@ -1014,11 +1047,13 @@ function SpotifyLinkIntake() {
         if (!recordingTagCapability?.canCheck || recordingTagInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
             audioCheckInFlight.current || fullAudioCheckInFlight.current ||
+            unifiedInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified" ||
             audioResults[id]?.state !== "header_observed_unverified" ||
             fullAudioResults[id]?.state !== "stream_decoded_unmatched") return;
+        clearUnifiedResult(id);
         recordingTagInFlight.current = true;
         const epoch = ++recordingTagEpoch.current;
         setRecordingTagCheckingId(id);
@@ -1042,6 +1077,56 @@ function SpotifyLinkIntake() {
         } finally {
             recordingTagInFlight.current = false;
             if (epoch === recordingTagEpoch.current) setRecordingTagCheckingId(null);
+        }
+    };
+
+    // Single-click D9 is a UI convenience for five separate, read-only
+    // backend checks. Every API revalidates owner/server/media independently.
+    // A failure stops the sequence; never POST, retry, import or persist.
+    const verifyComplete = async (id: string) => {
+        if (!reconciliationCapability?.canCheck || !sourceCapability?.canCheck ||
+            !audioCapability?.canCheck || !fullAudioCapability?.canCheck ||
+            !recordingTagCapability?.canCheck || unifiedInFlight.current ||
+            remoteCheckInFlight.current || sourceCheckInFlight.current ||
+            audioCheckInFlight.current || fullAudioCheckInFlight.current ||
+            recordingTagInFlight.current) return;
+        unifiedInFlight.current = true;
+        const epoch = ++unifiedEpoch.current;
+        setUnifiedCheckingId(id);
+        setUnifiedResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const result = await verifySavedSpotifyTrack(
+                id,
+                path => api.get<unknown>(path),
+                step => {
+                    if (epoch === unifiedEpoch.current) {
+                        setUnifiedSteps(previous => ({ ...previous, [id]: step }));
+                    }
+                },
+                () => epoch === unifiedEpoch.current,
+            );
+            if (epoch === unifiedEpoch.current) {
+                setUnifiedResults(previous => ({ ...previous, [id]: result }));
+            }
+        } catch {
+            // All unexpected conditions are reported without upstream details.
+            if (epoch === unifiedEpoch.current) {
+                setUnifiedResults(previous => ({
+                    ...previous,
+                    [id]: {
+                        state: "unavailable", step: "remote",
+                        recordingVerified: false, libraryImportVerified: false,
+                        filesChanged: false, retryAllowed: false,
+                    },
+                }));
+            }
+        } finally {
+            unifiedInFlight.current = false;
+            if (epoch === unifiedEpoch.current) setUnifiedCheckingId(null);
         }
     };
 
@@ -1216,6 +1301,10 @@ function SpotifyLinkIntake() {
                                     {item.canonicalUrl ?? t("Invalid stored link")}
                                 </p>
                                 {reconciliationCapability?.canCheck === true &&
+                                    sourceCapability?.canCheck === true &&
+                                    audioCapability?.canCheck === true &&
+                                    fullAudioCapability?.canCheck === true &&
+                                    recordingTagCapability?.canCheck === true &&
                                     item.kind === "track" &&
                                     (item.requestState === "submitted" ||
                                         item.requestState === "dispatching" ||
@@ -1223,7 +1312,44 @@ function SpotifyLinkIntake() {
                                         <div className="mt-3 space-y-2">
                                             <button
                                                 type="button"
-                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
+                                                disabled={unifiedCheckingId !== null ||
+                                                    remoteCheckingId !== null || sourceCheckingId !== null ||
+                                                    audioCheckingId !== null || fullAudioCheckingId !== null ||
+                                                    recordingTagCheckingId !== null}
+                                                onClick={() => { void verifyComplete(item.id); }}
+                                                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                            >
+                                                {unifiedCheckingId === item.id
+                                                    ? t("Verifying download evidence...")
+                                                    : t("Verify completed download")}
+                                            </button>
+                                            {unifiedCheckingId === item.id && unifiedSteps[item.id] && (
+                                                <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                    {t(unifiedStepLabels[unifiedSteps[item.id]])}
+                                                </p>
+                                            )}
+                                            {unifiedResults[item.id] && (
+                                                <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                    {unifiedResults[item.id].state === "consistent_untrusted"
+                                                        ? t("Checks consistent. Recording and library import are not verified.")
+                                                        : unifiedResults[item.id].state === "unavailable"
+                                                            ? t("Download verification interrupted. No retry was started.")
+                                                            : t("Download verification stopped at") + " " +
+                                                                t(unifiedStepLabels[unifiedResults[item.id].step]) +
+                                                                ". " + t("No download was retried.")}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                {reconciliationCapability?.canCheck === true &&
+                                    item.kind === "track" &&
+                                    (item.requestState === "submitted" ||
+                                        item.requestState === "dispatching" ||
+                                        item.requestState === "dispatch_unknown") && (
+                                        <div className="mt-3 space-y-2">
+                                            <button
+                                                type="button"
+                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null || unifiedCheckingId !== null}
                                                 onClick={() => { void checkRemote(item.id); }}
                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                             >
@@ -1250,7 +1376,7 @@ function SpotifyLinkIntake() {
                                                     <div className="space-y-2">
                                                         <button
                                                             type="button"
-                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
+                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null || unifiedCheckingId !== null}
                                                             onClick={() => { void checkSourceFile(item.id); }}
                                                             className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                         >
@@ -1273,7 +1399,7 @@ function SpotifyLinkIntake() {
                                                                 <div className="space-y-2">
                                                                     <button
                                                                         type="button"
-                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
+                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null || unifiedCheckingId !== null}
                                                                         onClick={() => { void checkAudioHeader(item.id); }}
                                                                         className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                     >
@@ -1296,7 +1422,7 @@ function SpotifyLinkIntake() {
                                                                             <div className="space-y-2">
                                                                                 <button
                                                                                     type="button"
-                                                                                    disabled={fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || recordingTagCheckingId !== null}
+                                                                                    disabled={fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || recordingTagCheckingId !== null || unifiedCheckingId !== null}
                                                                                     onClick={() => { void checkFullAudio(item.id); }}
                                                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                                 >
@@ -1319,7 +1445,7 @@ function SpotifyLinkIntake() {
                                                                                         <div className="space-y-2">
                                                                                             <button
                                                                                                 type="button"
-                                                                                                disabled={recordingTagCheckingId !== null || fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                                                disabled={recordingTagCheckingId !== null || fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || unifiedCheckingId !== null}
                                                                                                 onClick={() => { void checkRecordingTags(item.id); }}
                                                                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                                             >
