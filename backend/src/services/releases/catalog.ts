@@ -145,7 +145,7 @@ export const RELEASES: Release[] = [
                 key: "fork.118.importer",
                 title: "Existing Importer v5 remains in control",
                 summary: "No automatic Spotify-to-DAS import or source file deletion is introduced.",
-                body: "The new tools do not replace the external Downtify importer or stop its timer. Automatic transfer to your storage server, catalog indexing and rollback require a separately validated integration. No existing music files are moved, modified or deleted by this release.",
+                body: "The new tools do not replace the existing external Downtify Importer v5 or stop its service/timer. Automatic transfer to your storage server, catalog indexing and rollback require a separately validated integration. No existing music files are moved, modified or deleted by this release.",
                 links: [],
             },
         ],
