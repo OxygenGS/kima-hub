@@ -158,6 +158,42 @@ interface RemoteIntentVerification {
     filesChanged: false;
     retryAllowed: false;
 }
+type SourceFileState =
+    | "disabled" | "unbound" | "misconfigured" | "not_found"
+    | "storage_unavailable" | "remote_unverified" | "not_downloaded"
+    | "source_path_unavailable" | "external_source_unsupported"
+    | "unsafe_source_path" | "source_unavailable" | "candidate_present_unverified";
+interface SourceFileCapability {
+    state: "disabled" | "unbound" | "misconfigured" | "available";
+    canCheck: boolean;
+    singleTrackOnly: true;
+}
+interface SourceFileEvidence {
+    state: SourceFileState;
+    remotePhase: RemoteTransferPhase;
+    regularFileObserved: boolean;
+    recordingVerified: false;
+    audioDecoded: false;
+    stableMountVerified: false;
+    libraryImportVerified: false;
+    filesChanged: false;
+    retryAllowed: false;
+}
+const sourceFileLabel: Record<SourceFileState, TranslationKey> = {
+    disabled: "Downtify integration is disabled.",
+    unbound: "No Downtify account is linked to this user.",
+    misconfigured: "Downtify connection settings are incomplete.",
+    not_found: "Request state not independently verified",
+    storage_unavailable: "Staging storage is unavailable or unsafe.",
+    remote_unverified: "Remote task ownership could not be verified.",
+    not_downloaded: "The remote download is not yet complete.",
+    source_path_unavailable: "Downtify did not provide a source filename.",
+    external_source_unsupported: "This source is outside the configured download folder.",
+    unsafe_source_path: "Unsafe source path or mount. Manual review required.",
+    source_unavailable: "Source file not found. It may already have been moved.",
+    candidate_present_unverified: "Staging file observed; recording and import are unverified.",
+};
+
 const reconciliationLabel: Record<Exclude<ReconciliationState, "verified">, TranslationKey> = {
     disabled: "Downtify integration is disabled.",
     unbound: "No Downtify account is linked to this user.",
@@ -430,6 +466,12 @@ function SpotifyLinkIntake() {
     const [remoteResults, setRemoteResults] = useState<Record<string, RemoteIntentVerification>>({});
     const [remoteErrors, setRemoteErrors] = useState<Record<string, boolean>>({});
     const [remoteCheckingId, setRemoteCheckingId] = useState<string | null>(null);
+    const [sourceCapability, setSourceCapability] = useState<SourceFileCapability | null>(null);
+    const [sourceResults, setSourceResults] = useState<Record<string, SourceFileEvidence>>({});
+    const [sourceErrors, setSourceErrors] = useState<Record<string, boolean>>({});
+    const [sourceCheckingId, setSourceCheckingId] = useState<string | null>(null);
+    const sourceCheckInFlight = useRef(false);
+    const sourceCheckEpoch = useRef(0);
     const remoteCheckInFlight = useRef(false);
     const remoteCheckEpoch = useRef(0);
     const [ackUnverified, setAckUnverified] = useState(false);
@@ -443,6 +485,7 @@ function SpotifyLinkIntake() {
     useEffect(() => () => {
         requestEpoch.current++;
         remoteCheckEpoch.current++;
+        sourceCheckEpoch.current++;
     }, []);
 
     useEffect(() => {
@@ -458,6 +501,14 @@ function SpotifyLinkIntake() {
         void api.get<ReconciliationCapability>("/download-manager/spotify/reconciliation-capability")
             .then(data => { if (active) setReconciliationCapability(data); })
             .catch(() => { if (active) setReconciliationCapability(null); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<SourceFileCapability>("/download-manager/spotify/source-file-capability")
+            .then(data => { if (active) setSourceCapability(data); })
+            .catch(() => { if (active) setSourceCapability(null); });
         return () => { active = false; };
     }, []);
 
@@ -617,6 +668,13 @@ function SpotifyLinkIntake() {
         if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current) return;
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
+        // Any prior source-file observation is stale after a new remote check.
+        sourceCheckEpoch.current++;
+        setSourceResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setRemoteCheckingId(id);
         setRemoteErrors(previous => ({ ...previous, [id]: false }));
         setRemoteResults(previous => {
@@ -638,6 +696,38 @@ function SpotifyLinkIntake() {
         } finally {
             remoteCheckInFlight.current = false;
             if (epoch === remoteCheckEpoch.current) setRemoteCheckingId(null);
+        }
+    };
+
+    // A D3 confirmed 'done' row unlocks a deliberate D5 file probe.
+    // The server rechecks owner, server identity, job and staging root again.
+    const checkSourceFile = async (id: string) => {
+        const verified = remoteResults[id];
+        if (!sourceCapability?.canCheck || sourceCheckInFlight.current ||
+            verified?.state !== "verified" || verified.remotePhase !== "downloaded") return;
+        sourceCheckInFlight.current = true;
+        const epoch = ++sourceCheckEpoch.current;
+        setSourceCheckingId(id);
+        setSourceErrors(previous => ({ ...previous, [id]: false }));
+        setSourceResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const evidence = await api.get<SourceFileEvidence>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(id) + "/source-file"
+            );
+            if (epoch === sourceCheckEpoch.current) {
+                setSourceResults(previous => ({ ...previous, [id]: evidence }));
+            }
+        } catch {
+            if (epoch === sourceCheckEpoch.current) {
+                setSourceErrors(previous => ({ ...previous, [id]: true }));
+            }
+        } finally {
+            sourceCheckInFlight.current = false;
+            if (epoch === sourceCheckEpoch.current) setSourceCheckingId(null);
         }
     };
 
@@ -840,6 +930,32 @@ function SpotifyLinkIntake() {
                                                     {t("The remote status check failed. Do not retry automatically.")}
                                                 </p>
                                             )}
+                                            {sourceCapability?.canCheck === true &&
+                                                remoteResults[item.id]?.state === "verified" &&
+                                                remoteResults[item.id]?.remotePhase === "downloaded" && (
+                                                    <div className="space-y-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null}
+                                                            onClick={() => { void checkSourceFile(item.id); }}
+                                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                                        >
+                                                            {sourceCheckingId === item.id
+                                                                ? t("Checking downloaded source file...")
+                                                                : t("Check downloaded source file")}
+                                                        </button>
+                                                        {sourceResults[item.id] && (
+                                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                {t(sourceFileLabel[sourceResults[item.id].state])}
+                                                            </p>
+                                                        )}
+                                                        {sourceErrors[item.id] && (
+                                                            <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                                                {t("Source file check failed. Do not retry the download.")}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                         </div>
                                     )}
                             </li>
