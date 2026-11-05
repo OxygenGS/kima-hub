@@ -529,3 +529,68 @@ separately reviewed stage must prove physical file identity on the target
 DAS, safe transfer/rollback, single-writer handoff with Importer v5, and
 Kima indexing before introducing any importer side effects. Existing
 Importer v5 and all existing Soulseek/Lidarr code remain untouched.
+
+
+## Phase D4: admin-only, read-only storage topology preflight
+
+D3 can independently verify that a bound Downtify user has a queue entry
+and that Downtify has marked it `done`. That does **not** establish which
+local file it produced or whether that file was copied to the Kima DAS,
+correctly tagged, indexed or playable. The Downtify `GET /list` API returns
+relative downloaded file paths, not a verified immutable Spotify-to-file
+import manifest; do not infer exact song identity from a filename.
+
+D4 adds a strictly **admin-only**, **default-OFF**, **read-only** root
+topology check that can inform a later single-writer importer design:
+
+    GET /api/download-engines/downtify/storage-preflight
+
+For a separately approved staging environment only, Kima's existing
+`MUSIC_PATH` is the candidate destination and the operator can configure:
+
+    KIMA_DOWNTIFY_ENABLED=true
+    KIMA_DOWNTIFY_STORAGE_PREFLIGHT_ENABLED=true
+    KIMA_DOWNTIFY_STAGING_ROOT=<absolute download-root path visible to Kima>
+
+This is a specification, not a ready-to-paste production env file.
+The staging root must be **mounted read-only into the Kima backend** by
+the operator and must not overlap with the Kima music root. Neither this
+PR nor this endpoint changes container mounts or other configuration.
+If the two applications do not share an explicitly provisioned source
+directory, the preflight must report the source as unavailable.
+
+The endpoint requires Kima administrator authorization and uses `Cache-Control:
+no-store`. Only backend-controlled roots are accepted: no HTTP-supplied
+paths, user IDs or URLs. It inspects each absolute root using read-only
+`lstat` and `realpath`; rejects missing, non-directory and symlinked
+roots, symlinked ancestor paths and overlapping directory trees. It never
+traverses download files or asks Downtify to modify jobs.
+
+The sanitized result is deliberately conservative:
+
+- `disabled` or `misconfigured`: no filesystem access.
+- `source_unavailable` or `library_unavailable`: inspection failed; no
+  assumption about an absent volume or a fallback host directory.
+- `unsafe_layout`: symbolic links, unexpected canonical paths or an
+  overlapping source/library tree.
+- `inspected` with `filesystemRelation: different_device`: device IDs
+  differ, so future transfer would require copy-based semantics, not a
+  hardlink.
+- `inspected` with `filesystemRelation: same_device_candidate`: the device
+  IDs match; a hardlink **might** be possible, but two bind mounts can still
+  prohibit it. No write or hardlink test is performed.
+
+In every state `mountIdentityVerified`, `sourceAudioVerified`,
+`libraryImportVerified`, `importerCutoverAuthorized` and `filesChanged`
+remain **false**. No raw host/container paths, device IDs, tokens, filenames
+or error messages appear in the response. A successful topology inspection
+never means that the source volume is the correct physical volume, that an
+audio file matches the Spotify identity, or that the importer is ready.
+
+**Must remain separate work:** verify stable mount identities; obtain a
+recording-to-source-file manifest from the deployed Downtify version or a
+trusted file-level handoff; prove file format, full-byte integrity, exact
+path containment and import ownership; design atomic copy/rename and
+rollback across different devices; prove Kima indexing and playback;
+and arrange a single-writer cutover from Importer v5. Do **not** disable
+the existing Importer v5 systemd timer or delete source files in D4.
