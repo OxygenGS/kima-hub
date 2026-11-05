@@ -606,6 +606,11 @@ function SpotifyLinkIntake() {
     };
 
 
+    const remoteStatusText = (value: RemoteIntentVerification) =>
+        value.state === "verified"
+            ? t("Remote status") + ": " + t(remoteTransferLabel[value.remotePhase])
+            : t(reconciliationLabel[value.state]);
+
     // Only a deliberate click reads an intent's remote queue state.
     // A missing or failed check NEVER resets the saved request for retry.
     const checkRemote = async (id: string) => {
@@ -825,9 +830,7 @@ function SpotifyLinkIntake() {
                                             {remoteResults[item.id] && (
                                                 <div role="status" className="space-y-1 text-xs text-[var(--text-secondary)]">
                                                     <p>
-                                                        {remoteResults[item.id].state === "verified"
-                                                            ? t("Remote status") + ": " + t(remoteTransferLabel[remoteResults[item.id].remotePhase])
-                                                            : t(reconciliationLabel[remoteResults[item.id].state])}
+                                                        {remoteStatusText(remoteResults[item.id])}
                                                     </p>
                                                     <p>{t("A remote transfer does not confirm Kima library import or playable audio.")}</p>
                                                 </div>
