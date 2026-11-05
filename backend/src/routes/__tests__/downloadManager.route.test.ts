@@ -9,6 +9,8 @@ const mockListSavedIntents = jest.fn();
 const mockLibraryEvidence = jest.fn();
 const mockDispatchCapability = jest.fn();
 const mockDispatchRequest = jest.fn();
+const mockReconciliationCapability = jest.fn();
+const mockRemoteVerification = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -20,6 +22,10 @@ jest.mock("../../services/unifiedDownloadOverview", () => ({
 jest.mock("../../services/downtifyTrackDispatch", () => ({
     getDispatchCapability: (...args: unknown[]) => mockDispatchCapability(...args),
     dispatchPreparedSpotifyTrack: (...args: unknown[]) => mockDispatchRequest(...args),
+}));
+jest.mock("../../services/downtifyDispatchReconciliation", () => ({
+    getReconciliationCapability: (...args: unknown[]) => mockReconciliationCapability(...args),
+    verifyRemoteSpotifyIntent: (...args: unknown[]) => mockRemoteVerification(...args),
 }));
 jest.mock("../../services/spotifyLibraryEvidence", () => ({
     checkSpotifyLibraryEvidence: (...args: unknown[]) => mockLibraryEvidence(...args),
@@ -57,6 +63,14 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockReconciliationCapability.mockReset().mockReturnValue({
+        state: "disabled", canCheck: false, singleTrackOnly: true,
+    });
+    mockRemoteVerification.mockReset().mockResolvedValue({
+        state: "verified", remotePhase: "downloaded", remoteOwnershipVerified: true,
+        libraryVerification: "not_checked", playbackVerified: false,
+        filesChanged: false, retryAllowed: false,
+    });
     mockDispatchCapability.mockReset().mockReturnValue({
         state: "disabled", canSubmit: false, singleTrackOnly: true,
     });
@@ -608,5 +622,80 @@ describe("pinned, default-off single-track Downtify submission route", () => {
         expect((await request(app).delete("/api/download-manager/spotify/intents/" + id + "/submit")).status).toBe(404);
         expect((await request(app).patch("/api/download-manager/spotify/intents/" + id + "/submit").send({})).status).toBe(404);
         expect(mockDispatchRequest).not.toHaveBeenCalled();
+    });
+});
+
+
+describe("D3 explicitly requested owner-only read-only remote verification", () => {
+    const path = "/api/download-manager/spotify/intents/intent-abc123/remote-status";
+    const cap = "/api/download-manager/spotify/reconciliation-capability";
+
+    it("rejects unauthenticated capability and verification requests", async () => {
+        expect((await request(app).get(cap)).status).toBe(401);
+        expect((await request(app).get(path)).status).toBe(401);
+        expect(mockReconciliationCapability).not.toHaveBeenCalled();
+        expect(mockRemoteVerification).not.toHaveBeenCalled();
+    });
+
+    it("requires the latest persisted track-download permission", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        const result = await read("owner-1", path + "?userId=victim&role=admin");
+        expect(result.status).toBe(403);
+        expect(mockReconciliationCapability).not.toHaveBeenCalled();
+        expect(mockRemoteVerification).not.toHaveBeenCalled();
+    });
+
+    it("is disabled by default and never queries the remote engine", async () => {
+        const status = await read("owner-1", cap);
+        expect(status.status).toBe(200);
+        expect(status.body).toEqual({
+            state: "disabled", canCheck: false, singleTrackOnly: true,
+        });
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(404);
+        expect(result.headers["cache-control"]).toBe("no-store");
+        expect(mockRemoteVerification).not.toHaveBeenCalled();
+    });
+
+    it("uses only authenticated identity and returns non-playable proof with no raw paths", async () => {
+        mockReconciliationCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        const result = await read("owner-1", path + "?userId=victim&token=ignored");
+        expect(result.status).toBe(200);
+        expect(result.headers["cache-control"]).toBe("no-store");
+        expect(mockRemoteVerification).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(result.body).toEqual({
+            state: "verified", remotePhase: "downloaded",
+            remoteOwnershipVerified: true, libraryVerification: "not_checked",
+            playbackVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        expect(JSON.stringify(result.body)).not.toContain("victim");
+    });
+
+    it("denies missing owned intent and redacts internal errors", async () => {
+        mockReconciliationCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockRemoteVerification.mockResolvedValueOnce({
+            state: "not_found", remotePhase: "not_checked",
+            remoteOwnershipVerified: false, libraryVerification: "not_checked",
+            playbackVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        expect((await read("owner-1", path)).status).toBe(404);
+        mockRemoteVerification.mockRejectedValueOnce(new Error("secret=token path=/music/private"));
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(503);
+        expect(JSON.stringify(result.body)).not.toContain("private");
+        expect(JSON.stringify(result.body)).not.toContain("secret");
+    });
+
+    it("exposes no mutation, retry, cancel or queue-clear route", async () => {
+        expect((await request(app).post(path).send({})).status).toBe(404);
+        expect((await request(app).patch(path).send({})).status).toBe(404);
+        expect((await request(app).delete(path)).status).toBe(404);
+        expect(mockRemoteVerification).not.toHaveBeenCalled();
     });
 });

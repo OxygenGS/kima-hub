@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/reconciliation-capability")) {
+            return { state: "disabled", canCheck: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/dispatch-capability")) {
             return { state: "disabled", canSubmit: false, singleTrackOnly: true };
         }
@@ -654,5 +657,100 @@ describe("gated one-track Downtify submission UI", () => {
         await mount();
         expect(host.textContent).not.toContain("Submission could not be verified.");
         expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+    });
+});
+
+
+describe("manual D3 remote reconciliation of previously submitted Spotify tracks", () => {
+    const submitted = { ...savedTrack, requestState: "dispatch_unknown" };
+
+    const configure = (remoteResult: unknown, rejecting = false) => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) => {
+            if (path.endsWith("/spotify/reconciliation-capability")) {
+                return { state: "available", canCheck: true, singleTrackOnly: true };
+            }
+            if (path.includes("/spotify/intents/") && path.endsWith("/remote-status")) {
+                if (rejecting) throw new Error("secret token /music/private.flac");
+                return remoteResult;
+            }
+            if (path.includes("/spotify/intents?")) return savedIntents([submitted]);
+            return original?.(path);
+        });
+    };
+
+    it("never checks a remote job automatically and hides controls when disabled", async () => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) =>
+            path.includes("/spotify/intents?") ? savedIntents([submitted]) : original?.(path)
+        );
+        await mount();
+        expect(host.textContent).not.toContain("Check Downtify job");
+        expect(mocks.get.mock.calls.some(([path]) => String(path).endsWith("/remote-status"))).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("checks only an explicitly selected saved owner's intent, without a download or import", async () => {
+        configure({
+            state: "verified", remotePhase: "downloaded",
+            remoteOwnershipVerified: true, libraryVerification: "not_checked",
+            playbackVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        await mount();
+        expect(host.textContent).toContain("Check Downtify job");
+        expect(mocks.get.mock.calls.some(([path]) => String(path).endsWith("/remote-status"))).toBe(false);
+        await clickButtonContaining("Check Downtify job");
+        expect(mocks.get).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/remote-status"
+        );
+        expect(host.textContent).toContain("Remote status: Download complete (index not checked)");
+        expect(host.textContent).toContain(
+            "A remote transfer does not confirm Kima library import or playable audio."
+        );
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not show a retry option for missing or ambiguous remote jobs", async () => {
+        configure({
+            state: "no_verified_job", remotePhase: "not_checked",
+            remoteOwnershipVerified: false, libraryVerification: "not_checked",
+            playbackVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).toContain("No owned Downtify job verified. Do not retry automatically.");
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("redacts failed remote API responses and does not offer a retry submission", async () => {
+        configure(null, true);
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).toContain("The remote status check failed. Do not retry automatically.");
+        expect(host.textContent).not.toContain("secret token");
+        expect(host.textContent).not.toContain("/music/private");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("never carries a prior owner's remote result into another session", async () => {
+        configure({
+            state: "verified", remotePhase: "downloaded",
+            remoteOwnershipVerified: true, libraryVerification: "not_checked",
+            playbackVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).toContain("Remote status:");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "other-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Remote status:");
+        expect(host.textContent).not.toContain("Check Downtify job");
     });
 });

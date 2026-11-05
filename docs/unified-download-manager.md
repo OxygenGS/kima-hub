@@ -469,3 +469,63 @@ contracts, account owner, duplicate safety, Importer v5 handoff, rollback
 and staging end-to-end tests have been approved. No Compose activation,
 Docker publication, systemd changes, file moves, old importer cleanup or
 /mnt/music modifications belong to this source-code PR.
+
+
+## Phase D3: manual, read-only verification of a submitted Spotify intent
+
+This phase supplements D2 with a separate **explicit check**, and does not
+download, import, index or alter any files. A user can verify only an already
+attempted single-track request that they own. A remote transfer in the
+`done` state is **NOT** proof of a Kima library import or playable audio.
+
+An operator may enable the isolated read-only capability in an explicitly
+verified **staging** environment, in addition to the D2 server/account pins:
+
+    KIMA_SPOTIFY_INTENTS_ENABLED=true
+    KIMA_DOWNTIFY_ENABLED=true
+    KIMA_DOWNTIFY_RECONCILIATION_ENABLED=true
+
+Use the pinned device token, Kima user ID, remote username, **numeric remote
+account ID**, and persistent `server_id` from D2. This is not a ready-to-use
+environment file. The new flag is OFF by default, independent of the D2
+submission flag. Do not add it to production Compose or expose credentials
+in a GitHub commit.
+
+- `GET /api/download-manager/spotify/reconciliation-capability` returns
+  only whether manual read-only verification is available to the currently
+  authorized Kima user. It does not contact Downtify.
+- `GET /api/download-manager/spotify/intents/:intentId/remote-status`
+  requires Kima login, current persisted `canDownloadTracks` permission and
+  the operator-pinned Kima owner. All lookups are scoped to that same Kima
+  user's own saved intent. The feature gate is checked *before* querying
+  Prisma or the remote engine. Intent ID must be syntactically valid.
+- Only `submitted`, `dispatching`, and `dispatch_unknown` **single-track**
+  requests with a stored remote song identity exactly matching the canonical
+  Spotify ID are eligible. A prepared request is not a remote job.
+- The public Downtify `/api/server/info` is checked first without an
+  Authorization header; the API version, authenticated mode and persistent
+  server ID must match. The paired `/api/auth/status` must then match BOTH
+  numeric ID and username, even when the paired account is an admin.
+- `/api/queue` is limited to at most 5000 entries. Remote evidence requires
+  a unique queue row with BOTH the exact immutable song ID and numeric user
+  ID inside `user_ids`. Someone else's visible jobs never count. Multiple
+  matching owned rows are `ambiguous`, not an arbitrarily chosen success.
+  Missing jobs, malformed queue data, remote outages and incompatible server
+  identities produce conservative states.
+- The API returns only a normalized remote phase (`queued`, `processing`,
+  `downloaded`, `failed`, `unknown`) and explicit
+  `libraryVerification: not_checked`, `playbackVerified: false`,
+  `filesChanged: false`, `retryAllowed: false`. No raw URLs, remote IDs,
+  passwords, local paths, or upstream errors are returned.
+- The responsive EN/NL Download Manager offers **Check Downtify job** only
+  on eligible saved request rows when the operator gate is enabled. The
+  check runs exclusively after the user clicks. No background polling,
+  remote POST, automatic retry, or reconciliation mutation happens.
+
+**Import boundary:** This phase never updates `SpotifyDownloadIntent`
+statuses. In particular, a completed Downtify task does not become an
+imported Kima track or a safe trigger for another submission. A later
+separately reviewed stage must prove physical file identity on the target
+DAS, safe transfer/rollback, single-writer handoff with Importer v5, and
+Kima indexing before introducing any importer side effects. Existing
+Importer v5 and all existing Soulseek/Lidarr code remain untouched.
