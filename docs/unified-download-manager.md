@@ -808,3 +808,68 @@ to DAS with both source/destination hashes, atomic finalization, no collision,
 and recovery; then tested catalog indexing, single-writer Importer v5
 handoff and rollback. None of these steps are authorized by D7; Importer v5
 and the v1.17.1 stable installation remain unchanged.
+
+
+## Phase D8: cautious read-only embedded recording tag comparison
+
+D7 verifies that the full staged audio stream was readable and could be
+decoded. It does NOT prove the audio is the exact Spotify recording. D8 adds
+a deliberately **non-authoritative metadata consistency check**: it compares
+the Spotify provider's ISRC and duration against an ISRC embedded in the
+owner-verified staging file and the format's declared duration. Metadata
+can be incomplete, duplicated, stale, edited or forged. Even if values
+match, **recording identity is not proven**.
+
+The entire D8 feature remains OFF by default and depends on every D3–D7
+flag, bound owner and staging mount. Only in an operator-approved isolated
+staging setup add:
+
+    KIMA_DOWNTIFY_RECORDING_TAG_CHECK_ENABLED=true
+
+The exact Kima owner and Downtify account/server, Kima's Spotify metadata
+provider, all previous flags, and a read-only staging mount must already be
+configured. This is a feature contract, not a production Compose change.
+
+- `GET /api/download-manager/spotify/recording-tags-capability` checks
+  eligibility without filesystem or network I/O.
+- `GET /api/download-manager/spotify/intents/:intentId/recording-tags`
+  requires login, current persisted `canDownloadTracks` permission, the
+  exact pinned Kima/Downtify owner, a previously submitted track request,
+  D3's unique remote task and Spotify song ID, D4's storage preflight, and
+  D5's non-empty safe staging file. It re-reads the authenticated owner's
+  saved Spotify intent and verifies the canonical Spotify track URL before
+  retrieving provider metadata. Browser-supplied ISRC, filename or user ID
+  cannot alter these checks.
+- The source is opened `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`. The open
+  descriptor's device/inode/size must match the D5 observation, and the
+  identity, mtime and ctime must still match after parsing. The stream
+  reader uses at most **8 MiB** of 64-KiB chunks, accepts source files up
+  to **256 MiB**, and does not follow symlinks, mutate tags or extract
+  embedded artwork. Tags after the bounded prefix may be unavailable:
+  missing is UNKNOWN and never a reason for a retry or overwrite.
+- Kima's existing `music-metadata` parser reads this bounded stream and
+  extracts embedded ISRC values and format duration. It does not open the
+  file again from a user-supplied path. The service requires one unique,
+  well-formed ISRC, equal to the Spotify provider's current track ISRC,
+  and a duration within **4 seconds** of the provider's duration. Missing,
+  contradictory, invalid or differing tags fail conservatively.
+- A comparison is user-initiated from the EN/NL Download Manager only after
+  deliberate D3, D5, D6 and D7 checks. The backend repeats its own auth and
+  filesystem gates, rather than trusting UI state. One D8 comparison runs
+  per backend process at a time. Errors, private path names, ISRC values,
+  metadata payloads and upstream tokens are never returned.
+- `metadata_consistent_untrusted` is a comparison result, **not an import
+  or verified recording state**. `recordingVerified:false`,
+  `audioDecoded:false` (D8 does not repeat D7),
+  `wholeFileIntegrityVerified:false`, `stableMountVerified:false`,
+  `libraryImportVerified:false`, `filesChanged:false` and
+  `retryAllowed:false` are invariant in every response, even when
+  ISRC and duration match.
+
+**Import remains blocked:** the metadata of a downloaded file does not
+authenticate the content or link it immutably to a remote Spotify recording.
+Before an automatic transfer can safely replace Importer v5, independently
+verify the exact source-to-destination byte copy, the expected mount
+identity, catalog indexing, rollback, and exclusive writer ownership.
+D8 makes NO changes to production, systemd, Importer v5, Docker tags,
+Downtify queue, audio files or Kima's library tables.
