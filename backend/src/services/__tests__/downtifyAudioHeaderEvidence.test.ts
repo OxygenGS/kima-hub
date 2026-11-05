@@ -2,7 +2,7 @@ import { constants as fsConstants } from "fs";
 import {
     getAudioHeaderCapability, inspectDowntifyAudioHeader, detectAudioContainer,
 } from "../downtifyAudioHeaderEvidence";
-import type { ObserveValidatedStagingCandidate } from "../downtifySourceFileEvidence";
+import type { ObserveValidatedStagingCandidate, SourceFileEvidence } from "../downtifySourceFileEvidence";
 
 jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } }));
 
@@ -39,8 +39,8 @@ const signature = (kind: "flac" | "mp3" | "mp4" | "ogg" | "wav" | "noise") => {
     }
     return b;
 };
-const source = {
-    state: "candidate_present_unverified" as const,
+const source: SourceFileEvidence = {
+    state: "candidate_present_unverified",
     remotePhase: "downloaded" as const,
     regularFileObserved: true,
     recordingVerified: false as const,
