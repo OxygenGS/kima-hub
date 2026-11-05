@@ -50,7 +50,7 @@ const entry = (userIds: unknown, status: string, songId = ID) => ({
     private_info: "secret-token",
 });
 function api(queue: unknown = [entry([9], "queued")], server: unknown = info, account: unknown = auth) {
-    const get = jest.fn(async (url: string, opts: { headers?: Record<string, string> }) => {
+    const get = jest.fn(async (url: string) => {
         const path = new URL(url).pathname;
         if (path === "/api/server/info") return { data: server };
         if (path === "/api/auth/status") return { data: account };
