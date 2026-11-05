@@ -13,7 +13,7 @@ function reader(sourceDev = 7, libraryDev = 12) {
     const lstat = jest.fn(async (p: string) => ({
         dev: p === "/music" ? libraryDev : sourceDev,
         isDirectory: () => true,
-        isSymbolicLink: () => false,
+        isSymbolicLink: (): boolean => false,
     }));
     const realpath = jest.fn(async (p: string) => p);
     return { lstat, realpath };
