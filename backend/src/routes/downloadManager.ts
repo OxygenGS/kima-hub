@@ -10,6 +10,7 @@ import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
 import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence";
 import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services/downtifyTrackDispatch";
+import { getReconciliationCapability, verifyRemoteSpotifyIntent } from "../services/downtifyDispatchReconciliation";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -194,6 +195,42 @@ router.post(
     }
 );
 
+
+/**
+ * D3: owner-only explicit remote status check. Completely independent of the
+ * D2 submission toggle, read-only and disabled in production by default.
+ */
+router.get(
+    "/spotify/reconciliation-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getReconciliationCapability(req.user.id));
+    },
+);
+
+router.get(
+    "/spotify/intents/:intentId/remote-status",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        if (!getReconciliationCapability(req.user.id).canCheck) {
+            return res.status(404).json({ error: "Remote verification unavailable" });
+        }
+        try {
+            const result = await verifyRemoteSpotifyIntent(req.user.id, req.params.intentId);
+            if (result.state === "not_found") return res.status(404).json(result);
+            // A remote transfer is not an indexed, imported or playable track.
+            return res.json(result);
+        } catch {
+            return res.status(503).json({ error: "Remote verification unavailable; do not retry submission" });
+        }
+    },
+);
 
 /**
  * Read-only dispatch capability. This reveals no token, remote account ID,
