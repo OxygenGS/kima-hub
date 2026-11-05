@@ -93,7 +93,7 @@ export function detectAudioContainer(bytes: Buffer): AudioContainer {
     return "unknown";
 }
 
-function extensionCompatible(extension: string, container: AudioContainer, header: Buffer): boolean {
+export function audioHeaderMatchesExtension(extension: string, container: AudioContainer, header: Buffer): boolean {
     switch (extension) {
         case ".flac": return container === "flac";
         case ".mp3": return container === "mp3";
@@ -169,7 +169,7 @@ export async function inspectDowntifyAudioHeader(
             container = detectAudioContainer(sample);
             state = container === "unknown"
                 ? "unrecognized_header"
-                : extensionCompatible(path.extname(candidate.absolutePath).toLowerCase(), container, sample)
+                : audioHeaderMatchesExtension(path.extname(candidate.absolutePath).toLowerCase(), container, sample)
                     ? "header_observed_unverified"
                     : "container_mismatch";
         } catch {
