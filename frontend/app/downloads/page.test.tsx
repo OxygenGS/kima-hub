@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/audio-header-capability")) {
+            return { state: "disabled", canCheck: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/source-file-capability")) {
             return { state: "disabled", canCheck: false, singleTrackOnly: true };
         }
@@ -863,5 +866,120 @@ describe("D5 staged source-file check after an explicitly owned Downtify complet
         await mount();
         expect(host.textContent).not.toContain("Source file check failed.");
         expect(host.textContent).not.toContain("Check downloaded source file");
+    });
+});
+
+
+describe("D6 manual audio signature gate after D3 and D5", () => {
+    const submitted = { ...savedTrack, requestState: "submitted" };
+    const remoteDone = {
+        state: "verified", remotePhase: "downloaded",
+        remoteOwnershipVerified: true, libraryVerification: "not_checked",
+        playbackVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const sourcePresent = {
+        state: "candidate_present_unverified", remotePhase: "downloaded",
+        regularFileObserved: true, recordingVerified: false,
+        audioDecoded: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const header = {
+        state: "header_observed_unverified", container: "flac",
+        headerMatchedExtension: true, audioDecoded: false,
+        recordingVerified: false, wholeFileIntegrityVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    };
+
+    function setup(options: {
+        enabled?: boolean; sourceState?: string; failProbe?: boolean;
+    } = {}) {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (p: string) => {
+            if (p.endsWith("/spotify/reconciliation-capability") ||
+                p.endsWith("/spotify/source-file-capability")) {
+                return { state: "available", canCheck: true, singleTrackOnly: true };
+            }
+            if (p.endsWith("/spotify/audio-header-capability")) {
+                return { state: options.enabled === false ? "disabled" : "available",
+                    canCheck: options.enabled !== false, singleTrackOnly: true };
+            }
+            if (p.endsWith("/remote-status")) return remoteDone;
+            if (p.endsWith("/source-file")) {
+                return { ...sourcePresent, state: options.sourceState || sourcePresent.state };
+            }
+            if (p.endsWith("/audio-header")) {
+                if (options.failProbe) throw new Error("secret /staging/private.flac");
+                return header;
+            }
+            if (p.includes("/spotify/intents?")) return savedIntents([submitted]);
+            return original?.(p);
+        });
+    }
+
+    it("never probes an audio header automatically, even when enabled", async () => {
+        setup();
+        await mount();
+        expect(host.textContent).not.toContain("Check audio header");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/audio-header"))).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("requires three explicit checks and labels valid magic as unverified", async () => {
+        setup();
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).not.toContain("Check audio header");
+        await clickButtonContaining("Check downloaded source file");
+        expect(host.textContent).toContain("Check audio header");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/audio-header"))).toBe(false);
+        await clickButtonContaining("Check audio header");
+        expect(mocks.get).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/audio-header"
+        );
+        expect(host.textContent).toContain(
+            "Audio header matches the file type; decoding and recording are unverified."
+        );
+        expect(host.textContent).not.toContain("/staging/private");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("hides audio checks when the opt-in flag is off or source evidence fails", async () => {
+        setup({ enabled: false });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        expect(host.textContent).not.toContain("Check audio header");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/audio-header"))).toBe(false);
+    });
+
+    it("never enables a probe for an unverified D5 source", async () => {
+        setup({ sourceState: "source_unavailable" });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        expect(host.textContent).not.toContain("Check audio header");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not leak errors or retain a previous owner's audio evidence", async () => {
+        setup({ failProbe: true });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        await clickButtonContaining("Check audio header");
+        expect(host.textContent).toContain(
+            "Audio header inspection failed. Download was not retried."
+        );
+        expect(host.textContent).not.toContain("private.flac");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "another-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Audio header inspection failed");
+        expect(host.textContent).not.toContain("Check audio header");
     });
 });
