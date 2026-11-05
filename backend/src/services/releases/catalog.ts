@@ -101,6 +101,55 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.18.0
+    {
+        version: "1.18.0",
+        title: "Kima Hub 1.18.0 — Unified Download Manager (first stage)",
+        summary: "Review saved Spotify requests and downloads with guarded Downtify checks while keeping the existing importer.",
+        date: "2026-11-05",
+        items: [
+            {
+                kind: "note",
+                key: "fork.118.downloads",
+                title: "One place to review downloads",
+                summary: "See your download overview and saved Spotify track requests.",
+                body: "The new Downloads page combines a read-only download overview with Spotify link validation and requests saved separately for each account. Existing Soulseek and Lidarr workflows remain available. New Downtify integrations stay disabled until an administrator configures them.",
+                links: [{ label: "Open Downloads", href: "/downloads" }],
+            },
+            {
+                kind: "note",
+                key: "fork.118.spotify",
+                title: "Optional single-track Downtify submission",
+                summary: "Send one Spotify track manually with exact account and duplicate safeguards.",
+                body: "An administrator can separately enable tightly controlled Downtify track submission after matching Kima and Downtify user identities and server settings. Album and playlist submissions are not enabled. Uncertain results are not automatically retried, and existing library recordings take priority.",
+                links: [{ label: "Review Downloads", href: "/downloads" }],
+            },
+            {
+                kind: "note",
+                key: "fork.118.verify",
+                title: "Inspect completed downloads without modifying music",
+                summary: "Check a task, source file, audio stream and tags in one manual sequence.",
+                body: "With additional disabled-by-default safeguards enabled, the Downloads page can walk through remote job ownership, staging file presence, audio type, full decode plus SHA-256 and a comparison of ISRC and duration. These are checks, not verified recording identity or proof of import into your library. The staging folder must be separately mounted read-only.",
+                links: [{ label: "Open Downloads", href: "/downloads" }],
+            },
+            {
+                kind: "note",
+                key: "fork.118.upgrade",
+                title: "Back up data before upgrading",
+                summary: "Two additive database migrations need a verified /data backup and restore.",
+                body: "This release adds a table for saved Spotify requests and separate dispatch metadata. Back up the complete persistent /data volume and verify an independent restore before updating. A container downgrade does not undo the database changes. Keep the same Docker project, /music mount, existing library permissions and Importer v5 service.",
+                links: [],
+            },
+            {
+                kind: "note",
+                key: "fork.118.importer",
+                title: "Existing Importer v5 remains in control",
+                summary: "No automatic Spotify-to-DAS import or source file deletion is introduced.",
+                body: "The new tools do not replace the external Downtify importer or stop its timer. Automatic transfer to your storage server, catalog indexing and rollback require a separately validated integration. No existing music files are moved, modified or deleted by this release.",
+                links: [],
+            },
+        ],
+    },
     // release-candidate:1.17.1
     {
         "version": "1.17.1",
