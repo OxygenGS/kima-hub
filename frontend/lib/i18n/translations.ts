@@ -3,6 +3,15 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Source file was not verified for an audio header check.": "Source file was not verified for an audio header check.",
+    "The file changed during the check. No audio verification was made.": "The file changed during the check. No audio verification was made.",
+    "Could not read the source audio header.": "Could not read the source audio header.",
+    "No recognized audio container header was found.": "No recognized audio container header was found.",
+    "The audio header does not match the file extension.": "The audio header does not match the file extension.",
+    "Audio header matches the file type; decoding and recording are unverified.": "Audio header matches the file type; decoding and recording are unverified.",
+    "Checking audio header...": "Checking audio header...",
+    "Check audio header": "Check audio header",
+    "Audio header inspection failed. Download was not retried.": "Audio header inspection failed. Download was not retried.",
     "Staging storage is unavailable or unsafe.": "Staging storage is unavailable or unsafe.",
     "Remote task ownership could not be verified.": "Remote task ownership could not be verified.",
     "The remote download is not yet complete.": "The remote download is not yet complete.",
@@ -2074,6 +2083,15 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Source file was not verified for an audio header check.": "Het bronbestand is niet voldoende geverifieerd voor een audiocontrole.",
+    "The file changed during the check. No audio verification was made.": "Het bestand is tijdens de controle gewijzigd. Geen audioverificatie uitgevoerd.",
+    "Could not read the source audio header.": "De audiokop van het bronbestand kon niet worden gelezen.",
+    "No recognized audio container header was found.": "Geen herkenbare audiobestandsindeling gevonden.",
+    "The audio header does not match the file extension.": "De audiobestandsindeling komt niet overeen met de extensie.",
+    "Audio header matches the file type; decoding and recording are unverified.": "De bestandsindeling komt overeen; audio en opname zijn nog niet geverifieerd.",
+    "Checking audio header...": "Audiobestandsindeling controleren...",
+    "Check audio header": "Audiobestandsindeling controleren",
+    "Audio header inspection failed. Download was not retried.": "Audiocontrole mislukt. De download is niet opnieuw gestart.",
     "Staging storage is unavailable or unsafe.": "De stagingopslag is niet beschikbaar of onveilig.",
     "Remote task ownership could not be verified.": "Het eigenaarschap van de externe taak kon niet worden bevestigd.",
     "The remote download is not yet complete.": "De externe download is nog niet voltooid.",

@@ -13,6 +13,8 @@ const mockReconciliationCapability = jest.fn();
 const mockRemoteVerification = jest.fn();
 const mockSourceFileCapability = jest.fn();
 const mockSourceFileEvidence = jest.fn();
+const mockAudioHeaderCapability = jest.fn();
+const mockAudioHeaderEvidence = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -28,6 +30,10 @@ jest.mock("../../services/downtifyTrackDispatch", () => ({
 jest.mock("../../services/downtifyDispatchReconciliation", () => ({
     getReconciliationCapability: (...args: unknown[]) => mockReconciliationCapability(...args),
     verifyRemoteSpotifyIntent: (...args: unknown[]) => mockRemoteVerification(...args),
+}));
+jest.mock("../../services/downtifyAudioHeaderEvidence", () => ({
+    getAudioHeaderCapability: (...args: unknown[]) => mockAudioHeaderCapability(...args),
+    inspectDowntifyAudioHeader: (...args: unknown[]) => mockAudioHeaderEvidence(...args),
 }));
 jest.mock("../../services/downtifySourceFileEvidence", () => ({
     getSourceFileCapability: (...args: unknown[]) => mockSourceFileCapability(...args),
@@ -69,6 +75,16 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockAudioHeaderCapability.mockReset().mockReturnValue({
+        state: "disabled", canCheck: false, singleTrackOnly: true,
+    });
+    mockAudioHeaderEvidence.mockReset().mockResolvedValue({
+        state: "header_observed_unverified", container: "flac",
+        headerMatchedExtension: true, audioDecoded: false,
+        recordingVerified: false, wholeFileIntegrityVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    });
     mockSourceFileCapability.mockReset().mockReturnValue({
         state: "disabled", canCheck: false, singleTrackOnly: true,
     });
@@ -792,5 +808,85 @@ describe("D5 explicit, owner-only, read-only staged source file evidence", () =>
         expect((await request(app).post(path).send({})).status).toBe(404);
         expect((await request(app).patch(path).send({})).status).toBe(404);
         expect((await request(app).delete(path)).status).toBe(404);
+    });
+});
+
+
+describe("D6 explicit and bounded user-owned audio header read", () => {
+    const headerPath = "/api/download-manager/spotify/intents/intent-abc123/audio-header";
+    const capabilityPath = "/api/download-manager/spotify/audio-header-capability";
+
+    it("does not inspect unauthenticated sessions", async () => {
+        expect((await request(app).get(capabilityPath)).status).toBe(401);
+        expect((await request(app).get(headerPath)).status).toBe(401);
+        expect(mockAudioHeaderEvidence).not.toHaveBeenCalled();
+        expect(mockAudioHeaderCapability).not.toHaveBeenCalled();
+    });
+
+    it("refuses a user whose persisted Kima download permission was revoked", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: true, canDownloadTracks: false,
+        });
+        expect((await read("owner-1", headerPath + "?canDownloadTracks=true")).status).toBe(403);
+        expect(mockAudioHeaderCapability).not.toHaveBeenCalled();
+        expect(mockAudioHeaderEvidence).not.toHaveBeenCalled();
+    });
+
+    it("does not inspect a file unless the final operator gate is enabled", async () => {
+        const can = await read("owner-1", capabilityPath);
+        expect(can.status).toBe(200);
+        expect(can.headers["cache-control"]).toBe("no-store");
+        expect(can.body).toEqual({ state: "disabled", canCheck: false, singleTrackOnly: true });
+        expect((await read("owner-1", headerPath)).status).toBe(404);
+        expect(mockAudioHeaderEvidence).not.toHaveBeenCalled();
+    });
+
+    it("uses only the authenticated owner, never browser-supplied paths or tokens", async () => {
+        mockAudioHeaderCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        const result = await read("owner-1", headerPath +
+            "?userId=other&path=/etc/shadow&token=private"
+        );
+        expect(result.status).toBe(200);
+        expect(result.headers["cache-control"]).toBe("no-store");
+        expect(mockAudioHeaderEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(result.body).toMatchObject({
+            state: "header_observed_unverified", container: "flac",
+            headerMatchedExtension: true, wholeFileIntegrityVerified: false,
+            audioDecoded: false, recordingVerified: false,
+            libraryImportVerified: false, filesChanged: false,
+        });
+        expect(JSON.stringify(result.body)).not.toContain("other");
+        expect(JSON.stringify(result.body)).not.toContain("/etc/shadow");
+        expect(JSON.stringify(result.body)).not.toContain("private");
+    });
+
+    it("handles absent requests and errors with no private filesystem information", async () => {
+        mockAudioHeaderCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockAudioHeaderEvidence.mockResolvedValueOnce({
+            state: "not_found", container: "unknown",
+            headerMatchedExtension: false, audioDecoded: false,
+            recordingVerified: false, wholeFileIntegrityVerified: false,
+            stableMountVerified: false, libraryImportVerified: false,
+            filesChanged: false, retryAllowed: false,
+        });
+        expect((await read("owner-1", headerPath)).status).toBe(404);
+        mockAudioHeaderEvidence.mockRejectedValueOnce(
+            new Error("secret: staging/unsafe-file.flac")
+        );
+        const error = await read("owner-1", headerPath);
+        expect(error.status).toBe(503);
+        expect(JSON.stringify(error.body)).not.toContain("staging/");
+        expect(JSON.stringify(error.body)).not.toContain("secret");
+    });
+
+    it("exposes no POST, DELETE or PATCH handler and cannot start a retry", async () => {
+        expect((await request(app).post(headerPath).send({})).status).toBe(404);
+        expect((await request(app).patch(headerPath).send({})).status).toBe(404);
+        expect((await request(app).delete(headerPath)).status).toBe(404);
+        expect(mockAudioHeaderEvidence).not.toHaveBeenCalled();
     });
 });
