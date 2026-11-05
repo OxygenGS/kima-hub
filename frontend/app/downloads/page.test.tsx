@@ -1245,4 +1245,58 @@ describe("D8 manual untrusted recording tag comparison after D3-D7", () => {
         expect(host.textContent).not.toContain("Recording metadata check unavailable");
         expect(host.textContent).not.toContain("Compare recording tags");
     });
+
+    it("offers one explicit, read-only end-to-end check after all capabilities are enabled", async () => {
+        setup();
+        await mount();
+        expect(host.textContent).toContain("Verify completed download");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/remote-status"))).toBe(false);
+        await clickButtonContaining("Verify completed download");
+        const calls = mocks.get.mock.calls.map(([p]) => String(p));
+        expect(calls.filter(p => /\/(remote-status|source-file|audio-header|full-audio|recording-tags)$/.test(p)))
+            .toEqual([
+                "/download-manager/spotify/intents/saved-1/remote-status",
+                "/download-manager/spotify/intents/saved-1/source-file",
+                "/download-manager/spotify/intents/saved-1/audio-header",
+                "/download-manager/spotify/intents/saved-1/full-audio",
+                "/download-manager/spotify/intents/saved-1/recording-tags",
+            ]);
+        expect(host.textContent).toContain(
+            "Checks consistent. Recording and library import are not verified."
+        );
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not expose the combined control if D8 is disabled", async () => {
+        setup({ enabled: false });
+        await mount();
+        expect(host.textContent).not.toContain("Verify completed download");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/remote-status"))).toBe(false);
+    });
+
+    it("stops on a tag conflict without starting a download retry or import", async () => {
+        setup({ state: "tag_conflict" });
+        await mount();
+        await clickButtonContaining("Verify completed download");
+        expect(host.textContent).toContain("Download verification stopped at");
+        expect(host.textContent).toContain("No download was retried.");
+        expect(mocks.get.mock.calls.filter(([p]) => String(p).endsWith("/recording-tags"))).toHaveLength(1);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("redacts the combined workflow errors and clears results on account change", async () => {
+        setup({ error: true });
+        await mount();
+        await clickButtonContaining("Verify completed download");
+        expect(host.textContent).toContain("Download verification interrupted. No retry was started.");
+        expect(host.textContent).not.toContain("/staging/personal");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "another-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Download verification interrupted");
+        expect(host.textContent).not.toContain("Verify completed download");
+    });
 });

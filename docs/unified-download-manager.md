@@ -873,3 +873,54 @@ verify the exact source-to-destination byte copy, the expected mount
 identity, catalog indexing, rollback, and exclusive writer ownership.
 D8 makes NO changes to production, systemd, Importer v5, Docker tags,
 Downtify queue, audio files or Kima's library tables.
+
+
+## Phase D9: one-click fail-closed manual verification (no new backend access)
+
+D3–D8 intentionally ship as independent, default-OFF read-only checks. Their
+manual buttons are useful for diagnosis but requiring a user to click every
+button separately is unnecessarily cumbersome. D9 introduces a **single
+explicit click** in the EN/NL Download Manager, with no new provider
+credentials, storage mounts, database tables or backend write routes.
+
+The optional **Verify completed download** button appears on a saved,
+previously submitted single-track request only when D3, D5, D6, D7 and D8
+capabilities are **all** available. Because D8 depends on D3–D7, all original
+operator-controlled feature flags and exact user/server/account pins are
+still mandatory. No additional D9 environment variable is needed; all
+features stay default-OFF until the operator explicitly enables them.
+
+On user click only, the frontend issues these existing authenticated GETs
+sequentially, and stops at the first unavailable or inconclusive response:
+
+1. `remote-status`: D3 confirms exact owner and a remotely completed task.
+2. `source-file`: D4/D5 confirm an observed regular, nonempty staged file.
+3. `audio-header`: D6 checks the file's extension and bounded header.
+4. `full-audio`: D7 checks the entire stream can be decoded and hashed.
+5. `recording-tags`: D8 compares embedded ISRC/duration against the
+   exact requested Spotify track's provider metadata.
+
+The client accepts **only the expected response shape**, checks that every
+step still reports `filesChanged:false`, `retryAllowed:false` and
+`libraryImportVerified:false`, and does not continue on malformed data,
+wrong user ownership, unexpected success flags, API failures or unverified
+states. It never sends POST/PATCH/DELETE, never retries a download and never
+performs a source or library filesystem write. The backend independently
+checks current Kima permissions and account/Spotify/file identities on
+**every** GET; no earlier UI step authorizes a subsequent request.
+
+A complete result is deliberately `consistent_untrusted`, never
+`recordingVerified:true`, a library-import receipt, or a basis for
+automatic transfer. Both a successful and failed workflow explicitly show
+that no download was retried. The source/file path, ISRC, raw hash, private
+server identity, tokens, raw provider errors and audio bytes are never
+shown. The workflow is serial within a single browser session; concurrent
+individual verification buttons are disabled until it finishes. Previous
+user results and in-flight updates are discarded on account change.
+
+D9 remains a pure **read-only UI orchestration improvement**. The existing
+individual controls stay available for diagnostics when enabled. Importer v5,
+the running Proxmox/DAS setup, stable v1.17.1 and all default-OFF flags
+remain unchanged. An automatic importer requires a separate, independently
+authorized and tested single-writer handoff plus verified copy and Kima
+indexing; D9 does not implement or permit any of those operations.

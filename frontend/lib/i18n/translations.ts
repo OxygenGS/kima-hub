@@ -3,6 +3,12 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Verify completed download": "Verify completed download",
+    "Verifying download evidence...": "Verifying download evidence...",
+    "Checks consistent. Recording and library import are not verified.": "Checks consistent. Recording and library import are not verified.",
+    "Download verification interrupted. No retry was started.": "Download verification interrupted. No retry was started.",
+    "Download verification stopped at": "Download verification stopped at",
+    "No download was retried.": "No download was retried.",
     "Another recording metadata check is running.": "Another recording metadata check is running.",
     "No owner-verified source is available for metadata comparison.": "No owner-verified source is available for metadata comparison.",
     "Trusted Spotify ISRC or duration metadata is unavailable.": "Trusted Spotify ISRC or duration metadata is unavailable.",
@@ -2107,6 +2113,12 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Verify completed download": "Voltooide download controleren",
+    "Verifying download evidence...": "Downloadbewijzen controleren...",
+    "Checks consistent. Recording and library import are not verified.": "Controles komen overeen. De opname-identiteit en bibliotheekimport zijn niet geverifieerd.",
+    "Download verification interrupted. No retry was started.": "Downloadcontrole onderbroken. Er is geen nieuwe download gestart.",
+    "Download verification stopped at": "Downloadcontrole gestopt bij",
+    "No download was retried.": "Er is geen download opnieuw gestart.",
     "Another recording metadata check is running.": "Er wordt al een andere opnamecontrole uitgevoerd.",
     "No owner-verified source is available for metadata comparison.": "Er is geen bronbestand van de juiste gebruiker bevestigd voor metadatacontrole.",
     "Trusted Spotify ISRC or duration metadata is unavailable.": "Betrouwbare Spotify-metadata voor ISRC of speelduur zijn niet beschikbaar.",
