@@ -17,6 +17,8 @@ const mockAudioHeaderCapability = jest.fn();
 const mockAudioHeaderEvidence = jest.fn();
 const mockFullAudioCapability = jest.fn();
 const mockFullAudioEvidence = jest.fn();
+const mockRecordingTagsCapability = jest.fn();
+const mockRecordingTagsEvidence = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -32,6 +34,10 @@ jest.mock("../../services/downtifyTrackDispatch", () => ({
 jest.mock("../../services/downtifyDispatchReconciliation", () => ({
     getReconciliationCapability: (...args: unknown[]) => mockReconciliationCapability(...args),
     verifyRemoteSpotifyIntent: (...args: unknown[]) => mockRemoteVerification(...args),
+}));
+jest.mock("../../services/downtifyRecordingTagsEvidence", () => ({
+    getRecordingTagCapability: (...args: unknown[]) => mockRecordingTagsCapability(...args),
+    inspectDowntifyRecordingTags: (...args: unknown[]) => mockRecordingTagsEvidence(...args),
 }));
 jest.mock("../../services/downtifyFullAudioEvidence", () => ({
     getFullAudioCapability: (...args: unknown[]) => mockFullAudioCapability(...args),
@@ -81,6 +87,15 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockRecordingTagsCapability.mockReset().mockReturnValue({
+        state: "disabled", canCheck: false, singleTrackOnly: true,
+    });
+    mockRecordingTagsEvidence.mockReset().mockResolvedValue({
+        state: "metadata_consistent_untrusted", isrcMatches: true,
+        durationMatches: true, recordingVerified: false, audioDecoded: false,
+        wholeFileIntegrityVerified: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    });
     mockFullAudioCapability.mockReset().mockReturnValue({
         state: "disabled", canCheck: false, singleTrackOnly: true,
     });
@@ -998,5 +1013,92 @@ describe("D7 permission-bound, explicit read-only complete audio inspection API"
         expect((await request(app).post(path).send({})).status).toBe(404);
         expect((await request(app).patch(path).send({})).status).toBe(404);
         expect((await request(app).delete(path)).status).toBe(404);
+    });
+});
+
+
+describe("D8 user-owner-only read-only recording metadata comparison", () => {
+    const cap = "/api/download-manager/spotify/recording-tags-capability";
+    const path = "/api/download-manager/spotify/intents/intent-abc123/recording-tags";
+
+    it("rejects anonymous callers before any metadata lookup or file I/O", async () => {
+        expect((await request(app).get(cap)).status).toBe(401);
+        expect((await request(app).get(path)).status).toBe(401);
+        expect(mockRecordingTagsCapability).not.toHaveBeenCalled();
+        expect(mockRecordingTagsEvidence).not.toHaveBeenCalled();
+    });
+
+    it("honors live persisted track-download permission, not query arguments", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canDownloadTracks: false, canRequestAlbums: true,
+        });
+        const res = await read("owner-1", path + "?canDownloadTracks=true&role=admin");
+        expect(res.status).toBe(403);
+        expect(mockRecordingTagsCapability).not.toHaveBeenCalled();
+        expect(mockRecordingTagsEvidence).not.toHaveBeenCalled();
+    });
+
+    it("is absent until the operator enables D8 after D3-D7", async () => {
+        const capResponse = await read("owner-1", cap);
+        expect(capResponse.status).toBe(200);
+        expect(capResponse.body).toEqual({
+            state: "disabled", canCheck: false, singleTrackOnly: true,
+        });
+        expect(capResponse.headers["cache-control"]).toBe("no-store");
+        const status = await read("owner-1", path);
+        expect(status.status).toBe(404);
+        expect(status.headers["cache-control"]).toBe("no-store");
+        expect(mockRecordingTagsEvidence).not.toHaveBeenCalled();
+    });
+
+    it("matches only the authenticated owner and returns no ISRC, paths or claims", async () => {
+        mockRecordingTagsCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        const res = await read("owner-1", path + "?userId=other&path=/etc&isrc=private");
+        expect(res.status).toBe(200);
+        expect(mockRecordingTagsEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(res.body).toMatchObject({
+            state: "metadata_consistent_untrusted",
+            isrcMatches: true, durationMatches: true,
+            recordingVerified: false, audioDecoded: false,
+            wholeFileIntegrityVerified: false, libraryImportVerified: false,
+            filesChanged: false, retryAllowed: false,
+        });
+        expect(JSON.stringify(res.body)).not.toContain("other");
+        expect(JSON.stringify(res.body)).not.toContain("/etc");
+        expect(JSON.stringify(res.body)).not.toContain("private");
+    });
+
+    it("honors busy, missing owner intent and sanitized provider outages", async () => {
+        mockRecordingTagsCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockRecordingTagsEvidence.mockResolvedValueOnce({
+            state: "busy", isrcMatches: false, durationMatches: false,
+            recordingVerified: false, audioDecoded: false,
+            wholeFileIntegrityVerified: false, stableMountVerified: false,
+            libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        expect((await read("owner-1", path)).status).toBe(429);
+        mockRecordingTagsEvidence.mockResolvedValueOnce({
+            state: "not_found", isrcMatches: false, durationMatches: false,
+            recordingVerified: false, audioDecoded: false,
+            wholeFileIntegrityVerified: false, stableMountVerified: false,
+            libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        expect((await read("owner-1", path)).status).toBe(404);
+        mockRecordingTagsEvidence.mockRejectedValueOnce(new Error("secret ISRC at /staging/private"));
+        const res = await read("owner-1", path);
+        expect(res.status).toBe(503);
+        expect(JSON.stringify(res.body)).not.toContain("/staging");
+        expect(JSON.stringify(res.body)).not.toContain("secret");
+    });
+
+    it("does not expose POST/PATCH/DELETE, resubmit or scanner routes", async () => {
+        expect((await request(app).post(path).send({})).status).toBe(404);
+        expect((await request(app).patch(path).send({})).status).toBe(404);
+        expect((await request(app).delete(path)).status).toBe(404);
+        expect(mockRecordingTagsEvidence).not.toHaveBeenCalled();
     });
 });
