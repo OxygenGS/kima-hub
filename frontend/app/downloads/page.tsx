@@ -179,6 +179,35 @@ interface SourceFileEvidence {
     filesChanged: false;
     retryAllowed: false;
 }
+
+type AudioHeaderState = "disabled" | "unbound" | "misconfigured" |
+    "not_found" | "source_unverified" | "file_changed" |
+    "file_unreadable" | "unrecognized_header" |
+    "container_mismatch" | "header_observed_unverified";
+interface AudioHeaderEvidence {
+    state: AudioHeaderState;
+    container: "flac" | "mp3" | "mp4" | "ogg" | "wav" | "unknown";
+    headerMatchedExtension: boolean;
+    audioDecoded: false;
+    recordingVerified: false;
+    wholeFileIntegrityVerified: false;
+    stableMountVerified: false;
+    libraryImportVerified: false;
+    filesChanged: false;
+    retryAllowed: false;
+}
+const audioHeaderLabel: Record<AudioHeaderState, TranslationKey> = {
+    disabled: "Downtify integration is disabled.",
+    unbound: "No Downtify account is linked to this user.",
+    misconfigured: "Downtify connection settings are incomplete.",
+    not_found: "Request state not independently verified",
+    source_unverified: "Source file was not verified for an audio header check.",
+    file_changed: "The file changed during the check. No audio verification was made.",
+    file_unreadable: "Could not read the source audio header.",
+    unrecognized_header: "No recognized audio container header was found.",
+    container_mismatch: "The audio header does not match the file extension.",
+    header_observed_unverified: "Audio header matches the file type; decoding and recording are unverified.",
+};
 const sourceFileLabel: Record<SourceFileState, TranslationKey> = {
     disabled: "Downtify integration is disabled.",
     unbound: "No Downtify account is linked to this user.",
@@ -470,6 +499,12 @@ function SpotifyLinkIntake() {
     const [sourceResults, setSourceResults] = useState<Record<string, SourceFileEvidence>>({});
     const [sourceErrors, setSourceErrors] = useState<Record<string, boolean>>({});
     const [sourceCheckingId, setSourceCheckingId] = useState<string | null>(null);
+    const [audioCapability, setAudioCapability] = useState<SourceFileCapability | null>(null);
+    const [audioResults, setAudioResults] = useState<Record<string, AudioHeaderEvidence>>({});
+    const [audioErrors, setAudioErrors] = useState<Record<string, boolean>>({});
+    const [audioCheckingId, setAudioCheckingId] = useState<string | null>(null);
+    const audioCheckInFlight = useRef(false);
+    const audioEpoch = useRef(0);
     const sourceCheckInFlight = useRef(false);
     const sourceCheckEpoch = useRef(0);
     const remoteCheckInFlight = useRef(false);
@@ -486,6 +521,7 @@ function SpotifyLinkIntake() {
         requestEpoch.current++;
         remoteCheckEpoch.current++;
         sourceCheckEpoch.current++;
+        audioEpoch.current++;
     }, []);
 
     useEffect(() => {
@@ -509,6 +545,14 @@ function SpotifyLinkIntake() {
         void api.get<SourceFileCapability>("/download-manager/spotify/source-file-capability")
             .then(data => { if (active) setSourceCapability(data); })
             .catch(() => { if (active) setSourceCapability(null); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<SourceFileCapability>("/download-manager/spotify/audio-header-capability")
+            .then(data => { if (active) setAudioCapability(data); })
+            .catch(() => { if (active) setAudioCapability(null); });
         return () => { active = false; };
     }, []);
 
@@ -666,11 +710,17 @@ function SpotifyLinkIntake() {
     // A missing or failed check NEVER resets the saved request for retry.
     const checkRemote = async (id: string) => {
         if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current ||
-            sourceCheckInFlight.current) return;
+            sourceCheckInFlight.current || audioCheckInFlight.current) return;
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
         // Any prior source-file observation is stale after a new remote check.
         sourceCheckEpoch.current++;
+        audioEpoch.current++;
+        setAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setSourceResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -705,9 +755,16 @@ function SpotifyLinkIntake() {
     const checkSourceFile = async (id: string) => {
         const verified = remoteResults[id];
         if (!sourceCapability?.canCheck || sourceCheckInFlight.current ||
+            audioCheckInFlight.current || remoteCheckInFlight.current ||
             verified?.state !== "verified" || verified.remotePhase !== "downloaded") return;
         sourceCheckInFlight.current = true;
         const epoch = ++sourceCheckEpoch.current;
+        audioEpoch.current++;
+        setAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setSourceCheckingId(id);
         setSourceErrors(previous => ({ ...previous, [id]: false }));
         setSourceResults(previous => {
@@ -729,6 +786,41 @@ function SpotifyLinkIntake() {
         } finally {
             sourceCheckInFlight.current = false;
             if (epoch === sourceCheckEpoch.current) setSourceCheckingId(null);
+        }
+    };
+
+    // D6 runs only after the user asked D3 then D5 to verify this row.
+    // The server repeats all permissions/owner/path proofs and opens the
+    // source file as O_RDONLY + O_NOFOLLOW before reading max 64 bytes.
+    const checkAudioHeader = async (id: string) => {
+        if (!audioCapability?.canCheck || audioCheckInFlight.current ||
+            remoteCheckInFlight.current || sourceCheckInFlight.current ||
+            remoteResults[id]?.state !== "verified" ||
+            remoteResults[id]?.remotePhase !== "downloaded" ||
+            sourceResults[id]?.state !== "candidate_present_unverified") return;
+        audioCheckInFlight.current = true;
+        const epoch = ++audioEpoch.current;
+        setAudioCheckingId(id);
+        setAudioErrors(previous => ({ ...previous, [id]: false }));
+        setAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const response = await api.get<AudioHeaderEvidence>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(id) + "/audio-header"
+            );
+            if (epoch === audioEpoch.current) {
+                setAudioResults(previous => ({ ...previous, [id]: response }));
+            }
+        } catch {
+            if (epoch === audioEpoch.current) {
+                setAudioErrors(previous => ({ ...previous, [id]: true }));
+            }
+        } finally {
+            audioCheckInFlight.current = false;
+            if (epoch === audioEpoch.current) setAudioCheckingId(null);
         }
     };
 
@@ -910,7 +1002,7 @@ function SpotifyLinkIntake() {
                                         <div className="mt-3 space-y-2">
                                             <button
                                                 type="button"
-                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null}
+                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null}
                                                 onClick={() => { void checkRemote(item.id); }}
                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                             >
@@ -937,7 +1029,7 @@ function SpotifyLinkIntake() {
                                                     <div className="space-y-2">
                                                         <button
                                                             type="button"
-                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null}
+                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null}
                                                             onClick={() => { void checkSourceFile(item.id); }}
                                                             className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                         >
@@ -955,6 +1047,31 @@ function SpotifyLinkIntake() {
                                                                 {t("Source file check failed. Do not retry the download.")}
                                                             </p>
                                                         )}
+                                                        {audioCapability?.canCheck === true &&
+                                                            sourceResults[item.id]?.state === "candidate_present_unverified" && (
+                                                                <div className="space-y-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                        onClick={() => { void checkAudioHeader(item.id); }}
+                                                                        className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                                                    >
+                                                                        {audioCheckingId === item.id
+                                                                            ? t("Checking audio header...")
+                                                                            : t("Check audio header")}
+                                                                    </button>
+                                                                    {audioResults[item.id] && (
+                                                                        <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                            {t(audioHeaderLabel[audioResults[item.id].state])}
+                                                                        </p>
+                                                                    )}
+                                                                    {audioErrors[item.id] && (
+                                                                        <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                                                            {t("Audio header inspection failed. Download was not retried.")}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                     </div>
                                                 )}
                                         </div>
