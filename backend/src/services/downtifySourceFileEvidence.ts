@@ -39,6 +39,7 @@ export interface SourceFileEvidence {
 
 type FileStat = {
     dev: number;
+    ino?: number;
     size: number;
     isFile: () => boolean;
     isDirectory: () => boolean;
@@ -48,6 +49,19 @@ type Reader = {
     lstat: (file: string) => Promise<FileStat>;
     realpath: (file: string) => Promise<string>;
 };
+
+/**
+ * Internal-only handoff. An opaque file identity is given to the D6 reader
+ * after D3 account proof and D4/D5 path checks. It MUST NOT reach an API.
+ */
+export interface ValidatedStagingCandidate {
+    absolutePath: string;
+    dev: number;
+    ino: number;
+    size: number;
+}
+export type ObserveValidatedStagingCandidate =
+    (candidate: ValidatedStagingCandidate) => Promise<void>;
 type Deps = {
     inspectStorage: (env: NodeJS.ProcessEnv, musicRoot: string) => Promise<StoragePreflight>;
     inspectRemote: (
@@ -129,6 +143,7 @@ export async function inspectDowntifySourceFile(
     env: NodeJS.ProcessEnv = process.env,
     musicRoot: string = config.music.musicPath,
     deps: Deps = defaultDeps,
+    observe?: ObserveValidatedStagingCandidate,
 ): Promise<SourceFileEvidence> {
     const cap = getSourceFileCapability(userId, env);
     if (!cap.canCheck) {
@@ -176,6 +191,7 @@ export async function inspectDowntifySourceFile(
         // Inspect every component. A symlinked ancestor, nested mount or
         // non-directory component invalidates this candidate.
         let current = root;
+        let finalStat: FileStat | null = null;
         const parts = relative.parts;
         for (let i = 0; i < parts.length; i++) {
             current = path.join(current, parts[i]);
@@ -186,6 +202,7 @@ export async function inspectDowntifySourceFile(
                 if (!stat.isDirectory()) return outcome("unsafe_source_path", "downloaded");
             } else {
                 if (!stat.isFile()) return outcome("unsafe_source_path", "downloaded");
+                finalStat = stat;
                 if (!Number.isSafeInteger(stat.size) || stat.size <= 0) {
                     return outcome("source_unavailable", "downloaded");
                 }
@@ -194,6 +211,20 @@ export async function inspectDowntifySourceFile(
         const fullReal = await deps.reader.realpath(current);
         if (fullReal !== current || !fullReal.startsWith(rootReal + path.sep)) {
             return outcome("unsafe_source_path", "downloaded");
+        }
+        if (observe) {
+            // The consumer must re-open O_NOFOLLOW and compare fstat dev/ino/size;
+            // this check alone cannot close a path-replacement TOCTOU window.
+            if (!finalStat || !Number.isSafeInteger(finalStat.ino) ||
+                (finalStat.ino ?? 0) <= 0) {
+                return outcome("unsafe_source_path", "downloaded");
+            }
+            await observe({
+                absolutePath: current,
+                dev: finalStat.dev,
+                ino: finalStat.ino as number,
+                size: finalStat.size,
+            });
         }
         return outcome("candidate_present_unverified", "downloaded");
     } catch {
