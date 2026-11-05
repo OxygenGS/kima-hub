@@ -60,11 +60,21 @@ FROM node:24-slim
 # (trivy found 42 fixable HIGH/CRIT in the Debian layer of rc-* images).
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* && apt-get update
 
-# Add PostgreSQL 16 repository (Debian Bookworm only has PG15 by default)
+# Add PostgreSQL 16 repository (Debian Bookworm only has PG15 by default).
+# CI runners occasionally receive truncated HTTP/2 key responses (curl 18).
+# Download with HTTP/1.1 and bounded retries, THEN verify the whole response
+# before passing it to gpg. Do not mask curl failures behind a shell pipeline.
 RUN apt-get install -y --no-install-recommends \
     gnupg lsb-release curl ca-certificates && \
     echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
+    curl --http1.1 --fail --silent --show-error --location \
+      --retry 6 --retry-delay 3 --retry-all-errors \
+      --connect-timeout 20 --max-time 120 \
+      --output /tmp/postgresql-pgdg-key.asc \
+      https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    test -s /tmp/postgresql-pgdg-key.asc && \
+    gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg /tmp/postgresql-pgdg-key.asc && \
+    rm /tmp/postgresql-pgdg-key.asc && \
     apt-get update
 
 # Install system dependencies including Python for audio analysis
