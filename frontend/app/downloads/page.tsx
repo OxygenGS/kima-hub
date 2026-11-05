@@ -214,6 +214,44 @@ interface FullAudioEvidence {
     filesChanged: false;
     retryAllowed: false;
 }
+type RecordingTagState =
+    | "disabled" | "unbound" | "misconfigured" | "busy" | "not_found"
+    | "source_unverified" | "identity_unavailable" | "metadata_unavailable"
+    | "file_changed" | "file_unreadable" | "file_too_large"
+    | "tag_missing" | "tag_conflict" | "duration_missing"
+    | "isrc_mismatch" | "duration_mismatch" | "metadata_consistent_untrusted";
+interface RecordingTagEvidence {
+    state: RecordingTagState;
+    isrcMatches: boolean;
+    durationMatches: boolean;
+    recordingVerified: false;
+    audioDecoded: false;
+    wholeFileIntegrityVerified: false;
+    stableMountVerified: false;
+    libraryImportVerified: false;
+    filesChanged: false;
+    retryAllowed: false;
+}
+const recordingTagLabels: Record<RecordingTagState, TranslationKey> = {
+    disabled: "Downtify integration is disabled.",
+    unbound: "No Downtify account is linked to this user.",
+    misconfigured: "Downtify connection settings are incomplete.",
+    busy: "Another recording metadata check is running.",
+    not_found: "Request state not independently verified",
+    source_unverified: "No owner-verified source is available for metadata comparison.",
+    identity_unavailable: "Trusted Spotify ISRC or duration metadata is unavailable.",
+    metadata_unavailable: "Could not safely read embedded recording metadata.",
+    file_changed: "The file changed during the check. No audio verification was made.",
+    file_unreadable: "Source file could not be opened for metadata inspection.",
+    file_too_large: "Audio file exceeds the inspection size limit.",
+    tag_missing: "No embedded ISRC was found. Recording identity remains unknown.",
+    tag_conflict: "Embedded ISRC tags conflict or are invalid.",
+    duration_missing: "The embedded audio duration could not be verified.",
+    isrc_mismatch: "The embedded ISRC differs from Spotify's reference.",
+    duration_mismatch: "The file duration differs from Spotify's reference.",
+    metadata_consistent_untrusted: "ISRC and duration are consistent; recording identity is not proven.",
+};
+
 const fullAudioLabels: Record<FullAudioState, TranslationKey> = {
     disabled: "Downtify integration is disabled.",
     unbound: "No Downtify account is linked to this user.",
@@ -541,6 +579,12 @@ function SpotifyLinkIntake() {
     const [fullAudioResults, setFullAudioResults] = useState<Record<string, FullAudioEvidence>>({});
     const [fullAudioErrors, setFullAudioErrors] = useState<Record<string, boolean>>({});
     const [fullAudioCheckingId, setFullAudioCheckingId] = useState<string | null>(null);
+    const [recordingTagCapability, setRecordingTagCapability] = useState<SourceFileCapability | null>(null);
+    const [recordingTagResults, setRecordingTagResults] = useState<Record<string, RecordingTagEvidence>>({});
+    const [recordingTagErrors, setRecordingTagErrors] = useState<Record<string, boolean>>({});
+    const [recordingTagCheckingId, setRecordingTagCheckingId] = useState<string | null>(null);
+    const recordingTagInFlight = useRef(false);
+    const recordingTagEpoch = useRef(0);
     const fullAudioCheckInFlight = useRef(false);
     const fullAudioEpoch = useRef(0);
     const audioCheckInFlight = useRef(false);
@@ -563,6 +607,7 @@ function SpotifyLinkIntake() {
         sourceCheckEpoch.current++;
         audioEpoch.current++;
         fullAudioEpoch.current++;
+        recordingTagEpoch.current++;
     }, []);
 
     useEffect(() => {
@@ -602,6 +647,14 @@ function SpotifyLinkIntake() {
         void api.get<SourceFileCapability>("/download-manager/spotify/full-audio-capability")
             .then(data => { if (active) setFullAudioCapability(data); })
             .catch(() => { if (active) setFullAudioCapability(null); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<SourceFileCapability>("/download-manager/spotify/recording-tags-capability")
+            .then(data => { if (active) setRecordingTagCapability(data); })
+            .catch(() => { if (active) setRecordingTagCapability(null); });
         return () => { active = false; };
     }, []);
 
@@ -760,13 +813,19 @@ function SpotifyLinkIntake() {
     const checkRemote = async (id: string) => {
         if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current ||
             sourceCheckInFlight.current || audioCheckInFlight.current ||
-            fullAudioCheckInFlight.current) return;
+            fullAudioCheckInFlight.current || recordingTagInFlight.current) return;
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
         // Any prior source-file observation is stale after a new remote check.
         sourceCheckEpoch.current++;
         audioEpoch.current++;
         fullAudioEpoch.current++;
+        recordingTagEpoch.current++;
+        setRecordingTagResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setFullAudioResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -812,12 +871,18 @@ function SpotifyLinkIntake() {
         const verified = remoteResults[id];
         if (!sourceCapability?.canCheck || sourceCheckInFlight.current ||
             audioCheckInFlight.current || remoteCheckInFlight.current ||
-            fullAudioCheckInFlight.current ||
+            fullAudioCheckInFlight.current || recordingTagInFlight.current ||
             verified?.state !== "verified" || verified.remotePhase !== "downloaded") return;
         sourceCheckInFlight.current = true;
         const epoch = ++sourceCheckEpoch.current;
         audioEpoch.current++;
         fullAudioEpoch.current++;
+        recordingTagEpoch.current++;
+        setRecordingTagResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setFullAudioResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -858,13 +923,19 @@ function SpotifyLinkIntake() {
     const checkAudioHeader = async (id: string) => {
         if (!audioCapability?.canCheck || audioCheckInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
-            fullAudioCheckInFlight.current ||
+            fullAudioCheckInFlight.current || recordingTagInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified") return;
         audioCheckInFlight.current = true;
         const epoch = ++audioEpoch.current;
         fullAudioEpoch.current++;
+        recordingTagEpoch.current++;
+        setRecordingTagResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setFullAudioResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -900,13 +971,19 @@ function SpotifyLinkIntake() {
     const checkFullAudio = async (id: string) => {
         if (!fullAudioCapability?.canCheck || fullAudioCheckInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
-            audioCheckInFlight.current ||
+            audioCheckInFlight.current || recordingTagInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified" ||
             audioResults[id]?.state !== "header_observed_unverified") return;
         fullAudioCheckInFlight.current = true;
         const epoch = ++fullAudioEpoch.current;
+        recordingTagEpoch.current++;
+        setRecordingTagResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setFullAudioCheckingId(id);
         setFullAudioErrors(previous => ({ ...previous, [id]: false }));
         setFullAudioResults(previous => {
@@ -928,6 +1005,43 @@ function SpotifyLinkIntake() {
         } finally {
             fullAudioCheckInFlight.current = false;
             if (epoch === fullAudioEpoch.current) setFullAudioCheckingId(null);
+        }
+    };
+
+    // D8 is a fifth explicit, read-only metadata comparison. Even exact
+    // ISRC+duration matching cannot authenticate the audio recording.
+    const checkRecordingTags = async (id: string) => {
+        if (!recordingTagCapability?.canCheck || recordingTagInFlight.current ||
+            remoteCheckInFlight.current || sourceCheckInFlight.current ||
+            audioCheckInFlight.current || fullAudioCheckInFlight.current ||
+            remoteResults[id]?.state !== "verified" ||
+            remoteResults[id]?.remotePhase !== "downloaded" ||
+            sourceResults[id]?.state !== "candidate_present_unverified" ||
+            audioResults[id]?.state !== "header_observed_unverified" ||
+            fullAudioResults[id]?.state !== "stream_decoded_unmatched") return;
+        recordingTagInFlight.current = true;
+        const epoch = ++recordingTagEpoch.current;
+        setRecordingTagCheckingId(id);
+        setRecordingTagErrors(previous => ({ ...previous, [id]: false }));
+        setRecordingTagResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const result = await api.get<RecordingTagEvidence>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(id) + "/recording-tags"
+            );
+            if (epoch === recordingTagEpoch.current) {
+                setRecordingTagResults(previous => ({ ...previous, [id]: result }));
+            }
+        } catch {
+            if (epoch === recordingTagEpoch.current) {
+                setRecordingTagErrors(previous => ({ ...previous, [id]: true }));
+            }
+        } finally {
+            recordingTagInFlight.current = false;
+            if (epoch === recordingTagEpoch.current) setRecordingTagCheckingId(null);
         }
     };
 
@@ -1109,7 +1223,7 @@ function SpotifyLinkIntake() {
                                         <div className="mt-3 space-y-2">
                                             <button
                                                 type="button"
-                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null}
+                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
                                                 onClick={() => { void checkRemote(item.id); }}
                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                             >
@@ -1136,7 +1250,7 @@ function SpotifyLinkIntake() {
                                                     <div className="space-y-2">
                                                         <button
                                                             type="button"
-                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null}
+                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
                                                             onClick={() => { void checkSourceFile(item.id); }}
                                                             className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                         >
@@ -1159,7 +1273,7 @@ function SpotifyLinkIntake() {
                                                                 <div className="space-y-2">
                                                                     <button
                                                                         type="button"
-                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || fullAudioCheckingId !== null}
+                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || fullAudioCheckingId !== null || recordingTagCheckingId !== null}
                                                                         onClick={() => { void checkAudioHeader(item.id); }}
                                                                         className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                     >
@@ -1182,7 +1296,7 @@ function SpotifyLinkIntake() {
                                                                             <div className="space-y-2">
                                                                                 <button
                                                                                     type="button"
-                                                                                    disabled={fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                                    disabled={fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || recordingTagCheckingId !== null}
                                                                                     onClick={() => { void checkFullAudio(item.id); }}
                                                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                                 >
@@ -1200,6 +1314,31 @@ function SpotifyLinkIntake() {
                                                                                         {t("Full audio check unavailable. Do not resubmit.")}
                                                                                     </p>
                                                                                 )}
+                                                                                {recordingTagCapability?.canCheck === true &&
+                                                                                    fullAudioResults[item.id]?.state === "stream_decoded_unmatched" && (
+                                                                                        <div className="space-y-2">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                disabled={recordingTagCheckingId !== null || fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                                                onClick={() => { void checkRecordingTags(item.id); }}
+                                                                                                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                                                                            >
+                                                                                                {recordingTagCheckingId === item.id
+                                                                                                    ? t("Checking recording tags...")
+                                                                                                    : t("Compare recording tags")}
+                                                                                            </button>
+                                                                                            {recordingTagResults[item.id] && (
+                                                                                                <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                                                    {t(recordingTagLabels[recordingTagResults[item.id].state])}
+                                                                                                </p>
+                                                                                            )}
+                                                                                            {recordingTagErrors[item.id] && (
+                                                                                                <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                                                                                    {t("Recording metadata check unavailable. Do not resubmit.")}
+                                                                                                </p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
                                                                             </div>
                                                                         )}
                                                                 </div>

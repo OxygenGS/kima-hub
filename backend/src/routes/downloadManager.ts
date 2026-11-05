@@ -14,6 +14,7 @@ import { getReconciliationCapability, verifyRemoteSpotifyIntent } from "../servi
 import { getSourceFileCapability, inspectDowntifySourceFile } from "../services/downtifySourceFileEvidence";
 import { getAudioHeaderCapability, inspectDowntifyAudioHeader } from "../services/downtifyAudioHeaderEvidence";
 import { getFullAudioCapability, inspectDowntifyFullAudio } from "../services/downtifyFullAudioEvidence";
+import { getRecordingTagCapability, inspectDowntifyRecordingTags } from "../services/downtifyRecordingTagsEvidence";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -341,6 +342,43 @@ router.get(
             return res.json(result);
         } catch {
             return res.status(503).json({ error: "Full audio inspection unavailable" });
+        }
+    },
+);
+
+/**
+ * D8: user-initiated, read-only ISRC and duration tag comparison.
+ * The source is re-owned and re-opened each request. Matching embedded
+ * tags are not cryptographic proof of the requested Spotify recording.
+ */
+router.get(
+    "/spotify/recording-tags-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getRecordingTagCapability(req.user.id));
+    },
+);
+
+router.get(
+    "/spotify/intents/:intentId/recording-tags",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        if (!getRecordingTagCapability(req.user.id).canCheck) {
+            return res.status(404).json({ error: "Recording tag comparison unavailable" });
+        }
+        try {
+            const result = await inspectDowntifyRecordingTags(req.user.id, req.params.intentId);
+            if (result.state === "not_found") return res.status(404).json(result);
+            if (result.state === "busy") return res.status(429).json(result);
+            return res.json(result);
+        } catch {
+            return res.status(503).json({ error: "Recording tag comparison unavailable" });
         }
     },
 );

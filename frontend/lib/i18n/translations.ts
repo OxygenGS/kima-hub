@@ -3,6 +3,20 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Another recording metadata check is running.": "Another recording metadata check is running.",
+    "No owner-verified source is available for metadata comparison.": "No owner-verified source is available for metadata comparison.",
+    "Trusted Spotify ISRC or duration metadata is unavailable.": "Trusted Spotify ISRC or duration metadata is unavailable.",
+    "Could not safely read embedded recording metadata.": "Could not safely read embedded recording metadata.",
+    "Source file could not be opened for metadata inspection.": "Source file could not be opened for metadata inspection.",
+    "No embedded ISRC was found. Recording identity remains unknown.": "No embedded ISRC was found. Recording identity remains unknown.",
+    "Embedded ISRC tags conflict or are invalid.": "Embedded ISRC tags conflict or are invalid.",
+    "The embedded audio duration could not be verified.": "The embedded audio duration could not be verified.",
+    "The embedded ISRC differs from Spotify's reference.": "The embedded ISRC differs from Spotify's reference.",
+    "The file duration differs from Spotify's reference.": "The file duration differs from Spotify's reference.",
+    "ISRC and duration are consistent; recording identity is not proven.": "ISRC and duration are consistent; recording identity is not proven.",
+    "Checking recording tags...": "Checking recording tags...",
+    "Compare recording tags": "Compare recording tags",
+    "Recording metadata check unavailable. Do not resubmit.": "Recording metadata check unavailable. Do not resubmit.",
     "Another full audio inspection is running.": "Another full audio inspection is running.",
     "Could not read the full source audio.": "Could not read the full source audio.",
     "Audio file exceeds the inspection size limit.": "Audio file exceeds the inspection size limit.",
@@ -2093,6 +2107,20 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Another recording metadata check is running.": "Er wordt al een andere opnamecontrole uitgevoerd.",
+    "No owner-verified source is available for metadata comparison.": "Er is geen bronbestand van de juiste gebruiker bevestigd voor metadatacontrole.",
+    "Trusted Spotify ISRC or duration metadata is unavailable.": "Betrouwbare Spotify-metadata voor ISRC of speelduur zijn niet beschikbaar.",
+    "Could not safely read embedded recording metadata.": "De ingesloten opnamemetadata konden niet veilig worden gelezen.",
+    "Source file could not be opened for metadata inspection.": "Het bronbestand kon niet worden geopend voor metadatacontrole.",
+    "No embedded ISRC was found. Recording identity remains unknown.": "Geen ISRC in het bestand gevonden. De opname-identiteit blijft onbekend.",
+    "Embedded ISRC tags conflict or are invalid.": "De ISRC-tags in het bestand zijn ongeldig of spreken elkaar tegen.",
+    "The embedded audio duration could not be verified.": "De speelduur in het bestand kon niet worden vastgesteld.",
+    "The embedded ISRC differs from Spotify's reference.": "De ISRC in het bestand verschilt van de Spotify-referentie.",
+    "The file duration differs from Spotify's reference.": "De speelduur van het bestand verschilt van die van Spotify.",
+    "ISRC and duration are consistent; recording identity is not proven.": "ISRC en speelduur komen overeen; de opname-identiteit is niet bewezen.",
+    "Checking recording tags...": "Opnametags controleren...",
+    "Compare recording tags": "Opnametags vergelijken",
+    "Recording metadata check unavailable. Do not resubmit.": "Opnamemetadata kunnen niet worden gecontroleerd. Dien de download niet opnieuw in.",
     "Another full audio inspection is running.": "Er loopt al een volledige audiocontrole.",
     "Could not read the full source audio.": "Het volledige bronbestand kon niet worden gelezen.",
     "Audio file exceeds the inspection size limit.": "Het audiobestand is te groot voor deze controle.",
