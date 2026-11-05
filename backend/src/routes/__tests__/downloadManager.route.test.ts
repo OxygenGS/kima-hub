@@ -15,6 +15,8 @@ const mockSourceFileCapability = jest.fn();
 const mockSourceFileEvidence = jest.fn();
 const mockAudioHeaderCapability = jest.fn();
 const mockAudioHeaderEvidence = jest.fn();
+const mockFullAudioCapability = jest.fn();
+const mockFullAudioEvidence = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -30,6 +32,10 @@ jest.mock("../../services/downtifyTrackDispatch", () => ({
 jest.mock("../../services/downtifyDispatchReconciliation", () => ({
     getReconciliationCapability: (...args: unknown[]) => mockReconciliationCapability(...args),
     verifyRemoteSpotifyIntent: (...args: unknown[]) => mockRemoteVerification(...args),
+}));
+jest.mock("../../services/downtifyFullAudioEvidence", () => ({
+    getFullAudioCapability: (...args: unknown[]) => mockFullAudioCapability(...args),
+    inspectDowntifyFullAudio: (...args: unknown[]) => mockFullAudioEvidence(...args),
 }));
 jest.mock("../../services/downtifyAudioHeaderEvidence", () => ({
     getAudioHeaderCapability: (...args: unknown[]) => mockAudioHeaderCapability(...args),
@@ -75,6 +81,16 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockFullAudioCapability.mockReset().mockReturnValue({
+        state: "disabled", canCheck: false, singleTrackOnly: true,
+    });
+    mockFullAudioEvidence.mockReset().mockResolvedValue({
+        state: "stream_decoded_unmatched", container: "flac",
+        fullFileSha256Calculated: true, audioDecoded: true,
+        wholeFileIntegrityVerified: false, recordingVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    });
     mockAudioHeaderCapability.mockReset().mockReturnValue({
         state: "disabled", canCheck: false, singleTrackOnly: true,
     });
@@ -888,5 +904,99 @@ describe("D6 explicit and bounded user-owned audio header read", () => {
         expect((await request(app).patch(headerPath).send({})).status).toBe(404);
         expect((await request(app).delete(headerPath)).status).toBe(404);
         expect(mockAudioHeaderEvidence).not.toHaveBeenCalled();
+    });
+});
+
+
+describe("D7 permission-bound, explicit read-only complete audio inspection API", () => {
+    const cap = "/api/download-manager/spotify/full-audio-capability";
+    const path = "/api/download-manager/spotify/intents/intent-abc123/full-audio";
+
+    it("denies anonymous access before touching audio files", async () => {
+        expect((await request(app).get(cap)).status).toBe(401);
+        expect((await request(app).get(path)).status).toBe(401);
+        expect(mockFullAudioCapability).not.toHaveBeenCalled();
+        expect(mockFullAudioEvidence).not.toHaveBeenCalled();
+    });
+
+    it("requires currently persisted track download rights, not caller parameters", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canDownloadTracks: false, canRequestAlbums: true,
+        });
+        const result = await read("owner-1", path + "?canDownloadTracks=true&role=admin");
+        expect(result.status).toBe(403);
+        expect(mockFullAudioEvidence).not.toHaveBeenCalled();
+    });
+
+    it("returns disabled unless the D7 operator gate is enabled", async () => {
+        const capability = await read("owner-1", cap);
+        expect(capability.status).toBe(200);
+        expect(capability.headers["cache-control"]).toBe("no-store");
+        expect(capability.body).toEqual({
+            state: "disabled", canCheck: false, singleTrackOnly: true,
+        });
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(404);
+        expect(result.headers["cache-control"]).toBe("no-store");
+        expect(mockFullAudioEvidence).not.toHaveBeenCalled();
+    });
+
+    it("never trusts query-provided users, paths or tokens for a user-owned file", async () => {
+        mockFullAudioCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        const result = await read(
+            "owner-1", path + "?userId=other&path=/etc/passwd&token=private",
+        );
+        expect(result.status).toBe(200);
+        expect(mockFullAudioEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(result.body).toMatchObject({
+            state: "stream_decoded_unmatched", fullFileSha256Calculated: true,
+            audioDecoded: true, wholeFileIntegrityVerified: false,
+            recordingVerified: false, libraryImportVerified: false,
+            filesChanged: false, retryAllowed: false,
+        });
+        expect(JSON.stringify(result.body)).not.toContain("other");
+        expect(JSON.stringify(result.body)).not.toContain("/etc/");
+        expect(JSON.stringify(result.body)).not.toContain("private");
+    });
+
+    it("returns busy as 429 without claiming import or triggering retries", async () => {
+        mockFullAudioCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockFullAudioEvidence.mockResolvedValueOnce({
+            state: "busy", container: "unknown",
+            fullFileSha256Calculated: false, audioDecoded: false,
+            wholeFileIntegrityVerified: false, recordingVerified: false,
+            stableMountVerified: false, libraryImportVerified: false,
+            filesChanged: false, retryAllowed: false,
+        });
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(429);
+        expect(result.body.retryAllowed).toBe(false);
+        expect(result.body.filesChanged).toBe(false);
+    });
+
+    it("redacts errors, handles missing owned requests, and has no write methods", async () => {
+        mockFullAudioCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockFullAudioEvidence.mockResolvedValueOnce({
+            state: "not_found", container: "unknown",
+            fullFileSha256Calculated: false, audioDecoded: false,
+            wholeFileIntegrityVerified: false, recordingVerified: false,
+            stableMountVerified: false, libraryImportVerified: false,
+            filesChanged: false, retryAllowed: false,
+        });
+        expect((await read("owner-1", path)).status).toBe(404);
+        mockFullAudioEvidence.mockRejectedValueOnce(new Error("/music/private/secret"));
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(503);
+        expect(JSON.stringify(result.body)).not.toContain("/music");
+        expect(JSON.stringify(result.body)).not.toContain("secret");
+        expect((await request(app).post(path).send({})).status).toBe(404);
+        expect((await request(app).patch(path).send({})).status).toBe(404);
+        expect((await request(app).delete(path)).status).toBe(404);
     });
 });
