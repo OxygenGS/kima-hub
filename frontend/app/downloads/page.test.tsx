@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/full-audio-capability")) {
+            return { state: "disabled", canCheck: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/audio-header-capability")) {
             return { state: "disabled", canCheck: false, singleTrackOnly: true };
         }
@@ -981,5 +984,128 @@ describe("D6 manual audio signature gate after D3 and D5", () => {
         await mount();
         expect(host.textContent).not.toContain("Audio header inspection failed");
         expect(host.textContent).not.toContain("Check audio header");
+    });
+});
+
+
+describe("D7 complete audio read only after three explicit prior checks", () => {
+    const submitted = { ...savedTrack, requestState: "submitted" };
+    const done = {
+        state: "verified", remotePhase: "downloaded",
+        remoteOwnershipVerified: true, libraryVerification: "not_checked",
+        playbackVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const source = {
+        state: "candidate_present_unverified", remotePhase: "downloaded",
+        regularFileObserved: true, recordingVerified: false,
+        audioDecoded: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const header = {
+        state: "header_observed_unverified", container: "flac",
+        headerMatchedExtension: true, audioDecoded: false,
+        recordingVerified: false, wholeFileIntegrityVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    };
+    const decoded = {
+        state: "stream_decoded_unmatched", container: "flac",
+        fullFileSha256Calculated: true, audioDecoded: true,
+        wholeFileIntegrityVerified: false, recordingVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    };
+
+    const setup = (options: { flag?: boolean; decode?: unknown; fail?: boolean } = {}) => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (p: string) => {
+            if (p.endsWith("/spotify/reconciliation-capability") ||
+                p.endsWith("/spotify/source-file-capability") ||
+                p.endsWith("/spotify/audio-header-capability")) {
+                return { state: "available", canCheck: true, singleTrackOnly: true };
+            }
+            if (p.endsWith("/spotify/full-audio-capability")) {
+                return { state: options.flag === false ? "disabled" : "available",
+                    canCheck: options.flag !== false, singleTrackOnly: true };
+            }
+            if (p.endsWith("/remote-status")) return done;
+            if (p.endsWith("/source-file")) return source;
+            if (p.endsWith("/audio-header")) return header;
+            if (p.endsWith("/full-audio")) {
+                if (options.fail) throw new Error("secret token /staging/private");
+                return options.decode ?? decoded;
+            }
+            if (p.includes("/spotify/intents?")) return savedIntents([submitted]);
+            return original?.(p);
+        });
+    };
+
+    const verifyPrerequisites = async () => {
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        await clickButtonContaining("Check audio header");
+    };
+
+    it("never starts full-file decoding on initial render or without explicit prior checks", async () => {
+        setup();
+        await mount();
+        expect(host.textContent).not.toContain("Verify full audio stream");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/full-audio"))).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("after four manual clicks, displays decoded plus hashed but not imported", async () => {
+        setup();
+        await mount();
+        await verifyPrerequisites();
+        expect(host.textContent).toContain("Verify full audio stream");
+        await clickButtonContaining("Verify full audio stream");
+        expect(mocks.get).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/full-audio"
+        );
+        expect(host.textContent).toContain(
+            "Full audio decoded and SHA-256 calculated; recording and import are not verified."
+        );
+        expect(mocks.post).not.toHaveBeenCalled();
+        expect(host.textContent).not.toContain("private");
+    });
+
+    it("stays hidden if D7 is disabled even after D3-D6 all pass", async () => {
+        setup({ flag: false });
+        await mount();
+        await verifyPrerequisites();
+        expect(host.textContent).not.toContain("Verify full audio stream");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/full-audio"))).toBe(false);
+    });
+
+    it("preserves uncertainty after decode failure; never allows resubmitting the request", async () => {
+        setup({ decode: { ...decoded, state: "decode_failed",
+            audioDecoded: false, fullFileSha256Calculated: true } });
+        await mount();
+        await verifyPrerequisites();
+        await clickButtonContaining("Verify full audio stream");
+        expect(host.textContent).toContain(
+            "Full audio decode failed. Do not retry the download."
+        );
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("redacts full-file failures and cannot show a former user's audio result", async () => {
+        setup({ fail: true });
+        await mount();
+        await verifyPrerequisites();
+        await clickButtonContaining("Verify full audio stream");
+        expect(host.textContent).toContain("Full audio check unavailable. Do not resubmit.");
+        expect(host.textContent).not.toContain("/staging/private");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "another-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Full audio check unavailable");
+        expect(host.textContent).not.toContain("Verify full audio stream");
     });
 });
