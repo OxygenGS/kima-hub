@@ -13,6 +13,7 @@ jest.mock("../../utils/db", () => ({
 
 import {
     getReconciliationCapability, verifyRemoteSpotifyIntent,
+    inspectOwnedDowntifyFileCandidate,
 } from "../downtifyDispatchReconciliation";
 
 const ID = "0123456789ABCDEFGHIJKL";
@@ -200,5 +201,50 @@ describe("default-off manual Downtify reconciliation", () => {
         expect(JSON.stringify(result)).not.toContain("secret");
         expect(JSON.stringify(result)).not.toContain("/music");
         expect(mockUpdateMany).not.toHaveBeenCalled();
+    });
+});
+
+describe("D5 private filename handoff never widens public D3 evidence", () => {
+    it("returns a filename internally only for an owned, completed track", async () => {
+        const completed = { ...entry([9], "done"), filename: "Artist/Album/Song.flac" };
+        const http = api([completed, { ...entry([29], "done"), filename: "/private.flac" }]);
+        const candidate = await inspectOwnedDowntifyFileCandidate(
+            "owner-1", "intent-abc123", settings(), http,
+        );
+        expect(candidate.verification).toMatchObject({
+            state: "verified", remotePhase: "downloaded",
+            remoteOwnershipVerified: true, filesChanged: false,
+        });
+        expect(candidate.filename).toBe("Artist/Album/Song.flac");
+        const publicResult = await run(http);
+        expect(JSON.stringify(publicResult)).not.toContain("Artist/Album");
+        expect(JSON.stringify(publicResult)).not.toContain("private.flac");
+        expect(mockUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it("never hands out a filename for another remote owner, non-done, or ambiguous job", async () => {
+        const wrongUser = await inspectOwnedDowntifyFileCandidate(
+            "owner-1", "intent-abc123", settings(),
+            api([{ ...entry([99], "done"), filename: "secret.flac" }]),
+        );
+        expect(wrongUser.verification.state).toBe("no_verified_job");
+        expect(wrongUser.filename).toBeNull();
+
+        const queued = await inspectOwnedDowntifyFileCandidate(
+            "owner-1", "intent-abc123", settings(),
+            api([{ ...entry([9], "queued"), filename: "secret.flac" }]),
+        );
+        expect(queued.verification.remotePhase).toBe("queued");
+        expect(queued.filename).toBeNull();
+
+        const ambiguous = await inspectOwnedDowntifyFileCandidate(
+            "owner-1", "intent-abc123", settings(),
+            api([
+                { ...entry([9], "done"), filename: "one.flac" },
+                { ...entry([9], "done"), filename: "two.flac" },
+            ]),
+        );
+        expect(ambiguous.verification.state).toBe("ambiguous");
+        expect(ambiguous.filename).toBeNull();
     });
 });
