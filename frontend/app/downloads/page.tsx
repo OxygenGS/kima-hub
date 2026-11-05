@@ -138,6 +138,48 @@ interface DispatchResponse {
     libraryVerified: false;
     downloadInKimaVerified: false;
 }
+
+type ReconciliationState = "disabled" | "unbound" | "misconfigured" | "available" |
+    "not_found" | "not_attempted" | "invalid_intent" | "unavailable" |
+    "unauthorized" | "incompatible" | "no_verified_job" | "ambiguous" | "verified";
+type RemoteTransferPhase = "not_checked" | "queued" | "processing" |
+    "downloaded" | "failed" | "unknown";
+interface ReconciliationCapability {
+    state: "disabled" | "unbound" | "misconfigured" | "available";
+    canCheck: boolean;
+    singleTrackOnly: true;
+}
+interface RemoteIntentVerification {
+    state: ReconciliationState;
+    remotePhase: RemoteTransferPhase;
+    remoteOwnershipVerified: boolean;
+    libraryVerification: "not_checked";
+    playbackVerified: false;
+    filesChanged: false;
+    retryAllowed: false;
+}
+const reconciliationLabel: Record<Exclude<ReconciliationState, "verified">, TranslationKey> = {
+    disabled: "Downtify integration is disabled.",
+    unbound: "No Downtify account is linked to this user.",
+    misconfigured: "Downtify connection settings are incomplete.",
+    available: "Remote transfer status is unknown.",
+    not_found: "Request state not independently verified",
+    not_attempted: "Prepared only — not sent for download",
+    invalid_intent: "Recording identity could not be verified.",
+    unavailable: "Downtify is unavailable. Try refreshing.",
+    unauthorized: "Downtify device pairing could not be verified.",
+    incompatible: "This Downtify API version is not supported.",
+    no_verified_job: "No owned Downtify job verified. Do not retry automatically.",
+    ambiguous: "Multiple owned Downtify jobs matched. Manual review required.",
+};
+const remoteTransferLabel: Record<RemoteTransferPhase, TranslationKey> = {
+    not_checked: "Unknown status",
+    queued: "Queued",
+    processing: "Processing",
+    downloaded: "Download complete (index not checked)",
+    failed: "Failed",
+    unknown: "Unknown status",
+};
 const savedRequestLabel: Record<SavedSpotifyIntent["requestState"], TranslationKey> = {
     prepared: "Prepared only — not sent for download",
     dispatching: "Dispatch started; do not send again until verified.",
@@ -384,6 +426,12 @@ function SpotifyLinkIntake() {
     const [libraryChecking, setLibraryChecking] = useState(false);
     const [libraryError, setLibraryError] = useState(false);
     const [dispatchCapability, setDispatchCapability] = useState<DispatchCapabilityResponse | null>(null);
+    const [reconciliationCapability, setReconciliationCapability] = useState<ReconciliationCapability | null>(null);
+    const [remoteResults, setRemoteResults] = useState<Record<string, RemoteIntentVerification>>({});
+    const [remoteErrors, setRemoteErrors] = useState<Record<string, boolean>>({});
+    const [remoteCheckingId, setRemoteCheckingId] = useState<string | null>(null);
+    const remoteCheckInFlight = useRef(false);
+    const remoteCheckEpoch = useRef(0);
     const [ackUnverified, setAckUnverified] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -392,13 +440,24 @@ function SpotifyLinkIntake() {
     const attemptedIntentIds = useRef(new Set<string>());
     const requestEpoch = useRef(0);
 
-    useEffect(() => () => { requestEpoch.current++; }, []);
+    useEffect(() => () => {
+        requestEpoch.current++;
+        remoteCheckEpoch.current++;
+    }, []);
 
     useEffect(() => {
         let active = true;
         void api.get<DispatchCapabilityResponse>("/download-manager/spotify/dispatch-capability")
             .then(data => { if (active) setDispatchCapability(data); })
             .catch(() => { if (active) setDispatchCapability(null); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<ReconciliationCapability>("/download-manager/spotify/reconciliation-capability")
+            .then(data => { if (active) setReconciliationCapability(data); })
+            .catch(() => { if (active) setReconciliationCapability(null); });
         return () => { active = false; };
     }, []);
 
@@ -543,6 +602,37 @@ function SpotifyLinkIntake() {
             }
         } finally {
             if (requestEpoch.current === epoch) setSubmitting(false);
+        }
+    };
+
+
+    // Only a deliberate click reads an intent's remote queue state.
+    // A missing or failed check NEVER resets the saved request for retry.
+    const checkRemote = async (id: string) => {
+        if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current) return;
+        remoteCheckInFlight.current = true;
+        const epoch = remoteCheckEpoch.current;
+        setRemoteCheckingId(id);
+        setRemoteErrors(previous => ({ ...previous, [id]: false }));
+        setRemoteResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const result = await api.get<RemoteIntentVerification>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(id) + "/remote-status"
+            );
+            if (epoch === remoteCheckEpoch.current) {
+                setRemoteResults(previous => ({ ...previous, [id]: result }));
+            }
+        } catch {
+            if (epoch === remoteCheckEpoch.current) {
+                setRemoteErrors(previous => ({ ...previous, [id]: true }));
+            }
+        } finally {
+            remoteCheckInFlight.current = false;
+            if (epoch === remoteCheckEpoch.current) setRemoteCheckingId(null);
         }
     };
 
@@ -716,6 +806,39 @@ function SpotifyLinkIntake() {
                                 <p className="mt-1 break-all text-xs text-[var(--text-secondary)]">
                                     {item.canonicalUrl ?? t("Invalid stored link")}
                                 </p>
+                                {reconciliationCapability?.canCheck === true &&
+                                    item.kind === "track" &&
+                                    (item.requestState === "submitted" ||
+                                        item.requestState === "dispatching" ||
+                                        item.requestState === "dispatch_unknown") && (
+                                        <div className="mt-3 space-y-2">
+                                            <button
+                                                type="button"
+                                                disabled={remoteCheckingId !== null}
+                                                onClick={() => { void checkRemote(item.id); }}
+                                                className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                            >
+                                                {remoteCheckingId === item.id
+                                                    ? t("Checking Downtify job...")
+                                                    : t("Check Downtify job")}
+                                            </button>
+                                            {remoteResults[item.id] && (
+                                                <div role="status" className="space-y-1 text-xs text-[var(--text-secondary)]">
+                                                    <p>
+                                                        {remoteResults[item.id].state === "verified"
+                                                            ? t("Remote status") + ": " + t(remoteTransferLabel[remoteResults[item.id].remotePhase])
+                                                            : t(reconciliationLabel[remoteResults[item.id].state])}
+                                                    </p>
+                                                    <p>{t("A remote transfer does not confirm Kima library import or playable audio.")}</p>
+                                                </div>
+                                            )}
+                                            {remoteErrors[item.id] && (
+                                                <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                                    {t("The remote status check failed. Do not retry automatically.")}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                             </li>
                         ))}
                         {savedList.hasMore && (
