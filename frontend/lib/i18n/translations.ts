@@ -3,6 +3,17 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Staging storage is unavailable or unsafe.": "Staging storage is unavailable or unsafe.",
+    "Remote task ownership could not be verified.": "Remote task ownership could not be verified.",
+    "The remote download is not yet complete.": "The remote download is not yet complete.",
+    "Downtify did not provide a source filename.": "Downtify did not provide a source filename.",
+    "This source is outside the configured download folder.": "This source is outside the configured download folder.",
+    "Unsafe source path or mount. Manual review required.": "Unsafe source path or mount. Manual review required.",
+    "Source file not found. It may already have been moved.": "Source file not found. It may already have been moved.",
+    "Staging file observed; recording and import are unverified.": "Staging file observed; recording and import are unverified.",
+    "Checking downloaded source file...": "Checking downloaded source file...",
+    "Check downloaded source file": "Check downloaded source file",
+    "Source file check failed. Do not retry the download.": "Source file check failed. Do not retry the download.",
     "Check Downtify job": "Check Downtify job",
     "Checking Downtify job...": "Checking Downtify job...",
     "Remote status": "Remote status",
@@ -2063,6 +2074,17 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Staging storage is unavailable or unsafe.": "De stagingopslag is niet beschikbaar of onveilig.",
+    "Remote task ownership could not be verified.": "Het eigenaarschap van de externe taak kon niet worden bevestigd.",
+    "The remote download is not yet complete.": "De externe download is nog niet voltooid.",
+    "Downtify did not provide a source filename.": "Downtify heeft geen bronbestandsnaam doorgegeven.",
+    "This source is outside the configured download folder.": "Dit bronbestand valt buiten de ingestelde downloadmap.",
+    "Unsafe source path or mount. Manual review required.": "Onveilig bronpad of koppelpunt. Handmatige controle vereist.",
+    "Source file not found. It may already have been moved.": "Bronbestand niet aangetroffen. Mogelijk is het al verplaatst.",
+    "Staging file observed; recording and import are unverified.": "Bestand aangetroffen in staging; opname en import zijn niet geverifieerd.",
+    "Checking downloaded source file...": "Gedownload bronbestand controleren...",
+    "Check downloaded source file": "Gedownload bronbestand controleren",
+    "Source file check failed. Do not retry the download.": "Controle van het bronbestand mislukt. Download het nummer niet opnieuw.",
     "Check Downtify job": "Downtify-taak controleren",
     "Checking Downtify job...": "Downtify-taak controleren...",
     "Remote status": "Externe status",
