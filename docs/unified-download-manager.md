@@ -739,3 +739,72 @@ with a bounded decoder, tie the file's recording identity to trusted
 metadata, and prove a source/destination hash before copy/rename into
 the DAS. A single-writer handoff from Importer v5 requires staging
 end-to-end and rollback tests before any release can replace it.
+
+
+## Phase D7: full read and decode-to-null, without import or checksum claims
+
+D6 checks at most the first 64 bytes of a D3/D4/D5-verified source. D7
+deliberately reads **all bytes** of one operator-pinned, user-owned, completed
+single-track download and asks FFmpeg to decode the stream to its **null**
+output. A SHA-256 digest is calculated from those exact same source bytes.
+
+This remains a **separately gated, manual staging feature, OFF by default**:
+
+    KIMA_DOWNTIFY_FULL_AUDIO_CHECK_ENABLED=true
+
+All previous D3, D4, D5 and D6 feature gates and the original Downtify server,
+pinned remote numeric account, username, exact Kima owner, device token and
+staging mount must already be explicitly configured. Never put a token in a
+public commit. This PR does not edit a production environment or run a
+deployment.
+
+- `GET /api/download-manager/spotify/full-audio-capability`: permission-
+  checked eligibility only, with no network, file or decoder activity.
+- `GET /api/download-manager/spotify/intents/:intentId/full-audio`: current
+  persisted Kima `canDownloadTracks` permission and owner-only intent are
+  required. The backend independently repeats D3 server/user/song binding,
+  D4 root safety and D5 exact owned candidate file checks, even if a previous
+  browser button said the check passed.
+- D7 re-opens the same D5-proved inode with
+  `O_RDONLY | O_NOFOLLOW | O_NONBLOCK`, compares device, inode and size, and
+  validates the D6 container signature and extension before launching a
+  decoder. It rejects a file under 64 bytes or over **256 MiB** and declines
+  changed/missing/unsafe files.
+- A single verification runs per backend **process**. Requests arriving while
+  one is running get `429` and `busy`; this does not provide a distributed
+  lock across multiple Kima instances. The UI initiates verification only
+  after explicit D3, D5 and D6 user clicks.
+- The same `O_RDONLY` descriptor supplies bounded 64-KiB chunks to the
+  SHA-256 calculation and FFmpeg. FFmpeg receives the bytes via stdin
+  (`pipe:0`), never a filesystem path. It runs via an **absolute executable
+  path** and an argument array (no shell), with `-xerror`, audio-only
+  `-map`, restricted `pipe` protocol, one thread, no environment secrets,
+  a null output, and a 90-second process timeout. No image/video, playlist,
+  remote URL, write or user-supplied execution argument is accepted.
+- The entire declared source must have been read successfully before any
+  positive result is allowed. D7 checks opened-file device/inode/size and
+  mtime/ctime again after the read, closes its descriptor on every outcome,
+  and reports changed, missing, truncated or undecodable files
+  conservatively.
+- Successful `stream_decoded_unmatched` returns
+  `fullFileSha256Calculated:true` and `audioDecoded:true`, **not** the hash,
+  bytes, filename or private host path. If decoding fails after a complete
+  read, the hash can still have been calculated but the audio check is
+  unsuccessful.
+
+**Safety semantics:** The digest has no independently trusted baseline and
+is not persisted, compared to another file or exposed to users. Thus
+`wholeFileIntegrityVerified:false` in **every** response, including a
+successful decoder run. `recordingVerified:false`,
+`stableMountVerified:false`, `libraryImportVerified:false`,
+`filesChanged:false` and `retryAllowed:false` also remain invariant.
+A decoded stream cannot authenticate that it is the intended Spotify
+recording. Nor does it prove the volume cannot disappear, that the file
+will still exist when imported, or that Kima has indexed it.
+
+**Next phases:** trusted recording and on-disk metadata identity
+verification; an *explicitly authorized* staged transfer from source SSD
+to DAS with both source/destination hashes, atomic finalization, no collision,
+and recovery; then tested catalog indexing, single-writer Importer v5
+handoff and rollback. None of these steps are authorized by D7; Importer v5
+and the v1.17.1 stable installation remain unchanged.
