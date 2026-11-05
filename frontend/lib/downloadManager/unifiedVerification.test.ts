@@ -1,3 +1,4 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { verifySavedSpotifyTrack } from "./unifiedVerification";
 
 const ROOT = "/download-manager/spotify/intents/saved-1/";
@@ -38,16 +39,16 @@ const responses: Record<string, unknown> = {
     "audio-header": header, "full-audio": decoded,
     "recording-tags": tag,
 };
-const get = jest.fn(async (url: string): Promise<unknown> => {
+const get = vi.fn(async (url: string): Promise<unknown> => {
     const suffix = url.slice(ROOT.length);
     return responses[suffix];
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
 describe("D9 one explicit, fail-closed read-only verification", () => {
     it("runs exactly five owner-scoped GETs, in order, without claiming import", async () => {
-        const progress = jest.fn();
+        const progress = vi.fn();
         const result = await verifySavedSpotifyTrack("saved-1", get, progress);
         expect(result).toEqual({
             state: "consistent_untrusted", step: "tags",
@@ -88,7 +89,7 @@ describe("D9 one explicit, fail-closed read-only verification", () => {
         ["full-audio", { ...decoded, audioDecoded: false }, "decode"],
         ["recording-tags", { ...tag, state: "tag_conflict", isrcMatches: false }, "tags"],
     ] as const)("stops at %s and does not call any later stage", async (suffix, response, stage) => {
-        const read = jest.fn(async (url: string) =>
+        const read = vi.fn(async (url: string) =>
             url.endsWith(suffix) ? response : responses[url.slice(ROOT.length)]
         );
         const result = await verifySavedSpotifyTrack("saved-1", read);
@@ -103,7 +104,7 @@ describe("D9 one explicit, fail-closed read-only verification", () => {
         });
         expect((await verifySavedSpotifyTrack("saved-1", get)).state).toBe("unverified");
         expect(get).toHaveBeenCalledTimes(1);
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         get.mockRejectedValueOnce(new Error("secret token /music/private.flac"));
         const result = await verifySavedSpotifyTrack("saved-1", get);
         expect(result).toMatchObject({
@@ -122,7 +123,7 @@ describe("D9 one explicit, fail-closed read-only verification", () => {
     it("aborts future remote/file reads if the user's session changes while a request is pending", async () => {
         let deliver!: (payload: unknown) => void;
         const pending = new Promise<unknown>(resolve => { deliver = resolve; });
-        const read = jest.fn(async () => pending);
+        const read = vi.fn(async () => pending);
         let sameAccount = true;
         const run = verifySavedSpotifyTrack(
             "saved-1", read, () => undefined, () => sameAccount,
