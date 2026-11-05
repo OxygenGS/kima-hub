@@ -294,6 +294,10 @@ model SpotifyDownloadIntent {
   spotifyId     String
   canonicalUrl  String
   status        String   @default("prepared")
+  // Set only after an atomic dispatch claim. Never assume a remote timeout
+  // means no job was created; ambiguous attempts stay blocked for review.
+  remoteSongId    String?
+  dispatchStartedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -301,6 +305,7 @@ model SpotifyDownloadIntent {
   // Atomic deduplication; identical links shared by two Kima users remain separate.
   @@unique([userId, kind, spotifyId])
   @@index([userId, createdAt])
+  @@index([userId, status])
 }
 
 model DownloadJob {

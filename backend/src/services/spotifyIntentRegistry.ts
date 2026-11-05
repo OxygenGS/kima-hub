@@ -12,7 +12,7 @@
 import { prisma } from "../utils/db";
 import { parseSpotifyDownloadLink, type SpotifyDownloadKind } from "./spotifyLinkIntake";
 
-export type SpotifyIntentStatus = "prepared" | "submitted" | "completed" | "failed" | "unknown";
+export type SpotifyIntentStatus = "prepared" | "dispatching" | "dispatch_unknown" | "submitted" | "completed" | "failed" | "unknown";
 
 export interface PreparedSpotifyIntent {
     id: string;
@@ -29,7 +29,8 @@ export interface PreparedSpotifyIntent {
 }
 
 function knownStatus(status: string): SpotifyIntentStatus {
-    if (status === "prepared" || status === "submitted" ||
+    if (status === "prepared" || status === "dispatching" ||
+        status === "dispatch_unknown" || status === "submitted" ||
         status === "completed" || status === "failed") return status;
     return "unknown";
 }

@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/dispatch-capability")) {
+            return { state: "disabled", canSubmit: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/intents")) {
             return {
                 enabled: false, items: [], total: 0,
@@ -169,7 +172,7 @@ describe("Spotify link preview — no download or import actions", () => {
         });
         await mount();
         expect(host.textContent).toContain("Check Spotify link");
-        expect(host.textContent).toContain("Downloads are not available yet.");
+        expect(host.textContent).toContain("Track submission requires an explicitly configured Downtify connection.");
         expect(host.querySelector("#spotify-intake-link")).not.toBeNull();
         expect(host.querySelector('button[type="submit"]')?.hasAttribute("disabled")).toBe(true);
         expect(mocks.post).not.toHaveBeenCalled();
@@ -507,5 +510,149 @@ describe("explicit Spotify local recording evidence", () => {
         await mount();
         expect(host.textContent).not.toContain("Recording match found in indexed local file");
         expect(host.querySelector("#spotify-intake-link")).toBeNull();
+    });
+});
+
+describe("gated one-track Downtify submission UI", () => {
+    const link = "https://open.spotify.com/track/0123456789ABCDEFGHIJKL";
+    const setup = (checkStatus = "no_verified_match") => {
+        authorizeSpotifyPreview();
+        const oldGet = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (path: string) => {
+            if (path.includes("dispatch-capability")) {
+                return { state: "available", canSubmit: true, singleTrackOnly: true };
+            }
+            if (path.includes("/spotify/intents")) return savedIntents([savedTrack]);
+            return oldGet?.(path);
+        });
+        const oldPost = mocks.post.getMockImplementation();
+        mocks.post.mockImplementation(async (path: string, data?: unknown) => {
+            if (path.includes("spotify/check-library")) {
+                return {
+                    provider: "spotify", kind: "track", status: checkStatus,
+                    recordingMatch: checkStatus === "recording_match_on_disk",
+                    evidence: checkStatus === "recording_match_on_disk"
+                        ? "isrc_duration_and_file" : "not_proven",
+                    matchedTrackId: checkStatus === "recording_match_on_disk" ? "local-track" : null,
+                    audioDecoded: false, albumEditionVerified: false,
+                    downloadStarted: false,
+                };
+            }
+            if (path.endsWith("/submit")) {
+                return {
+                    state: "submitted", remotePostSent: true,
+                    libraryVerified: false, downloadInKimaVerified: false,
+                };
+            }
+            return oldPost?.(path, data);
+        });
+    };
+    const previewAndCheck = async () => {
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(new Event(
+                "submit", { bubbles: true, cancelable: true }
+            ));
+        });
+        await clickButtonContaining("Check local recording");
+    };
+
+    it("does not show a Downtify Submit button when disabled, unprepared or unverified", async () => {
+        authorizeSpotifyPreview();
+        await mount();
+        await enterSpotifyLink(link);
+        await act(async () => {
+            host.querySelector("form")?.dispatchEvent(new Event(
+                "submit", { bubbles: true, cancelable: true }
+            ));
+        });
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalledWith(
+            expect.stringContaining("/submit"), expect.anything()
+        );
+    });
+
+    it("prevents sending when matching local ISRC+file evidence exists", async () => {
+        setup("recording_match_on_disk");
+        await mount();
+        await previewAndCheck();
+        expect(host.textContent).toContain("Recording match found in indexed local file");
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalledWith(
+            expect.stringContaining("/submit"), expect.anything()
+        );
+    });
+
+    it("requires explicit duplicate-risk consent and submits only one stored track ID", async () => {
+        setup();
+        await mount();
+        await previewAndCheck();
+        expect(host.textContent).toContain("No verified match was found");
+        const button = Array.from(host.querySelectorAll("button"))
+            .find(node => node.textContent?.includes("Submit track to Downtify"));
+        expect(button).not.toBeUndefined();
+        expect(button?.hasAttribute("disabled")).toBe(true);
+        expect(mocks.post).not.toHaveBeenCalledWith(
+            expect.stringContaining("/submit"), expect.anything()
+        );
+        await act(async () => {
+            host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click();
+        });
+        await clickButtonContaining("Submit track to Downtify");
+        expect(mocks.post).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/submit",
+            { acknowledgeUnverified: true }
+        );
+        expect(host.textContent).toContain("Downtify accepted the track.");
+        expect(host.textContent).toContain("Library import is not yet verified.");
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        const calls = mocks.post.mock.calls.filter((c: unknown[]) => String(c[0]).endsWith("/submit"));
+        expect(calls).toHaveLength(1);
+    });
+
+    it("does not allow a second submission after a response with uncertain status", async () => {
+        setup();
+        const original = mocks.post.getMockImplementation();
+        mocks.post.mockImplementation(async (path: string, body?: unknown) =>
+            path.endsWith("/submit")
+                ? { state: "dispatch_unknown", remotePostSent: true,
+                    libraryVerified: false, downloadInKimaVerified: false }
+                : original?.(path, body)
+        );
+        await mount();
+        await previewAndCheck();
+        await act(async () => {
+            host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click();
+        });
+        await clickButtonContaining("Submit track to Downtify");
+        expect(host.textContent).toContain("Submission is uncertain. Do not resend");
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        const calls = mocks.post.mock.calls.filter((c: unknown[]) => String(c[0]).endsWith("/submit"));
+        expect(calls).toHaveLength(1);
+    });
+
+    it("does not echo failed submission internals or keep a previous account's consent", async () => {
+        setup();
+        const original = mocks.post.getMockImplementation();
+        mocks.post.mockImplementation(async (path: string, body?: unknown) => {
+            if (path.endsWith("/submit")) throw new Error("private token /music/secret");
+            return original?.(path, body);
+        });
+        await mount();
+        await previewAndCheck();
+        await act(async () => {
+            host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click();
+        });
+        await clickButtonContaining("Submit track to Downtify");
+        expect(host.textContent).toContain("Submission could not be verified.");
+        expect(host.textContent).not.toContain("private token");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "new-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Submission could not be verified.");
+        expect(host.querySelector('input[type="checkbox"]')).toBeNull();
     });
 });

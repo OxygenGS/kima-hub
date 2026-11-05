@@ -3,6 +3,21 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Follow downloads and manage staged Spotify requests.": "Follow downloads and manage staged Spotify requests.",
+    "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.": "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.",
+    "Dispatch started; do not send again until verified.": "Dispatch started; do not send again until verified.",
+    "Remote submission uncertain. Do not retry automatically.": "Remote submission uncertain. Do not retry automatically.",
+    "Sent to Downtify; Kima library import not verified.": "Sent to Downtify; Kima library import not verified.",
+    "Request marked complete; local file not verified.": "Request marked complete; local file not verified.",
+    "Request marked failed; review before resending.": "Request marked failed; review before resending.",
+    "No verified match was found; this does not prove the track is absent.": "No verified match was found; this does not prove the track is absent.",
+    "I understand a duplicate may exist and want to request this track.": "I understand a duplicate may exist and want to request this track.",
+    "Submitting to Downtify...": "Submitting to Downtify...",
+    "Submit track to Downtify": "Submit track to Downtify",
+    "Downtify accepted the track. Library import is not yet verified.": "Downtify accepted the track. Library import is not yet verified.",
+    "Track already belongs to your Downtify queue; no new request sent.": "Track already belongs to your Downtify queue; no new request sent.",
+    "Submission is uncertain. Do not resend until the queue is checked.": "Submission is uncertain. Do not resend until the queue is checked.",
+    "Submission could not be verified. Do not retry automatically.": "Submission could not be verified. Do not retry automatically.",
     "Recording match found in indexed local file (audio not decoded).": "Recording match found in indexed local file (audio not decoded).",
     "Catalog recording match exists, but its audio file was not verified.": "Catalog recording match exists, but its audio file was not verified.",
     "No proven local recording match. This does not prove the song is absent.": "No proven local recording match. This does not prove the song is absent.",
@@ -2040,6 +2055,21 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Follow downloads and manage staged Spotify requests.": "Volg downloads en beheer voorbereide Spotify-aanvragen.",
+    "Preview Spotify links. Track submission requires an explicitly configured Downtify connection.": "Controleer Spotify-links. Nummers verzenden vereist een expliciet ingestelde Downtify-koppeling.",
+    "Dispatch started; do not send again until verified.": "Verzending gestart; niet opnieuw verzenden zonder controle.",
+    "Remote submission uncertain. Do not retry automatically.": "Status van verzending onzeker. Niet automatisch opnieuw proberen.",
+    "Sent to Downtify; Kima library import not verified.": "Verzonden naar Downtify; bibliotheekimport in Kima is nog niet geverifieerd.",
+    "Request marked complete; local file not verified.": "Aanvraag als voltooid gemarkeerd; lokaal bestand niet geverifieerd.",
+    "Request marked failed; review before resending.": "Aanvraag mislukt; controleer voordat je opnieuw verzendt.",
+    "No verified match was found; this does not prove the track is absent.": "Geen bevestigde match gevonden; dit bewijst niet dat het nummer ontbreekt.",
+    "I understand a duplicate may exist and want to request this track.": "Ik begrijp dat het nummer mogelijk al aanwezig is en wil het toch aanvragen.",
+    "Submitting to Downtify...": "Naar Downtify verzenden...",
+    "Submit track to Downtify": "Nummer naar Downtify verzenden",
+    "Downtify accepted the track. Library import is not yet verified.": "Downtify heeft het nummer aangenomen. De bibliotheekimport is nog niet geverifieerd.",
+    "Track already belongs to your Downtify queue; no new request sent.": "Het nummer staat al in jouw Downtify-wachtrij; niets opnieuw verzonden.",
+    "Submission is uncertain. Do not resend until the queue is checked.": "De verzending is onzeker. Niet opnieuw sturen voordat de wachtrij is gecontroleerd.",
+    "Submission could not be verified. Do not retry automatically.": "De verzending kon niet worden bevestigd. Probeer niet automatisch opnieuw.",
     "Recording match found in indexed local file (audio not decoded).": "Overeenkomstige opname gevonden in een geïndexeerd lokaal bestand (audio niet gedecodeerd).",
     "Catalog recording match exists, but its audio file was not verified.": "Er staat een overeenkomstige opname in de catalogus, maar het audiobestand is niet geverifieerd.",
     "No proven local recording match. This does not prove the song is absent.": "Geen bewezen lokale opnamematch. Dit bewijst niet dat het nummer ontbreekt.",

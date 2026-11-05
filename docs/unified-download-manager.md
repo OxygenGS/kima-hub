@@ -388,3 +388,84 @@ makes no library changes, does not decode audio, and leaves Importer v5
 and production mounts untouched. Future download submission must recheck
 the recording/file identity immediately before scheduling rather than
 trusting a stale browser result.
+
+
+## Phase D2: guarded one-track Downtify submission (staging only)
+
+This is the FIRST remote write path. It is behind two independently OFF
+operator settings and must NOT be activated in production just by merging
+or publishing a PR. Importer v5 and its systemd timer remain untouched.
+
+For isolated staging only, after a verified DB backup and review of the
+Downtify instance and its existing music paths, configure:
+
+    KIMA_SPOTIFY_INTENTS_ENABLED=true
+    KIMA_DOWNTIFY_ENABLED=true
+    KIMA_DOWNTIFY_URL=http://downtify:8000
+    KIMA_DOWNTIFY_DEVICE_TOKEN=<paired device token>
+    KIMA_DOWNTIFY_OWNER_KIMA_USER_ID=<Kima user database ID>
+    KIMA_DOWNTIFY_EXPECTED_USERNAME=<paired Downtify username>
+    KIMA_DOWNTIFY_EXPECTED_USER_ID=<numeric Downtify user ID>
+    KIMA_DOWNTIFY_EXPECTED_SERVER_ID=<persistent Downtify server_id>
+    KIMA_DOWNTIFY_TRACK_SUBMISSION_ENABLED=true
+
+This is a SPECIFICATION, not a command to copy into an existing .env.
+Never commit the token. The numeric remote user ID and stable server ID
+are mandatory for WRITES, in addition to the older username binding.
+The public /api/server/info identity probe never receives a bearer token.
+Its product, API version, authenticated mode and persistent server ID
+must match exactly before a device token is sent. Authentication via
+/api/auth/status must confirm the precise username AND numeric user ID.
+A browser may not provide its own remote base URL, token or account.
+
+Kima provides:
+- GET /api/download-manager/spotify/dispatch-capability: read-only and
+  sanitized eligibility state, with no remote IDs, addresses or credentials.
+- POST /api/download-manager/spotify/intents/:intentId/submit:
+  accepts only a true acknowledgeUnverified flag; requires a signed-in
+  Kima user with persisted canDownloadTracks permission and a prepared
+  track request owned by that user. Other resource kinds are blocked.
+
+The UI requires: a checked Spotify single-track link, a previously saved
+prepared request, an explicit library check with no verified ISRC match,
+and positive confirmation by the user that an unmatched track might still
+be in the library. A confirmed local recording, a stale/unavailable DAS
+file, an unverified catalog candidate, or missing Spotify metadata blocks
+submission. The BACKEND revalidates everything, not the browser alone.
+
+The Downtify queue has shared global rows. An administrator may SEE every
+user's jobs, but Kima treats an existing job as owned only when its
+user_ids includes the exact pinned remote account. The service refuses
+to overwrite or retry owned failed jobs and never sends a duplicate
+request for one of that user's already queued/running/done tracks.
+
+For a new song, GET /api/song/url resolves the canonical Spotify link.
+The returned source, song ID, URL, title, artists and duration are
+validated; only an allowlist of safe metadata fields is forwarded.
+A database compare-and-set atomically changes precisely one Kima intent
+from prepared to dispatching, recording a timestamp and remote song ID
+BEFORE the first network POST. Only its winning concurrent caller sends
+one request to POST /api/download/batch with exactly one song and
+generate_m3u=false. This Downtify endpoint responds asynchronously;
+the blocking /api/download/url endpoint is deliberately not used.
+
+When the response confirms the exact job ID, the intent becomes submitted,
+not imported or playable. If the POST times out or returns an ambiguous
+reply, the claim remains dispatching or dispatch_unknown and CANNOT be
+automatically retried. It requires manual reconciliation against the pinned
+owner's remote queue. UI state also blocks repeat clicks for that saved
+request until the user switches accounts or the view is reloaded; server DB
+claims continue protecting it across restarts.
+
+Only single tracks are supported by this PR. Albums/playlists need their
+own bounded resolution, metadata proof and dedup policy. A remote job
+status of done does not mean Kima has imported/indexed a playable file.
+Hardlinks only work on one filesystem; SSD-to-DAS moves need safe verified
+copy/move logic. Importer v5, its systemd service and timer, and production
+audio must not be removed before the new importer is separately proven.
+
+The write flag remains OFF in production until actual deployed Downtify
+contracts, account owner, duplicate safety, Importer v5 handoff, rollback
+and staging end-to-end tests have been approved. No Compose activation,
+Docker publication, systemd changes, file moves, old importer cleanup or
+/mnt/music modifications belong to this source-code PR.

@@ -2,8 +2,8 @@
 
 /**
  * v1.18.0 Download Manager preview.
- * Request preparation is a feature-gated database write only. No download
- * submission, file moves, imports or remote mutations.
+ * Preparation and single-track Downtify submission are separate, opt-in
+ * operations. No submission happens automatically when this page loads.
  * Account-keyed subtree prevents previous-user results being displayed after
  * logout/login; the backend independently enforces ownership for both feeds.
  */
@@ -88,7 +88,8 @@ interface SavedSpotifyIntent {
     id: string;
     kind: SpotifyLinkPreview["kind"] | "unknown";
     canonicalUrl: string | null;
-    requestState: "prepared" | "submitted" | "completed" | "failed" | "unknown";
+    requestState: "prepared" | "dispatching" | "dispatch_unknown" |
+        "submitted" | "completed" | "failed" | "unknown";
     createdAt: string;
     libraryDuplicateCheck: "not_checked";
     engineStatus: "not_checked";
@@ -103,6 +104,7 @@ interface SavedSpotifyIntentPage {
 }
 interface PreparedSpotifyIntentResponse {
     id: string;
+    status?: SavedSpotifyIntent["requestState"];
     alreadyPrepared: boolean;
     submittedByThisRequest: false;
     downloadStartedByThisRequest: false;
@@ -124,6 +126,28 @@ interface LibraryEvidence {
     matchedTrackId: string | null;
     downloadStarted: false;
 }
+interface DispatchCapabilityResponse {
+    state: "disabled" | "unbound" | "misconfigured" | "available";
+    canSubmit: boolean;
+    singleTrackOnly: true;
+}
+type DispatchState = "submitted" | "already_in_remote_queue" | "dispatch_unknown";
+interface DispatchResponse {
+    state: DispatchState;
+    remotePostSent: boolean;
+    libraryVerified: false;
+    downloadInKimaVerified: false;
+}
+const savedRequestLabel: Record<SavedSpotifyIntent["requestState"], TranslationKey> = {
+    prepared: "Prepared only — not sent for download",
+    dispatching: "Dispatch started; do not send again until verified.",
+    dispatch_unknown: "Remote submission uncertain. Do not retry automatically.",
+    submitted: "Sent to Downtify; Kima library import not verified.",
+    completed: "Request marked complete; local file not verified.",
+    failed: "Request marked failed; review before resending.",
+    unknown: "Request state not independently verified",
+};
+
 const evidenceLabels: Record<LibraryEvidenceStatus, TranslationKey> = {
     recording_match_on_disk: "Recording match found in indexed local file (audio not decoded).",
     catalog_recording_unverified: "Catalog recording match exists, but its audio file was not verified.",
@@ -215,7 +239,7 @@ function AccountDownloads({ canPrepareSpotify }: { canPrepareSpotify: boolean })
             <PageHeader
                 eyebrow={t("Preview and preparation")}
                 title={t("Download Manager")}
-                description={t("Follow downloads and prepare requests. No downloads, imports or files are changed here.")}
+                description={t("Follow downloads and manage staged Spotify requests.")}
                 actions={
                     <button
                         type="button"
@@ -359,9 +383,24 @@ function SpotifyLinkIntake() {
     const [libraryEvidence, setLibraryEvidence] = useState<LibraryEvidence | null>(null);
     const [libraryChecking, setLibraryChecking] = useState(false);
     const [libraryError, setLibraryError] = useState(false);
+    const [dispatchCapability, setDispatchCapability] = useState<DispatchCapabilityResponse | null>(null);
+    const [ackUnverified, setAckUnverified] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitAttempted, setSubmitAttempted] = useState(false);
+    const [submission, setSubmission] = useState<DispatchResponse | null>(null);
+    const [submissionError, setSubmissionError] = useState(false);
+    const attemptedIntentIds = useRef(new Set<string>());
     const requestEpoch = useRef(0);
 
     useEffect(() => () => { requestEpoch.current++; }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<DispatchCapabilityResponse>("/download-manager/spotify/dispatch-capability")
+            .then(data => { if (active) setDispatchCapability(data); })
+            .catch(() => { if (active) setDispatchCapability(null); });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -393,7 +432,7 @@ function SpotifyLinkIntake() {
 
     const check = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (!link.trim() || checking || saving || libraryChecking) return;
+        if (!link.trim() || checking || saving || libraryChecking || submitting) return;
 
         const epoch = ++requestEpoch.current;
         setChecking(true);
@@ -403,6 +442,10 @@ function SpotifyLinkIntake() {
         setSaveError(false);
         setLibraryEvidence(null);
         setLibraryError(false);
+        setAckUnverified(false);
+        setSubmission(null);
+        setSubmissionError(false);
+        setSubmitAttempted(false);
         try {
             const response = await api.post<SpotifyLinkPreview>(
                 "/download-manager/spotify/preview", { url: link }
@@ -417,7 +460,7 @@ function SpotifyLinkIntake() {
     };
 
     const save = async () => {
-        if (!savedList?.enabled || !result || saving || libraryChecking) return;
+        if (!savedList?.enabled || !result || saving || libraryChecking || submitting) return;
         const epoch = ++requestEpoch.current;
         setSaving(true);
         setSaveError(false);
@@ -439,11 +482,15 @@ function SpotifyLinkIntake() {
     };
 
     const verifyLibrary = async () => {
-        if (!result || result.kind !== "track" || libraryChecking || saving || checking) return;
+        if (!result || result.kind !== "track" || libraryChecking || saving || checking || submitting) return;
         const epoch = ++requestEpoch.current;
         setLibraryChecking(true);
         setLibraryEvidence(null);
         setLibraryError(false);
+        setAckUnverified(false);
+        setSubmission(null);
+        setSubmissionError(false);
+        setSubmitAttempted(false);
         try {
             const evidence = await api.post<LibraryEvidence>(
                 "/download-manager/spotify/check-library",
@@ -457,13 +504,55 @@ function SpotifyLinkIntake() {
         }
     };
 
+
+    // A prepared request is not a job. The server rechecks all identities,
+    // proof and permissions immediately before any external submission.
+    const preparedOnPage = savedList?.items.find(item =>
+        item.kind === "track" && item.canonicalUrl === result?.canonicalUrl &&
+        item.requestState === "prepared"
+    );
+    const preparedId = savedResult
+        ? (savedResult.status === "prepared" ? savedResult.id : null)
+        : preparedOnPage?.id ?? null;
+    const canDispatch = dispatchCapability?.canSubmit === true &&
+        result?.kind === "track" && libraryEvidence?.status === "no_verified_match" &&
+        !!preparedId && !submitAttempted && !attemptedIntentIds.current.has(preparedId);
+
+    const submitTrack = async () => {
+        if (!canDispatch || !ackUnverified || !preparedId || submitting ||
+            saving || checking || libraryChecking) return;
+        const epoch = ++requestEpoch.current;
+        setSubmitting(true);
+        attemptedIntentIds.current.add(preparedId);
+        setSubmitAttempted(true); // lost HTTP reply must never auto-retry
+        setSubmission(null);
+        setSubmissionError(false);
+        try {
+            const response = await api.post<DispatchResponse>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(preparedId) + "/submit",
+                { acknowledgeUnverified: true }
+            );
+            if (requestEpoch.current === epoch) {
+                setSubmission(response);
+                setListReload(n => n + 1);
+            }
+        } catch {
+            if (requestEpoch.current === epoch) {
+                setSubmissionError(true);
+                setListReload(n => n + 1);
+            }
+        } finally {
+            if (requestEpoch.current === epoch) setSubmitting(false);
+        }
+    };
+
     return (
         <section aria-labelledby="spotify-intake-title" className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
             <h2 id="spotify-intake-title" className="text-lg font-semibold text-white">
                 {t("Check Spotify link")}
             </h2>
             <p className="mb-4 mt-1 text-sm text-[var(--text-muted)]">
-                {t("Preview a track, album or playlist link. Downloads are not available yet.")}
+                {t("Preview Spotify links. Track submission requires an explicitly configured Downtify connection.")}
             </p>
             <form onSubmit={(event) => { void check(event); }} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="min-w-0 flex-1">
@@ -476,7 +565,7 @@ function SpotifyLinkIntake() {
                         inputMode="url"
                         autoComplete="off"
                         maxLength={2048}
-                        disabled={saving || libraryChecking}
+                        disabled={saving || libraryChecking || submitting}
                         value={link}
                         onChange={(event) => {
                             requestEpoch.current++;
@@ -487,6 +576,10 @@ function SpotifyLinkIntake() {
                             setSaveError(false);
                             setLibraryEvidence(null);
                             setLibraryError(false);
+                            setAckUnverified(false);
+                            setSubmission(null);
+                            setSubmissionError(false);
+                            setSubmitAttempted(false);
                             setChecking(false);
                         }}
                         placeholder="https://open.spotify.com/track/..."
@@ -495,7 +588,7 @@ function SpotifyLinkIntake() {
                 </div>
                 <button
                     type="submit"
-                    disabled={!link.trim() || checking || saving || libraryChecking}
+                    disabled={!link.trim() || checking || saving || libraryChecking || submitting}
                     className="rounded-xl bg-brand px-5 py-3 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {checking ? t("Checking link...") : t("Check link")}
@@ -514,7 +607,7 @@ function SpotifyLinkIntake() {
                         {result.kind === "track" && (
                             <button
                                 type="button"
-                                disabled={libraryChecking || saving || checking}
+                                disabled={libraryChecking || saving || checking || submitting}
                                 onClick={() => { void verifyLibrary(); }}
                                 className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                             >
@@ -534,7 +627,7 @@ function SpotifyLinkIntake() {
                         {savedList?.enabled && (
                             <button
                                 type="button"
-                                disabled={saving || checking || libraryChecking}
+                                disabled={saving || checking || libraryChecking || submitting}
                                 onClick={() => { void save(); }}
                                 className="mt-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                             >
@@ -551,6 +644,44 @@ function SpotifyLinkIntake() {
                         {saveError && (
                             <p role="alert" className="text-xs text-[var(--text-secondary)]">
                                 {t("Could not save the prepared request.")}
+                            </p>
+                        )}
+                        {canDispatch && (
+                            <div className="mt-3 space-y-3 rounded-lg border border-white/15 p-3">
+                                <p className="text-xs text-[var(--text-secondary)]">
+                                    {t("No verified match was found; this does not prove the track is absent.")}
+                                </p>
+                                <label className="flex cursor-pointer items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                    <input
+                                        type="checkbox"
+                                        checked={ackUnverified}
+                                        onChange={event => setAckUnverified(event.target.checked)}
+                                        className="mt-0.5"
+                                    />
+                                    <span>{t("I understand a duplicate may exist and want to request this track.")}</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    disabled={!ackUnverified || submitting}
+                                    onClick={() => { void submitTrack(); }}
+                                    className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                >
+                                    {submitting ? t("Submitting to Downtify...") : t("Submit track to Downtify")}
+                                </button>
+                            </div>
+                        )}
+                        {submission && (
+                            <p role="status" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {submission.state === "submitted"
+                                    ? t("Downtify accepted the track. Library import is not yet verified.")
+                                    : submission.state === "already_in_remote_queue"
+                                        ? t("Track already belongs to your Downtify queue; no new request sent.")
+                                        : t("Submission is uncertain. Do not resend until the queue is checked.")}
+                            </p>
+                        )}
+                        {submissionError && (
+                            <p role="alert" className="mt-2 text-xs text-[var(--text-secondary)]">
+                                {t("Submission could not be verified. Do not retry automatically.")}
                             </p>
                         )}
                     </div>
@@ -579,9 +710,7 @@ function SpotifyLinkIntake() {
                                         {item.kind === "unknown" ? t("Unknown source") : t(kindLabel[item.kind])}
                                     </span>
                                     <span className="text-xs text-[var(--text-muted)]">
-                                        {item.requestState === "prepared"
-                                            ? t("Prepared only — not sent for download")
-                                            : t("Request state not independently verified")}
+                                        {t(savedRequestLabel[item.requestState])}
                                     </span>
                                 </div>
                                 <p className="mt-1 break-all text-xs text-[var(--text-secondary)]">
