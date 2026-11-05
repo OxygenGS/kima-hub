@@ -11,6 +11,8 @@ const mockDispatchCapability = jest.fn();
 const mockDispatchRequest = jest.fn();
 const mockReconciliationCapability = jest.fn();
 const mockRemoteVerification = jest.fn();
+const mockSourceFileCapability = jest.fn();
+const mockSourceFileEvidence = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
 }));
@@ -26,6 +28,10 @@ jest.mock("../../services/downtifyTrackDispatch", () => ({
 jest.mock("../../services/downtifyDispatchReconciliation", () => ({
     getReconciliationCapability: (...args: unknown[]) => mockReconciliationCapability(...args),
     verifyRemoteSpotifyIntent: (...args: unknown[]) => mockRemoteVerification(...args),
+}));
+jest.mock("../../services/downtifySourceFileEvidence", () => ({
+    getSourceFileCapability: (...args: unknown[]) => mockSourceFileCapability(...args),
+    inspectDowntifySourceFile: (...args: unknown[]) => mockSourceFileEvidence(...args),
 }));
 jest.mock("../../services/spotifyLibraryEvidence", () => ({
     checkSpotifyLibraryEvidence: (...args: unknown[]) => mockLibraryEvidence(...args),
@@ -63,6 +69,15 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockSourceFileCapability.mockReset().mockReturnValue({
+        state: "disabled", canCheck: false, singleTrackOnly: true,
+    });
+    mockSourceFileEvidence.mockReset().mockResolvedValue({
+        state: "candidate_present_unverified", remotePhase: "downloaded",
+        regularFileObserved: true, recordingVerified: false,
+        audioDecoded: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    });
     mockReconciliationCapability.mockReset().mockReturnValue({
         state: "disabled", canCheck: false, singleTrackOnly: true,
     });
@@ -697,5 +712,85 @@ describe("D3 explicitly requested owner-only read-only remote verification", () 
         expect((await request(app).patch(path).send({})).status).toBe(404);
         expect((await request(app).delete(path)).status).toBe(404);
         expect(mockRemoteVerification).not.toHaveBeenCalled();
+    });
+});
+
+describe("D5 explicit, owner-only, read-only staged source file evidence", () => {
+    const path = "/api/download-manager/spotify/intents/intent-abc123/source-file";
+    const cap = "/api/download-manager/spotify/source-file-capability";
+
+    it("requires a signed-in user before reading any capability or source evidence", async () => {
+        expect((await request(app).get(cap)).status).toBe(401);
+        expect((await request(app).get(path)).status).toBe(401);
+        expect(mockSourceFileCapability).not.toHaveBeenCalled();
+        expect(mockSourceFileEvidence).not.toHaveBeenCalled();
+    });
+
+    it("denies revoked persisted download rights regardless of forged query parameters", async () => {
+        mockPermissionUser.mockResolvedValue({
+            role: "user", canRequestAlbums: false, canDownloadTracks: false,
+        });
+        const result = await read("owner-1", path + "?userId=victim&role=admin");
+        expect(result.status).toBe(403);
+        expect(mockSourceFileCapability).not.toHaveBeenCalled();
+        expect(mockSourceFileEvidence).not.toHaveBeenCalled();
+    });
+
+    it("does not read staging when disabled by default", async () => {
+        const capRes = await read("owner-1", cap);
+        expect(capRes.status).toBe(200);
+        expect(capRes.body).toEqual({ state: "disabled", canCheck: false, singleTrackOnly: true });
+        const res = await read("owner-1", path);
+        expect(res.status).toBe(404);
+        expect(res.headers["cache-control"]).toBe("no-store");
+        expect(mockSourceFileEvidence).not.toHaveBeenCalled();
+    });
+
+    it("ignores client-supplied remote credentials, filenames and other users", async () => {
+        mockSourceFileCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        const res = await read(
+            "owner-1", path + "?userId=other&filename=/etc/passwd&token=secret",
+        );
+        expect(res.status).toBe(200);
+        expect(mockSourceFileEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(res.body).toMatchObject({
+            state: "candidate_present_unverified", regularFileObserved: true,
+            recordingVerified: false, audioDecoded: false,
+            libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        expect(JSON.stringify(res.body)).not.toContain("etc/passwd");
+        expect(JSON.stringify(res.body)).not.toContain("secret");
+        expect(JSON.stringify(res.body)).not.toContain("other");
+    });
+
+    it("treats missing owned requests as missing without leaking remote files", async () => {
+        mockSourceFileCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockSourceFileEvidence.mockResolvedValueOnce({
+            state: "not_found", remotePhase: "not_checked",
+            regularFileObserved: false, recordingVerified: false,
+            audioDecoded: false, stableMountVerified: false,
+            libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+        });
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(404);
+        expect(result.body.regularFileObserved).toBe(false);
+    });
+
+    it("redacts private filesystem errors and has no mutating HTTP methods", async () => {
+        mockSourceFileCapability.mockReturnValue({
+            state: "available", canCheck: true, singleTrackOnly: true,
+        });
+        mockSourceFileEvidence.mockRejectedValueOnce(new Error("secret /staging/private.flac"));
+        const result = await read("owner-1", path);
+        expect(result.status).toBe(503);
+        expect(JSON.stringify(result.body)).not.toContain("secret");
+        expect(JSON.stringify(result.body)).not.toContain("/staging");
+        expect((await request(app).post(path).send({})).status).toBe(404);
+        expect((await request(app).patch(path).send({})).status).toBe(404);
+        expect((await request(app).delete(path)).status).toBe(404);
     });
 });
