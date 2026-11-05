@@ -99,15 +99,33 @@ function remotePhase(value: unknown): RemoteTransferPhase {
     }
 }
 
-export async function verifyRemoteSpotifyIntent(
+/**
+ * Internal, privileged remote evidence for D5. `filename` is untrusted and
+ * MUST NEVER be returned directly by an HTTP endpoint. Both the exact Kima
+ * owner and remote numeric account membership are rechecked on every call.
+ */
+export interface OwnedDowntifyFileCandidate {
+    verification: RemoteIntentVerification;
+    filename: unknown;
+}
+
+function internal(
+    state: ReconciliationState,
+    phase: RemoteTransferPhase = "not_checked",
+    filename: unknown = null,
+): OwnedDowntifyFileCandidate {
+    return { verification: response(state, phase), filename };
+}
+
+export async function inspectOwnedDowntifyFileCandidate(
     userId: string,
     intentId: string,
     env: NodeJS.ProcessEnv = process.env,
     http: Pick<AxiosInstance, "get"> = axios,
-): Promise<RemoteIntentVerification> {
+): Promise<OwnedDowntifyFileCandidate> {
     const gate = targetFor(userId, env);
-    if (gate.state !== "available" || !gate.target) return response(gate.state);
-    if (!INTENT_ID.test(intentId)) return response("not_found");
+    if (gate.state !== "available" || !gate.target) return internal(gate.state);
+    if (!INTENT_ID.test(intentId)) return internal("not_found");
 
     // The authenticated Kima owner is mandatory, even for Kima administrators.
     const intent = await prisma.spotifyDownloadIntent.findFirst({
@@ -117,16 +135,16 @@ export async function verifyRemoteSpotifyIntent(
             status: true, remoteSongId: true,
         },
     });
-    if (!intent) return response("not_found");
+    if (!intent) return internal("not_found");
     if (!["submitted", "dispatching", "dispatch_unknown"].includes(intent.status)) {
-        return response("not_attempted");
+        return internal("not_attempted");
     }
     const parsed = parseSpotifyDownloadLink(intent.canonicalUrl);
     if (intent.kind !== "track" || !parsed || parsed.kind !== "track" ||
         parsed.canonicalUrl !== intent.canonicalUrl ||
         parsed.intentKey !== "spotify:track:" + intent.spotifyId ||
         intent.remoteSongId !== intent.spotifyId) {
-        return response("invalid_intent");
+        return internal("invalid_intent");
     }
 
     const target = gate.target;
@@ -149,7 +167,7 @@ export async function verifyRemoteSpotifyIntent(
         const info = await get("/api/server/info", false);
         if (!record(info) || info.product !== "Downtify" ||
             info.api_version !== 1 || info.require_sign_in !== true ||
-            info.server_id !== target.serverId) return response("incompatible");
+            info.server_id !== target.serverId) return internal("incompatible");
 
         const auth = await get("/api/auth/status", true);
         if (!record(auth) || auth.signed_in !== true ||
@@ -157,12 +175,12 @@ export async function verifyRemoteSpotifyIntent(
             !record(auth.user) || auth.user.id !== target.userId ||
             typeof auth.user.username !== "string" ||
             auth.user.username.toLowerCase() !== target.username.toLowerCase()) {
-            return response("unauthorized");
+            return internal("unauthorized");
         }
 
         const queue = await get("/api/queue", true);
         if (!Array.isArray(queue) || queue.length > MAX_QUEUE_SIZE) {
-            return response("incompatible");
+            return internal("incompatible");
         }
         // Administrator tokens can see other users' jobs. Ownership requires
         // BOTH the numeric user_ids membership and immutable remote song ID.
@@ -172,11 +190,26 @@ export async function verifyRemoteSpotifyIntent(
             (item.song.source === undefined || item.song.source === "spotify") &&
             Array.isArray(item.user_ids) && item.user_ids.includes(target.userId)
         );
-        if (matches.length > 1) return response("ambiguous");
-        if (matches.length === 0) return response("no_verified_job");
-        return response("verified", remotePhase(matches[0].status));
+        if (matches.length > 1) return internal("ambiguous");
+        if (matches.length === 0) return internal("no_verified_job");
+        return internal(
+            "verified",
+            remotePhase(matches[0].status),
+            matches[0].status === "done" ? matches[0].filename : null,
+        );
     } catch (error: unknown) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-        return response(status === 401 || status === 403 ? "unauthorized" : "unavailable");
+        return internal(status === 401 || status === 403 ? "unauthorized" : "unavailable");
     }
+}
+
+/** Public D3 result intentionally strips untrusted remote filename and paths. */
+export async function verifyRemoteSpotifyIntent(
+    userId: string,
+    intentId: string,
+    env: NodeJS.ProcessEnv = process.env,
+    http: Pick<AxiosInstance, "get"> = axios,
+): Promise<RemoteIntentVerification> {
+    const { verification } = await inspectOwnedDowntifyFileCandidate(userId, intentId, env, http);
+    return verification;
 }

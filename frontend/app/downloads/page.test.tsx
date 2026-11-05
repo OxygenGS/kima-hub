@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/source-file-capability")) {
+            return { state: "disabled", canCheck: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/reconciliation-capability")) {
             return { state: "disabled", canCheck: false, singleTrackOnly: true };
         }
@@ -752,5 +755,113 @@ describe("manual D3 remote reconciliation of previously submitted Spotify tracks
         await mount();
         expect(host.textContent).not.toContain("Remote status:");
         expect(host.textContent).not.toContain("Check Downtify job");
+    });
+});
+
+
+describe("D5 staged source-file check after an explicitly owned Downtify completion", () => {
+    const submitted = { ...savedTrack, requestState: "submitted" };
+    const confirmedRemote = {
+        state: "verified", remotePhase: "downloaded",
+        remoteOwnershipVerified: true, libraryVerification: "not_checked",
+        playbackVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const presentSource = {
+        state: "candidate_present_unverified", remotePhase: "downloaded",
+        regularFileObserved: true, recordingVerified: false,
+        audioDecoded: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    };
+
+    function configure(
+        remoteResult: unknown = confirmedRemote,
+        sourceResult: unknown = presentSource,
+        sourceEnabled = true,
+        sourceError = false,
+    ) {
+        authorizeSpotifyPreview();
+        const old = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (p: string) => {
+            if (p.endsWith("/spotify/reconciliation-capability")) {
+                return { state: "available", canCheck: true, singleTrackOnly: true };
+            }
+            if (p.endsWith("/spotify/source-file-capability")) {
+                return { state: sourceEnabled ? "available" : "disabled",
+                    canCheck: sourceEnabled, singleTrackOnly: true };
+            }
+            if (p.endsWith("/remote-status")) return remoteResult;
+            if (p.endsWith("/source-file")) {
+                if (sourceError) throw new Error("secret token /staging/personal.flac");
+                return sourceResult;
+            }
+            if (p.includes("/spotify/intents?")) return savedIntents([submitted]);
+            return old?.(p);
+        });
+    }
+
+    it("does not inspect files automatically or when D5 is disabled", async () => {
+        configure(confirmedRemote, presentSource, false);
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).not.toContain("Check downloaded source file");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/source-file"))).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not offer source inspection until remote ownership and completion are proven", async () => {
+        configure({
+            ...confirmedRemote, remotePhase: "queued",
+        });
+        await mount();
+        expect(host.textContent).not.toContain("Check downloaded source file");
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).not.toContain("Check downloaded source file");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/source-file"))).toBe(false);
+    });
+
+    it("reads one exact saved intent only after two explicit clicks; never imports or exposes paths", async () => {
+        configure();
+        await mount();
+        expect(host.textContent).not.toContain("Check downloaded source file");
+        await clickButtonContaining("Check Downtify job");
+        expect(host.textContent).toContain("Check downloaded source file");
+        await clickButtonContaining("Check downloaded source file");
+        expect(mocks.get).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/source-file"
+        );
+        expect(host.textContent).toContain(
+            "Staging file observed; recording and import are unverified."
+        );
+        expect(host.textContent).not.toContain("/staging");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("retains uncertainty and refuses a resubmission when the source file is missing", async () => {
+        configure(confirmedRemote, {
+            ...presentSource, state: "source_unavailable", regularFileObserved: false,
+        });
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        expect(host.textContent).toContain("Source file not found. It may already have been moved.");
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("redacts errors and prevents a previous owner's file result appearing in another session", async () => {
+        configure(confirmedRemote, presentSource, true, true);
+        await mount();
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        expect(host.textContent).toContain("Source file check failed. Do not retry the download.");
+        expect(host.textContent).not.toContain("personal.flac");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "other-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Source file check failed.");
+        expect(host.textContent).not.toContain("Check downloaded source file");
     });
 });

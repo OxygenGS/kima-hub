@@ -594,3 +594,83 @@ path containment and import ownership; design atomic copy/rename and
 rollback across different devices; prove Kima indexing and playback;
 and arrange a single-writer cutover from Importer v5. Do **not** disable
 the existing Importer v5 systemd timer or delete source files in D4.
+
+
+## Phase D5: owner-verified, read-only staging file evidence
+
+Downtify's officially documented `GET /api/queue` job rows include a
+`filename` field. It is populated for completed jobs; the library's
+`GET /list` paths are relative and can include `slskd/...` paths outside
+the ordinary downloads root. These are *remote claims*, not trustworthy
+filesystem paths or independently verified recording identities. D5
+conservatively uses this contract **without trusting a title match**.
+
+This is a **third independent, OFF-by-default staging flag** that depends
+on both D3 owner verification and D4 safe root topology:
+
+    KIMA_SPOTIFY_INTENTS_ENABLED=true
+    KIMA_DOWNTIFY_ENABLED=true
+    KIMA_DOWNTIFY_RECONCILIATION_ENABLED=true
+    KIMA_DOWNTIFY_STORAGE_PREFLIGHT_ENABLED=true
+    KIMA_DOWNTIFY_SOURCE_EVIDENCE_ENABLED=true
+    KIMA_DOWNTIFY_STAGING_ROOT=<operator-controlled read-only mount>
+
+The remote URL and paired token, exact Kima owner, remote username, numeric
+remote account ID and persistent Downtify server ID must also be pinned as
+specified in D2. These placeholders are NOT a deployment snippet.
+The actual Downtify download root needs an **explicit read-only mount**
+inside the Kima backend. This PR does not configure it, change Docker mounts,
+touch music, enable flags, or replace Importer v5.
+
+New endpoints require login and the **currently stored** Kima track download
+permission, and accept no caller-provided path or remote credentials:
+
+- `GET /api/download-manager/spotify/source-file-capability`: sanitized
+  eligibility only, without network or filesystem I/O.
+- `GET /api/download-manager/spotify/intents/:intentId/source-file`: on
+  deliberate user request, D4 checks that both staging and Kima library
+  roots are safe, then D3 re-checks immutable Spotify track identity,
+  saved Kima intent ownership, Downtify server ID, device credentials,
+  exact remote numeric user membership, and unique job ownership.
+  Only a remotely **done** single-track job can yield a candidate filename.
+
+The filename is handled only inside the backend. Empty/missing names are
+unknown. Absolute paths, backslashes, dot/dotdot, control characters,
+unexpected extensions, path component overflow and malformed names are
+rejected **before filesystem operations**. `slskd/...` and `ext/...`
+are deliberately unsupported: those source files may reside elsewhere.
+Within the normal download root, D5 uses only `lstat`/`realpath` to
+inspect every parent and the final regular file, rejecting symlinks, nested
+mount device changes, escape from the canonical staging root, non-regular
+files and empty files. A missing file is never a reason to resubmit: an
+external importer might already have moved it.
+
+Response statuses are intentionally narrow:
+
+- `candidate_present_unverified`: a non-empty regular file was **observed**
+  under the configured staging root. It might disappear after this instant,
+  be on a different physical mount than intended, or contain incorrect audio.
+- `source_unavailable`, `source_path_unavailable`,
+  `unsafe_source_path`, `external_source_unsupported`,
+  `storage_unavailable`: no source-file evidence is established.
+- `remote_unverified`, `not_downloaded`, `not_found`: the remote
+  state or user-owned intent was insufficient.
+
+Every response explicitly includes `recordingVerified:false`,
+`audioDecoded:false`, `stableMountVerified:false`,
+`libraryImportVerified:false`, `filesChanged:false`,
+`retryAllowed:false`. It never includes the filename, path, file size,
+raw remote object, token, remote user ID or upstream error.
+
+The English/Dutch Download Manager shows **Check downloaded source file**
+only *after* the user manually verified the owned remote job as done.
+The backend repeats ALL validations even though the UI already checked.
+No automatic polling, download submission, copy, rename, deletion, DB
+mutation, filesystem write, importer cutover or systemd change occurs.
+
+**Following stages (separate PRs):** verify the running container's real
+mount identity and trusted source-file provenance, inspect audio and tags
+without changing them, define immutable staging-to-DAS delivery proofs,
+then design controlled atomic copy/rename, Kima index verification, importer
+single-writer handoff and safe rollback. Keep existing Importer v5 running
+until an explicit cutover is proven safe on an isolated staging instance.

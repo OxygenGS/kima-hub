@@ -11,6 +11,7 @@ import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
 import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence";
 import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services/downtifyTrackDispatch";
 import { getReconciliationCapability, verifyRemoteSpotifyIntent } from "../services/downtifyDispatchReconciliation";
+import { getSourceFileCapability, inspectDowntifySourceFile } from "../services/downtifySourceFileEvidence";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -228,6 +229,42 @@ router.get(
             return res.json(result);
         } catch {
             return res.status(503).json({ error: "Remote verification unavailable; do not retry submission" });
+        }
+    },
+);
+
+/**
+ * D5: manually inspect a downloaded candidate under staging. The backend
+ * repeats D3 owner/server/song checks, then D4 root safety verification.
+ * Never accept a browser-supplied source path, token or remote identity.
+ */
+router.get(
+    "/spotify/source-file-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getSourceFileCapability(req.user.id));
+    },
+);
+
+router.get(
+    "/spotify/intents/:intentId/source-file",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        if (!getSourceFileCapability(req.user.id).canCheck) {
+            return res.status(404).json({ error: "Source file inspection unavailable" });
+        }
+        try {
+            const result = await inspectDowntifySourceFile(req.user.id, req.params.intentId);
+            if (result.state === "not_found") return res.status(404).json(result);
+            return res.json(result);
+        } catch {
+            return res.status(503).json({ error: "Source file inspection unavailable" });
         }
     },
 );
