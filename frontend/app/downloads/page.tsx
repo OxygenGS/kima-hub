@@ -665,7 +665,8 @@ function SpotifyLinkIntake() {
     // Only a deliberate click reads an intent's remote queue state.
     // A missing or failed check NEVER resets the saved request for retry.
     const checkRemote = async (id: string) => {
-        if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current) return;
+        if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current ||
+            sourceCheckInFlight.current) return;
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
         // Any prior source-file observation is stale after a new remote check.
@@ -909,7 +910,7 @@ function SpotifyLinkIntake() {
                                         <div className="mt-3 space-y-2">
                                             <button
                                                 type="button"
-                                                disabled={remoteCheckingId !== null}
+                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null}
                                                 onClick={() => { void checkRemote(item.id); }}
                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                             >
