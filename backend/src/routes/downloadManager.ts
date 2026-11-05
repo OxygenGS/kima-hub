@@ -13,6 +13,7 @@ import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services
 import { getReconciliationCapability, verifyRemoteSpotifyIntent } from "../services/downtifyDispatchReconciliation";
 import { getSourceFileCapability, inspectDowntifySourceFile } from "../services/downtifySourceFileEvidence";
 import { getAudioHeaderCapability, inspectDowntifyAudioHeader } from "../services/downtifyAudioHeaderEvidence";
+import { getFullAudioCapability, inspectDowntifyFullAudio } from "../services/downtifyFullAudioEvidence";
 import {
     prepareSpotifyIntent,
     getSavedSpotifyIntents,
@@ -302,6 +303,44 @@ router.get(
             return res.json(result);
         } catch {
             return res.status(503).json({ error: "Audio header inspection unavailable" });
+        }
+    },
+);
+
+/**
+ * D7: explicitly user-triggered complete audio read, hash and decode-to-null.
+ * This DOES NOT authenticate the recording, persist a checksum, import
+ * music, or give permission for future writes. Current track permission
+ * and all D3-D6 operator/owner gates are revalidated on every request.
+ */
+router.get(
+    "/spotify/full-audio-capability",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        return res.json(getFullAudioCapability(req.user.id));
+    },
+);
+
+router.get(
+    "/spotify/intents/:intentId/full-audio",
+    requireAuth,
+    requireMusicPermission("canDownloadTracks"),
+    async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+        if (!getFullAudioCapability(req.user.id).canCheck) {
+            return res.status(404).json({ error: "Full audio inspection unavailable" });
+        }
+        try {
+            const result = await inspectDowntifyFullAudio(req.user.id, req.params.intentId);
+            if (result.state === "not_found") return res.status(404).json(result);
+            if (result.state === "busy") return res.status(429).json(result);
+            return res.json(result);
+        } catch {
+            return res.status(503).json({ error: "Full audio inspection unavailable" });
         }
     },
 );
