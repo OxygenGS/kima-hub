@@ -52,6 +52,9 @@ beforeEach(() => {
         user: { id: "first-user", role: "user" },
     });
     mocks.get.mockImplementation(async (path: string) => {
+        if (path.startsWith("/download-manager/spotify/recording-tags-capability")) {
+            return { state: "disabled", canCheck: false, singleTrackOnly: true };
+        }
         if (path.startsWith("/download-manager/spotify/full-audio-capability")) {
             return { state: "disabled", canCheck: false, singleTrackOnly: true };
         }
@@ -1107,5 +1110,139 @@ describe("D7 complete audio read only after three explicit prior checks", () => 
         await mount();
         expect(host.textContent).not.toContain("Full audio check unavailable");
         expect(host.textContent).not.toContain("Verify full audio stream");
+    });
+});
+
+
+describe("D8 manual untrusted recording tag comparison after D3-D7", () => {
+    const submitted = { ...savedTrack, requestState: "submitted" };
+    const remote = {
+        state: "verified", remotePhase: "downloaded",
+        remoteOwnershipVerified: true, libraryVerification: "not_checked",
+        playbackVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const file = {
+        state: "candidate_present_unverified", remotePhase: "downloaded",
+        regularFileObserved: true, recordingVerified: false,
+        audioDecoded: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    };
+    const header = {
+        state: "header_observed_unverified", container: "flac",
+        headerMatchedExtension: true, audioDecoded: false,
+        recordingVerified: false, wholeFileIntegrityVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    };
+    const audio = {
+        state: "stream_decoded_unmatched", container: "flac",
+        fullFileSha256Calculated: true, audioDecoded: true,
+        wholeFileIntegrityVerified: false, recordingVerified: false,
+        stableMountVerified: false, libraryImportVerified: false,
+        filesChanged: false, retryAllowed: false,
+    };
+    const tag = {
+        state: "metadata_consistent_untrusted",
+        isrcMatches: true, durationMatches: true,
+        recordingVerified: false, audioDecoded: false,
+        wholeFileIntegrityVerified: false, stableMountVerified: false,
+        libraryImportVerified: false, filesChanged: false, retryAllowed: false,
+    };
+
+    const setup = (options: {
+        enabled?: boolean; state?: string; error?: boolean;
+    } = {}) => {
+        authorizeSpotifyPreview();
+        const original = mocks.get.getMockImplementation();
+        mocks.get.mockImplementation(async (p: string) => {
+            if (p.endsWith("/spotify/reconciliation-capability") ||
+                p.endsWith("/spotify/source-file-capability") ||
+                p.endsWith("/spotify/audio-header-capability") ||
+                p.endsWith("/spotify/full-audio-capability")) {
+                return { state: "available", canCheck: true, singleTrackOnly: true };
+            }
+            if (p.endsWith("/spotify/recording-tags-capability")) {
+                return { state: options.enabled === false ? "disabled" : "available",
+                    canCheck: options.enabled !== false, singleTrackOnly: true };
+            }
+            if (p.endsWith("/remote-status")) return remote;
+            if (p.endsWith("/source-file")) return file;
+            if (p.endsWith("/audio-header")) return header;
+            if (p.endsWith("/full-audio")) return audio;
+            if (p.endsWith("/recording-tags")) {
+                if (options.error) throw new Error("private ISRC /staging/personal.flac");
+                return { ...tag, state: options.state ?? tag.state };
+            }
+            if (p.includes("/spotify/intents?")) return savedIntents([submitted]);
+            return original?.(p);
+        });
+    };
+    const priorFourChecks = async () => {
+        await clickButtonContaining("Check Downtify job");
+        await clickButtonContaining("Check downloaded source file");
+        await clickButtonContaining("Check audio header");
+        await clickButtonContaining("Verify full audio stream");
+    };
+
+    it("never reads recording metadata automatically or on initial load", async () => {
+        setup();
+        await mount();
+        expect(host.textContent).not.toContain("Compare recording tags");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/recording-tags"))).toBe(false);
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("reveals a manual comparison only after D3-D7 and does not claim verified recording", async () => {
+        setup();
+        await mount();
+        await priorFourChecks();
+        expect(host.textContent).toContain("Compare recording tags");
+        await clickButtonContaining("Compare recording tags");
+        expect(mocks.get).toHaveBeenCalledWith(
+            "/download-manager/spotify/intents/saved-1/recording-tags"
+        );
+        expect(host.textContent).toContain(
+            "ISRC and duration are consistent; recording identity is not proven."
+        );
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("hides the comparison completely if the operator has not enabled D8", async () => {
+        setup({ enabled: false });
+        await mount();
+        await priorFourChecks();
+        expect(host.textContent).not.toContain("Compare recording tags");
+        expect(mocks.get.mock.calls.some(([p]) => String(p).endsWith("/recording-tags"))).toBe(false);
+    });
+
+    it("displays mismatches conservatively, without automatically retrying downloads", async () => {
+        setup({ state: "isrc_mismatch" });
+        await mount();
+        await priorFourChecks();
+        await clickButtonContaining("Compare recording tags");
+        expect(host.textContent).toContain(
+            "The embedded ISRC differs from Spotify's reference."
+        );
+        expect(host.textContent).not.toContain("Submit track to Downtify");
+        expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("redacts failures and does not retain the former user's tag results", async () => {
+        setup({ error: true });
+        await mount();
+        await priorFourChecks();
+        await clickButtonContaining("Compare recording tags");
+        expect(host.textContent).toContain(
+            "Recording metadata check unavailable. Do not resubmit."
+        );
+        expect(host.textContent).not.toContain("personal.flac");
+        mocks.auth.mockReturnValue({
+            isAuthenticated: true, isLoading: false,
+            user: { id: "different-user", role: "user", canDownloadTracks: true },
+        });
+        mocks.get.mockImplementation(() => new Promise(() => {}));
+        await mount();
+        expect(host.textContent).not.toContain("Recording metadata check unavailable");
+        expect(host.textContent).not.toContain("Compare recording tags");
     });
 });
