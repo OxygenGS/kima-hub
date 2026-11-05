@@ -2,6 +2,8 @@
 
 **Current published fork release:** [v1.17.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) — Upstream Polish, Library Intelligence and reliability fixes
 
+**Upcoming v1.18.0:** source-only release candidate with the guarded Unified Download Manager. **Not yet published; do not pull an unverified v1.18.0 image.** It introduces two additive database migrations and leaves Downtify staging/download features default-OFF and Importer v5 intact. Review the [v1.18.0 release checklist](v118-release-readiness.md) and complete `/data` backup/restore checks before any eventual upgrade.
+
 The published all-in-one Docker image is `ghcr.io/oxygengs/kima-hub:v1.17.1`, with native **linux/amd64** and **linux/arm64** support. The [v1.17.1 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) and both native Docker publication workflows have completed successfully.
 
 **v1.17.1 is a published stable release.** It adds no new PostgreSQL migration or music re-enrichment, but v1.17.0 introduced a database migration for reversible album links. Before upgrading, stop application writes, back up the entire persistent `/data` volume, verify an independent restore and keep `/music` mounted exactly as before. Never point an older image at a migrated database; restore the matching pre-upgrade `/data` backup when rolling back across a migration.
