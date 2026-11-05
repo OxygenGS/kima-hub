@@ -196,6 +196,40 @@ interface AudioHeaderEvidence {
     filesChanged: false;
     retryAllowed: false;
 }
+
+type FullAudioState =
+    | "disabled" | "unbound" | "misconfigured" | "not_found" | "busy"
+    | "source_unverified" | "file_changed" | "file_unreadable"
+    | "file_too_large" | "header_unverified" | "read_incomplete"
+    | "decode_failed" | "stream_decoded_unmatched";
+interface FullAudioEvidence {
+    state: FullAudioState;
+    container: "flac" | "mp3" | "mp4" | "ogg" | "wav" | "unknown";
+    fullFileSha256Calculated: boolean;
+    audioDecoded: boolean;
+    wholeFileIntegrityVerified: false;
+    recordingVerified: false;
+    stableMountVerified: false;
+    libraryImportVerified: false;
+    filesChanged: false;
+    retryAllowed: false;
+}
+const fullAudioLabels: Record<FullAudioState, TranslationKey> = {
+    disabled: "Downtify integration is disabled.",
+    unbound: "No Downtify account is linked to this user.",
+    misconfigured: "Downtify connection settings are incomplete.",
+    not_found: "Request state not independently verified",
+    busy: "Another full audio inspection is running.",
+    source_unverified: "Source file was not verified for an audio header check.",
+    file_changed: "The file changed during the check. No audio verification was made.",
+    file_unreadable: "Could not read the full source audio.",
+    file_too_large: "Audio file exceeds the inspection size limit.",
+    header_unverified: "Audio header could not be verified for full decoding.",
+    read_incomplete: "Full audio read was incomplete. Integrity is unknown.",
+    decode_failed: "Full audio decode failed. Do not retry the download.",
+    stream_decoded_unmatched: "Full audio decoded and SHA-256 calculated; recording and import are not verified.",
+};
+
 const audioHeaderLabel: Record<AudioHeaderState, TranslationKey> = {
     disabled: "Downtify integration is disabled.",
     unbound: "No Downtify account is linked to this user.",
@@ -503,6 +537,12 @@ function SpotifyLinkIntake() {
     const [audioResults, setAudioResults] = useState<Record<string, AudioHeaderEvidence>>({});
     const [audioErrors, setAudioErrors] = useState<Record<string, boolean>>({});
     const [audioCheckingId, setAudioCheckingId] = useState<string | null>(null);
+    const [fullAudioCapability, setFullAudioCapability] = useState<SourceFileCapability | null>(null);
+    const [fullAudioResults, setFullAudioResults] = useState<Record<string, FullAudioEvidence>>({});
+    const [fullAudioErrors, setFullAudioErrors] = useState<Record<string, boolean>>({});
+    const [fullAudioCheckingId, setFullAudioCheckingId] = useState<string | null>(null);
+    const fullAudioCheckInFlight = useRef(false);
+    const fullAudioEpoch = useRef(0);
     const audioCheckInFlight = useRef(false);
     const audioEpoch = useRef(0);
     const sourceCheckInFlight = useRef(false);
@@ -522,6 +562,7 @@ function SpotifyLinkIntake() {
         remoteCheckEpoch.current++;
         sourceCheckEpoch.current++;
         audioEpoch.current++;
+        fullAudioEpoch.current++;
     }, []);
 
     useEffect(() => {
@@ -553,6 +594,14 @@ function SpotifyLinkIntake() {
         void api.get<SourceFileCapability>("/download-manager/spotify/audio-header-capability")
             .then(data => { if (active) setAudioCapability(data); })
             .catch(() => { if (active) setAudioCapability(null); });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        void api.get<SourceFileCapability>("/download-manager/spotify/full-audio-capability")
+            .then(data => { if (active) setFullAudioCapability(data); })
+            .catch(() => { if (active) setFullAudioCapability(null); });
         return () => { active = false; };
     }, []);
 
@@ -710,12 +759,19 @@ function SpotifyLinkIntake() {
     // A missing or failed check NEVER resets the saved request for retry.
     const checkRemote = async (id: string) => {
         if (!reconciliationCapability?.canCheck || remoteCheckInFlight.current ||
-            sourceCheckInFlight.current || audioCheckInFlight.current) return;
+            sourceCheckInFlight.current || audioCheckInFlight.current ||
+            fullAudioCheckInFlight.current) return;
         remoteCheckInFlight.current = true;
         const epoch = remoteCheckEpoch.current;
         // Any prior source-file observation is stale after a new remote check.
         sourceCheckEpoch.current++;
         audioEpoch.current++;
+        fullAudioEpoch.current++;
+        setFullAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setAudioResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -756,10 +812,17 @@ function SpotifyLinkIntake() {
         const verified = remoteResults[id];
         if (!sourceCapability?.canCheck || sourceCheckInFlight.current ||
             audioCheckInFlight.current || remoteCheckInFlight.current ||
+            fullAudioCheckInFlight.current ||
             verified?.state !== "verified" || verified.remotePhase !== "downloaded") return;
         sourceCheckInFlight.current = true;
         const epoch = ++sourceCheckEpoch.current;
         audioEpoch.current++;
+        fullAudioEpoch.current++;
+        setFullAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setAudioResults(previous => {
             const next = { ...previous };
             delete next[id];
@@ -795,11 +858,18 @@ function SpotifyLinkIntake() {
     const checkAudioHeader = async (id: string) => {
         if (!audioCapability?.canCheck || audioCheckInFlight.current ||
             remoteCheckInFlight.current || sourceCheckInFlight.current ||
+            fullAudioCheckInFlight.current ||
             remoteResults[id]?.state !== "verified" ||
             remoteResults[id]?.remotePhase !== "downloaded" ||
             sourceResults[id]?.state !== "candidate_present_unverified") return;
         audioCheckInFlight.current = true;
         const epoch = ++audioEpoch.current;
+        fullAudioEpoch.current++;
+        setFullAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setAudioCheckingId(id);
         setAudioErrors(previous => ({ ...previous, [id]: false }));
         setAudioResults(previous => {
@@ -821,6 +891,43 @@ function SpotifyLinkIntake() {
         } finally {
             audioCheckInFlight.current = false;
             if (epoch === audioEpoch.current) setAudioCheckingId(null);
+        }
+    };
+
+    // A fourth manual action reads and decodes the entire source only once
+    // D3/D5/D6 evidence has already been checked. The backend independently
+    // repeats every prior owner, queue, source and path permission gate.
+    const checkFullAudio = async (id: string) => {
+        if (!fullAudioCapability?.canCheck || fullAudioCheckInFlight.current ||
+            remoteCheckInFlight.current || sourceCheckInFlight.current ||
+            audioCheckInFlight.current ||
+            remoteResults[id]?.state !== "verified" ||
+            remoteResults[id]?.remotePhase !== "downloaded" ||
+            sourceResults[id]?.state !== "candidate_present_unverified" ||
+            audioResults[id]?.state !== "header_observed_unverified") return;
+        fullAudioCheckInFlight.current = true;
+        const epoch = ++fullAudioEpoch.current;
+        setFullAudioCheckingId(id);
+        setFullAudioErrors(previous => ({ ...previous, [id]: false }));
+        setFullAudioResults(previous => {
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
+        try {
+            const evidence = await api.get<FullAudioEvidence>(
+                "/download-manager/spotify/intents/" + encodeURIComponent(id) + "/full-audio"
+            );
+            if (epoch === fullAudioEpoch.current) {
+                setFullAudioResults(previous => ({ ...previous, [id]: evidence }));
+            }
+        } catch {
+            if (epoch === fullAudioEpoch.current) {
+                setFullAudioErrors(previous => ({ ...previous, [id]: true }));
+            }
+        } finally {
+            fullAudioCheckInFlight.current = false;
+            if (epoch === fullAudioEpoch.current) setFullAudioCheckingId(null);
         }
     };
 
@@ -1002,7 +1109,7 @@ function SpotifyLinkIntake() {
                                         <div className="mt-3 space-y-2">
                                             <button
                                                 type="button"
-                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null}
+                                                disabled={remoteCheckingId !== null || sourceCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null}
                                                 onClick={() => { void checkRemote(item.id); }}
                                                 className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                             >
@@ -1029,7 +1136,7 @@ function SpotifyLinkIntake() {
                                                     <div className="space-y-2">
                                                         <button
                                                             type="button"
-                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null}
+                                                            disabled={sourceCheckingId !== null || remoteCheckingId !== null || audioCheckingId !== null || fullAudioCheckingId !== null}
                                                             onClick={() => { void checkSourceFile(item.id); }}
                                                             className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                         >
@@ -1052,7 +1159,7 @@ function SpotifyLinkIntake() {
                                                                 <div className="space-y-2">
                                                                     <button
                                                                         type="button"
-                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                        disabled={audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null || fullAudioCheckingId !== null}
                                                                         onClick={() => { void checkAudioHeader(item.id); }}
                                                                         className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
                                                                     >
@@ -1070,6 +1177,31 @@ function SpotifyLinkIntake() {
                                                                             {t("Audio header inspection failed. Download was not retried.")}
                                                                         </p>
                                                                     )}
+                                                                    {fullAudioCapability?.canCheck === true &&
+                                                                        audioResults[item.id]?.state === "header_observed_unverified" && (
+                                                                            <div className="space-y-2">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={fullAudioCheckingId !== null || audioCheckingId !== null || sourceCheckingId !== null || remoteCheckingId !== null}
+                                                                                    onClick={() => { void checkFullAudio(item.id); }}
+                                                                                    className="rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                                                                                >
+                                                                                    {fullAudioCheckingId === item.id
+                                                                                        ? t("Decoding full audio...")
+                                                                                        : t("Verify full audio stream")}
+                                                                                </button>
+                                                                                {fullAudioResults[item.id] && (
+                                                                                    <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                                        {t(fullAudioLabels[fullAudioResults[item.id].state])}
+                                                                                    </p>
+                                                                                )}
+                                                                                {fullAudioErrors[item.id] && (
+                                                                                    <p role="alert" className="text-xs text-[var(--text-secondary)]">
+                                                                                        {t("Full audio check unavailable. Do not resubmit.")}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                 </div>
                                                             )}
                                                     </div>
