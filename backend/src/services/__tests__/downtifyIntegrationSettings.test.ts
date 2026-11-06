@@ -11,7 +11,7 @@ jest.mock("../../utils/db", () => ({
     prisma: {
         downtifyIntegration: {
             findUnique: jest.fn(),
-            upsert: jest.fn(),
+            create: jest.fn(),
             updateMany: jest.fn(),
         },
     },
@@ -53,8 +53,9 @@ beforeEach(() => {
     jest.clearAllMocks();
     row = null;
     (db.findUnique as jest.Mock).mockImplementation(async () => row);
-    (db.upsert as jest.Mock).mockImplementation(async ({ create, update }) => {
-        row = (row ? { ...row, ...update } : { ...create }) as Row;
+    (db.create as jest.Mock).mockImplementation(async ({ data }) => {
+        if (row) throw Object.assign(new Error("Unique constraint"), { code: "P2002" });
+        row = { ...data } as Row;
         return row;
     });
     (db.updateMany as jest.Mock).mockImplementation(async ({ data }) => {
@@ -147,6 +148,26 @@ describe("Downtify authenticated owner pairing", () => {
         await expect(testSavedDowntifyPair("admin-1", client(INFO, AUTH))).rejects.toMatchObject({
             state: "incompatible",
         });
+    });
+
+    it("does not let another admin overwrite a previously paired owner's device", async () => {
+        await pairDowntify("admin-1", pair, client(INFO, AUTH));
+        const before = row!.deviceTokenEncrypted;
+        await expect(pairDowntify("admin-2", pair, client(INFO, AUTH))).rejects.toMatchObject({
+            state: "unauthorized",
+        });
+        expect(row!.deviceTokenEncrypted).toBe(before);
+        expect(row!.ownerKimaUserId).toBe("admin-1");
+    });
+
+    it("refuses a concurrent unique-ID race instead of stealing the paired binding", async () => {
+        (db.create as jest.Mock).mockRejectedValueOnce(
+            Object.assign(new Error("unique"), { code: "P2002" }),
+        );
+        await expect(pairDowntify("admin-1", pair, client(INFO, AUTH))).rejects.toMatchObject({
+            state: "unauthorized",
+        });
+        expect(row).toBeNull();
     });
 
     it("forces an existing write-capable pairing OFF again when repaired", async () => {
