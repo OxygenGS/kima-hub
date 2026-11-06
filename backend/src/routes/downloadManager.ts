@@ -7,6 +7,7 @@ import {
 } from "../services/unifiedDownloadOverview";
 import { logger } from "../utils/logger";
 import { getBoundDowntifyQueue } from "../services/downtifyBoundQueue";
+import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { parseSpotifyDownloadLink } from "../services/spotifyLinkIntake";
 import { checkSpotifyLibraryEvidence } from "../services/spotifyLibraryEvidence";
 import { dispatchPreparedSpotifyTrack, getDispatchCapability } from "../services/downtifyTrackDispatch";
@@ -23,6 +24,21 @@ import {
 } from "../services/spotifyIntentRegistry";
 
 const router = Router();
+
+/** Resolve owner-locked DB settings after login, without changing process.env. */
+const withDowntifyConfig = async (
+    _req: import("express").Request,
+    res: import("express").Response,
+    next: import("express").NextFunction,
+) => {
+    try {
+        res.locals.downtifyEnv = await getDowntifyRuntimeEnv();
+        next();
+    } catch {
+        // A DB outage must never silently fall back to old credentials/flags.
+        return res.status(503).json({ error: "Downtify configuration unavailable" });
+    }
+};
 
 function safeInt(raw: unknown, fallback: number, max: number): number | null {
     if (raw === undefined) return fallback;
@@ -58,11 +74,11 @@ router.get("/jobs", requireAuth, async (req, res) => {
  * Single-bound-user, read-only remote queue. If no verified mapping exists,
  * nothing about other Downtify accounts or their jobs is returned.
  */
-router.get("/downtify/jobs", requireAuth, async (req, res) => {
+router.get("/downtify/jobs", requireAuth, withDowntifyConfig, async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (!req.user) return res.status(401).json({ error: "Not authenticated" });
     try {
-        return res.json(await getBoundDowntifyQueue(req.user.id));
+        return res.json(await getBoundDowntifyQueue(req.user.id, res.locals.downtifyEnv));
     } catch {
         return res.status(503).json({
             state: "unavailable", items: [], displayed: 0, hasMore: false,
@@ -136,9 +152,10 @@ router.post(
 router.get(
     "/spotify/intents",
     requireAuth,
+    withDowntifyConfig,
     (_req, res, next) => {
         res.setHeader("Cache-Control", "no-store");
-        if (process.env.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
+        if (res.locals.downtifyEnv.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
             return res.json({
                 enabled: false, items: [], displayed: 0, total: 0,
                 limit: 20, offset: 0, hasMore: false, isDownloadQueue: false,
@@ -172,9 +189,10 @@ router.get(
 router.post(
     "/spotify/intents",
     requireAuth,
+    withDowntifyConfig,
     (_req, res, next) => {
         res.setHeader("Cache-Control", "no-store");
-        if (process.env.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
+        if (res.locals.downtifyEnv.KIMA_SPOTIFY_INTENTS_ENABLED !== "true") {
             return res.status(404).json({ error: "Spotify intent preparation unavailable" });
         }
         next();
@@ -207,26 +225,28 @@ router.post(
 router.get(
     "/spotify/reconciliation-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getReconciliationCapability(req.user.id));
+        return res.json(getReconciliationCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
 router.get(
     "/spotify/intents/:intentId/remote-status",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        if (!getReconciliationCapability(req.user.id).canCheck) {
+        if (!getReconciliationCapability(req.user.id, res.locals.downtifyEnv).canCheck) {
             return res.status(404).json({ error: "Remote verification unavailable" });
         }
         try {
-            const result = await verifyRemoteSpotifyIntent(req.user.id, req.params.intentId);
+            const result = await verifyRemoteSpotifyIntent(req.user.id, req.params.intentId, res.locals.downtifyEnv);
             if (result.state === "not_found") return res.status(404).json(result);
             // A remote transfer is not an indexed, imported or playable track.
             return res.json(result);
@@ -244,26 +264,28 @@ router.get(
 router.get(
     "/spotify/source-file-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getSourceFileCapability(req.user.id));
+        return res.json(getSourceFileCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
 router.get(
     "/spotify/intents/:intentId/source-file",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        if (!getSourceFileCapability(req.user.id).canCheck) {
+        if (!getSourceFileCapability(req.user.id, res.locals.downtifyEnv).canCheck) {
             return res.status(404).json({ error: "Source file inspection unavailable" });
         }
         try {
-            const result = await inspectDowntifySourceFile(req.user.id, req.params.intentId);
+            const result = await inspectDowntifySourceFile(req.user.id, req.params.intentId, res.locals.downtifyEnv);
             if (result.state === "not_found") return res.status(404).json(result);
             return res.json(result);
         } catch {
@@ -280,26 +302,28 @@ router.get(
 router.get(
     "/spotify/audio-header-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getAudioHeaderCapability(req.user.id));
+        return res.json(getAudioHeaderCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
 router.get(
     "/spotify/intents/:intentId/audio-header",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        if (!getAudioHeaderCapability(req.user.id).canCheck) {
+        if (!getAudioHeaderCapability(req.user.id, res.locals.downtifyEnv).canCheck) {
             return res.status(404).json({ error: "Audio header inspection unavailable" });
         }
         try {
-            const result = await inspectDowntifyAudioHeader(req.user.id, req.params.intentId);
+            const result = await inspectDowntifyAudioHeader(req.user.id, req.params.intentId, res.locals.downtifyEnv);
             if (result.state === "not_found") return res.status(404).json(result);
             return res.json(result);
         } catch {
@@ -317,26 +341,28 @@ router.get(
 router.get(
     "/spotify/full-audio-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getFullAudioCapability(req.user.id));
+        return res.json(getFullAudioCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
 router.get(
     "/spotify/intents/:intentId/full-audio",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        if (!getFullAudioCapability(req.user.id).canCheck) {
+        if (!getFullAudioCapability(req.user.id, res.locals.downtifyEnv).canCheck) {
             return res.status(404).json({ error: "Full audio inspection unavailable" });
         }
         try {
-            const result = await inspectDowntifyFullAudio(req.user.id, req.params.intentId);
+            const result = await inspectDowntifyFullAudio(req.user.id, req.params.intentId, res.locals.downtifyEnv);
             if (result.state === "not_found") return res.status(404).json(result);
             if (result.state === "busy") return res.status(429).json(result);
             return res.json(result);
@@ -354,26 +380,28 @@ router.get(
 router.get(
     "/spotify/recording-tags-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getRecordingTagCapability(req.user.id));
+        return res.json(getRecordingTagCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
 router.get(
     "/spotify/intents/:intentId/recording-tags",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        if (!getRecordingTagCapability(req.user.id).canCheck) {
+        if (!getRecordingTagCapability(req.user.id, res.locals.downtifyEnv).canCheck) {
             return res.status(404).json({ error: "Recording tag comparison unavailable" });
         }
         try {
-            const result = await inspectDowntifyRecordingTags(req.user.id, req.params.intentId);
+            const result = await inspectDowntifyRecordingTags(req.user.id, req.params.intentId, res.locals.downtifyEnv);
             if (result.state === "not_found") return res.status(404).json(result);
             if (result.state === "busy") return res.status(429).json(result);
             return res.json(result);
@@ -390,11 +418,12 @@ router.get(
 router.get(
     "/spotify/dispatch-capability",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        return res.json(getDispatchCapability(req.user.id));
+        return res.json(getDispatchCapability(req.user.id, res.locals.downtifyEnv));
     },
 );
 
@@ -406,11 +435,12 @@ router.get(
 router.post(
     "/spotify/intents/:intentId/submit",
     requireAuth,
+    withDowntifyConfig,
     requireMusicPermission("canDownloadTracks"),
     async (req, res) => {
         res.setHeader("Cache-Control", "no-store");
         if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-        const capability = getDispatchCapability(req.user.id);
+        const capability = getDispatchCapability(req.user.id, res.locals.downtifyEnv);
         if (!capability.canSubmit) {
             return res.status(404).json({ error: "Downtify submission not available" });
         }
@@ -419,7 +449,7 @@ router.post(
             !Array.isArray(req.body) ? req.body : {};
         const ack = body.acknowledgeUnverified === true;
         try {
-            const result = await dispatchPreparedSpotifyTrack(req.user.id, req.params.intentId, ack);
+            const result = await dispatchPreparedSpotifyTrack(req.user.id, req.params.intentId, ack, res.locals.downtifyEnv);
             if (result.state === "submitted") return res.status(202).json(result);
             if (result.state === "already_in_remote_queue") return res.status(200).json(result);
             // A timed-out HTTP response does NOT prove the remote job absent.
