@@ -139,10 +139,12 @@ export async function verifyDowntifyPair(
 
 /** Re-check a saved pairing without exposing or resetting the stored token. */
 export async function testSavedDowntifyPair(
+    adminUserId: string,
     http: Pick<AxiosInstance, "get"> = axios,
 ): Promise<VerifiedDowntify> {
     const row = await prisma.downtifyIntegration.findUnique({ where: { id: PAIR_ID } });
     if (!row) throw new DowntifySetupError("not_paired");
+    if (row.ownerKimaUserId !== adminUserId) throw new DowntifySetupError("unauthorized");
     let token: string;
     try {
         token = decrypt(row.deviceTokenEncrypted);
@@ -203,8 +205,11 @@ export async function pairDowntify(
     input: IntegrationPairing,
     http: Pick<AxiosInstance, "get"> = axios,
 ): Promise<VerifiedDowntify> {
-    if (process.env.KIMA_DOWNTIFY_ENABLED === "true" &&
-        !(await prisma.downtifyIntegration.findUnique({ where: { id: PAIR_ID } }))) {
+    const previous = await prisma.downtifyIntegration.findUnique({ where: { id: PAIR_ID } });
+    if (previous && previous.ownerKimaUserId !== adminUserId) {
+        throw new DowntifySetupError("unauthorized");
+    }
+    if (process.env.KIMA_DOWNTIFY_ENABLED === "true" && !previous) {
         throw new DowntifySetupError("environment_managed");
     }
     const verified = await verifyDowntifyPair(input, http);
