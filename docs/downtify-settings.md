@@ -1,13 +1,13 @@
-# Downtify integration settings — in development
+# Downtify integration settings — merged, awaiting a stable release
 
-**Status:** this feature is under development on a separate PR after the
-published v1.18.0 release. It is **not available in the released v1.18.0
-container**. No Proxmox, DAS or Importer v5 configuration is changed by
-this work.
+**Status:** implementation merged into `main` via PR #210, but **not available
+in the published v1.18.0 container**. Availability requires a separately
+approved stable release and installation update. No Proxmox, DAS or Importer v5
+configuration was changed by merging this code.
 
 ## Admin UI
 
-The next release adds **Settings → Integrations → Downtify** (administrators
+A future stable release adds **Settings → Integrations → Downtify** (administrators
 only). The original Kima Downloads screen remains available at `/downloads`.
 
 1. Enter a Downtify URL reachable **from the Kima container**, for example
@@ -31,9 +31,10 @@ only). The original Kima Downloads screen remains available at `/downloads`.
 The settings are saved in a new, additive `DowntifyIntegration` PostgreSQL
 table. They never overwrite the running container's `.env` or Docker mounts.
 Enabling a feature takes effect through a private request-scoped configuration
-projection and needs no container restart. If `KIMA_DOWNTIFY_ENABLED=true`
-already configures Downtify through Docker, the existing integration remains
-environment-managed until the operator explicitly migrates it. Re-pairing
+projection and needs no container restart. If `KIMA_DOWNTIFY_ENABLED=true` **or a Docker-managed
+`KIMA_DOWNTIFY_DEVICE_TOKEN` is present**, pairing through Settings is blocked
+to protect the existing configuration. Explicit operator migration is needed
+before using database-owned pairing. Re-pairing
 resets **all** feature switches to OFF.
 
 ## Safety
@@ -62,5 +63,5 @@ resets **all** feature switches to OFF.
   An older image may not undo this schema change; do not rely on image
   downgrade as a database rollback.
 
-This is a **separately tested development PR**, not an instruction to edit
-the currently running Proxmox installation.
+This integration is **merged source code, not yet a published stable image**.
+Do not change the running Proxmox installation or deploy an unapproved image.
