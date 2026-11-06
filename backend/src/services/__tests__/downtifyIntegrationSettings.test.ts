@@ -2,7 +2,7 @@ import type { AxiosInstance } from "axios";
 import { prisma } from "../../utils/db";
 import { decrypt, isEncryptedFormat } from "../../utils/encryption";
 import {
-    DowntifySetupError, getDowntifyRuntimeEnv, getDowntifyAdminStatus,
+    getDowntifyRuntimeEnv, getDowntifyAdminStatus,
     pairDowntify, safeControls, updateDowntifyControls,
     verifyDowntifyPair, testSavedDowntifyPair,
 } from "../downtifyIntegrationSettings";
