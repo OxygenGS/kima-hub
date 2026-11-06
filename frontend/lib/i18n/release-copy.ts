@@ -49,6 +49,42 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.19.0
+    "1.19.0": {
+        "titles": {
+            "Kima Hub 1.19.0 \u2014 Downtify Settings": "Kima Hub 1.19.0 \u2014 Downtify-instellingen"
+        },
+        "summaries": {
+            "Pair a Downtify device in Settings and manage safe, individually enabled Spotify request and manual download controls.": "Koppel een Downtify-apparaat in Instellingen en beheer veilige, afzonderlijk in te schakelen Spotify-aanvragen en handmatige downloads."
+        },
+        "items": {
+            "fork.119.downtify-settings": {
+                "title": "Downtify instellen vanuit Instellingen",
+                "summary": "Beheerders kunnen een Downtify-apparaat testen en koppelen zonder Docker-geheimen te bewerken.",
+                "body": "Open Instellingen > Integraties > Downtify om een vertrouwd serveradres en gekoppeld apparaattoken in te voeren. Controleer eerst de server en het account. De gepubliceerde v1.18.0-image bevat deze functie niet; zij is pas beschikbaar na afzonderlijke goedkeuring, publicatie en installatie van deze versie."
+            },
+            "fork.119.device-security": {
+                "title": "Versleutelde, accountgebonden koppeling",
+                "summary": "Bewaar apparaatgeheimen versleuteld en bind aanvragen aan een gecontroleerde server en gebruiker.",
+                "body": "Downtify gebruikt de bestaande versleutelingssleutel voor instellingen en bewaart de exacte externe server, het numerieke gebruikers-ID, de gebruikersnaam en de Kima-beheerder. De API geeft het apparaattoken nooit terug. Bij opnieuw koppelen gaan alle functieschakelaars weer UIT. Een gebruiker kan geen willekeurige download-URL of extern account opgeven."
+            },
+            "fork.119.manual-controls": {
+                "title": "Afzonderlijke schakelaars voor handmatige aanvragen",
+                "summary": "Schakel wachtrijweergave, opgeslagen Spotify-nummers en bewust verzenden per functie in.",
+                "body": "Alle schakelaars staan standaard UIT. Een beheerder kan de accountgebonden wachtrij, het bewaren van Spotify-nummeraanvragen, het handmatig verzenden van \u00e9\u00e9n nummer na uitdrukkelijke bevestiging en handmatige statuscontroles afzonderlijk activeren. Mislukte of onduidelijke verzendingen worden niet automatisch herhaald. Een voltooide externe taak bewijst geen geslaagde bibliotheekimport of opname-identiteit."
+            },
+            "fork.119.docker-compatibility": {
+                "title": "Bestaande Docker-instellingen blijven behouden",
+                "summary": "Vervang bestaande tokens niet stilzwijgend en verander niets aan opslag of import.",
+                "body": "Een bestaande, via Docker beheerde Downtify-verbinding of apparaattoken blokkeert koppeling via de browser totdat de beheerder bewust migreert. Database-instellingen werken per aanvraag zonder process.env te wijzigen. Geavanceerde bron- en audiocontroles blijven in databasemodus uitgeschakeld totdat een afzonderlijke alleen-lezen staging-koppeling is beoordeeld. Importer v5 en de DAS-opslag blijven ongewijzigd."
+            },
+            "fork.119.backup": {
+                "title": "Controleer een volledige back-up v\u00f3\u00f3r het bijwerken",
+                "summary": "E\u00e9n aanvullende PostgreSQL-migratie vereist een herstelbare back-up van /data.",
+                "body": "Deze versie voegt de tabel DowntifyIntegration toe. Maak voor elke productie-update een back-up van het volledige permanente /data-volume, controleer een onafhankelijk herstel, bewaar de bestaande Compose/Dockge-configuratie en opslagkoppelingen en beoordeel de beveiligingsresultaten van de AMD64- en ARM64-images. Alleen een oudere image terugzetten maakt de migratie niet ongedaan. Een broncodemerge en CI-goedkeuring geven geen toestemming tot publiceren of installeren."
+            }
+        }
+    },
     // release-candidate:1.17.1
     "1.17.1": {
         "titles": {

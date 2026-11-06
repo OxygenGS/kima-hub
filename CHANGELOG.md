@@ -1,5 +1,24 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.19.0 — release preparation (unpublished)
+
+This source-only candidate adds the first administrator-managed Downtify integration settings to the OxygenGS fork. The already published v1.18.0 image and its existing downloads, music imports and DAS mounts are unchanged.
+
+### Downtify pairing and configuration
+- PR #210: add Settings > Integrations > Downtify for administrators, with connection testing and explicit account pairing using a device token. Preserve English and Dutch user-facing copy.
+- Verify the public Downtify API v1 identity before sending a token, pin the remote server and numeric user identity, and store the device token encrypted at rest using Kima's existing settings encryption key. Redact secrets, private identifiers and upstream error payloads from all admin API responses.
+- Add four independent, default-OFF controls: owner-scoped queue viewing, saving Spotify track requests, confirmed manual single-track dispatch and manual remote-job reconciliation. Each re-pair resets every switch to OFF.
+
+### Existing Docker and music importer boundaries
+- Existing Docker-managed Downtify connections or tokens take priority until explicitly migrated; new DB configuration is projected only per request and never rewrites process.env, Compose files or mounts.
+- Source, staging-file, full-audio, metadata and import verification switches remain OFF in DB mode. A separately reviewed read-only staging mount and safe single-writer handoff are required before enabling those stages.
+- No automatic track retry, album or playlist dispatch, file move, copy, delete, retag, SSD-to-DAS transfer, Kima scanner receipt or Importer v5 takeover is introduced.
+
+### Data safety and release gate
+- Add one forward-only, default-OFF DowntifyIntegration PostgreSQL migration. Before any production upgrade, back up all persistent /data and independently verify a restore; image downgrade alone is not a database rollback.
+- Require the candidate PR security, database upgrade/restore, EN/NL browser tests, full-stack AIO smoke and native AMD64/ARM64 preflight on the exact final commit. Review residual native-image vulnerabilities before a separately approved stable tag and Docker publication.
+- This is unpublished release-preparation source. It does not authorize tagging, pushing an image, changing a running Proxmox installation, or altering Importer v5.
+
 ## OxygenGS fork v1.18.0 — release preparation (unpublished)
 
 Kima Hub v1.18.0 delivers the **first guarded stage** of the Unified Download Manager. The new `/downloads` screen combines a read-only Kima download overview with a user-owned Spotify link/request flow and selectively enabled Downtify checks. Existing Soulseek and Lidarr behavior stays intact. This is **not** the promised autonomous Downtify-to-DAS importer: Importer v5 remains the independent live importer.

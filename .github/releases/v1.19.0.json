@@ -1,0 +1,96 @@
+{
+  "release": {
+    "version": "1.19.0",
+    "title": "Kima Hub 1.19.0 — Downtify Settings",
+    "summary": "Pair a Downtify device in Settings and manage safe, individually enabled Spotify request and manual download controls.",
+    "date": "2026-11-06",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.119.downtify-settings",
+        "title": "Downtify setup inside Settings",
+        "summary": "Administrators can test and pair a Downtify device without editing Docker secrets.",
+        "body": "Open Settings > Integrations > Downtify to enter a trusted server URL and a paired-device token. Test server and account identity before pairing. The published v1.18.0 image does not include this feature; it becomes available only when this release is separately approved, published and installed.",
+        "links": [
+          {
+            "label": "Open Settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.119.device-security",
+        "title": "Encrypted, account-bound pairing",
+        "summary": "Keep device secrets encrypted and bind requests to a verified server and user.",
+        "body": "Downtify pairing uses the existing settings encryption key and pins the exact remote server, numeric user, username and Kima administrator. The API never returns the device token, and each re-pair resets all feature switches to OFF. No arbitrary download URL or remote account can be supplied from a user request.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.119.manual-controls",
+        "title": "Separate switches for manual requests",
+        "summary": "Enable queue viewing, saved Spotify tracks and deliberate single-track submission separately.",
+        "body": "All switches default to OFF. An administrator may enable an owner-scoped remote queue, saving of Spotify track requests, explicit manual single-track dispatch with an acknowledgement, and owner-only manual remote job checks. Dispatch has no automatic retry. A completed remote job is not proof of library import or recording authenticity.",
+        "links": [
+          {
+            "label": "Review Downloads",
+            "href": "/downloads"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.119.docker-compatibility",
+        "title": "Preserve existing Docker configuration",
+        "summary": "Avoid silently replacing legacy tokens or changing music storage and imports.",
+        "body": "An existing Docker-managed Downtify connection or device token blocks browser pairing until the operator deliberately migrates. Database-owned switches apply per request without mutating process.env. Advanced source and audio verification flags remain disabled in database mode pending a separate read-only staging mount review. Existing Importer v5 and DAS storage are untouched.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.119.backup",
+        "title": "Verify a full backup before upgrading",
+        "summary": "One additive PostgreSQL migration requires a restorable /data backup.",
+        "body": "This release adds the DowntifyIntegration database table. Before any production update, back up the entire persistent /data volume, verify an independent restore, preserve the original Compose/Dockge configuration and storage mounts, and review native AMD64/ARM64 image security evidence. Downgrading an image alone does not undo the migration. Source merge and candidate CI do not authorize publication or deployment.",
+        "links": []
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.19.0 — Downtify Settings": "Kima Hub 1.19.0 — Downtify-instellingen"
+    },
+    "summaries": {
+      "Pair a Downtify device in Settings and manage safe, individually enabled Spotify request and manual download controls.": "Koppel een Downtify-apparaat in Instellingen en beheer veilige, afzonderlijk in te schakelen Spotify-aanvragen en handmatige downloads."
+    },
+    "items": {
+      "fork.119.downtify-settings": {
+        "title": "Downtify instellen vanuit Instellingen",
+        "summary": "Beheerders kunnen een Downtify-apparaat testen en koppelen zonder Docker-geheimen te bewerken.",
+        "body": "Open Instellingen > Integraties > Downtify om een vertrouwd serveradres en gekoppeld apparaattoken in te voeren. Controleer eerst de server en het account. De gepubliceerde v1.18.0-image bevat deze functie niet; zij is pas beschikbaar na afzonderlijke goedkeuring, publicatie en installatie van deze versie."
+      },
+      "fork.119.device-security": {
+        "title": "Versleutelde, accountgebonden koppeling",
+        "summary": "Bewaar apparaatgeheimen versleuteld en bind aanvragen aan een gecontroleerde server en gebruiker.",
+        "body": "Downtify gebruikt de bestaande versleutelingssleutel voor instellingen en bewaart de exacte externe server, het numerieke gebruikers-ID, de gebruikersnaam en de Kima-beheerder. De API geeft het apparaattoken nooit terug. Bij opnieuw koppelen gaan alle functieschakelaars weer UIT. Een gebruiker kan geen willekeurige download-URL of extern account opgeven."
+      },
+      "fork.119.manual-controls": {
+        "title": "Afzonderlijke schakelaars voor handmatige aanvragen",
+        "summary": "Schakel wachtrijweergave, opgeslagen Spotify-nummers en bewust verzenden per functie in.",
+        "body": "Alle schakelaars staan standaard UIT. Een beheerder kan de accountgebonden wachtrij, het bewaren van Spotify-nummeraanvragen, het handmatig verzenden van één nummer na uitdrukkelijke bevestiging en handmatige statuscontroles afzonderlijk activeren. Mislukte of onduidelijke verzendingen worden niet automatisch herhaald. Een voltooide externe taak bewijst geen geslaagde bibliotheekimport of opname-identiteit."
+      },
+      "fork.119.docker-compatibility": {
+        "title": "Bestaande Docker-instellingen blijven behouden",
+        "summary": "Vervang bestaande tokens niet stilzwijgend en verander niets aan opslag of import.",
+        "body": "Een bestaande, via Docker beheerde Downtify-verbinding of apparaattoken blokkeert koppeling via de browser totdat de beheerder bewust migreert. Database-instellingen werken per aanvraag zonder process.env te wijzigen. Geavanceerde bron- en audiocontroles blijven in databasemodus uitgeschakeld totdat een afzonderlijke alleen-lezen staging-koppeling is beoordeeld. Importer v5 en de DAS-opslag blijven ongewijzigd."
+      },
+      "fork.119.backup": {
+        "title": "Controleer een volledige back-up vóór het bijwerken",
+        "summary": "Eén aanvullende PostgreSQL-migratie vereist een herstelbare back-up van /data.",
+        "body": "Deze versie voegt de tabel DowntifyIntegration toe. Maak voor elke productie-update een back-up van het volledige permanente /data-volume, controleer een onafhankelijk herstel, bewaar de bestaande Compose/Dockge-configuratie en opslagkoppelingen en beoordeel de beveiligingsresultaten van de AMD64- en ARM64-images. Alleen een oudere image terugzetten maakt de migratie niet ongedaan. Een broncodemerge en CI-goedkeuring geven geen toestemming tot publiceren of installeren."
+      }
+    }
+  },
+  "changelog": "This source-only candidate adds the first administrator-managed Downtify integration settings to the OxygenGS fork. The already published v1.18.0 image and its existing downloads, music imports and DAS mounts are unchanged.\n\n### Downtify pairing and configuration\n- PR #210: add Settings > Integrations > Downtify for administrators, with connection testing and explicit account pairing using a device token. Preserve English and Dutch user-facing copy.\n- Verify the public Downtify API v1 identity before sending a token, pin the remote server and numeric user identity, and store the device token encrypted at rest using Kima's existing settings encryption key. Redact secrets, private identifiers and upstream error payloads from all admin API responses.\n- Add four independent, default-OFF controls: owner-scoped queue viewing, saving Spotify track requests, confirmed manual single-track dispatch and manual remote-job reconciliation. Each re-pair resets every switch to OFF.\n\n### Existing Docker and music importer boundaries\n- Existing Docker-managed Downtify connections or tokens take priority until explicitly migrated; new DB configuration is projected only per request and never rewrites process.env, Compose files or mounts.\n- Source, staging-file, full-audio, metadata and import verification switches remain OFF in DB mode. A separately reviewed read-only staging mount and safe single-writer handoff are required before enabling those stages.\n- No automatic track retry, album or playlist dispatch, file move, copy, delete, retag, SSD-to-DAS transfer, Kima scanner receipt or Importer v5 takeover is introduced.\n\n### Data safety and release gate\n- Add one forward-only, default-OFF DowntifyIntegration PostgreSQL migration. Before any production upgrade, back up all persistent /data and independently verify a restore; image downgrade alone is not a database rollback.\n- Require the candidate PR security, database upgrade/restore, EN/NL browser tests, full-stack AIO smoke and native AMD64/ARM64 preflight on the exact final commit. Review residual native-image vulnerabilities before a separately approved stable tag and Docker publication.\n- This is unpublished release-preparation source. It does not authorize tagging, pushing an image, changing a running Proxmox installation, or altering Importer v5."
+}
