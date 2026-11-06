@@ -168,13 +168,15 @@ export async function getDowntifyAdminStatus(
 ): Promise<DowntifyAdminStatus> {
     const row = await prisma.downtifyIntegration.findUnique({ where: { id: PAIR_ID } });
     if (row) {
+        const ownerMatches = row.ownerKimaUserId === adminUserId;
         return {
             source: "database",
             configured: true,
             enabled: row.enabled,
-            url: row.baseUrl,
-            username: row.expectedUsername,
-            ownerMatches: row.ownerKimaUserId === adminUserId,
+            // Do not expose another admin's private server URL or account.
+            url: ownerMatches ? row.baseUrl : null,
+            username: ownerMatches ? row.expectedUsername : null,
+            ownerMatches,
             spotifyIntentsEnabled: row.spotifyIntentsEnabled,
             trackSubmissionEnabled: row.trackSubmissionEnabled,
             reconciliationEnabled: row.reconciliationEnabled,
@@ -260,7 +262,8 @@ export function safeControls(input: DowntifyControls): DowntifyControls {
         spotifyIntentsEnabled: input.enabled && input.spotifyIntentsEnabled,
         trackSubmissionEnabled:
             input.enabled && input.spotifyIntentsEnabled && input.trackSubmissionEnabled,
-        reconciliationEnabled: input.enabled && input.reconciliationEnabled,
+        reconciliationEnabled:
+            input.enabled && input.spotifyIntentsEnabled && input.reconciliationEnabled,
     };
 }
 export async function updateDowntifyControls(
