@@ -211,7 +211,8 @@ export async function pairDowntify(
     if (previous && previous.ownerKimaUserId !== adminUserId) {
         throw new DowntifySetupError("unauthorized");
     }
-    if (process.env.KIMA_DOWNTIFY_ENABLED === "true" && !previous) {
+    if (!previous && (process.env.KIMA_DOWNTIFY_ENABLED === "true" ||
+        !!process.env.KIMA_DOWNTIFY_DEVICE_TOKEN)) {
         throw new DowntifySetupError("environment_managed");
     }
     const verified = await verifyDowntifyPair(input, http);
