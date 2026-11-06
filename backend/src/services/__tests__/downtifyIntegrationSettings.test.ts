@@ -141,10 +141,10 @@ describe("Downtify authenticated owner pairing", () => {
 
     it("checks the saved encrypted token with no API response secrets", async () => {
         await pairDowntify("admin-1", pair, client(INFO, AUTH));
-        const result = await testSavedDowntifyPair(client(INFO, AUTH));
+        const result = await testSavedDowntifyPair("admin-1", client(INFO, AUTH));
         expect(result).toEqual(expected);
         row!.expectedServerId = "another_server_identifier_1234";
-        await expect(testSavedDowntifyPair(client(INFO, AUTH))).rejects.toMatchObject({
+        await expect(testSavedDowntifyPair("admin-1", client(INFO, AUTH))).rejects.toMatchObject({
             state: "incompatible",
         });
     });
