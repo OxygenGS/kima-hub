@@ -59,12 +59,13 @@ router.get("/", async (req, res) => {
 /** Read-only server/account probe: accepts candidate or a saved pairing. */
 router.post("/test", async (req, res) => {
     try {
+        if (!req.user) return res.status(401).json({ state: "unauthorized" });
         const candidate = req.body ?? {};
         if (typeof candidate !== "object" || Array.isArray(candidate)) {
             return res.status(400).json({ state: "invalid_input" });
         }
         const result = Object.keys(candidate).length === 0
-            ? await testSavedDowntifyPair()
+            ? await testSavedDowntifyPair(req.user.id)
             : await verifyDowntifyPair(pairingSchema.parse(candidate));
         // Version is a public string; never return token, account IDs, URL,
         // server ID or arbitrary remote payloads.
