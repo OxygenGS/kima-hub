@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { api } from "@/lib/api";
+import type { TranslationKey } from "@/lib/i18n/translations";
 import {
     SettingsInput, SettingsRow, SettingsSection, SettingsToggle,
 } from "../ui";
@@ -77,7 +78,7 @@ export function DowntifySection() {
 
     const reportError = (err: unknown) => {
         setError(true);
-        setFeedback(t(safeMessage[errorState(err)] || safeMessage.unavailable));
+        setFeedback(t((safeMessage[errorState(err)] || safeMessage.unavailable) as TranslationKey));
     };
     const run = async (action: () => Promise<void>) => {
         if (pending) return;
