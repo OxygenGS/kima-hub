@@ -158,6 +158,10 @@ describe("Downtify authenticated owner pairing", () => {
         });
         expect(row!.deviceTokenEncrypted).toBe(before);
         expect(row!.ownerKimaUserId).toBe("admin-1");
+        const otherStatus = await getDowntifyAdminStatus("admin-2");
+        expect(otherStatus.ownerMatches).toBe(false);
+        expect(otherStatus.url).toBeNull();
+        expect(otherStatus.username).toBeNull();
     });
 
     it("refuses a concurrent unique-ID race instead of stealing the paired binding", async () => {
@@ -259,7 +263,9 @@ describe("DB settings affect existing route-level gates without modifying proces
         expect(safeControls({
             enabled: true, spotifyIntentsEnabled: false,
             trackSubmissionEnabled: true, reconciliationEnabled: true,
-        })).toMatchObject({ trackSubmissionEnabled: false });
+        })).toMatchObject({
+            trackSubmissionEnabled: false, reconciliationEnabled: false,
+        });
     });
 
     it("fails closed if the encrypted token is changed or corrupted", async () => {
