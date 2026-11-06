@@ -27,6 +27,7 @@ import { DownloadPreferencesSection } from "@/features/settings/components/secti
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
 import { AudiobookshelfSection } from "@/features/settings/components/sections/AudiobookshelfSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
+import { DowntifySection } from "@/features/settings/components/sections/DowntifySection";
 import { ArtworkSection } from "@/features/settings/components/sections/ArtworkSection";
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
 import { CacheSection } from "@/features/settings/components/sections/CacheSection";
@@ -47,6 +48,7 @@ const sidebarItems: SidebarItem[] = [
     { id: "lidarr", label: "Download Services", adminOnly: true },
     { id: "audiobookshelf", label: "Media Servers", adminOnly: true },
     { id: "soulseek", label: "P2P Networks", adminOnly: true },
+    { id: "integrations", label: "Integrations", adminOnly: true },
     { id: "artwork", label: "Artwork", adminOnly: true },
     { id: "storage", label: "Storage", adminOnly: true },
     { id: "cache", label: "Library Enrichment", adminOnly: true },
@@ -267,6 +269,8 @@ export default function SettingsPage() {
                             onTest={handleTestService}
                             isTesting={testingServices.soulseek || false}
                         />
+
+                        <DowntifySection key={user?.id} />
 
                         <ArtworkSection
                             settings={systemSettings}
