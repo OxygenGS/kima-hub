@@ -101,6 +101,65 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.19.0
+    {
+        "version": "1.19.0",
+        "title": "Kima Hub 1.19.0 \u2014 Downtify Settings",
+        "summary": "Pair a Downtify device in Settings and manage safe, individually enabled Spotify request and manual download controls.",
+        "date": "2026-11-06",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.119.downtify-settings",
+                "title": "Downtify setup inside Settings",
+                "summary": "Administrators can test and pair a Downtify device without editing Docker secrets.",
+                "body": "Open Settings > Integrations > Downtify to enter a trusted server URL and a paired-device token. Test server and account identity before pairing. The published v1.18.0 image does not include this feature; it becomes available only when this release is separately approved, published and installed.",
+                "links": [
+                    {
+                        "label": "Open Settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.119.device-security",
+                "title": "Encrypted, account-bound pairing",
+                "summary": "Keep device secrets encrypted and bind requests to a verified server and user.",
+                "body": "Downtify pairing uses the existing settings encryption key and pins the exact remote server, numeric user, username and Kima administrator. The API never returns the device token, and each re-pair resets all feature switches to OFF. No arbitrary download URL or remote account can be supplied from a user request.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.119.manual-controls",
+                "title": "Separate switches for manual requests",
+                "summary": "Enable queue viewing, saved Spotify tracks and deliberate single-track submission separately.",
+                "body": "All switches default to OFF. An administrator may enable an owner-scoped remote queue, saving of Spotify track requests, explicit manual single-track dispatch with an acknowledgement, and owner-only manual remote job checks. Dispatch has no automatic retry. A completed remote job is not proof of library import or recording authenticity.",
+                "links": [
+                    {
+                        "label": "Review Downloads",
+                        "href": "/downloads"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.119.docker-compatibility",
+                "title": "Preserve existing Docker configuration",
+                "summary": "Avoid silently replacing legacy tokens or changing music storage and imports.",
+                "body": "An existing Docker-managed Downtify connection or device token blocks browser pairing until the operator deliberately migrates. Database-owned switches apply per request without mutating process.env. Advanced source and audio verification flags remain disabled in database mode pending a separate read-only staging mount review. Existing Importer v5 and DAS storage are untouched.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.119.backup",
+                "title": "Verify a full backup before upgrading",
+                "summary": "One additive PostgreSQL migration requires a restorable /data backup.",
+                "body": "This release adds the DowntifyIntegration database table. Before any production update, back up the entire persistent /data volume, verify an independent restore, preserve the original Compose/Dockge configuration and storage mounts, and review native AMD64/ARM64 image security evidence. Downgrading an image alone does not undo the migration. Source merge and candidate CI do not authorize publication or deployment.",
+                "links": []
+            }
+        ]
+    },
     // release-candidate:1.18.0
     {
         version: "1.18.0",
