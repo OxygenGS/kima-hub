@@ -33,7 +33,7 @@ const url = "/api/downtify-integration";
 const admin = () => request(app).get(url)
     .set("Authorization", "Bearer admin")
     .set("X-Test-Role", "admin");
-const post = (path: string, body: unknown = {}) => request(app).post(url + path)
+const post = (path: string, body: object = {}) => request(app).post(url + path)
     .set("Authorization", "Bearer admin")
     .set("X-Test-Role", "admin")
     .send(body);
