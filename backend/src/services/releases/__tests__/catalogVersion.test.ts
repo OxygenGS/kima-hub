@@ -22,6 +22,22 @@ describe("in-app release catalog matches the build", () => {
         }
     });
 
+    it("presents v1.18 as an opt-in, non-importing staged release with a backup warning", () => {
+        const release = RELEASES.find((entry) => entry.version === "1.18.0");
+        expect(release).toBeDefined();
+        expect(release?.items.every(item => item.kind === "note")).toBe(true);
+        expect(release?.items.some(item => item.key === "fork.118.downloads")).toBe(true);
+        expect(release?.items.some(item =>
+            item.key === "fork.118.upgrade" && item.body.includes("/data")
+        )).toBe(true);
+        expect(release?.items.some(item =>
+            item.key === "fork.118.importer" && item.body.includes("Importer v5")
+        )).toBe(true);
+        expect(release?.items.some(item =>
+            item.key === "fork.118.verify" && item.body.includes("disabled-by-default")
+        )).toBe(true);
+    });
+
     it("includes the published Turbo and UI 2.0 history", () => {
         const turbo = RELEASES.find((release) => release.version === "1.12.0");
         expect(turbo?.title).toContain("Project Turbo");

@@ -1,5 +1,31 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.18.0 — release preparation (unpublished)
+
+Kima Hub v1.18.0 delivers the **first guarded stage** of the Unified Download Manager. The new `/downloads` screen combines a read-only Kima download overview with a user-owned Spotify link/request flow and selectively enabled Downtify checks. Existing Soulseek and Lidarr behavior stays intact. This is **not** the promised autonomous Downtify-to-DAS importer: Importer v5 remains the independent live importer.
+
+### Download Manager and safe Spotify intake
+- PRs #190–#194: introduce an optional, default-OFF Downtify connection probe, owner-scoped read-only download overview, remote queue ownership checks and an English/Dutch Download Manager screen.
+- PRs #195–#197: validate canonical Spotify track links, persist each authorized user's requests idempotently and show their saved track requests without exposing other accounts.
+- PR #199: add **explicit, single-track-only** Downtify submission, guarded by owner-pinned server/account identity, current download permission, duplicate-library checks and a separate default-OFF dispatch gate. Uncertain outcomes remain `dispatch_unknown` and are **never automatically resubmitted**. Albums/playlists, arbitrary Downtify accounts and automatic downloads remain unsupported.
+- D3–D5 (PRs #200–#202): confirm unique completed remote queue jobs, assess the staging/music filesystem topology and observe a nonempty staged source file without copying or modifying it.
+- D6–D8 (PRs #203–#205): optionally examine the bounded audio container header, read and decode an entire audio stream while calculating an internal SHA-256, and compare untrusted embedded ISRC/duration with the requested Spotify track. Matching metadata is **not** a proof of recording identity, intact transfer or successful library import.
+- PR #206 (D9): add one explicit **Verify completed download** action that walks through the five read-only checks in order and stops on any incomplete, inconsistent or unavailable result. The original diagnostic actions remain available. These stages require separately enabled operator flags and a supported, pinned Downtify installation; the staging mount must be provisioned read-only.
+
+### Reliability and data protection
+- PR #207: make Docker's download of the official PostgreSQL signing key resilient to truncated HTTP/2 responses using HTTP/1.1, bounded retries and validation before GPG import.
+- Add **two forward-only, additive PostgreSQL migrations** for `SpotifyDownloadIntent` and dispatch claim metadata. Existing music files, `DownloadJob`, `Track`, scanner tables and current Importer v5 jobs are not migrated or moved.
+- Keep EN/NL translations, stored Kima account permissions, per-user isolation, session-change guards, modern Symfonium/Feishin authentication and the upstream refinements already released in v1.17.1.
+- No new required integration, enabled download engine, automatic retry, audio copy/move/delete, retag, Kima library re-indexing, Importer v5 service/timer shutdown or Proxmox/DAS reconfiguration is part of this version.
+
+### Upgrade and release boundaries
+- **Before an upgrade:** back up the **entire persistent `/data` volume**, verify an independent restore, retain the exact original Compose/Dockge project, configuration and music mounts, and ensure enough space for the new database tables. A version rollback **without a pre-upgrade `/data` restore is not safe** after these migrations.
+- Continue to use published `ghcr.io/oxygengs/kima-hub:v1.17.1` until the exact-commit v1.18.0 native AMD64/ARM64 preflight, residual image vulnerability review, explicit stable-release approval and GitHub publication all succeed. Do not deploy a source branch or unverified image to the live music server.
+- A later, independently reviewed importer phase must establish verified physical mount identity, an immutable source-to-destination file handoff, copy checksums, duplicate/collision prevention, a Kima index/playback receipt, exclusive writer ownership and tested rollback **before** changing Importer v5.
+
+- **Release gate:** This entry is source-only release preparation, not evidence of a built/published stable image. Require exact-tag metadata validation, native architecture and Trivy preflight, vulnerability signoff, isolated upgrade/restore, and a separate publication authorization.
+
+
 ## OxygenGS fork v1.17.1 — released 2026-11-04
 
 Kima Hub v1.17.1 selectively integrates nine independently tested reliability, UI and accessibility backports from official upstream Kima v1.12.2, while preserving OxygenGS Library Intelligence and modern native-client authentication.

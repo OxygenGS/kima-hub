@@ -25,9 +25,11 @@ A modern, self-hosted music experience for the collection you own. Stream your l
 
 [See what's new in v1.17.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.17.1) · [View the changelog](CHANGELOG.md)
 
-## In development: v1.18.0 — Unified Download Manager
+## Next release candidate: v1.18.0 — Unified Download Manager (guarded first stage)
 
-Downtify and Soulseek in one future interface. This development work is not yet a published release; the existing external Downtify importer remains in place until its tested replacement is ready.
+The next version introduces a Download Manager at `/downloads` with a read-only Kima download overview, saved Spotify track requests, narrowly controlled **optional** Downtify single-track submission and manual source/audio verification. The check sequence can be started from a single button. **All Downtify submission, reconciliation and filesystem-inspection features are disabled by default** and require explicit configuration and current Kima download permission.
+
+**v1.18.0 is not yet published.** It does **not** automatically import Downtify music to the DAS, switch off Importer v5, authenticate the precise recording from matching ISRC tags, or replace existing Soulseek/Lidarr workflows. Two additive database migrations require a full pre-upgrade `/data` backup and independently verified restore. [Release preparation notes](CHANGELOG.md) · [Safe upgrade guide](docs/safe-aio-updates.md) · [Technical limits](docs/unified-download-manager.md).
 
 ## Everything in one place
 

@@ -1,6 +1,6 @@
 # Unified Download Manager (v1.18.0) — staged design
 
-**Status:** development; **not in published v1.17.1**. The existing Downtify
+**Status:** v1.18.0 release candidate (unpublished); **not in published v1.17.1**. The existing Downtify
 Importer v5 and its systemd service/timer are **not replaced** by this change.
 Downtify continues to run independently; Kima is the future orchestration UI.
 The current backend stages add read-only diagnostics, a caller-scoped Kima job feed and a narrowly bound Downtify queue. No filesystem or queue writes are included.
