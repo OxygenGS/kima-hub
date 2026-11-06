@@ -1,9 +1,14 @@
-# Unified Download Manager (v1.18.0) — staged design
+# Unified Download Manager (v1.18.0) — published first stage
 
-**Status:** v1.18.0 release candidate (unpublished); **not in published v1.17.1**. The existing Downtify
-Importer v5 and its systemd service/timer are **not replaced** by this change.
-Downtify continues to run independently; Kima is the future orchestration UI.
-The current backend stages add read-only diagnostics, a caller-scoped Kima job feed and a narrowly bound Downtify queue. No filesystem or queue writes are included.
+**Status:** The guarded first stage is included in the [published v1.18.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.18.0). The existing Downtify
+Importer v5 and its systemd service/timer are **not replaced** by this release.
+Downtify continues to run independently. Kima provides an owner-scoped job overview, optional
+single-track dispatch, and explicit read-only source/audio/metadata checks. New Downtify
+features remain **disabled by default**, and automated SSD-to-DAS import is **not implemented**.
+
+The sections below document the design and historical implementation phases. Each phase's
+original PR wording should not be read as a current publication status or authorization
+to enable a production importer.
 
 ## Source contracts and boundaries
 
