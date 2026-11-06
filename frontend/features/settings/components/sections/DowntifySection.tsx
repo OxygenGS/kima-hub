@@ -136,7 +136,10 @@ export function DowntifySection() {
                 next.trackSubmissionEnabled = false;
                 next.reconciliationEnabled = false;
             }
-            if (!next.spotifyIntentsEnabled) next.trackSubmissionEnabled = false;
+            if (!next.spotifyIntentsEnabled) {
+                next.trackSubmissionEnabled = false;
+                next.reconciliationEnabled = false;
+            }
             return next;
         });
     };
@@ -190,7 +193,7 @@ export function DowntifySection() {
                                     {t("Test Downtify connection")}
                                 </button>
                                 <button type="button" onClick={pair}
-                                    disabled={pending || !url || !token}
+                                    disabled={pending || !url || !token || (isDatabase && !status?.ownerMatches)}
                                     className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40">
                                     {isDatabase ? t("Replace Downtify pairing") : t("Pair Downtify account")}
                                 </button>
@@ -227,7 +230,7 @@ export function DowntifySection() {
                                 description={t("Read the exact owner's completed Downtify jobs without changing files.")}>
                                 <SettingsToggle id="downtify-reconciliation" checked={controls.reconciliationEnabled}
                                     onChange={v => set("reconciliationEnabled", v)}
-                                    disabled={!editable || !controls.enabled} />
+                                    disabled={!editable || !controls.enabled || !controls.spotifyIntentsEnabled} />
                             </SettingsRow>
                             <div className="py-3">
                                 <button type="button" onClick={save}
