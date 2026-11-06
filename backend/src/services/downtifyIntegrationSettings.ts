@@ -137,6 +137,29 @@ export async function verifyDowntifyPair(
     };
 }
 
+/** Re-check a saved pairing without exposing or resetting the stored token. */
+export async function testSavedDowntifyPair(
+    http: Pick<AxiosInstance, "get"> = axios,
+): Promise<VerifiedDowntify> {
+    const row = await prisma.downtifyIntegration.findUnique({ where: { id: PAIR_ID } });
+    if (!row) throw new DowntifySetupError("not_paired");
+    let token: string;
+    try {
+        token = decrypt(row.deviceTokenEncrypted);
+    } catch {
+        throw new DowntifySetupError("unauthorized");
+    }
+    const verified = await verifyDowntifyPair({
+        baseUrl: row.baseUrl, deviceToken: token,
+    }, http);
+    if (verified.expectedServerId !== row.expectedServerId ||
+        verified.expectedUserId !== row.expectedUserId ||
+        verified.expectedUsername.toLowerCase() !== row.expectedUsername.toLowerCase()) {
+        throw new DowntifySetupError("incompatible");
+    }
+    return verified;
+}
+
 /** Never reveal token, remote account/server numeric identifiers or ciphertext. */
 export async function getDowntifyAdminStatus(
     adminUserId: string,
