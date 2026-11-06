@@ -102,7 +102,9 @@ export async function getBoundDowntifyQueue(
         // Do not send token before verifying the public Downtify identity.
         const info = await get("/api/server/info", false);
         if (!record(info) || info.product !== "Downtify" ||
-            info.api_version !== 1 || info.require_sign_in !== true) {
+            info.api_version !== 1 || info.require_sign_in !== true ||
+            (env.KIMA_DOWNTIFY_EXPECTED_SERVER_ID &&
+                info.server_id !== env.KIMA_DOWNTIFY_EXPECTED_SERVER_ID)) {
             return result("incompatible");
         }
 
@@ -115,6 +117,12 @@ export async function getBoundDowntifyQueue(
             return result("unauthorized");
         }
         const remoteUserId = auth.user.id as number;
+        // A UI-paired account must remain bound to the same numeric account
+        // and persistent server ID on every queue read, not only on pairing.
+        const pinnedUser = env.KIMA_DOWNTIFY_EXPECTED_USER_ID;
+        if (pinnedUser && String(remoteUserId) !== pinnedUser) {
+            return result("unauthorized");
+        }
 
         const remoteQueue = await get("/api/queue", true);
         if (!Array.isArray(remoteQueue) || remoteQueue.length > 5000) return result("incompatible");

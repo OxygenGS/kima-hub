@@ -691,6 +691,25 @@ model SpotifyImportJob {
   @@index([userId])
 }
 
+/// Single, deliberately owner-bound Downtify device pairing. Never serialize
+/// deviceTokenEncrypted from an admin API or the generic SystemSettings route.
+/// Every write-capable feature starts disabled; Importer v5 is independent.
+model DowntifyIntegration {
+  id                     String   @id @default("default")
+  baseUrl                String
+  deviceTokenEncrypted   String
+  ownerKimaUserId        String
+  expectedUsername       String
+  expectedUserId         Int
+  expectedServerId       String
+  enabled                Boolean  @default(false)
+  spotifyIntentsEnabled  Boolean  @default(false)
+  trackSubmissionEnabled Boolean  @default(false)
+  reconciliationEnabled  Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
 model SystemSettings {
   id                          String   @id @default("default")
   lidarrEnabled               Boolean  @default(true)

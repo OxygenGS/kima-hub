@@ -25,6 +25,7 @@ import recommendationsRoutes from "./routes/recommendations";
 import downloadsRoutes from "./routes/downloads";
 import downloadEnginesRoutes from "./routes/downloadEngines";
 import downloadManagerRoutes from "./routes/downloadManager";
+import downtifyIntegrationRoutes from "./routes/downtifyIntegration";
 import webhooksRoutes from "./routes/webhooks";
 import audiobooksRoutes from "./routes/audiobooks";
 import podcastsRoutes from "./routes/podcasts";
@@ -171,6 +172,7 @@ app.use("/api/downloads", apiLimiter, downloadsRoutes);
 app.use("/api/download-engines", apiLimiter, downloadEnginesRoutes);
 // Read-only caller-scoped download history; Downtify jobs require identity mapping.
 app.use("/api/download-manager", apiLimiter, downloadManagerRoutes);
+app.use("/api/downtify-integration", apiLimiter, downtifyIntegrationRoutes);
 app.use("/api/notifications", apiLimiter, notificationsRoutes);
 app.use("/api/webhooks", webhooksRoutes); // Excluded from apiLimiter; the router applies webhookLimiter
 // /api/audiobooks gets apiLimiter like every other mount. The cover route stays
