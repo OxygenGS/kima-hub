@@ -19,8 +19,12 @@ const mockFullAudioCapability = jest.fn();
 const mockFullAudioEvidence = jest.fn();
 const mockRecordingTagsCapability = jest.fn();
 const mockRecordingTagsEvidence = jest.fn();
+const mockDowntifyRuntimeEnv = jest.fn();
 jest.mock("../../utils/db", () => ({
     prisma: { user: { findUnique: (...args: unknown[]) => mockPermissionUser(...args) } },
+}));
+jest.mock("../../services/downtifyIntegrationSettings", () => ({
+    getDowntifyRuntimeEnv: (...args: unknown[]) => mockDowntifyRuntimeEnv(...args),
 }));
 jest.mock("../../services/unifiedDownloadOverview", () => ({
     MAX_DOWNLOAD_PAGE_SIZE: 100,
@@ -87,6 +91,7 @@ const read = (user = "user-A", path = "/api/download-manager/jobs") =>
     request(app).get(path).set("Authorization", "Bearer synthetic-test-token").set("X-Test-User", user);
 
 beforeEach(() => {
+    mockDowntifyRuntimeEnv.mockReset().mockImplementation(async () => process.env);
     mockRecordingTagsCapability.mockReset().mockReturnValue({
         state: "disabled", canCheck: false, singleTrackOnly: true,
     });
