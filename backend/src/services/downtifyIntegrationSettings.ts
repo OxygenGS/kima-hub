@@ -223,11 +223,28 @@ export async function pairDowntify(
         enabled: false, spotifyIntentsEnabled: false,
         trackSubmissionEnabled: false, reconciliationEnabled: false,
     };
-    await prisma.downtifyIntegration.upsert({
-        where: { id: PAIR_ID },
-        create: { id: PAIR_ID, ...values },
-        update: values,
-    });
+    if (previous) {
+        // A second administrator cannot win an ownership race after the
+        // initial read: include the originally paired admin in the UPDATE.
+        const updated = await prisma.downtifyIntegration.updateMany({
+            where: { id: PAIR_ID, ownerKimaUserId: adminUserId },
+            data: values,
+        });
+        if (updated.count !== 1) throw new DowntifySetupError("unauthorized");
+    } else {
+        try {
+            await prisma.downtifyIntegration.create({
+                data: { id: PAIR_ID, ...values },
+            });
+        } catch (err) {
+            // Another pair may have won the unique default ID race. Do not
+            // adopt or overwrite that owner's fresh credential binding.
+            if ((err as { code?: string }).code === "P2002") {
+                throw new DowntifySetupError("unauthorized");
+            }
+            throw err;
+        }
+    }
     return verified;
 }
 
