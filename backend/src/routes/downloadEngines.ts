@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireAdmin } from "../middleware/auth";
 import { probeDowntify } from "../services/downtifyClient";
 import { inspectDowntifyStorage } from "../services/downtifyStoragePreflight";
+import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 
 const router = Router();
 
@@ -10,8 +11,12 @@ const router = Router();
 router.use(requireAuth, requireAdmin);
 router.get("/downtify/status", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
-    const status = await probeDowntify();
-    res.json(status);
+    try {
+        return res.json(await probeDowntify(await getDowntifyRuntimeEnv()));
+    } catch {
+        return res.status(503).json({ engine: "downtify", enabled: false,
+            configured: false, state: "unavailable" });
+    }
 });
 
 
@@ -20,7 +25,7 @@ router.get("/downtify/status", async (_req, res) => {
 router.get("/downtify/storage-preflight", async (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
     try {
-        return res.json(await inspectDowntifyStorage());
+        return res.json(await inspectDowntifyStorage(await getDowntifyRuntimeEnv()));
     } catch {
         return res.status(503).json({ error: "Storage inspection unavailable" });
     }
