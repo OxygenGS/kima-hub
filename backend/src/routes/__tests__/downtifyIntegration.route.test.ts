@@ -100,7 +100,7 @@ describe("Downtify Settings admin-only API", () => {
         const stored = await post("/test");
         expect(stored.status).toBe(200);
         expect(stored.body).toEqual(test);
-        expect(mockTestSaved).toHaveBeenCalledTimes(1);
+        expect(mockTestSaved).toHaveBeenCalledWith("admin-1");
         expect(JSON.stringify(stored.body)).not.toContain(TOKEN);
     });
 
