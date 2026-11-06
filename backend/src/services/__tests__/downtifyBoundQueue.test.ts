@@ -89,6 +89,27 @@ describe("owner-bound Downtify queue", () => {
         }
     });
 
+    it("rechecks the exact pinned server and remote numeric account on each queue call", async () => {
+        const wrongServer = http({ ...info, server_id: "different_server_12345678" }, auth, queue);
+        const serverState = await getBoundDowntifyQueue("kima-owner", env({
+            KIMA_DOWNTIFY_EXPECTED_SERVER_ID: "correct_server_12345678",
+            KIMA_DOWNTIFY_EXPECTED_USER_ID: "9",
+        }), wrongServer);
+        expect(serverState.state).toBe("incompatible");
+        expect(wrongServer.get).toHaveBeenCalledTimes(1);
+        expect((wrongServer.get as jest.Mock).mock.calls[0][1].headers.Authorization).toBeUndefined();
+
+        const wrongUser = http({
+            ...info, server_id: "correct_server_12345678",
+        }, auth, queue);
+        const userState = await getBoundDowntifyQueue("kima-owner", env({
+            KIMA_DOWNTIFY_EXPECTED_SERVER_ID: "correct_server_12345678",
+            KIMA_DOWNTIFY_EXPECTED_USER_ID: "11",
+        }), wrongUser);
+        expect(userState.state).toBe("unauthorized");
+        expect(wrongUser.get).toHaveBeenCalledTimes(2);
+    });
+
     it("does not request queue when token belongs to a different Downtify account", async () => {
         const client = http(info, { ...auth, user: { id: 9, username: "someone-else", role: "admin" } }, queue);
         expect((await getBoundDowntifyQueue("kima-owner", env(), client)).state).toBe("unauthorized");
