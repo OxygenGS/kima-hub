@@ -237,7 +237,7 @@ describe("owner-bound Downtify read-only route", () => {
         const response = await read("my-kima-id", "/api/download-manager/downtify/jobs?userId=other&admin=true");
         expect(response.status).toBe(200);
         expect(response.headers["cache-control"]).toBe("no-store");
-        expect(mockBoundQueue).toHaveBeenCalledWith("my-kima-id");
+        expect(mockBoundQueue).toHaveBeenCalledWith("my-kima-id", process.env);
         expect(response.body).toEqual({ state: "unbound", items: [], displayed: 0, hasMore: false });
     });
 
@@ -635,7 +635,7 @@ describe("pinned, default-off single-track Downtify submission route", () => {
             song: { song_id: "wrong" },
         });
         expect(res.status).toBe(202);
-        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, true);
+        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, true, process.env);
         expect(JSON.stringify(res.body)).not.toContain("evil.example");
         expect(JSON.stringify(res.body)).not.toContain("victim");
         expect(res.headers["cache-control"]).toBe("no-store");
@@ -649,7 +649,7 @@ describe("pinned, default-off single-track Downtify submission route", () => {
         });
         const response = await post({ acknowledgeUnverified: "true" });
         expect(response.status).toBe(400);
-        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, false);
+        expect(mockDispatchRequest).toHaveBeenCalledWith("owner-1", id, false, process.env);
     });
 
     it("returns conservative states without retries for remote timeouts or local matches", async () => {
@@ -733,7 +733,7 @@ describe("D3 explicitly requested owner-only read-only remote verification", () 
         const result = await read("owner-1", path + "?userId=victim&token=ignored");
         expect(result.status).toBe(200);
         expect(result.headers["cache-control"]).toBe("no-store");
-        expect(mockRemoteVerification).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(mockRemoteVerification).toHaveBeenCalledWith("owner-1", "intent-abc123", process.env);
         expect(result.body).toEqual({
             state: "verified", remotePhase: "downloaded",
             remoteOwnershipVerified: true, libraryVerification: "not_checked",
@@ -806,7 +806,7 @@ describe("D5 explicit, owner-only, read-only staged source file evidence", () =>
             "owner-1", path + "?userId=other&filename=/etc/passwd&token=secret",
         );
         expect(res.status).toBe(200);
-        expect(mockSourceFileEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(mockSourceFileEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123", process.env);
         expect(res.body).toMatchObject({
             state: "candidate_present_unverified", regularFileObserved: true,
             recordingVerified: false, audioDecoded: false,
@@ -886,7 +886,7 @@ describe("D6 explicit and bounded user-owned audio header read", () => {
         );
         expect(result.status).toBe(200);
         expect(result.headers["cache-control"]).toBe("no-store");
-        expect(mockAudioHeaderEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(mockAudioHeaderEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123", process.env);
         expect(result.body).toMatchObject({
             state: "header_observed_unverified", container: "flac",
             headerMatchedExtension: true, wholeFileIntegrityVerified: false,
@@ -969,7 +969,7 @@ describe("D7 permission-bound, explicit read-only complete audio inspection API"
             "owner-1", path + "?userId=other&path=/etc/passwd&token=private",
         );
         expect(result.status).toBe(200);
-        expect(mockFullAudioEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(mockFullAudioEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123", process.env);
         expect(result.body).toMatchObject({
             state: "stream_decoded_unmatched", fullFileSha256Calculated: true,
             audioDecoded: true, wholeFileIntegrityVerified: false,
@@ -1062,7 +1062,7 @@ describe("D8 user-owner-only read-only recording metadata comparison", () => {
         });
         const res = await read("owner-1", path + "?userId=other&path=/etc&isrc=private");
         expect(res.status).toBe(200);
-        expect(mockRecordingTagsEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123");
+        expect(mockRecordingTagsEvidence).toHaveBeenCalledWith("owner-1", "intent-abc123", process.env);
         expect(res.body).toMatchObject({
             state: "metadata_consistent_untrusted",
             isrcMatches: true, durationMatches: true,
