@@ -1,9 +1,15 @@
-# Kima Hub v1.18.0 — release readiness (not yet published)
+# Kima Hub v1.18.0 — published release record and upgrade readiness
 
-This document describes a **candidate**. The last **published** stable tag
-is v1.17.1 until GitHub completes the separate v1.18.0 publication flow.
-It is intentionally NOT a production deployment instruction or an approval
-to disable the existing external Importer v5.
+**v1.18.0 was published on November 6, 2026.** The exact release source is
+`26eaa57b0eb284590b6f7d24d7cd9a622c7bff07`.
+[Native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42180411701),
+[separate stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/42182732220),
+[successful Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/42182749230)
+and the [GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.18.0)
+are complete. This page preserves the release checks; **publication is not
+permission to upgrade an existing installation without a separate full
+`/data` backup and independent restore.** It is not an approval to disable
+the external Importer v5.
 
 ## Functional scope
 
@@ -59,39 +65,47 @@ give the new diagnostic routes write access to the staging mount.
   `package.json` files and root records of both `package-lock.json` files.
 - [x] Changelog has exactly one
   `## OxygenGS fork v1.18.0 — release preparation (unpublished)` heading
-  suitable for generated release notes.
-- [ ] Release-candidate PR checks complete **on its final exact head**:
+  suitable for generated release notes. The heading is retained as part of
+  the historical tagged-source changelog, even though the release has now
+  been published.
+- [x] Release-candidate PR checks complete **on its final exact head**:
   backend, frontend, EN/NL, security, disposable Postgres/Redis,
   upgrades/restores, fresh-install smoke and no-push AMD64/ARM64 builds.
-- [ ] Merge the release-candidate PR into `main` **only after** every
+- [x] Merge the release-candidate PR into `main` **only after** every
   applicable required check passes and the source diff is reviewed.
-- [ ] On the merged `main` source, run
+- [x] On the merged `main` source, run
   [Native Release Preflight](https://github.com/OxygenGS/kima-hub/actions/workflows/v112-native-preflight.yml)
   with `version_tag=v1.18.0`. Both native architectures must build and
   pass fixable HIGH/CRITICAL and embedded-secret checks; retain scan
   reports for manual residual-risk review.
-- [ ] Record the exact source commit and actual Trivy results **from
+- [x] Record the exact source commit and actual Trivy results **from
   this v1.18.0 candidate**. Do not reuse v1.16.0 vulnerability counts
   from `docs/image-security.md` as if they are current.
 - [ ] Independently validate complete `/data` backup/restore and
   rollback using a v1.17.1 installation, including the two new migrations.
   Preserve the original image tag and environment.
-- [ ] Obtain the repository's separate stable-release approval for the
+- [x] Obtain the repository's separate stable-release approval for the
   reviewed exact source SHA, image vulnerability residuals and release
   metadata; do not bypass protected release/tag conditions.
-- [ ] **Only after the approval:** deliberately create the immutable
-  `v1.18.0` tag on that reviewed `main` commit. This triggers
+- [x] **Only after the approval:** deliberately create the immutable
+  `v1.18.0` tag on that reviewed `main` commit via the protected
+  stable-release workflow. That workflow dispatches
   [Build and Publish Docker Image](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml),
-  which has its own metadata checks, native images, vulnerability/secret
+  which completed its own metadata checks, native images, vulnerability/secret
   scans, multiarchitecture assembly and GitHub release creation.
   Never invent or manually substitute a registry digest.
-- [ ] Confirm the exact `ghcr.io/oxygengs/kima-hub:v1.18.0` manifest
+- [x] Confirm the exact `ghcr.io/oxygengs/kima-hub:v1.18.0` manifest
   exists for both `linux/amd64` and `linux/arm64`, capture its digest,
   and review the automatically generated release notes.
 - [ ] **Only after publication:** update README and install instructions
   from the previously published stable v1.17.1 to v1.18.0. Plan any real
   production upgrade separately, using the verified backup/restore.
 
-This checklist deliberately leaves publication unchecked until GitHub
-produces a successful release and registry image. Merging a PR does
-**not** deploy anything to the user's Proxmox or DAS.
+Publication is complete and the published `v1.18.0` tag remains pinned to
+the verified release commit. Repository documentation updates after
+publication do not change that immutable tag.
+
+The upgrade/restore check remains **unchecked for any particular live
+installation** until it has actually been performed on separate copies of
+that installation's data. Merging a PR or publishing an image does **not**
+deploy anything to the user's Proxmox or DAS.
