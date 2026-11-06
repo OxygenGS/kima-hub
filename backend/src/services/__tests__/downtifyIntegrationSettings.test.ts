@@ -174,6 +174,29 @@ describe("Downtify authenticated owner pairing", () => {
         expect(row).toBeNull();
     });
 
+    it("refuses UI pairing while a disabled Docker integration still owns a device token", async () => {
+        const previousEnabled = process.env.KIMA_DOWNTIFY_ENABLED;
+        const previousToken = process.env.KIMA_DOWNTIFY_DEVICE_TOKEN;
+        try {
+            process.env.KIMA_DOWNTIFY_ENABLED = "false";
+            process.env.KIMA_DOWNTIFY_DEVICE_TOKEN = TOKEN;
+            const http = client(INFO, AUTH);
+            await expect(pairDowntify("admin-1", pair, http)).rejects.toMatchObject({
+                state: "environment_managed",
+            });
+            expect(http.get).not.toHaveBeenCalled();
+            expect(db.create).not.toHaveBeenCalled();
+            expect(await getDowntifyAdminStatus("admin-1")).toMatchObject({
+                source: "environment", configured: true, enabled: false,
+            });
+        } finally {
+            if (previousEnabled === undefined) delete process.env.KIMA_DOWNTIFY_ENABLED;
+            else process.env.KIMA_DOWNTIFY_ENABLED = previousEnabled;
+            if (previousToken === undefined) delete process.env.KIMA_DOWNTIFY_DEVICE_TOKEN;
+            else process.env.KIMA_DOWNTIFY_DEVICE_TOKEN = previousToken;
+        }
+    });
+
     it("forces an existing write-capable pairing OFF again when repaired", async () => {
         await pairDowntify("admin-1", pair, client(INFO, AUTH));
         row!.enabled = true;
