@@ -3,6 +3,10 @@ import request from "supertest";
 
 const mockProbe = jest.fn();
 const mockStorage = jest.fn();
+const mockDowntifyRuntimeEnv = jest.fn();
+jest.mock("../../services/downtifyIntegrationSettings", () => ({
+    getDowntifyRuntimeEnv: (...args: unknown[]) => mockDowntifyRuntimeEnv(...args),
+}));
 jest.mock("../../services/downtifyStoragePreflight", () => ({
     inspectDowntifyStorage: (...args: unknown[]) => mockStorage(...args),
 }));
@@ -25,6 +29,7 @@ const app = express();
 app.use("/api/download-engines", router);
 
 beforeEach(() => {
+    mockDowntifyRuntimeEnv.mockReset().mockImplementation(async () => process.env);
     mockStorage.mockReset().mockResolvedValue({
         state: "disabled", filesystemRelation: "not_checked",
         copyRequiredByDevice: null, mountIdentityVerified: false,
