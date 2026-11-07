@@ -8,6 +8,7 @@ import {
 import {
     claimNativeImport, confirmNativeIndexed, discoverNativeCompleted,
     getNativeImportSummary, holdNativeImportForReview, recordNativePublished,
+    releaseNativeUnwrittenClaim,
 } from "../downtifyNativeImportLedger";
 import { ensureNativeImportDestination, nativeImportDestination } from "../downtifyNativeImportWorkspace";
 import { publishNativeAudio } from "../downtifyAtomicPublisher";
@@ -39,6 +40,7 @@ jest.mock("../downtifyNativeImportLedger", () => ({
     discoverNativeCompleted: jest.fn(),
     getNativeImportSummary: jest.fn(),
     holdNativeImportForReview: jest.fn(),
+    releaseNativeUnwrittenClaim: jest.fn(),
     recordNativePublished: jest.fn(),
 }));
 jest.mock("../downtifyNativeImportWorkspace", () => ({
@@ -94,6 +96,7 @@ const getSummary = mock(getNativeImportSummary);
 const claimImport = mock(claimNativeImport);
 const confirm = mock(confirmNativeIndexed);
 const hold = mock(holdNativeImportForReview);
+const safeRetry = mock(releaseNativeUnwrittenClaim);
 const getSource = mock(openNativeDowntifyOriginal);
 const getSpotify = mock(spotifyService.getTrackBySpotifyId);
 const target = mock(nativeImportDestination);
@@ -115,6 +118,7 @@ beforeEach(() => {
     claimImport.mockResolvedValue(claim);
     confirm.mockResolvedValue({ state: "not_indexed" });
     hold.mockResolvedValue(true);
+    safeRetry.mockResolvedValue(true);
     getSource.mockImplementation(async () => ({ ...source, cancel: jest.fn() }));
     getSpotify.mockResolvedValue({
         spotifyId: SPOTIFY, title: "Test song", artist: "Example",
@@ -225,6 +229,42 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(scan).not.toHaveBeenCalled();
         expect(hold).toHaveBeenCalledWith(owner, claim.id, claim.claimToken,
             "spotify_identity_unavailable");
+    });
+
+    it("automatically releases a verified pre-write remote outage without copying media", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        getSource.mockResolvedValueOnce({state:"unavailable"});
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"checked",published:0,heldForReview:0});
+        expect(safeRetry).toHaveBeenCalledWith(
+            owner,claim.id,claim.claimToken,"remote_temporarily_unavailable",
+        );
+        expect(publish).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
+        expect(hold).not.toHaveBeenCalled();
+    });
+
+    it("retries a missing storage mount only before any file is opened", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        workspace.mockResolvedValueOnce({state:"storage_unavailable"});
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"checked",published:0,heldForReview:0});
+        expect(safeRetry).toHaveBeenCalledWith(
+            owner,claim.id,claim.claimToken,"storage_temporarily_unavailable",
+        );
+        expect(publish).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
+    });
+
+    it("does not release a claim when the publisher reports an uncertain write", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        publish.mockResolvedValueOnce({state:"uncertain",sha256:null,bytes:1024});
+        const result=await runNativeImportCycle();
+        expect(result.heldForReview).toBe(1);
+        expect(hold).toHaveBeenCalledWith(
+            owner,claim.id,claim.claimToken,"publish_uncertain",
+        );
+        expect(safeRetry).not.toHaveBeenCalled();
     });
 
     it("refuses a source if its remote server/account cannot verify ownership", async () => {
