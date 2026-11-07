@@ -94,6 +94,7 @@ describe("One-switch Downtify native import activation", () => {
         expect(response).toEqual({
             state: "paused", enabled: false, baselineReady: false,
             awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+            storageReady: true,
         });
         expect(JSON.stringify(response)).not.toContain(serverId);
         expect(runtime).not.toHaveBeenCalled();
@@ -130,6 +131,7 @@ describe("One-switch Downtify native import activation", () => {
         expect(result).toEqual({
             state: "enabled", enabled: true, baselineReady: true,
             awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+            storageReady: true,
         });
         expect(queue).toHaveBeenCalledTimes(1);
         expect(baseline).toHaveBeenCalledWith({
@@ -180,6 +182,19 @@ describe("One-switch Downtify native import activation", () => {
         });
         expect(runtime).not.toHaveBeenCalled();
         expect(queue).not.toHaveBeenCalled();
+    });
+
+    it("reports unavailable music storage without exposing the private volume identity", async () => {
+        record.nativeImportBaselineAt = new Date();
+        record.nativeImportLibraryCursor = 7;
+        record.nativeImportMountProof = PROOF;
+        record.nativeImportEnabled = true;
+        verifyVolume.mockResolvedValueOnce(false);
+        const result=await getNativeAutoImportStatus(admin);
+        expect(result).toMatchObject({
+            state:"enabled",enabled:true,storageReady:false,
+        });
+        expect(JSON.stringify(result)).not.toContain(PROOF);
     });
 
     it("never enables the importer while the original DAS volume proof is missing", async () => {
