@@ -14,6 +14,7 @@ import { ensureNativeImportDestination, nativeImportDestination } from "../downt
 import { publishNativeAudio } from "../downtifyAtomicPublisher";
 import { verifyNativeTemporaryRecording } from "../downtifyNativeAudioVerification";
 import { requestScan } from "../../workers/scanRequest";
+import { verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { runNativeImportCycle } from "../downtifyNativeImportRunner";
 
 jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } }));
@@ -56,8 +57,12 @@ jest.mock("../downtifyNativeAudioVerification", () => ({
 jest.mock("../../workers/scanRequest", () => ({
     requestScan: jest.fn(),
 }));
+jest.mock("../downtifyNativeMountProof", () => ({
+    verifyNativeMusicVolume: jest.fn(),
+}));
 
 const SPOTIFY = "0123456789ABCDEFGHIJKL";
+const volumeProof = "11111111-1111-4111-8111-111111111111";
 const owner = {
     kimaUserId: "kima-owner", remoteServerId: "test-server-001",
     remoteUserId: 9,
@@ -66,6 +71,7 @@ const row = {
     enabled: true, nativeImportEnabled: true,
     nativeImportBaselineAt: new Date("2026-11-07T17:00:00Z"),
     nativeImportLibraryCursor: 6,
+    nativeImportMountProof: volumeProof,
     ownerKimaUserId: owner.kimaUserId, expectedServerId: owner.remoteServerId,
     expectedUserId: owner.remoteUserId,
 };
@@ -105,10 +111,12 @@ const publish = mock(publishNativeAudio);
 const verify = mock(verifyNativeTemporaryRecording);
 const markPublished = mock(recordNativePublished);
 const scan = mock(requestScan);
+const verifyVolume = mock(verifyNativeMusicVolume);
 
 beforeEach(() => {
     jest.clearAllMocks();
     pairing.mockResolvedValue(row);
+    verifyVolume.mockResolvedValue(true);
     imports.mockResolvedValue([]);
     getRuntime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
     getQueue.mockResolvedValue({ state: "ready", queue: [] });
@@ -154,6 +162,16 @@ describe("Native Downtify auto-import coordinator", () => {
             state: "paused", newJobs: 0, published: 0,
             imported: 0, heldForReview: 0, filesDeleted: false,
         });
+        expect(getRuntime).not.toHaveBeenCalled();
+        expect(getQueue).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
+    });
+
+    it("never accesses Downtify or a local fallback directory when the mount proof is missing", async () => {
+        verifyVolume.mockResolvedValueOnce(false);
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"unavailable",published:0,imported:0});
         expect(getRuntime).not.toHaveBeenCalled();
         expect(getQueue).not.toHaveBeenCalled();
         expect(publish).not.toHaveBeenCalled();
