@@ -27,8 +27,6 @@ const SERVER_ID = /^[A-Za-z0-9_-]{8,128}$/;
 const MAX_QUEUE_ROWS = 5000;
 const MAX_QUEUE_BATCH = 5000;
 const COMPLETED = "done";
-const IMPORT_ROW_LIMIT = 100;
-type RemoteJob = Record<string, unknown>;
 
 export interface PinnedImportOwner {
     kimaUserId: string;
