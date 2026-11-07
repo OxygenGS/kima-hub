@@ -20,6 +20,7 @@ export type NativePublishState =
     | "unsafe_destination"
     | "invalid_source"
     | "incomplete_source"
+    | "validation_failed"
     | "unavailable"
     | "uncertain";
 
@@ -40,10 +41,17 @@ export interface NativePublishInput {
     musicRoot: string;
     /** Internal-only Singles/ path produced from reviewed metadata. */
     relativeTarget: string;
-    /** Original bytes, already verified as the intended recording by caller. */
+    /** Original bytes from the pinned authenticated remote source. */
     chunks: AsyncIterable<Buffer>;
     /** Exact expected byte count from authenticated source evidence. */
     expectedBytes: number;
+    /** REQUIRED: independently check complete decode and recording identity
+     * on the private temp file before it can enter the Kima library.
+     * This is internal-only and must never expose the temp path to HTTP.
+     */
+    verifyTempFile: (
+        absolutePath: string, expected: { bytes: number; sha256: string },
+    ) => Promise<boolean>;
 }
 
 const MAX_BYTES = 256 * 1024 * 1024;
@@ -216,6 +224,24 @@ export async function publishNativeAudio(input: NativePublishInput): Promise<Nat
         }
         await handle.close();
         handle = undefined;
+
+        // Do not expose untrusted remote audio to the music scanner until
+        // a separate complete-recording verification has succeeded.
+        // This mandatory callback operates only on our private 0600 temp.
+        const approved = await input.verifyTempFile(pending, {
+            bytes, sha256: hash,
+        });
+        const afterVerification = await fs.lstat(pending);
+        if (!approved || !afterVerification.isFile() ||
+            afterVerification.isSymbolicLink() ||
+            afterVerification.dev !== finalTempStat.dev ||
+            afterVerification.ino !== finalTempStat.ino ||
+            afterVerification.size !== finalTempStat.size ||
+            afterVerification.mtimeMs !== finalTempStat.mtimeMs ||
+            afterVerification.ctimeMs !== finalTempStat.ctimeMs) {
+            result = outcome("validation_failed", bytes, hash);
+            return result;
+        }
 
         // Ensure parents have not been replaced between the initial check
         // and the publication. The complete build must run under trusted
