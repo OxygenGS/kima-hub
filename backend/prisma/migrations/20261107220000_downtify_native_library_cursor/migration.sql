@@ -3,4 +3,5 @@
 -- already applied the initial ledger migration remains upgradeable.
 -- Migration changes no existing audio files, jobs or enablement defaults.
 ALTER TABLE "DowntifyIntegration"
-  ADD COLUMN "nativeImportLibraryCursor" INTEGER;
+  ADD COLUMN "nativeImportLibraryCursor" INTEGER,
+  ADD COLUMN "nativeImportMountProof" TEXT;
