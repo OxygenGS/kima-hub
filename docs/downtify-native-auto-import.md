@@ -67,8 +67,14 @@ line to use it after initial setup.
   library mount disappears, becomes a symlink or changes permissions, Kima
   stops rather than writing elsewhere.
 - No `rm -rf`, source deletion, album replacement, or forced overwrite.
-- Uncertain status, a failed decode, absent ISRC and unexpected storage
-  permissions never trigger an automatic retry of an already claimed job.
+- **Temporary downtime before a media write** (Downtify unavailable or
+  music mount absent) releases only the exact authenticated one-use claim,
+  with a persistent **15-minute cooldown**. This makes ordinary outages
+  self-healing without manual terminal commands.
+- **After the first file write attempt**, failed decoding, missing ISRC,
+  destination conflict, uncertain publication or scanner failure never
+  restarts a copy automatically. Those tasks require reconciliation.
+  File bytes and the original source are never deleted.
 - The imported flag is **not** automatically enabled by upgrading Kima,
   connecting Downtify, enabling Spotify intents, or viewing the queue.
 - Other Kima accounts cannot replace the paired owner's token or enable
