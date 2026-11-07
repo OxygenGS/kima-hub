@@ -338,6 +338,9 @@ describe("Simple Downtify Settings section", () => {
         expect(host.textContent).toContain(
             "Music storage is unavailable. Automatic importing is paused until the correct disk returns."
         );
+        expect(host.textContent).toContain(
+            "Automatic import is paused because the verified music storage is unavailable."
+        );
         expect(host.querySelector('[role="alert"]')?.textContent)
             .toContain("Music storage is unavailable");
         expect(api.post).not.toHaveBeenCalled();
