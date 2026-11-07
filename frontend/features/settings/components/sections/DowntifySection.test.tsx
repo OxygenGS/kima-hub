@@ -31,7 +31,7 @@ const paired = {
 };
 const nativeOff = {
     state: "paused", enabled: false, baselineReady: false,
-    awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+    awaitingImport: 0, needsReview: 0,
     storageReady: true,
 };
 let host: HTMLDivElement;
