@@ -2,12 +2,13 @@
  * Administrator-only native Downtify importer activation.
  *
  * The normal UI offers a single OFF-by-default control. First enablement
- * requires one explicit acknowledgement that all external writers targeting
- * the same library have been stopped and a verified snapshot of already-done
- * jobs has been recorded as "baseline" (never imported).
+ * requires explicit confirmation that the configured music storage is correct
+ * and no other importer is writing to the same library. New installations
+ * without another importer do not require a migration or cutover.
  *
- * The application cannot inspect external Proxmox systemd timers. The
- * acknowledgement is operational and must not be claimed as host proof.
+ * Kima cannot inspect other containers or host services. The acknowledgement
+ * is operational, not independent proof of single-writer safety. Already-done
+ * remote jobs are recorded as a baseline and never imported.
  */
 import { prisma } from "../utils/db";
 import { config } from "../config";
@@ -26,7 +27,6 @@ export type NativeAutoImportStatus = {
     baselineReady: boolean;
     awaitingImport: number;
     needsReview: number;
-    legacyHostVerified: false;
     /** Read-only proof that the current music root matches its first-activation disk. */
     storageReady: boolean;
 };
@@ -54,12 +54,12 @@ export async function getNativeAutoImportStatus(
     });
     if (!row) return {
         state: "unpaired", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        awaitingImport: 0, needsReview: 0,
         storageReady: false,
     };
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        awaitingImport: 0, needsReview: 0,
         storageReady: false,
     };
     const summary = await getNativeImportSummary({
@@ -76,7 +76,6 @@ export async function getNativeAutoImportStatus(
         baselineReady: summary.baselineReady,
         awaitingImport: summary.waiting,
         needsReview: summary.inReview,
-        legacyHostVerified: false,
         storageReady,
     };
 }
