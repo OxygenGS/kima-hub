@@ -254,6 +254,7 @@ describe("Simple Downtify Settings section", () => {
         expect(checklist?.textContent).toContain("Paired Downtify account");
         expect(checklist?.textContent).toContain("Music directory access");
         expect(checklist?.textContent).toContain("Original audio sample");
+        expect(host.textContent).toContain("Music folder access does not prove that the correct disk is mounted.");
         expect(checklist?.querySelectorAll("li")).toHaveLength(4);
         expect([...checklist!.querySelectorAll("li")].every(row =>
             row.textContent?.includes("Verified"))).toBe(true);
@@ -309,6 +310,27 @@ describe("Simple Downtify Settings section", () => {
         expect(host.querySelector('[aria-label="Read-only setup checks"]')).toBeNull();
         expect(host.textContent).not.toContain("dtfy_private_secret");
         expect(host.textContent).not.toContain("/some/host/path");
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("clears previous setup results before changing the paired connection", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") return nativeOff;
+            if (url === "/downtify-integration/import-readiness") return {
+                state: "no_completed_track", serverVerified: true,
+                accountVerified: true, musicRootAccessible: true,
+                originalStreamChecked: false, autoImportAvailable: false,
+                importerCutoverAuthorized: false, filesChanged: false,
+            };
+            return none;
+        });
+        await mount();
+        await click("Check Downtify setup");
+        expect(host.querySelector('[aria-label="Read-only setup checks"]')).not.toBeNull();
+        await click("Change connection");
+        expect(host.querySelector('[aria-label="Read-only setup checks"]')).toBeNull();
+        expect(host.textContent).not.toContain("No completed download is available to test");
         expect(api.post).not.toHaveBeenCalled();
     });
 
