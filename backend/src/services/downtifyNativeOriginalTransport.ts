@@ -243,3 +243,60 @@ export async function openNativeDowntifyOriginal(
         return fail(code === 401 || code === 403 ? "unauthorized" : "unavailable");
     }
 }
+
+
+/** Internal-only snapshot for the durable importer and first-run baseline.
+ * It is NOT an API response: queue items contain private filenames and IDs.
+ */
+export type NativeQueueSnapshot =
+    | { state: "ready"; queue: unknown[] }
+    | { state: Exclude<NativeSourceState, "ready">; queue: [] };
+export async function getVerifiedNativeImportQueue(
+    kimaUserId: string,
+    env: NodeJS.ProcessEnv = process.env,
+    deps: SourceDeps = depsDefault,
+): Promise<NativeQueueSnapshot> {
+    const empty = (state: Exclude<NativeSourceState, "ready">): NativeQueueSnapshot =>
+        ({ state, queue: [] });
+    if (env.KIMA_DOWNTIFY_ENABLED !== "true") return empty("disabled");
+    if (!kimaUserId || env.KIMA_DOWNTIFY_OWNER_KIMA_USER_ID?.trim() !== kimaUserId) {
+        return empty("unbound");
+    }
+    const cfg = readDowntifyConfig(env);
+    const serverId = env.KIMA_DOWNTIFY_EXPECTED_SERVER_ID?.trim() || "";
+    const userText = env.KIMA_DOWNTIFY_EXPECTED_USER_ID?.trim() || "";
+    const username = env.KIMA_DOWNTIFY_EXPECTED_USERNAME?.trim() || "";
+    if (cfg.state !== "configured" || !SERVER_ID.test(serverId) ||
+        !/^[1-9]\d{0,9}$/.test(userText) || !USERNAME.test(username)) {
+        return empty("misconfigured");
+    }
+    const get = async (endpoint: string, authenticated: boolean, limit: number) =>
+        (await deps.http.get<unknown>(new URL(endpoint, cfg.base).toString(), {
+            headers: {
+                Accept: "application/json",
+                ...(authenticated ? { Authorization: "Bearer " + cfg.token } : {}),
+            },
+            timeout: 8000, maxRedirects: 0, proxy: false,
+            maxContentLength: limit, responseType: "json",
+        })).data;
+    try {
+        const server = await get("/api/server/info", false, 16 * 1024);
+        if (!record(server) || server.product !== "Downtify" ||
+            server.api_version !== 1 || server.require_sign_in !== true ||
+            server.server_id !== serverId) return empty("incompatible");
+        const auth = await get("/api/auth/status", true, 16 * 1024);
+        if (!record(auth) || !record(auth.user) || auth.signed_in !== true ||
+            auth.via !== "device" || auth.auth_disabled !== false ||
+            auth.user.id !== Number(userText) ||
+            typeof auth.user.username !== "string" ||
+            auth.user.username.toLowerCase() !== username.toLowerCase()) {
+            return empty("unauthorized");
+        }
+        const queue = await get("/api/queue", true, 3 * 1024 * 1024);
+        if (!Array.isArray(queue) || queue.length > MAX_QUEUE) return empty("incompatible");
+        return { state: "ready", queue };
+    } catch(error: unknown) {
+        const code = axios.isAxiosError(error) ? error.response?.status : undefined;
+        return empty(code === 401 || code === 403 ? "unauthorized" : "unavailable");
+    }
+}
