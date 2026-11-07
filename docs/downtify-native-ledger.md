@@ -67,6 +67,31 @@ the owner authentication, safe source stream and index-confirmed file
 publication must be wired together first. Do not flip
 `nativeImportEnabled` by editing the database directly.
 
+## Direct source transfer (new, read-only)
+
+The internal `downtifyNativeOriginalTransport` module can resolve a
+**specific Spotify song**, not an arbitrary item in the shared remote
+library. It uses the saved device token from Kima's existing pairing,
+checks the pinned public server identity **before sending the token**,
+checks the exact signed-in device/account, and finds **one and only one**
+completed, owner-attributed Downtify queue row for that song.
+
+The remote job's path is treated as untrusted input and used solely to
+locate **one** opaque mobile-library track ID. It is never interpreted
+as a filesystem destination in Kima. The module requests an original
+Downtify audio stream over the official mobile API. The response must
+have HTTP status 200, an exact Content-Length matching the approved
+library record, an expected media type and no content encoding. Redirects
+and proxy forwarding are disabled, and the async stream rejects
+oversized, truncated or malformed byte chunks.
+
+**The stream is not written to disk yet.** A complete response is not
+proof that embedded metadata matches the requested Spotify recording.
+Future code must compare identity, decode audio, issue an approved
+atomic file publish, and verify a Kima scanner receipt before returning
+an imported state. A refused or interrupted stream must stop at review,
+not silently retry after an uncertain file write.
+
 ## Existing Importer v5
 
 The private host timer `chillverse-downtify-import.timer` is still enabled,
