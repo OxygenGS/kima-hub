@@ -120,7 +120,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-comp
 | [Configuration](docs/configuration.md) | [Downtify settings](docs/downtify-settings.md) | [Native clients](docs/subsonic.md) |
 | [Releases](https://github.com/OxygenGS/kima-hub/releases) | [Image security](docs/image-security.md) | [Language settings](docs/internationalization.md) |
 
-[Issues](https://github.com/OxygenGS/kima-hub/issues) · [Contribution guidelines](CONTRIBUTING.md) · [Upstream compatibility](docs/upstream-compatibility.md)
+[Contribution guidelines](CONTRIBUTING.md) · [Upstream compatibility](docs/upstream-compatibility.md) · [Security reporting](SECURITY.md)
 
 ## Credits and license
 
