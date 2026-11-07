@@ -30,9 +30,15 @@ line to use it after initial setup.
   encrypted device token. Revalidate exact remote user and numeric job
   membership for every Spotify song. Do not ingest shared-account jobs.
 - **Baseline:** one atomic PostgreSQL transaction records completed
-  historical Spotify IDs. Subsequent restarts never reimport them.
-  Independent unique and CAS claims prevent two Kima workers from claiming
-  the same song. An uncertain claim stays held for review.
+  historical Spotify IDs **and Downtify's full mobile-library sync cursor**.
+  Subsequent cycles request only the library's incremental changes, then
+  require a newly added file, its post-activation timestamp and a matching
+  owner-bound completed queue job. Old `done` rows that are cleared and later
+  reappear or old tracks retagged after activation are not auto-imported.
+  A lost cursor or full-reset feed is treated as a new baseline, not a
+  source of automatically importable old music. Unique and CAS claims
+  prevent two workers from claiming the same song. An uncertain claim
+  stays held for review.
 - **Transfer:** fetch the untranscoded original over the official
   authenticated mobile v1 track stream. Require exact response length and
   bounded streaming; never use a remote path as a local destination.
@@ -53,7 +59,10 @@ line to use it after initial setup.
 
 ## Fail-safe limits
 
-- Up to **two new songs per cycle** and **256 MiB per file**.
+- Up to **two new songs per cycle** and **256 MiB per file**. If a remote
+  library changefeed cannot prove a song is new, Kima skips it rather than
+  guessing. A fast download that finishes without appearing in a verified
+  incremental feed may require manual review.
 - A temporary file is private to the destination filesystem; if the
   library mount disappears, becomes a symlink or changes permissions, Kima
   stops rather than writing elsewhere.
