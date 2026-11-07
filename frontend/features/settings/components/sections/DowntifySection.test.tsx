@@ -206,6 +206,44 @@ describe("Simple Downtify Settings section", () => {
         expect(api.post).not.toHaveBeenCalled();
     });
 
+    it("does not probe native import automatically and keeps the old importer active", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({
+            ...paired, enabled: true,
+        });
+        await mount();
+        expect(host.textContent).toContain("Automatic library import");
+        expect(host.textContent).toContain("automatic importer is not available yet");
+        expect(button("Test direct audio transfer")?.disabled).toBe(false);
+        expect(api.get).toHaveBeenCalledTimes(1);
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("reports a safe original audio probe without enabling import or exposing credentials", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({
+            ...paired, enabled: true,
+        }).mockResolvedValueOnce({
+            state: "original_stream_verified",
+            originalStreamChecked: true,
+            autoImportAvailable: false,
+            importerCutoverAuthorized: false,
+            filesChanged: false,
+        });
+        await mount();
+        await click("Test direct audio transfer");
+        expect(api.get).toHaveBeenCalledWith("/downtify-integration/import-readiness");
+        expect(host.textContent).toContain("Original audio transfer is reachable");
+        expect(host.textContent).toContain("Automatic importing is not enabled yet");
+        expect(api.post).not.toHaveBeenCalled();
+        expect(host.textContent).not.toContain("dtfy_");
+    });
+
+    it("refuses a native import probe when Downtify features are disabled", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        expect(button("Test direct audio transfer")?.disabled).toBe(true);
+        expect(api.get).toHaveBeenCalledTimes(1);
+    });
+
     it("redacts failures instead of displaying private remote tokens or errors", async () => {
         vi.mocked(api.get).mockRejectedValueOnce(new Error("dtfy_private_secret"));
         await mount();
