@@ -60,7 +60,7 @@ function outcome(
     return {
         state, sha256, bytes,
         libraryImportVerified: false,
-        filesPublished: state === "published" || state === "uncertain",
+        filesPublished: state === "published",
         retryAllowed: false,
     };
 }
@@ -95,7 +95,7 @@ async function verifyExistingDirectories(root: string, parts: string[]): Promise
             if (!stat.isDirectory() || stat.isSymbolicLink() ||
                 // Another local actor must not be able to swap parent
                 // directories while an import is being published.
-                (stat.mode & 0o002) !== 0) return null;
+                (stat.mode & 0o022) !== 0) return null;
             if (await fs.realpath(current) !== current) return null;
         }
         return current;
@@ -246,6 +246,7 @@ export async function publishNativeAudio(input: NativePublishInput): Promise<Nat
         // The link may have succeeded before syncDirectory failed. Retrying
         // automatically could duplicate the recording or corrupt the ledger.
         result = outcome(linked ? "uncertain" : "unavailable", bytes, hash);
+        if (linked) result.filesPublished = true;
         return result;
     } finally {
         if (handle) await handle.close().catch(() => undefined);
