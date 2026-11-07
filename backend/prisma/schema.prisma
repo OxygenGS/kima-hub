@@ -706,8 +706,40 @@ model DowntifyIntegration {
   spotifyIntentsEnabled  Boolean  @default(false)
   trackSubmissionEnabled Boolean  @default(false)
   reconciliationEnabled  Boolean  @default(false)
+  // Future native importer: schema exists but NO route/worker can enable it.
+  nativeImportEnabled     Boolean  @default(false)
+  nativeImportBaselineAt  DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+/// Persistent idempotency ledger for a future first-party Downtify importer.
+/// Creating this table never fetches, copies or removes any media.
+/// A download is unique per verified remote server/account/Spotify track.
+/// States are intentionally conservative: no automatic retry after "claimed",
+/// "published_pending_scan" or "uncertain" without reconciliation.
+model DowntifyNativeImport {
+  id                  String   @id @default(cuid())
+  ownerKimaUserId     String
+  remoteServerId      String
+  remoteUserId        Int
+  spotifyTrackId      String
+  remoteLibraryTrackId String?
+  status              String   @default("baseline")
+  claimedAt           DateTime?
+  claimToken          String?  @unique
+  expectedBytes       Int?
+  outputRelativePath  String?
+  fullSha256          String?
+  indexedTrackId      String?
+  reviewReason        String?
+  discoveredAt        DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  owner               User     @relation(fields: [ownerKimaUserId], references: [id], onDelete: Cascade)
+
+  @@unique([remoteServerId, remoteUserId, spotifyTrackId])
+  @@index([ownerKimaUserId, status])
+  @@index([status, updatedAt])
 }
 
 model SystemSettings {
@@ -962,6 +994,7 @@ model User {
   dislikedEntities       DislikedEntity[]
   downloadJobs           DownloadJob[]
   spotifyDownloadIntents  SpotifyDownloadIntent[]
+  downtifyNativeImports  DowntifyNativeImport[]
   hiddenPlaylists        HiddenPlaylist[]
   likedTracks            LikedTrack[]
   notifications          Notification[]
