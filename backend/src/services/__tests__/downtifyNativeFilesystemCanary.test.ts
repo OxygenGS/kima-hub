@@ -58,7 +58,12 @@ function synthesize(destination: string, frequency: number): void {
         "-y", destination,
     ], { timeout: 20000 });
     if (result.status !== 0 || result.error) {
-        throw new Error("Synthetic audio generation unavailable");
+        // Synthetic input only: stdout/stderr cannot contain private media.
+        // Never silently convert an absent FFmpeg binary into an audio failure.
+        throw new Error("Synthetic audio generation unavailable: " +
+            (result.error ? String(result.error.message) :
+                "ffmpeg exit " + result.status + ": " +
+                String(result.stderr || "").slice(0, 300)));
     }
 }
 
