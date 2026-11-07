@@ -225,6 +225,9 @@ export async function pairDowntify(
         expectedServerId: verified.expectedServerId,
         enabled: false, spotifyIntentsEnabled: false,
         trackSubmissionEnabled: false, reconciliationEnabled: false,
+        // Re-pairing must revoke future native import permission and force
+        // a fresh, explicitly reviewed baseline before any new cutover.
+        nativeImportEnabled: false, nativeImportBaselineAt: null,
     };
     if (previous) {
         // A second administrator cannot win an ownership race after the
@@ -282,7 +285,12 @@ export async function updateDowntifyControls(
     // remains active. Never set trackSubmissionEnabled without Spotify intents.
     await prisma.downtifyIntegration.updateMany({
         where: { id: PAIR_ID, ownerKimaUserId: adminUserId },
-        data: next,
+        data: {
+            ...next,
+            // A re-enable after switching the master integration OFF must
+            // never restart automatic file writes without a fresh opt-in.
+            ...(!next.enabled ? { nativeImportEnabled: false } : {}),
+        },
     });
     return getDowntifyAdminStatus(adminUserId);
 }
