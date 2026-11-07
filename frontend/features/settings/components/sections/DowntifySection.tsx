@@ -38,6 +38,14 @@ type NativeImportReadiness = {
     importerCutoverAuthorized: false;
     filesChanged: false;
 };
+type NativeAutoImportStatus = {
+    state: "unpaired" | "other_owner" | "paused" | "enabled";
+    enabled: boolean;
+    baselineReady: boolean;
+    awaitingImport: number;
+    needsReview: number;
+    legacyHostVerified: false;
+};
 const importMessages: Record<NativeImportState, TranslationKey> = {
     disabled: "Enable the Downtify queue first.",
     unbound: "Only the linked Kima administrator can check import readiness.",
@@ -141,6 +149,10 @@ export function DowntifySection() {
     const [error, setError] = useState(false);
     const [importChecking, setImportChecking] = useState(false);
     const [importFeedback, setImportFeedback] = useState<TranslationKey | null>(null);
+    const [nativeStatus, setNativeStatus] = useState<NativeAutoImportStatus | null>(null);
+    const [nativeAck, setNativeAck] = useState(false);
+    const [nativeBusy, setNativeBusy] = useState(false);
+    const [nativeFeedback, setNativeFeedback] = useState<TranslationKey | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -154,6 +166,20 @@ export function DowntifySection() {
         }).finally(() => { if (active) setLoaded(true); });
         return () => { active = false; };
     }, [t]);
+
+    useEffect(() => {
+        if (status?.source !== "database" || !status.ownerMatches) {
+            setNativeStatus(null);
+            return;
+        }
+        let active = true;
+        void api.get<NativeAutoImportStatus>("/downtify-integration/native-import")
+            .then(result => { if (active) setNativeStatus(result); })
+            .catch(() => {
+                if (active) setNativeFeedback("Could not load automatic import settings.");
+            });
+        return () => { active = false; };
+    }, [status?.source, status?.ownerMatches, status?.enabled]);
 
     const reportError = (err: unknown) => {
         setError(true);
@@ -222,6 +248,31 @@ export function DowntifySection() {
             setImportChecking(false);
         }
     };
+    const toggleNativeAutoImport = async (enabled: boolean) => {
+        if (nativeBusy || !ownerMatches || !nativeStatus || pending) return;
+        if (enabled && !nativeAck) {
+            setNativeFeedback("Confirm that the old importer has been stopped first.");
+            return;
+        }
+        setNativeBusy(true);
+        setNativeFeedback(null);
+        try {
+            const updated = await api.post<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+                { enabled, acknowledgeSingleWriter: enabled && nativeAck },
+            );
+            setNativeStatus(updated);
+            setNativeAck(false);
+            setNativeFeedback(
+                enabled ? "Automatic importing enabled." : "Automatic importing paused.",
+            );
+        } catch {
+            setNativeFeedback("Could not change automatic import settings.");
+        } finally {
+            setNativeBusy(false);
+        }
+    };
+
     const chooseUsage = (value: Usage) => {
         setFeedback("");
         setAck(false);
@@ -405,13 +456,40 @@ export function DowntifySection() {
                                             </a>
                                         )}
                                     </div>
-                                    <div className="rounded-xl border border-white/10 p-4 space-y-2">
-                                        <h4 className="text-sm font-semibold text-white">
-                                            {t("Automatic library import")}
-                                        </h4>
-                                        <p className="text-xs text-[var(--text-muted)]">
-                                            {t("Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.")}
-                                        </p>
+                                    <div className="rounded-xl border border-white/10 p-4 space-y-3">
+                                        <SettingsRow label={t("Automatically add downloaded music")}
+                                            description={t("Kima imports newly completed Downtify tracks, checks their audio and adds them to your music library. Old downloads are not imported.")}>
+                                            <SettingsToggle id="downtify-native-auto-import"
+                                                checked={nativeStatus?.enabled === true}
+                                                disabled={!ownerMatches || !status?.enabled ||
+                                                    !nativeStatus || nativeBusy || pending ||
+                                                    (!nativeStatus.enabled && !nativeAck)}
+                                                onChange={toggleNativeAutoImport} />
+                                        </SettingsRow>
+                                        {nativeStatus && !nativeStatus.enabled && (
+                                            <label className="flex items-start gap-3 rounded-lg border border-white/10 p-3 text-xs text-[var(--text-secondary)]">
+                                                <input type="checkbox" id="downtify-native-cutover-ack"
+                                                    checked={nativeAck}
+                                                    onChange={e => setNativeAck(e.target.checked)}
+                                                    disabled={nativeBusy || pending || !status?.enabled}
+                                                    className="mt-0.5" />
+                                                {t("I have stopped any old importer writing to the same library and verified my backup.")}
+                                            </label>
+                                        )}
+                                        {nativeStatus && (
+                                            <p className="text-xs text-[var(--text-muted)]">
+                                                {nativeStatus.enabled
+                                                    ? t("Automatic import is active.")
+                                                    : t("Automatic import is currently off.")}
+                                                {" · "}{t("Waiting")}: {nativeStatus.awaitingImport}
+                                                {" · "}{t("Needs review")}: {nativeStatus.needsReview}
+                                            </p>
+                                        )}
+                                        {nativeFeedback && (
+                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                {t(nativeFeedback)}
+                                            </p>
+                                        )}
                                         <button type="button" onClick={checkNativeImport}
                                             disabled={!ownerMatches || importChecking || pending || !status?.enabled}
                                             className="rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-40">
@@ -423,9 +501,6 @@ export function DowntifySection() {
                                             </p>
                                         )}
                                     </div>
-                                    <p className="text-xs leading-relaxed text-[var(--text-muted)]">
-                                        {t("Files are not automatically imported into your music library. Your existing importer stays unchanged.")}
-                                    </p>
                                 </div>
                             )}
                         </>
