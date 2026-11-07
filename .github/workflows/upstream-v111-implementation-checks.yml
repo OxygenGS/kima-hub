@@ -137,7 +137,15 @@ jobs:
       - name: Verify compiled native Downtify original-audio path (no real media)
         working-directory: backend
         run: |
+          set -euo pipefail
           npm run build
+          # The module graph loads Kima's fail-closed encryption/config guard.
+          # Use fresh CI-only random values, never a real account credential.
+          export SETTINGS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          export REDIS_URL="redis://127.0.0.1:6390"
+          export MUSIC_PATH="${RUNNER_TEMP}/kima-native-canary-no-real-mount"
+          export NODE_ENV="test"
           node scripts/downtify-native-prod-smoke.cjs
 
   language-browser:
