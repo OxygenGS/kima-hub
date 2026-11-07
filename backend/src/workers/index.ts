@@ -216,11 +216,14 @@ async function runReconciliationCycle() {
 schedule("reconciliation", runReconciliationCycle, 2 * 60 * 1000);
 logger.debug("Download reconciliation scheduled (every 2 minutes, self-rescheduling)");
 
+let nativeImportStopping = false;
+
 // Native Downtify is disabled by default in the database. This scheduler
 // performs no remote requests or music I/O until an administrator has
 // explicitly completed the one-time owner baseline + single-writer cutover.
 // A crash keeps any claimed/published item for review, never auto-retry.
 async function runNativeDowntifyCycle() {
+    if (nativeImportStopping) return;
     try {
         const result = await runNativeImportCycle();
         if (result.state === "checked" &&
@@ -233,7 +236,9 @@ async function runNativeDowntifyCycle() {
     } catch {
         logger.warn("[NativeImport] cycle unavailable; no automatic retry of claimed files");
     } finally {
-        schedule("downtify-native-import", runNativeDowntifyCycle, 2 * 60 * 1000);
+        if (!nativeImportStopping) {
+            schedule("downtify-native-import", runNativeDowntifyCycle, 2 * 60 * 1000);
+        }
     }
 }
 schedule("downtify-native-import", runNativeDowntifyCycle, 60 * 1000);
@@ -255,6 +260,8 @@ schedule("stuck-work", runStuckWorkCycle, 60 * 1000);
  * Gracefully shutdown all workers and cleanup resources
  */
 export async function shutdownWorkers(): Promise<void> {
+    // A finishing import cycle must not reschedule itself after shutdown.
+    nativeImportStopping = true;
     logger.debug("Shutting down workers...");
 
     // Stop unified enrichment worker (async — closes BullMQ workers and queues)
