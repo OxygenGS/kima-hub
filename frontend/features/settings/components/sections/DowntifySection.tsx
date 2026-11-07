@@ -501,7 +501,9 @@ export function DowntifySection() {
                                         {nativeStatus && (
                                             <p className="text-xs text-[var(--text-muted)]">
                                                 {nativeStatus.enabled
-                                                    ? t("Automatic import is active.")
+                                                    ? nativeStatus.storageReady
+                                                        ? t("Automatic import is active.")
+                                                        : t("Automatic import is paused because the verified music storage is unavailable.")
                                                     : t("Automatic import is currently off.")}
                                                 {" · "}{t("Waiting")}: {nativeStatus.awaitingImport}
                                                 {" · "}{t("Needs review")}: {nativeStatus.needsReview}
