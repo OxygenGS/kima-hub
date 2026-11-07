@@ -2,7 +2,56 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.18.0 — current published release (November 6, 2026)
+## v1.19.0 — current published release (7 November 2026)
+
+The [v1.19.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879)
+passed on the **exact published source commit**
+`c99605cbb4946a0aee38ea153263732b29eb72cb`, using independent
+native AMD64 and ARM64 builds. It verified architecture and revision,
+scanned for known vulnerabilities and embedded secrets, and retained
+architecture-specific scan evidence. The preflight did **not** push any image.
+The separate [stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/42397547487)
+and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696)
+both succeeded, publishing [v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0)
+with both native architectures.
+
+| v1.19.0 native preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 266 | 8 | 0 |
+| linux/arm64 | 265 | 8 | 0 |
+
+**Eight CRITICAL advisories remain unresolved in the scanner report on each
+architecture**, with **no listed patched version**. They match the advisories
+reported for v1.18.0 and are reproduced in the table below. An identical
+advisory count is **not** a security clearance: severity and exploitability
+depend on the reachable components, vendor backports, deployed configuration
+and new upstream information.
+
+- [AMD64 retained scan evidence](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879/artifacts/13583039330)
+- [ARM64 retained scan evidence](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879/artifacts/13583208284)
+- The native release jobs also ran checks for secrets embedded in the assembled images and verified that both architectures were present in the published manifest.
+- Package advisories with no reported fix are **not presumed safe**; Kima bundles media decoders, PostgreSQL, Redis and audio analysis libraries that need exposure-aware assessment.
+- The numbers above describe the **preflight images and one Trivy database snapshot**, not an independently refreshed scan of every production installation or the later registry digest. Review the actual deployed image and network boundaries.
+
+### Known critical advisories in the v1.19.0 preflight
+
+| Advisory | Package | Trivy status | Patched version reported |
+| :--- | :--- | :--- | :--- |
+| CVE-2023-45853 | `zlib1g` | will_not_fix | No |
+| CVE-2023-6879 | `libaom3` | affected | No |
+| CVE-2025-47917 | `libmbedcrypto7` | end_of_life | No |
+| CVE-2025-7458 | `libsqlite3-0` | affected | No |
+| CVE-2026-34873 | `libmbedcrypto7` | affected | No |
+| CVE-2026-34875 | `libmbedcrypto7` | affected | No |
+| CVE-2026-58016 | `libglib2.0-0` | fix_deferred | No |
+| CVE-2026-6653 | `libxml2` | fix_deferred | No |
+
+The published image is `ghcr.io/oxygengs/kima-hub:v1.19.0`.
+Publication does not remotely update running containers. Review host security
+and take a complete independently restorable pre-upgrade `/data` backup,
+particularly because the release adds an additive Downtify pairing migration.
+
+## Historical: v1.18.0 — published November 6, 2026
 
 The [v1.18.0 native release preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42180411701)
 completed successfully on the **exact released source commit**
