@@ -43,6 +43,32 @@ an exact behavioral migration.
 - Never deletes or changes a Downtify source. Never touches album
   assignments, Proxmox timers, Samba or any private host.
 
+## Full audio and metadata validation (new)
+
+The dormant `downtifyNativeAudioVerification` module now implements the
+required internal callback for a trusted temporary file. It verifies:
+
+1. Exact original-file length and SHA-256 calculated from a no-follow
+   file handle, matching the content hash from the staging copy.
+2. Media-container signature corresponding to the accepted audio extension.
+3. The **exact** expected Spotify track ID and consistent embedded ISRC and
+   duration (within 4 seconds of Spotify's authoritative metadata).
+4. A complete bounded FFmpeg decode-to-null, not just a readable header.
+5. Unchanged source inode, size, modification and change timestamps after
+   the metadata/decoder inspections.
+
+Missing, conflicting or unverifiable metadata leaves the track for
+**manual review**. A successful decode plus ISRC match is a strong
+consistency check, not cryptographic proof of a particular recording
+edition; the exact scanner receipt and playable indexed copy are still
+required later.
+
+The `publishNativeAudio` primitive now **requires** an independent
+`verifyTempFile` callback. It refuses to publish unverified data and
+rejects a temp file that changes while being inspected. Tests include
+invalid tags, mismatched duration, bad checksums, decode failures,
+injection attempts and time-of-check/time-of-use changes.
+
 At present this is a **library-only primitive** with automated isolated
 filesystem tests. It is deliberately not imported into an Express route or
 the download worker. For single-track import, source verification, consent,
