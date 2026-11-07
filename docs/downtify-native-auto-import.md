@@ -26,6 +26,34 @@ The normal Settings experience needs no host-script edits.
    attention. Turning the switch OFF stops new claims; existing music,
    remote jobs and the baseline remain untouched.
 
+## One-click read-only setup checks
+
+After pairing Downtify and enabling its connection, the linked administrator
+can open **Settings → Integrations → Downtify → Check Downtify setup**. This
+does **not** start a download, enable automatic importing, write to the
+music directory or migrate a legacy importer.
+
+Kima displays four separate checks instead of only an overall error:
+
+| Check | What it verifies | What it does not prove |
+| --- | --- | --- |
+| Music directory access | The configured library root exists, is a directory and is accessible to the Kima backend | That an external disk is mounted at that path or supports no-replace atomic hardlinks |
+| Downtify server identity | The remote server presents the exact pinned Downtify API and server identity | That the source recording is correct |
+| Paired Downtify account | The saved device token authenticates as the pinned remote owner | That all remote jobs belong to this owner |
+| Original audio sample | A single matching owner-attributed completed track has an original 64-byte stream whose response and audio header are valid | Full-file integrity, ISRC, duration, successful import/index, or safe cutover |
+
+It is normal to see **three verified checks and an unverified sample** on a
+new Downtify library with no completed track. A completed Spotify track
+and an exact unambiguous source-library match are necessary to test the
+original stream. The reason is shown without leaking file names, tokens
+or remote identifiers. Automatic import remains OFF unless explicitly
+enabled separately.
+
+This is an operational diagnostic, **not** a production acceptance test.
+A real full-file canary on the user's music volume, an independent backup
+and (for migrations) verification that other writers have stopped remain
+mandatory before a production cutover.
+
 ## Implementation
 
 - **Discovery:** every two minutes, only with an enabled DB setting.
