@@ -71,7 +71,9 @@ The **Downloads** screen shows permission-filtered jobs and saved Spotify track 
 
 ## Installation
 
-**Stable image:** `ghcr.io/oxygengs/kima-hub:v1.19.0` · **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
+**Published image:** `ghcr.io/oxygengs/kima-hub:v1.19.0`
+
+**Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 
 The All-in-One image includes Kima, PostgreSQL, Redis and music-analysis services. Keep the music library and application data on persistent volumes.
 
