@@ -3,6 +3,17 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Could not load automatic import settings.": "Could not load automatic import settings.",
+    "Confirm that the old importer has been stopped first.": "Confirm that the old importer has been stopped first.",
+    "Automatic importing enabled.": "Automatic importing enabled.",
+    "Automatic importing paused.": "Automatic importing paused.",
+    "Could not change automatic import settings.": "Could not change automatic import settings.",
+    "Automatically add downloaded music": "Automatically add downloaded music",
+    "Kima imports newly completed Downtify tracks, checks their audio and adds them to your music library. Old downloads are not imported.": "Kima imports newly completed Downtify tracks, checks their audio and adds them to your music library. Old downloads are not imported.",
+    "I have stopped any old importer writing to the same library and verified my backup.": "I have stopped any old importer writing to the same library and verified my backup.",
+    "Automatic import is active.": "Automatic import is active.",
+    "Automatic import is currently off.": "Automatic import is currently off.",
+    "Waiting": "Waiting",
     "Enable the Downtify queue first.": "Enable the Downtify queue first.",
     "Only the linked Kima administrator can check import readiness.": "Only the linked Kima administrator can check import readiness.",
     "Downtify pairing needs attention before import can be checked.": "Downtify pairing needs attention before import can be checked.",
@@ -2192,6 +2203,17 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Could not load automatic import settings.": "Kon de instellingen voor automatische import niet ophalen.",
+    "Confirm that the old importer has been stopped first.": "Bevestig eerst dat er geen oude importer meer naar dezelfde muziekbibliotheek schrijft.",
+    "Automatic importing enabled.": "Automatisch importeren ingeschakeld.",
+    "Automatic importing paused.": "Automatisch importeren gepauzeerd.",
+    "Could not change automatic import settings.": "Automatisch importeren kon niet worden aangepast.",
+    "Automatically add downloaded music": "Gedownloade muziek automatisch toevoegen",
+    "Kima imports newly completed Downtify tracks, checks their audio and adds them to your music library. Old downloads are not imported.": "Kima haalt nieuwe afgeronde Downtify-downloads op, controleert de audio en voegt ze toe aan je muziekbibliotheek. Oude downloads worden overgeslagen.",
+    "I have stopped any old importer writing to the same library and verified my backup.": "Ik heb gecontroleerd dat geen andere importer naar deze muziekbibliotheek schrijft en mijn back-up is herstelbaar.",
+    "Automatic import is active.": "Automatisch importeren is actief.",
+    "Automatic import is currently off.": "Automatisch importeren staat uit.",
+    "Waiting": "Wachtend",
     "Enable the Downtify queue first.": "Schakel eerst de Downtify-wachtrij in.",
     "Only the linked Kima administrator can check import readiness.": "Alleen de beheerder die Downtify heeft gekoppeld kan deze controle uitvoeren.",
     "Downtify pairing needs attention before import can be checked.": "Controleer de Downtify-koppeling voordat je de import kunt controleren.",
