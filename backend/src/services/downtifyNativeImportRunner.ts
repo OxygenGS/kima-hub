@@ -16,7 +16,7 @@ import { prisma } from "../utils/db";
 import { spotifyService } from "./spotify";
 import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
 import {
-    getVerifiedNativeImportQueue,
+    getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
     openNativeDowntifyOriginal,
 } from "./downtifyNativeOriginalTransport";
 import {
@@ -86,13 +86,14 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             where: { id: "default" },
             select: {
                 enabled: true, nativeImportEnabled: true,
-                nativeImportBaselineAt: true,
+                nativeImportBaselineAt: true, nativeImportLibraryCursor: true,
                 ownerKimaUserId: true, expectedServerId: true,
                 expectedUserId: true,
             },
         });
         if (!settings?.enabled || !settings.nativeImportEnabled ||
-            !settings.nativeImportBaselineAt) return outcome("paused");
+            !settings.nativeImportBaselineAt ||
+            settings.nativeImportLibraryCursor === null) return outcome("paused");
         const owner: PinnedImportOwner = {
             kimaUserId: settings.ownerKimaUserId,
             remoteServerId: settings.expectedServerId,
@@ -102,7 +103,13 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
         const queue = await getVerifiedNativeImportQueue(owner.kimaUserId, env);
         if (queue.state !== "ready") return outcome("unavailable");
 
-        const observed = await discoverNativeCompleted(owner, queue.queue);
+        const library = await getVerifiedNativeLibraryChanges(
+            owner.kimaUserId, settings.nativeImportLibraryCursor, env,
+        );
+        if (library.state !== "ready") return outcome("unavailable");
+        const observed = await discoverNativeCompleted(owner, queue.queue, {
+            cursor: library.cursor, full: library.full, tracks: library.tracks,
+        });
         if (observed.state !== "recorded") return outcome("unavailable");
         newJobs = observed.count;
         if (observed.ambiguous > 0) {
