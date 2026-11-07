@@ -20,6 +20,7 @@ import {
 } from "../downtifyNativeImportWorkspace";
 import { publishNativeAudio } from "../downtifyAtomicPublisher";
 import { verifyNativeTemporaryRecording } from "../downtifyNativeAudioVerification";
+import { decodeWithFfmpeg } from "../downtifyFullAudioEvidence";
 import {
     confirmNativeIndexed, recordNativePublished,
     type PinnedImportOwner,
@@ -59,6 +60,36 @@ function synthesize(destination: string, frequency: number): void {
     if (result.status !== 0 || result.error) {
         throw new Error("Synthetic audio generation unavailable");
     }
+}
+
+/**
+ * Jest maps music-metadata to a stub for its CJS test runner. Run the REAL
+ * ESM parser in a separate native Node process so these assertions cannot
+ * accidentally pass with fake FLAC tags or fake duration.
+ */
+async function realMetadata(file: string): Promise<{
+    isrc: unknown; durationSeconds: unknown;
+}> {
+    const script = [
+        "import { parseFile } from 'music-metadata';",
+        "const meta = await parseFile(process.argv[1], {duration:true,skipCovers:true});",
+        "console.log(JSON.stringify({isrc:meta.common.isrc ?? null,",
+        "durationSeconds:meta.format.duration ?? null}));",
+    ].join(" ");
+    const result = spawnSync(process.execPath, [
+        "--input-type=module", "-e", script, file,
+    ], {
+        cwd: path.resolve(__dirname, "../../.."),
+        encoding: "utf8",
+        timeout: 15000,
+        maxBuffer: 1024 * 1024,
+    });
+    if (result.status !== 0 || result.error) {
+        throw new Error("Native ESM metadata parser did not validate audio");
+    }
+    return JSON.parse(result.stdout) as {
+        isrc: unknown; durationSeconds: unknown;
+    };
 }
 
 async function* chunks(file: string): AsyncGenerator<Buffer> {
@@ -104,7 +135,10 @@ async function publish(file: string) {
                     spotifyId, expectedSpotifyId: spotifyId,
                     isrc, durationMs: 2000, extension: ".flac",
                 },
-                source,
+                source, {
+                    parse: realMetadata,
+                    decode: decodeWithFfmpeg,
+                },
             );
             return checked.verifiedForPublication;
         },
