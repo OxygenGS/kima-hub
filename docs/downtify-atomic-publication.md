@@ -21,7 +21,7 @@ an exact behavioral migration.
 ## New dormant component
 
 `backend/src/services/downtifyAtomicPublisher.ts` provides
-`publishNativeAudio({musicRoot, relativeTarget, chunks, expectedBytes})`.
+`publishNativeAudio({musicRoot, relativeTarget, chunks, expectedBytes, verifyTempFile})`.
 
 - Validates a relative file path under `Singles/`, a known audio extension,
   a pre-existing non-symlink music root and existing non-group/world-writable
@@ -31,6 +31,7 @@ an exact behavioral migration.
   SHA-256 digest; a truncated stream is rejected and its temporary file
   removed when possible. This module does **not** verify track identity or
   decode audio; upstream checks must succeed before it is called.
+- **Requires** the caller to supply an independent complete-recording verification callback for the private temporary file, before it can be made visible under the music root. The callback must check audio decoding and recording identity; false/exception stops publication. If the temporary inode or timestamps changed during verification, publication is refused.
 - Uses an exclusive filesystem link (atomic no-replace) rather than unsafe
   `rename()` over a destination or a move that deletes the original.
 - If the destination already exists, compares complete SHA-256 bytes through
