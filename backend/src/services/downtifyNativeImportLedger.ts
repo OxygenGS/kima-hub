@@ -26,6 +26,7 @@ export type LedgerState =
     | "uncertain";
 
 const SPOTIFY_ID = /^[A-Za-z0-9]{22}$/;
+const VOLUME_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SERVER_ID = /^[A-Za-z0-9_-]{8,128}$/;
 const MAX_QUEUE_ROWS = 5000;
 const MAX_QUEUE_BATCH = 5000;
@@ -89,16 +90,19 @@ export function selectOwnedCompletedSpotifyJobs(
 
 async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
     paired: boolean; enabled: boolean; baselineAt: Date | null;
-    libraryCursor: number | null;
+    libraryCursor: number | null; mountProof: string | null;
 }> {
-    if (!validOwner(owner)) return { paired: false, enabled: false, baselineAt: null, libraryCursor: null };
+    if (!validOwner(owner)) return {
+        paired: false, enabled: false, baselineAt: null,
+        libraryCursor: null, mountProof: null,
+    };
     const row = await prisma.downtifyIntegration.findUnique({
         where: { id: "default" },
         select: {
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
-            nativeImportLibraryCursor: true,
+            nativeImportLibraryCursor: true, nativeImportMountProof: true,
         },
     });
     const paired = row?.ownerKimaUserId === owner.kimaUserId &&
@@ -109,6 +113,9 @@ async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
         paired, enabled: paired && row?.nativeImportEnabled === true,
         baselineAt: paired ? row?.nativeImportBaselineAt || null : null,
         libraryCursor: paired ? row?.nativeImportLibraryCursor ?? null : null,
+        mountProof: paired && row?.nativeImportMountProof &&
+            VOLUME_UUID.test(row.nativeImportMountProof)
+            ? row.nativeImportMountProof : null,
     };
 }
 
@@ -125,18 +132,20 @@ export async function recordNativeBaseline(
     owner: PinnedImportOwner,
     queueSnapshot: unknown,
     libraryCursor: number,
+    mountProof: string,
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
     const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
     if (selection.state !== "ok" || !validOwner(owner) ||
         !Number.isSafeInteger(libraryCursor) || libraryCursor < 0 ||
-        libraryCursor > 2_147_483_647 || selection.ambiguous > 0) {
+        libraryCursor > 2_147_483_647 || !VOLUME_UUID.test(mountProof) ||
+        selection.ambiguous > 0) {
         // Never silently omit an ambiguous pre-existing song from the
         // initial baseline: it might later appear unique and be reimported.
         return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
     }
     const identity = await pinnedIdentity(owner);
     if (!identity.paired || identity.enabled || identity.baselineAt ||
-        identity.libraryCursor !== null) {
+        identity.libraryCursor !== null || identity.mountProof !== null) {
         return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
     }
     try {
@@ -149,10 +158,12 @@ export async function recordNativeBaseline(
                     enabled: true, nativeImportEnabled: false,
                     nativeImportBaselineAt: null,
                     nativeImportLibraryCursor: null,
+                    nativeImportMountProof: null,
                 },
                 data: {
                     nativeImportBaselineAt: new Date(),
                     nativeImportLibraryCursor: libraryCursor,
+                    nativeImportMountProof: mountProof,
                 },
             });
             if (changed.count !== 1) throw new Error("baseline race");
@@ -263,7 +274,8 @@ export async function discoverNativeCompleted(
     }
     const identity = await pinnedIdentity(owner);
     if (!identity.enabled || !identity.baselineAt ||
-        identity.libraryCursor === null || changes.cursor < identity.libraryCursor) {
+        identity.libraryCursor === null || !identity.mountProof ||
+        changes.cursor < identity.libraryCursor) {
         return { state: "blocked", count: 0, ambiguous: 0 };
     }
     const selection = changes.full
@@ -340,7 +352,7 @@ export async function claimNativeImport(
     }
     const identity = await pinnedIdentity(owner);
     if (!identity.enabled || !identity.baselineAt ||
-        identity.libraryCursor === null) return { state: "blocked" };
+        identity.libraryCursor === null || !identity.mountProof) return { state: "blocked" };
     const token = randomUUID();
     try {
         return await prisma.$transaction(async tx => {
@@ -353,6 +365,7 @@ export async function claimNativeImport(
                     expectedUserId: true, enabled: true,
                     nativeImportEnabled: true, nativeImportBaselineAt: true,
                     nativeImportLibraryCursor: true,
+                    nativeImportMountProof: true,
                 },
             });
             if (pairing?.ownerKimaUserId !== owner.kimaUserId ||
@@ -360,7 +373,9 @@ export async function claimNativeImport(
                 pairing.expectedUserId !== owner.remoteUserId ||
                 !pairing.enabled || !pairing.nativeImportEnabled ||
                 !pairing.nativeImportBaselineAt ||
-                pairing.nativeImportLibraryCursor === null)
+                pairing.nativeImportLibraryCursor === null ||
+                !pairing.nativeImportMountProof ||
+                !VOLUME_UUID.test(pairing.nativeImportMountProof))
                 return { state: "blocked" } as const;
             const row = await tx.downtifyNativeImport.findFirst({
                 where: {
@@ -473,7 +488,8 @@ export async function getNativeImportSummary(
     const count = (status: string) => rows.find(row => row.status === status)?._count._all ?? 0;
     return {
         enabled: identity.enabled,
-        baselineReady: !!identity.baselineAt && identity.libraryCursor !== null,
+        baselineReady: !!identity.baselineAt && identity.libraryCursor !== null &&
+            !!identity.mountProof,
         waiting: count("ready"),
         inReview: count("claimed") + count("review") + count("uncertain") +
             count("published_pending_scan"),
