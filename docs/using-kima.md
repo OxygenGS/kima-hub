@@ -78,7 +78,11 @@ N, P and S work on music; the other keys also work on podcasts and audiobooks.
 
 ## On a phone or a TV
 
-Kima installs to the home screen from the browser; see [install.md](install.md#installing-on-a-phone). On a television browser Kima switches to a separate television layout.
+On compatible phones and browsers Kima can be installed to the home screen as a web app. Open your running Kima URL and use the browser's **Install app** or **Add to Home Screen** option. On a television browser Kima switches to a separate television layout.
+
+## Downloads and Downtify
+
+The **Downloads** screen shows the current account's permitted download jobs and any explicitly enabled saved Spotify requests. From v1.19.0 administrators can use **Settings → Integrations → Downtify** for encrypted device pairing and separate default-OFF controls. Sending a prepared Spotify track is always manual, requires acknowledgement and does not imply that the song has reached the Kima library. Read [Downtify settings](downtify-settings.md) before configuring it.
 
 ## Other apps
 
