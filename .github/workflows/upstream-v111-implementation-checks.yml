@@ -267,6 +267,15 @@ jobs:
           npm ci --no-audit --no-fund
           npx prisma generate
           npx prisma migrate deploy
+      - name: Ensure FFmpeg is available for real-audio canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/bin/ffmpeg; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          /usr/bin/ffmpeg -hide_banner -version | head -n 1
       - name: Run all backend Jest tests with upstream v1.11 code
         working-directory: backend
         run: npm test -- --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
