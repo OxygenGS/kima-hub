@@ -48,10 +48,18 @@ the Kima user with cascading deletion.
 | `review` / `uncertain` | Stop automatic processing, require human reconciliation |
 
 Only the first two states may be created by the discovery service.
-The `claimed` state is acquired with a transactional compare-and-swap;
-an ambiguous or expired claim is **never automatically reset to ready**.
-A crash between file publication and database acknowledgement must not
-cause an automatic second file write.
+The `claimed` state is acquired with a transactional compare-and-swap.
+A process crash, ambiguous claim or any after-publication outcome is
+**never** automatically reset to ready. A crash between file publication
+and database acknowledgement must not cause an automatic second file write.
+
+Only two explicitly proven **pre-write** errors can release a currently
+owned claim back to ready: a temporarily unavailable remote source or
+unavailable music mount, *before* calling the atomic publisher. The
+released claim retains its last `claimedAt`, and both the claim query
+and atomic UPDATE enforce a **15-minute cooldown**. A missing DB receipt
+holds the claim; no retry path uses unchecked exceptions as evidence
+that no file was written.
 
 ## First-time activation
 
