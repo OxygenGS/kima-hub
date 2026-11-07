@@ -41,6 +41,7 @@ const owner = {
     remoteUserId: 7,
 };
 const SPOTIFY_ID = "0123456789ABCDEFGHIJKL";
+const VOLUME_PROOF = "11111111-1111-4111-8111-111111111111";
 const OTHER_SPOTIFY_ID = "123456789ABCDEFGHIJKLM";
 const queue = (ids: number[] = [7], songId = SPOTIFY_ID) => [{
     status: "done",
@@ -50,6 +51,7 @@ const queue = (ids: number[] = [7], songId = SPOTIFY_ID) => [{
 }];
 const pairing = (enabled = false, baselineAt: Date | null = null) => ({
     nativeImportLibraryCursor: baselineAt ? 8 : null,
+    nativeImportMountProof: baselineAt ? VOLUME_PROOF : null,
     ownerKimaUserId: owner.kimaUserId,
     expectedServerId: owner.remoteServerId,
     expectedUserId: owner.remoteUserId,
@@ -162,7 +164,7 @@ describe("New-only mobile library cursors", () => {
 
 describe("Durable native import baseline", () => {
     it("stores all pre-existing completed jobs as baseline in one transaction", async () => {
-        const result = await recordNativeBaseline(owner, queue(), 8);
+        const result = await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF);
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(transaction).toHaveBeenCalledTimes(1);
         expect(integrationUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -186,32 +188,32 @@ describe("Durable native import baseline", () => {
 
     it("does not reset a baseline or seed history when already initialized or enabled", async () => {
         paired.mockResolvedValueOnce(pairing(false, new Date()));
-        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         paired.mockResolvedValueOnce(pairing(true, new Date()));
-        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("fails closed if the pairing changed or no longer belongs to this user", async () => {
         paired.mockResolvedValueOnce({ ...pairing(), expectedUserId: 200 });
-        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("does not seed a partial baseline with an ambiguous old job", async () => {
-        expect((await recordNativeBaseline(owner, [...queue(), ...queue()], 8)).state)
+        expect((await recordNativeBaseline(owner, [...queue(), ...queue()], 8, VOLUME_PROOF)).state)
             .toBe("invalid_snapshot");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("rolls back on compare-and-swap conflict", async () => {
         integrationUpdate.mockResolvedValueOnce({ count: 0 });
-        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
     it("accepts an empty baseline without any file or remote changes", async () => {
-        expect(await recordNativeBaseline(owner, [], 8)).toMatchObject({
+        expect(await recordNativeBaseline(owner, [], 8, VOLUME_PROOF)).toMatchObject({
             state: "recorded", count: 0,
         });
         expect(importsCreate).not.toHaveBeenCalled();
