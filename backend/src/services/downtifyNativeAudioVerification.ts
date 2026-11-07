@@ -6,8 +6,9 @@
  * A matching tag is not cryptographic proof of a recording edition;
  * missing/conflicting tags require review rather than an automatic import.
  *
- * No HTTP route or worker calls this in the current change. No production
- * media files are modified or re-tagged by this module.
+ * The optional native worker invokes this on a private temporary file
+ * before publication. No HTTP route exposes verification or lets users
+ * supply filesystem paths. Existing music is not re-tagged or modified.
  */
 import { createHash } from "crypto";
 import { constants as flags, promises as fs } from "fs";
