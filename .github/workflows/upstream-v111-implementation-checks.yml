@@ -134,6 +134,15 @@ jobs:
       - name: Typecheck v1.11 backend source (must be fixed before release)
         working-directory: backend
         run: npm run typecheck
+      - name: Ensure FFmpeg is available for native audio verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/bin/ffmpeg; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          /usr/bin/ffmpeg -hide_banner -version | head -n 1
       - name: Verify compiled native Downtify original-audio path (no real media)
         working-directory: backend
         run: |
