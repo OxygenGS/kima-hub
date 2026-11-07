@@ -148,6 +148,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 heldForReview++;
                 await holdNativeImportForReview(owner, claim.id, claim.claimToken, reason);
             };
+            let cancelOriginal: (() => void) | undefined;
             try {
                 // No remote song, token or path comes from an HTTP request.
                 const original = await openNativeDowntifyOriginal(
@@ -157,6 +158,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     await hold("remote_source_unavailable");
                     continue;
                 }
+                cancelOriginal = original.cancel;
                 const expected = await spotifyService.getTrackBySpotifyId(
                     claim.spotifyTrackId,
                 );
@@ -241,6 +243,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 }
             } catch {
                 await hold("import_incomplete");
+            } finally {
+                // Stops an unused/unfinished authenticated HTTP stream.
+                // This also executes for all "continue" branches above.
+                cancelOriginal?.();
             }
         }
 
