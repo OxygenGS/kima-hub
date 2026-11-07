@@ -1,5 +1,5 @@
 /**
- * Durable, fail-closed claim ledger for a future native Downtify importer.
+ * Durable, fail-closed claim ledger for the optional native Downtify importer.
  *
  * This module does not contact Downtify, open files, schedule work, or
  * enable automatic imports. A worker must first independently verify the
@@ -8,8 +8,9 @@
  *
  * Every remote song ID is unique for one verified server and numeric
  * Downtify owner; separate Kima accounts cannot silently take ownership.
- * Once claimed, no automatic retry after worker crash, timeout, file write,
- * scan outage or uncertain outcome. Manual reconciliation is mandatory.
+ * A crashed or uncertain post-write claim is never automatically retried.
+ * Only provably unwritten pre-publication remote/storage outages may release
+ * the exact claim after a persistent 15-minute cooldown.
  */
 import { createHash, randomUUID } from "crypto";
 import { constants as fsFlags, promises as fs } from "fs";
