@@ -1,6 +1,8 @@
 import { prisma } from "../../utils/db";
 import { getDowntifyRuntimeEnv } from "../downtifyIntegrationSettings";
-import { getVerifiedNativeImportQueue } from "../downtifyNativeOriginalTransport";
+import {
+    getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
+} from "../downtifyNativeOriginalTransport";
 import { getNativeImportSummary, recordNativeBaseline } from "../downtifyNativeImportLedger";
 import {
     getNativeAutoImportStatus, setNativeAutoImport,
@@ -18,6 +20,7 @@ jest.mock("../downtifyIntegrationSettings", () => ({
 }));
 jest.mock("../downtifyNativeOriginalTransport", () => ({
     getVerifiedNativeImportQueue: jest.fn(),
+    getVerifiedNativeLibraryChanges: jest.fn(),
 }));
 jest.mock("../downtifyNativeImportLedger", () => ({
     getNativeImportSummary: jest.fn(),
@@ -28,6 +31,7 @@ const find = prisma.downtifyIntegration.findUnique as jest.Mock;
 const update = prisma.downtifyIntegration.updateMany as jest.Mock;
 const runtime = getDowntifyRuntimeEnv as jest.Mock;
 const queue = getVerifiedNativeImportQueue as jest.Mock;
+const library = getVerifiedNativeLibraryChanges as jest.Mock;
 const baseline = recordNativeBaseline as jest.Mock;
 const summary = getNativeImportSummary as jest.Mock;
 const serverId = "server_identity_123";
@@ -36,6 +40,7 @@ let record = {
     ownerKimaUserId: admin, expectedServerId: serverId,
     expectedUserId: 7, enabled: true,
     nativeImportEnabled: false, nativeImportBaselineAt: null as Date | null,
+    nativeImportLibraryCursor: null as number | null,
 };
 
 beforeEach(() => {
@@ -44,6 +49,7 @@ beforeEach(() => {
         ownerKimaUserId: admin, expectedServerId: serverId,
         expectedUserId: 7, enabled: true,
         nativeImportEnabled: false, nativeImportBaselineAt: null,
+        nativeImportLibraryCursor: null,
     };
     find.mockImplementation(async () => record);
     update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
@@ -52,13 +58,16 @@ beforeEach(() => {
     });
     runtime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
     queue.mockResolvedValue({ state: "ready", queue: [] });
+    library.mockResolvedValue({state:"ready",cursor:7,full:true,tracks:[]});
     baseline.mockImplementation(async () => {
         record.nativeImportBaselineAt = new Date();
+        record.nativeImportLibraryCursor = 7;
         return { state: "recorded", count: 0, ambiguous: 0 };
     });
     summary.mockImplementation(async () => ({
         enabled: record.nativeImportEnabled,
-        baselineReady: !!record.nativeImportBaselineAt,
+        baselineReady: !!record.nativeImportBaselineAt &&
+            record.nativeImportLibraryCursor !== null,
         waiting: 0, inReview: 0,
     }));
 });
@@ -109,7 +118,8 @@ describe("One-switch Downtify native import activation", () => {
         expect(queue).toHaveBeenCalledTimes(1);
         expect(baseline).toHaveBeenCalledWith({
             kimaUserId: admin, remoteServerId: serverId, remoteUserId: 7,
-        }, []);
+        }, [], 7);
+        expect(library).toHaveBeenCalledWith(admin, 0, expect.any(Object));
         expect(update).toHaveBeenCalledWith({
             where: expect.objectContaining({
                 nativeImportEnabled: false,
@@ -143,6 +153,7 @@ describe("One-switch Downtify native import activation", () => {
     it("pauses new work without changing the historic baseline or deleting files", async () => {
         record.nativeImportEnabled = true;
         record.nativeImportBaselineAt = new Date();
+        record.nativeImportLibraryCursor = 7;
         const state = await setNativeAutoImport(admin, false, false);
         expect(state.enabled).toBe(false);
         expect(state.baselineReady).toBe(true);
@@ -156,6 +167,7 @@ describe("One-switch Downtify native import activation", () => {
 
     it("does not reseed a complete baseline when a paused importer is re-enabled", async () => {
         record.nativeImportBaselineAt = new Date();
+        record.nativeImportLibraryCursor = 7;
         await setNativeAutoImport(admin, true, true);
         expect(baseline).not.toHaveBeenCalled();
         expect(queue).not.toHaveBeenCalled();
