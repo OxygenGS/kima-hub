@@ -12,7 +12,9 @@
 import { prisma } from "../utils/db";
 import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
 import { getNativeImportSummary, recordNativeBaseline } from "./downtifyNativeImportLedger";
-import { getVerifiedNativeImportQueue } from "./downtifyNativeOriginalTransport";
+import {
+    getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
+} from "./downtifyNativeOriginalTransport";
 
 export type NativeAutoImportStatus = {
     state: "unpaired" | "other_owner" | "paused" | "enabled";
@@ -41,6 +43,7 @@ export async function getNativeAutoImportStatus(
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true,
         },
     });
     if (!row) return {
@@ -98,13 +101,14 @@ export async function setNativeAutoImport(
         remoteServerId: row.expectedServerId,
         remoteUserId: row.expectedUserId,
     };
-    if (!row.nativeImportBaselineAt) {
+    if (!row.nativeImportBaselineAt || row.nativeImportLibraryCursor === null) {
         const env = await getDowntifyRuntimeEnv();
         const queue = await getVerifiedNativeImportQueue(adminId, env);
-        if (queue.state !== "ready") {
+        const library = await getVerifiedNativeLibraryChanges(adminId, 0, env);
+        if (queue.state !== "ready" || library.state !== "ready" || !library.full) {
             throw new NativeImportSetupError("source_unavailable");
         }
-        const seeded = await recordNativeBaseline(owner, queue.queue);
+        const seeded = await recordNativeBaseline(owner, queue.queue, library.cursor);
         if (seeded.state !== "recorded") {
             throw new NativeImportSetupError("invalid_baseline");
         }
@@ -118,6 +122,7 @@ export async function setNativeAutoImport(
             expectedUserId: owner.remoteUserId,
             enabled: true, nativeImportEnabled: false,
             nativeImportBaselineAt: { not: null },
+            nativeImportLibraryCursor: { not: null },
         },
         data: { nativeImportEnabled: true },
     });
