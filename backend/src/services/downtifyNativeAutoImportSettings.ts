@@ -78,6 +78,7 @@ export async function setNativeAutoImport(
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true,
         },
     });
     if (!row) throw new NativeImportSetupError("not_paired");
