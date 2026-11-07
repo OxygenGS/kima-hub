@@ -57,6 +57,27 @@ line to use it after initial setup.
   before marking the ledger row imported. Downtify `done`, a remote
   downloaded file, and successful local file publication are not enough.
 
+## Persistent music-volume identity (DAS/NAS safety)
+
+A Docker bind mount can remain accessible as an empty local directory when
+its external backing disk disappears. Before the **first explicit enable**,
+Kima creates a private `.kima-native-music-volume` UUID marker inside the
+configured music root, after the administrator confirms the actual disk is
+mounted. The UUID is stored with the paired Downtify owner in PostgreSQL
+and reset whenever the pairing changes.
+
+The import worker checks that exact marker **before** polling remote work
+and again immediately before exposing a new file to the library. A missing
+marker, a replaced disk with a different marker, a symlink, unsafe root
+permissions or an absent filesystem prevents importing. Verification never
+creates a missing marker or fallback music directory.
+
+A UUID marker is a continuity check, **not** independent proof that the
+correct disk was selected the first time. Production activation still needs
+a tested storage/mount check and a verified backup. The hidden marker is
+not an audio file and must be retained when pausing or rolling back native
+import. Never delete the source music or original host mounts.
+
 ## Fail-safe limits
 
 - Up to **two new songs per cycle** and **256 MiB per file**. If a remote
