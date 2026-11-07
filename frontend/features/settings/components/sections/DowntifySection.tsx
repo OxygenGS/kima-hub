@@ -27,6 +27,34 @@ type TestResult = {
     identityVerified?: boolean;
 };
 type Usage = "off" | "queue" | "requests" | "downloads";
+type NativeImportState = "disabled" | "unbound" | "misconfigured" | "music_unavailable" |
+    "unavailable" | "unauthorized" | "incompatible" | "no_completed_track" |
+    "ambiguous" | "library_unavailable" | "no_library_match" |
+    "stream_unavailable" | "header_unverified" | "original_stream_verified";
+type NativeImportReadiness = {
+    state: NativeImportState;
+    originalStreamChecked: boolean;
+    autoImportAvailable: false;
+    importerCutoverAuthorized: false;
+    filesChanged: false;
+};
+const importMessages: Record<NativeImportState, TranslationKey> = {
+    disabled: "Enable the Downtify queue first.",
+    unbound: "Only the linked Kima administrator can check import readiness.",
+    misconfigured: "Downtify pairing needs attention before import can be checked.",
+    music_unavailable: "Kima cannot access its music library mount.",
+    unavailable: "Cannot check Downtify right now.",
+    unauthorized: "Downtify rejected the linked account.",
+    incompatible: "The Downtify server identity or API is incompatible.",
+    no_completed_track: "No completed download is available to test the original audio stream.",
+    ambiguous: "Multiple remote records match. Manual review is required.",
+    library_unavailable: "Downtify's library listing is unavailable or too large for this check.",
+    no_library_match: "No exact library file matched an owned completed download.",
+    stream_unavailable: "Downtify did not provide the required original audio range.",
+    header_unverified: "The remote audio format could not be verified.",
+    original_stream_verified: "Original audio transfer is reachable. Automatic importing is not enabled yet.",
+};
+
 
 const disabled: DowntifyControls = {
     enabled: false, spotifyIntentsEnabled: false,
@@ -111,6 +139,8 @@ export function DowntifySection() {
     const [loaded, setLoaded] = useState(false);
     const [feedback, setFeedback] = useState("");
     const [error, setError] = useState(false);
+    const [importChecking, setImportChecking] = useState(false);
+    const [importFeedback, setImportFeedback] = useState<TranslationKey | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -177,6 +207,21 @@ export function DowntifySection() {
         setAck(false);
         setFeedback(t("Downtify settings saved."));
     });
+    const checkNativeImport = async () => {
+        if (importChecking || pending || !ownerMatches) return;
+        setImportChecking(true);
+        setImportFeedback(null);
+        try {
+            const result = await api.get<NativeImportReadiness>("/downtify-integration/import-readiness");
+            // Even a successful 64-byte audio probe is NOT a file import or
+            // approval to shut down a different writer on the music volume.
+            setImportFeedback(importMessages[result.state] || importMessages.unavailable);
+        } catch {
+            setImportFeedback(importMessages.unavailable);
+        } finally {
+            setImportChecking(false);
+        }
+    };
     const chooseUsage = (value: Usage) => {
         setFeedback("");
         setAck(false);
@@ -358,6 +403,24 @@ export function DowntifySection() {
                                             <a href="/downloads" className="text-sm text-brand hover:underline">
                                                 {t("Open Downloads")}
                                             </a>
+                                        )}
+                                    </div>
+                                    <div className="rounded-xl border border-white/10 p-4 space-y-2">
+                                        <h4 className="text-sm font-semibold text-white">
+                                            {t("Automatic library import")}
+                                        </h4>
+                                        <p className="text-xs text-[var(--text-muted)]">
+                                            {t("Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.")}
+                                        </p>
+                                        <button type="button" onClick={checkNativeImport}
+                                            disabled={!ownerMatches || importChecking || pending || !status?.enabled}
+                                            className="rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-40">
+                                            {importChecking ? t("Checking audio transfer...") : t("Test direct audio transfer")}
+                                        </button>
+                                        {importFeedback && (
+                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                {t(importFeedback)}
+                                            </p>
                                         )}
                                     </div>
                                     <p className="text-xs leading-relaxed text-[var(--text-muted)]">

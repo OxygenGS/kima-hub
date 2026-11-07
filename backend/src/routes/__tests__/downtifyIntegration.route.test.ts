@@ -6,6 +6,11 @@ const mockPair = jest.fn();
 const mockTest = jest.fn();
 const mockTestSaved = jest.fn();
 const mockControls = jest.fn();
+const mockRuntime = jest.fn();
+const mockImportReadiness = jest.fn();
+jest.mock("../../services/downtifyNativeImportPreflight", () => ({
+    inspectNativeDowntifyImport: (...args: unknown[]) => mockImportReadiness(...args),
+}));
 jest.mock("../../services/downtifyIntegrationSettings", () => ({
     DowntifySetupError: class DowntifySetupError extends Error {
         constructor(public state: string) { super(state); }
@@ -15,6 +20,7 @@ jest.mock("../../services/downtifyIntegrationSettings", () => ({
     verifyDowntifyPair: (...args: unknown[]) => mockTest(...args),
     testSavedDowntifyPair: (...args: unknown[]) => mockTestSaved(...args),
     updateDowntifyControls: (...args: unknown[]) => mockControls(...args),
+    getDowntifyRuntimeEnv: (...args: unknown[]) => mockRuntime(...args),
 }));
 jest.mock("../../middleware/auth", () => ({
     requireAdmin: (req: Request, res: Response, next: NextFunction) => {
@@ -65,6 +71,14 @@ beforeEach(() => {
         expectedUsername: "remote", expectedUserId: 12,
     });
     mockControls.mockResolvedValue(cfg);
+    mockRuntime.mockResolvedValue({ KIMA_DOWNTIFY_DEVICE_TOKEN: TOKEN });
+    mockImportReadiness.mockResolvedValue({
+        state: "original_stream_verified", serverVerified: true,
+        accountVerified: true, originalStreamChecked: true,
+        musicRootAccessible: true, autoImportAvailable: false,
+        importerCutoverAuthorized: false, libraryImportVerified: false,
+        filesChanged: false,
+    });
 });
 
 describe("Downtify Settings admin-only API", () => {
@@ -145,6 +159,34 @@ describe("Downtify Settings admin-only API", () => {
             enabled: true, spotifyIntentsEnabled: true,
             trackSubmissionEnabled: true, reconciliationEnabled: true,
         }, true);
+    });
+
+    it("restricts native import readiness to admins, never starts a copy or reveals tokens", async () => {
+        expect((await request(app).get(url + "/import-readiness")).status).toBe(401);
+        expect((await request(app).get(url + "/import-readiness")
+            .set("Authorization", "Bearer regular").set("X-Test-Role", "user")).status).toBe(403);
+        expect(mockImportReadiness).not.toHaveBeenCalled();
+
+        const res = await request(app).get(url + "/import-readiness")
+            .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("no-store");
+        expect(mockRuntime).toHaveBeenCalledTimes(1);
+        expect(mockImportReadiness).toHaveBeenCalledWith("admin-1", { KIMA_DOWNTIFY_DEVICE_TOKEN: TOKEN });
+        expect(res.body.originalStreamChecked).toBe(true);
+        expect(res.body.autoImportAvailable).toBe(false);
+        expect(res.body.filesChanged).toBe(false);
+        expect(JSON.stringify(res.body)).not.toContain(TOKEN);
+    });
+
+    it("never leaks private paths on a native import inspection failure", async () => {
+        mockImportReadiness.mockRejectedValueOnce(new Error("Private /music path " + TOKEN));
+        const res = await request(app).get(url + "/import-readiness")
+            .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
+        expect(res.status).toBe(503);
+        expect(res.body.autoImportAvailable).toBe(false);
+        expect(JSON.stringify(res.body)).not.toContain(TOKEN);
+        expect(JSON.stringify(res.body)).not.toContain("/music");
     });
 
     it("redacts upstream exceptions and never exposes write-to-media methods", async () => {
