@@ -36,6 +36,21 @@ The table has a unique constraint on
 `(remoteServerId, remoteUserId, spotifyTrackId)` and a foreign key to
 the Kima user with cascading deletion.
 
+## External music-volume identity
+
+The integration also stores `nativeImportMountProof` (nullable, OFF
+by default). On an administrator-confirmed first activation, a private
+UUID marker is written to the configured music root and its UUID is saved
+with the initial queue/library baseline. All later discovery and claim
+operations require this persistent proof; the media worker also checks
+the physical marker before polling, linking or scanning any file.
+
+A dropped DAS/USB disk may leave a writable local fallback path with the
+same directory name. Without this independent on-disk marker Kima could
+write files to the wrong storage. If the marker disappears, all automatic
+work pauses. Re-pairing clears the DB proof but does not delete the
+physical marker. The root was still operator-verified at first activation.
+
 ## Processing states
 
 | State | Meaning |
