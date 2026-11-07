@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Automatic import is paused because the verified music storage is unavailable.": "Automatic import is paused because the verified music storage is unavailable.",
     "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.": "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.",
     "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.": "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.",
     "Connect Downtify before enabling automatic import.": "Connect Downtify before enabling automatic import.",
@@ -2212,6 +2213,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Automatic import is paused because the verified music storage is unavailable.": "Automatisch importeren is gepauzeerd omdat de geverifieerde muziekopslag niet beschikbaar is.",
     "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.": "Nieuwe installatie: er is geen eerdere importer om te stoppen. Bestaande installatie: stop andere importers die naar deze bibliotheek schrijven voordat je dit inschakelt.",
     "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.": "Ik heb gecontroleerd dat de muziekopslag aangekoppeld en beschrijfbaar is, dat er een back-up is van een bestaande bibliotheek en dat geen andere importer hierin schrijft.",
     "Connect Downtify before enabling automatic import.": "Koppel eerst Downtify voordat je automatisch importeren inschakelt.",
