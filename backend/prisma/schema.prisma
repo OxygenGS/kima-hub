@@ -711,6 +711,8 @@ model DowntifyIntegration {
   nativeImportBaselineAt  DateTime?
   // Downtify mobile library sync cursor at first activation and after safe discovery.
   nativeImportLibraryCursor Int?
+  // Persistent marker of the operator-verified music volume; no secrets in API.
+  nativeImportMountProof String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
