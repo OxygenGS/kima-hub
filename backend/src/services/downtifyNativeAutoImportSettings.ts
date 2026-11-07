@@ -27,6 +27,8 @@ export type NativeAutoImportStatus = {
     awaitingImport: number;
     needsReview: number;
     legacyHostVerified: false;
+    /** Read-only proof that the current music root matches its first-activation disk. */
+    storageReady: boolean;
 };
 
 export class NativeImportSetupError extends Error {
@@ -53,6 +55,7 @@ export async function getNativeAutoImportStatus(
     if (!row) return {
         state: "unpaired", enabled: false, baselineReady: false,
         awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        storageReady: false,
     };
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
@@ -63,6 +66,9 @@ export async function getNativeAutoImportStatus(
         remoteServerId: row.expectedServerId,
         remoteUserId: row.expectedUserId,
     });
+    const storageReady = await verifyNativeMusicVolume(
+        config.music.musicPath, row.nativeImportMountProof,
+    );
     return {
         state: summary.enabled ? "enabled" : "paused",
         enabled: summary.enabled,
@@ -70,6 +76,7 @@ export async function getNativeAutoImportStatus(
         awaitingImport: summary.waiting,
         needsReview: summary.inReview,
         legacyHostVerified: false,
+        storageReady,
     };
 }
 
