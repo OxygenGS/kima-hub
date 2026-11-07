@@ -94,7 +94,7 @@ not silently retry after an uncertain file write.
 
 ## Existing Importer v5
 
-The private host timer `chillverse-downtify-import.timer` is still enabled,
+The operator-managed legacy host import timer is still enabled,
 and the existing script is backed up on the Proxmox host.
 No source-code PR can disable that private timer. The old and new
 importers must not write to the same music library concurrently.
