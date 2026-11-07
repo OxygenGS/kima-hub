@@ -16,6 +16,7 @@ function cleanComponent(raw: unknown, max = 80): string {
     if (typeof raw !== "string") return "";
     return raw.normalize("NFKC")
         .replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g, "_")
+        .replace(/\.{2,}/g, "_")
         .replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "")
         .slice(0, max).replace(/[.\s]+$/g, "");
 }
