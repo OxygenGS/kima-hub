@@ -313,6 +313,16 @@ export async function discoverNativeCompleted(
     }
 }
 
+// Retriable failures BEFORE media publication have a persistent cooldown.
+// No after-publication/uncertain claim is eligible for automatic reset.
+const SAFE_UNWRITTEN_RETRY_DELAY_MS = 15 * 60 * 1000;
+const dueForSafePrewriteRetry = () => ({
+    OR: [
+        { claimedAt: null },
+        { claimedAt: { lt: new Date(Date.now() - SAFE_UNWRITTEN_RETRY_DELAY_MS) } },
+    ],
+});
+
 export type ClaimResult =
     | { state: "claimed"; id: string; claimToken: string; spotifyTrackId: string }
     | { state: "blocked" | "not_found" | "claimed_elsewhere" };
@@ -360,6 +370,7 @@ export async function claimNativeImport(
                     // A previous pairing's unfinished claim must not be
                     // revived after re-pairing and a fresh baseline.
                     discoveredAt: { gt: pairing.nativeImportBaselineAt },
+                    ...dueForSafePrewriteRetry(),
                 },
                 select: { id: true, status: true, spotifyTrackId: true },
             });
@@ -371,9 +382,11 @@ export async function claimNativeImport(
                     remoteServerId: owner.remoteServerId,
                     remoteUserId: owner.remoteUserId,
                     discoveredAt: { gt: pairing.nativeImportBaselineAt },
+                    ...dueForSafePrewriteRetry(),
                 },
                 data: {
                     status: "claimed", claimToken: token, claimedAt: new Date(),
+                    reviewReason: null,
                 },
             });
             if (changed.count !== 1) return { state: "claimed_elsewhere" } as const;
@@ -384,6 +397,44 @@ export async function claimNativeImport(
         });
     } catch {
         return { state: "blocked" };
+    }
+}
+
+/**
+ * Explicitly release a claim ONLY while no media file was even opened for
+ * writing. A temporary remote outage or unavailable music mount must not
+ * require command-line intervention. The last claim timestamp remains in
+ * the database and prevents re-claiming for 15 minutes.
+ *
+ * CALLER CONTRACT: do not call this after publishNativeAudio is invoked.
+ * A worker crash or any ambiguous post-write outcome must stay claimed or
+ * uncertain for human reconciliation, never automatically retry.
+ */
+export async function releaseNativeUnwrittenClaim(
+    owner: PinnedImportOwner, id: string, token: string,
+    reason: "remote_temporarily_unavailable" | "storage_temporarily_unavailable",
+): Promise<boolean> {
+    if (!validOwner(owner) || !/^[a-z0-9]{10,40}$/.test(id) ||
+        !/^[0-9a-f-]{36}$/.test(token)) return false;
+    try {
+        const changed = await prisma.downtifyNativeImport.updateMany({
+            where: {
+                id, ownerKimaUserId: owner.kimaUserId,
+                remoteServerId: owner.remoteServerId,
+                remoteUserId: owner.remoteUserId,
+                status: "claimed", claimToken: token,
+            },
+            data: {
+                status: "ready",
+                claimToken: null,
+                // Preserve claimedAt as the durable retry backoff checkpoint.
+                reviewReason: reason,
+            },
+        });
+        return changed.count === 1;
+    } catch {
+        // Unknown commit outcome: the caller must not issue any new claim.
+        return false;
     }
 }
 
