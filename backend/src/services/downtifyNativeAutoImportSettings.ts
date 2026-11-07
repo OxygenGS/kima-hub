@@ -60,6 +60,7 @@ export async function getNativeAutoImportStatus(
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
         awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        storageReady: false,
     };
     const summary = await getNativeImportSummary({
         kimaUserId: adminId,
