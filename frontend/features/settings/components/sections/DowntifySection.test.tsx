@@ -258,13 +258,14 @@ describe("Simple Downtify Settings section", () => {
         expect(api.get).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps native importing OFF until the operator confirms the one-time cutover", async () => {
+    it("keeps native importing OFF until the administrator confirms storage and single-writer safety", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
         await mount();
         const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
         expect(toggle?.checked).toBe(false);
         expect(toggle?.disabled).toBe(true);
-        expect(host.textContent).toContain("I have stopped any old importer");
+        expect(host.textContent).toContain("New installation: no previous importer to stop.");
+        expect(host.textContent).toContain("I verified the music storage is mounted and writable");
         expect(api.post).not.toHaveBeenCalled();
         const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
         await act(async () => { consent?.click(); });
@@ -290,6 +291,40 @@ describe("Simple Downtify Settings section", () => {
         expect(host.textContent).not.toContain("dtfy_");
     });
 
+    it("explains incomplete Downtify source snapshots without revealing upstream details", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
+        await mount();
+        const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
+        await act(async () => { consent?.click(); });
+        vi.mocked(api.post).mockRejectedValueOnce({
+            response: { data: { state: "source_unavailable", privateToken: "dtfy_private_secret" } },
+        });
+        await act(async () => {
+            host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.click();
+        });
+        expect(host.querySelector('[role="alert"]')?.textContent)
+            .toContain("Downtify cannot provide a complete initial snapshot");
+        expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked)
+            .toBe(false);
+        expect(host.textContent).not.toContain("dtfy_private_secret");
+    });
+
+    it("explains storage configuration failures on any deployment without disclosing paths", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
+        await mount();
+        const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
+        await act(async () => { consent?.click(); });
+        vi.mocked(api.post).mockRejectedValueOnce({
+            response: { data: { state: "storage_unavailable", path: "/private/music" } },
+        });
+        await act(async () => {
+            host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.click();
+        });
+        expect(host.querySelector('[role="alert"]')?.textContent)
+            .toContain("Kima cannot verify the music storage.");
+        expect(host.textContent).not.toContain("/private/music");
+    });
+
     it("explains the missing music disk without disclosing private paths", async () => {
         vi.mocked(api.get).mockImplementation(async (url) => {
             if (url === "/downtify-integration") return { ...paired, enabled:true };
@@ -305,6 +340,20 @@ describe("Simple Downtify Settings section", () => {
         );
         expect(host.querySelector('[role="alert"]')?.textContent)
             .toContain("Music storage is unavailable");
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("warns about a missing existing music volume even while importing is paused", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") return {
+                ...nativeOff, baselineReady: true, storageReady: false,
+            };
+            return none;
+        });
+        await mount();
+        expect(host.querySelector('[role="alert"]')?.textContent)
+            .toContain("Music storage is unavailable.");
         expect(api.post).not.toHaveBeenCalled();
     });
 
