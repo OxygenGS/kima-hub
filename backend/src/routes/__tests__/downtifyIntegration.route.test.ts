@@ -83,11 +83,11 @@ beforeEach(() => {
     mockRuntime.mockResolvedValue({ KIMA_DOWNTIFY_DEVICE_TOKEN: TOKEN });
     mockNativeStatus.mockResolvedValue({
         state: "paused", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        awaitingImport: 0, needsReview: 0,
     });
     mockNativeControl.mockResolvedValue({
         state: "enabled", enabled: true, baselineReady: true,
-        awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+        awaitingImport: 0, needsReview: 0,
     });
     mockImportReadiness.mockResolvedValue({
         state: "original_stream_verified", serverVerified: true,
@@ -215,7 +215,7 @@ describe("Downtify Settings admin-only API", () => {
         const status = await request(app).get(url + "/native-import")
             .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
         expect(status.status).toBe(200);
-        expect(status.body).toMatchObject({ enabled: false, legacyHostVerified: false });
+        expect(status.body).toMatchObject({ enabled: false });
         expect(status.headers["cache-control"]).toBe("no-store");
         const bad = await post("/native-import", {
             enabled: true, acknowledgeSingleWriter: true,
@@ -231,7 +231,7 @@ describe("Downtify Settings admin-only API", () => {
         });
         expect(response.status).toBe(200);
         expect(response.body).toMatchObject({
-            enabled: true, baselineReady: true, legacyHostVerified: false,
+            enabled: true, baselineReady: true,
         });
         expect(mockNativeControl).toHaveBeenCalledWith("admin-1", true, true);
         expect(JSON.stringify(response.body)).not.toContain(TOKEN);

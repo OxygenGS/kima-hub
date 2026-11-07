@@ -29,7 +29,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 - **Admin-managed pairing:** verify the actual Downtify server and device account before storing the token encrypted at rest.
 - **Four opt-in switches:** owner-scoped remote queue, saved Spotify track requests, manually confirmed single-track submission and manual remote-status checks.
 - **Safe migration:** existing Docker-managed Downtify settings remain separate until explicitly migrated. Re-pairing turns all functions OFF.
-- **No import takeover:** the existing music library, external Importer v5 and storage mounts are unchanged.
+- **No import takeover:** existing music libraries, external import services and storage mounts are unchanged.
 
 [Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0) · [Downtify setup](docs/downtify-settings.md) · [Changelog](CHANGELOG.md)
 
@@ -65,7 +65,9 @@ The **Downloads** screen shows permission-filtered jobs and saved Spotify track 
 | Manual remote checks | Read owner-bound remote job state. A completed Downtify job is **not** proof that Kima imported the recording. |
 | Advanced audio evidence | Read-only source/header/decode/tag checks exist for operator-managed environments, but are **not unlocked by the browser pairing**. They require a separately reviewed read-only staging mount. |
 
-**Not included:** automatic album/playlist dispatch through Downtify, automatic SSD-to-DAS copying, scanner/index receipts, file deletion or replacement of external Importer v5. Every new switch starts **OFF**.
+**Not included in published v1.19.0:** automatic library importing, album/playlist dispatch, scanner/index receipts, source deletion or replacement of any external importer. Every new switch starts **OFF**.
+
+**In development:** optional native Downtify auto-import is being tested as a product feature for supported Docker installations, without a fixed host, NAS or Proxmox dependency. It requires explicit opt-in, verified music storage, an exact paired account, audio integrity checks and safe single-writer operation. It is **not released** and must not be enabled as a production migration without an independently verified mounted-volume canary. [Development architecture and generic setup](docs/downtify-native-auto-import.md).
 
 [Downtify setup and limitations](docs/downtify-settings.md) · [Download Manager design](docs/unified-download-manager.md) · [User permissions](docs/user-permissions.md)
 
@@ -109,7 +111,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-comp
 - v1.19.0 adds the `DowntifyIntegration` PostgreSQL table. A **container downgrade alone does not reverse migrations**. Rolling back across them requires the pre-upgrade data backup.
 - Preserve user permissions, original media mounts, third-party import services and any reverse-proxy restrictions. Use HTTPS for remote access.
 - The native AMD64/ARM64 builds and configured security gates passed. **Residual HIGH/CRITICAL dependency advisories without published fixes remain**, and a passing scan does not prove the container is vulnerability-free.
-- No release action in this repository changes a running Proxmox, Docker or NAS installation.
+- No release action in this repository changes a user's running host, Docker installation or storage mounts.
 
 [Published image security assessment](docs/image-security.md) · [v1.19.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879) · [Stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) · [Safe updates and rollback](docs/safe-aio-updates.md) · [Security policy](SECURITY.md)
 

@@ -44,7 +44,6 @@ type NativeAutoImportStatus = {
     baselineReady: boolean;
     awaitingImport: number;
     needsReview: number;
-    legacyHostVerified: false;
     storageReady: boolean;
 };
 const importMessages: Record<NativeImportState, TranslationKey> = {
@@ -64,6 +63,18 @@ const importMessages: Record<NativeImportState, TranslationKey> = {
     original_stream_verified: "Original audio transfer is reachable. Automatic importing is not enabled yet.",
 };
 
+
+/** Only known, sanitized server states may be shown; never display raw errors. */
+const nativeSafeMessage: Record<string, TranslationKey> = {
+    not_paired: "Connect Downtify before enabling automatic import.",
+    unauthorized: "Only the linked administrator can manage automatic import.",
+    pairing_disabled: "Enable the Downtify connection before automatic import.",
+    confirmation_required: "Confirm the music storage, backup and other-importer checks first.",
+    source_unavailable: "Downtify cannot provide a complete initial snapshot. Check the connection and retry.",
+    invalid_baseline: "Downtify returned inconsistent historical downloads. Automatic import remains off.",
+    changed_during_setup: "Downtify pairing changed during setup. Reload settings and try again.",
+    storage_unavailable: "Kima cannot verify the music storage. Check its mount and write permissions.",
+};
 
 const disabled: DowntifyControls = {
     enabled: false, spotifyIntentsEnabled: false,
@@ -154,6 +165,7 @@ export function DowntifySection() {
     const [nativeAck, setNativeAck] = useState(false);
     const [nativeBusy, setNativeBusy] = useState(false);
     const [nativeFeedback, setNativeFeedback] = useState<TranslationKey | null>(null);
+    const [nativeError, setNativeError] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -252,10 +264,12 @@ export function DowntifySection() {
     const toggleNativeAutoImport = async (enabled: boolean) => {
         if (nativeBusy || !ownerMatches || !nativeStatus || pending) return;
         if (enabled && !nativeAck) {
-            setNativeFeedback("Confirm that the old importer has been stopped first.");
+            setNativeError(true);
+            setNativeFeedback("Confirm the music storage, backup and other-importer checks first.");
             return;
         }
         setNativeBusy(true);
+        setNativeError(false);
         setNativeFeedback(null);
         try {
             const updated = await api.post<NativeAutoImportStatus>(
@@ -267,8 +281,10 @@ export function DowntifySection() {
             setNativeFeedback(
                 enabled ? "Automatic importing enabled." : "Automatic importing paused.",
             );
-        } catch {
-            setNativeFeedback("Could not change automatic import settings.");
+        } catch (err) {
+            setNativeError(true);
+            setNativeFeedback(nativeSafeMessage[errorState(err)] ||
+                "Could not change automatic import settings.");
         } finally {
             setNativeBusy(false);
         }
@@ -468,31 +484,39 @@ export function DowntifySection() {
                                                 onChange={toggleNativeAutoImport} />
                                         </SettingsRow>
                                         {nativeStatus && !nativeStatus.enabled && (
+                                            <p className="text-xs text-[var(--text-muted)]">
+                                                {t("New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.")}
+                                            </p>
+                                        )}
+                                        {nativeStatus && !nativeStatus.enabled && (
                                             <label className="flex items-start gap-3 rounded-lg border border-white/10 p-3 text-xs text-[var(--text-secondary)]">
                                                 <input type="checkbox" id="downtify-native-cutover-ack"
                                                     checked={nativeAck}
                                                     onChange={e => setNativeAck(e.target.checked)}
                                                     disabled={nativeBusy || pending || !status?.enabled}
                                                     className="mt-0.5" />
-                                                {t("I have stopped any old importer writing to the same library and verified my backup.")}
+                                                {t("I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.")}
                                             </label>
                                         )}
                                         {nativeStatus && (
                                             <p className="text-xs text-[var(--text-muted)]">
                                                 {nativeStatus.enabled
-                                                    ? t("Automatic import is active.")
+                                                    ? nativeStatus.storageReady
+                                                        ? t("Automatic import is active.")
+                                                        : t("Automatic import is paused because the verified music storage is unavailable.")
                                                     : t("Automatic import is currently off.")}
                                                 {" · "}{t("Waiting")}: {nativeStatus.awaitingImport}
                                                 {" · "}{t("Needs review")}: {nativeStatus.needsReview}
                                             </p>
                                         )}
-                                        {nativeStatus?.enabled && nativeStatus.storageReady === false && (
+                                        {nativeStatus?.baselineReady && nativeStatus.storageReady === false && (
                                             <p role="alert" className="text-xs text-amber-300">
                                                 {t("Music storage is unavailable. Automatic importing is paused until the correct disk returns.")}
                                             </p>
                                         )}
                                         {nativeFeedback && (
-                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                            <p role={nativeError ? "alert" : "status"}
+                                                className={"text-xs " + (nativeError ? "text-red-300" : "text-[var(--text-secondary)]")}>
                                                 {t(nativeFeedback)}
                                             </p>
                                         )}

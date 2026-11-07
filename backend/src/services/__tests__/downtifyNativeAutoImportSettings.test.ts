@@ -93,7 +93,7 @@ describe("One-switch Downtify native import activation", () => {
         const response = await getNativeAutoImportStatus(admin);
         expect(response).toEqual({
             state: "paused", enabled: false, baselineReady: false,
-            awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+            awaitingImport: 0, needsReview: 0,
             storageReady: true,
         });
         expect(JSON.stringify(response)).not.toContain(serverId);
@@ -130,7 +130,7 @@ describe("One-switch Downtify native import activation", () => {
         const result = await setNativeAutoImport(admin, true, true);
         expect(result).toEqual({
             state: "enabled", enabled: true, baselineReady: true,
-            awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+            awaitingImport: 0, needsReview: 0,
             storageReady: true,
         });
         expect(queue).toHaveBeenCalledTimes(1);

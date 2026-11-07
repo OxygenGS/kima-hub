@@ -1,10 +1,11 @@
-# Native Downtify auto-import — one control, conservative cutover
+# Native Downtify auto-import — portable application integration
 
 **Development branch only. Not published or installed on any running Kima
-instance.** This feature replaces a separately managed downloader import
-script only **after** an explicit, independently tested single-writer
-cutover. The normal UI is designed to require no script edits or command
-line to use it after initial setup.
+instance.** This optional integration is designed for ordinary Kima Docker installations,
+not one particular server or a Proxmox script. Fresh installations need no
+legacy importer or cutover. Existing installations with another media importer
+must complete a safe single-writer cutover before enabling native import.
+The normal Settings experience needs no host-script edits.
 
 ## Intended user experience
 
@@ -12,10 +13,12 @@ line to use it after initial setup.
 2. Enable **Downloads bekijken** or the relevant individual-track requests.
    This is independent from importing the remote file.
 3. Turn on **Gedownloade muziek automatisch toevoegen**.
-   The first activation requires confirming that any existing external
-   importer has been stopped and a tested complete Kima `/data` backup
-   is available. Kima cannot discover or disable external systemd timers
-   on other hosts. The acknowledgment is not technical proof.
+   The administrator confirms that music storage is mounted and writable,
+   that an existing library has a recoverable backup, and that no other
+   importer writes to the same library. **Fresh installs** have no previous
+   importer to stop. **Migrating installs** must stop and prevent automatic
+   restart of other importers. Kima cannot inspect other containers or
+   host services, so this acknowledgment is not independent proof.
 4. Kima creates an owner-bound baseline of already completed downloads,
    then imports only newly observed individual Spotify tracks. Album
    batches and arbitrary remote files are not automatically ingested.
@@ -62,8 +65,8 @@ line to use it after initial setup.
 A Docker bind mount can remain accessible as an empty local directory when
 its external backing disk disappears. Before the **first explicit enable**,
 Kima creates a private `.kima-native-music-volume` UUID marker inside the
-configured music root, after the administrator confirms the actual disk is
-mounted. The UUID is stored with the paired Downtify owner in PostgreSQL
+configured music root, after the administrator confirms the intended local or network music
+volume is mounted. The UUID is stored with the paired Downtify owner in PostgreSQL
 and reset whenever the pairing changes.
 
 The import worker checks that exact marker **before** polling remote work
@@ -73,8 +76,9 @@ permissions or an absent filesystem prevents importing. Verification never
 creates a missing marker or fallback music directory.
 
 A UUID marker is a continuity check, **not** independent proof that the
-correct disk was selected the first time. Production activation still needs
-a tested storage/mount check and a verified backup. The hidden marker is
+correct disk was selected the first time. An existing installation needs
+an independently verified app-data backup, and every installation must
+verify its intended music mount before enabling. The hidden marker is
 not an audio file and must be retained when pausing or rolling back native
 import. Never delete the source music or original host mounts.
 
@@ -111,18 +115,54 @@ code. Before enabling on an actual system, require:
 1. Native AMD64 and ARM64 builds, security and Prisma upgrade/restore
    checks, end-to-end tests, an externally mounted music-volume canary
    and an independently verified cold copy of the original `/data`.
-2. Confirm existing external import scripts/timers targeting **the same
-   library are stopped and prevented from automatically restarting**.
-   Save their definitions first and leave scripts backed up.
+2. **Migration only:** confirm existing external import services, containers
+   or scheduled tasks targeting the same library are stopped and prevented
+   from restarting. Save their definitions and backup. **Fresh installations:**
+   no external importer is required; skip this step.
 3. With the native setting OFF, verify Downtify connectivity, storage
    directory permissions, exact user identity and a direct original sample.
 4. Enable the native importer and download **one new test song**. Verify
    identical bytes, no duplicate copy, the Kima index, playback and
    surviving a restart/missing-mount simulation.
-5. Only after a successful canary and tested recovery remove the obsolete
-   external importer service/timer/script. Do **not** remove its music,
+5. **Migration only:** after a successful canary and tested recovery,
+   retire the obsolete external importer service/container/schedule. Do **not** remove its music,
    download directory, filesystem mounts, historical backups or audit data.
 
 Rolling back across the additive PostgreSQL migrations requires restoring
 the independently verified **pre-upgrade `/data`** backup; changing the
 Docker tag alone is not a database rollback.
+
+## Installation contract for everyone
+
+- **Kima:** a supported self-hosted Docker installation with a persistent
+  application-data volume and a writable music-library mount, normally
+  `/music` inside the container. The host path can be any user-selected local
+  disk, external drive or network share that meets the safety conditions.
+- **Downtify:** a separately installed compatible API v1 service, reachable
+  **from Kima's container**. On a trusted shared Docker network the example
+  `http://downtify:8000` can work. Do not use `localhost` to address a
+  different container or host. A paired-device token is required.
+- **Storage capability:** no-replace atomic hardlinks must work between
+  Kima's private temporary file and the final library location. Some
+  network shares do not support this, and native import must then refuse
+  publication rather than degrade to an unsafe copy.
+- **Permissions and evidence:** the mount must exist before activation,
+  not be an unsafe symlink or writable by untrusted users, and support
+  the full-audio SHA-256, container, FFmpeg, ISRC and duration checks.
+- **No personal configuration:** no fixed IP address, host name, storage
+  path, Proxmox CT ID, legacy script or shared Downtify staging mount
+  is part of the feature.
+
+## Common setup failures
+
+| Kima status | Safe next step |
+| --- | --- |
+| Connection disabled or unpaired | Pair Downtify and enable the connection first. |
+| Complete initial queue/library snapshot unavailable | Check the trusted server URL, device pairing, API compatibility and full feed. Import remains OFF. |
+| Historical downloads inconsistent | Resolve ambiguous remote jobs rather than creating a guessed baseline. |
+| Music storage cannot be verified | Check the real backing mount, permissions and filesystem capability. Do not select an empty Docker fallback directory. |
+| Previously registered music volume missing | Restore the same volume and its hidden UUID marker. Never recreate the proof on an empty replacement. |
+| A track needs review | Keep both original and published media; an uncertain write is not automatically retried. |
+
+The Settings page displays only sanitized error categories, not private
+filesystem paths, device tokens or the Downtify library feed.
