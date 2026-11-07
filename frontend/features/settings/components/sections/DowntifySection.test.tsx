@@ -29,6 +29,10 @@ const paired = {
     url: "http://downtify:8000/", username: "remote-owner",
     ownerMatches: true, tokenConfigured: true,
 };
+const nativeOff = {
+    state: "paused", enabled: false, baselineReady: false,
+    awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+};
 let host: HTMLDivElement;
 let root: Root;
 
@@ -52,7 +56,8 @@ const choose = async (value: "off" | "queue" | "requests" | "downloads") => {
 
 beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.get).mockResolvedValue(none);
+    vi.mocked(api.get).mockImplementation(async (url) =>
+        url === "/downtify-integration/native-import" ? nativeOff : none);
     vi.mocked(api.post).mockResolvedValue({ state: "connected", identityVerified: true, version: "3.2.0" });
     host = document.createElement("div");
     document.body.appendChild(host);
@@ -212,21 +217,29 @@ describe("Simple Downtify Settings section", () => {
         });
         await mount();
         expect(host.textContent).toContain("Automatic library import");
-        expect(host.textContent).toContain("automatic importer is not available yet");
+        expect(host.textContent).toContain("Automatically add downloaded music");
+        const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
+        expect(toggle?.checked).toBe(false);
+        expect(toggle?.disabled).toBe(true);
         expect(button("Test direct audio transfer")?.disabled).toBe(false);
-        expect(api.get).toHaveBeenCalledTimes(1);
+        expect(api.get).toHaveBeenCalledTimes(2);
         expect(api.post).not.toHaveBeenCalled();
     });
 
     it("reports a safe original audio probe without enabling import or exposing credentials", async () => {
-        vi.mocked(api.get).mockResolvedValueOnce({
-            ...paired, enabled: true,
-        }).mockResolvedValueOnce({
-            state: "original_stream_verified",
-            originalStreamChecked: true,
-            autoImportAvailable: false,
-            importerCutoverAuthorized: false,
-            filesChanged: false,
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") return nativeOff;
+            if (url === "/downtify-integration/import-readiness") {
+                return {
+                    state: "original_stream_verified",
+                    originalStreamChecked: true,
+                    autoImportAvailable: false,
+                    importerCutoverAuthorized: false,
+                    filesChanged: false,
+                };
+            }
+            return none;
         });
         await mount();
         await click("Test direct audio transfer");
@@ -242,6 +255,68 @@ describe("Simple Downtify Settings section", () => {
         await mount();
         expect(button("Test direct audio transfer")?.disabled).toBe(true);
         expect(api.get).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps native importing OFF until the operator confirms the one-time cutover", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
+        await mount();
+        const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
+        expect(toggle?.checked).toBe(false);
+        expect(toggle?.disabled).toBe(true);
+        expect(host.textContent).toContain("I have stopped any old importer");
+        expect(api.post).not.toHaveBeenCalled();
+        const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
+        await act(async () => { consent?.click(); });
+        expect(toggle?.disabled).toBe(false);
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("enables one-switch import with exactly one explicit confirmation, never silently", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
+        await mount();
+        const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
+        await act(async () => { consent?.click(); });
+        const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
+        vi.mocked(api.post).mockResolvedValueOnce({
+            ...nativeOff, state: "enabled", enabled: true, baselineReady: true,
+        });
+        await act(async () => { toggle?.click(); });
+        expect(api.post).toHaveBeenCalledWith("/downtify-integration/native-import", {
+            enabled: true, acknowledgeSingleWriter: true,
+        });
+        expect(host.textContent).toContain("Automatic importing enabled.");
+        expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked).toBe(true);
+        expect(host.textContent).not.toContain("dtfy_");
+    });
+
+    it("pauses a running native importer with one click and no new confirmation", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") {
+                return { ...nativeOff, state: "enabled", enabled: true, baselineReady: true };
+            }
+            return none;
+        });
+        await mount();
+        const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
+        expect(toggle?.checked).toBe(true);
+        expect(toggle?.disabled).toBe(false);
+        vi.mocked(api.post).mockResolvedValueOnce({ ...nativeOff, baselineReady: true });
+        await act(async () => { toggle?.click(); });
+        expect(api.post).toHaveBeenCalledWith("/downtify-integration/native-import", {
+            enabled: false, acknowledgeSingleWriter: false,
+        });
+        expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked).toBe(false);
+    });
+
+    it("keeps native import strictly unavailable to a different Kima administrator", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce({
+            ...paired, ownerMatches: false,
+        });
+        await mount();
+        expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.disabled).toBe(true);
+        expect(host.querySelector("#downtify-native-cutover-ack")).toBeNull();
+        expect(api.get).not.toHaveBeenCalledWith("/downtify-integration/native-import");
     });
 
     it("redacts failures instead of displaying private remote tokens or errors", async () => {
