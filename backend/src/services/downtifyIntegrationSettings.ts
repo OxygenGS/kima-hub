@@ -229,6 +229,7 @@ export async function pairDowntify(
         // a fresh, explicitly reviewed baseline before any new cutover.
         nativeImportEnabled: false, nativeImportBaselineAt: null,
         nativeImportLibraryCursor: null,
+        nativeImportMountProof: null,
     };
     if (previous) {
         // A second administrator cannot win an ownership race after the
