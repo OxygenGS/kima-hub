@@ -56,4 +56,4 @@ Kima has no telemetry and sends nothing to its author. It contacts outside servi
 
 ## Image vulnerability reports
 
-The assembled v1.11.0 build still has reported Debian package vulnerabilities with no scanner-listed fixed versions; these are not the same as known exploitable application flaws. See [image security and residual risks](image-security.md) before exposing a server to untrusted networks.
+The published v1.19.0 AMD64/ARM64 preflight found remaining HIGH/CRITICAL advisories without scanner-listed fixed versions. These findings are not automatically exploitable in every deployment, but neither are they proven safe. See the [current image-security report](image-security.md) and [security policy](../SECURITY.md) before exposing a server to untrusted networks.
