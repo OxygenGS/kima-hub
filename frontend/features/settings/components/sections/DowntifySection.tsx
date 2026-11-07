@@ -33,6 +33,9 @@ type NativeImportState = "disabled" | "unbound" | "misconfigured" | "music_unava
     "stream_unavailable" | "header_unverified" | "original_stream_verified";
 type NativeImportReadiness = {
     state: NativeImportState;
+    serverVerified: boolean;
+    accountVerified: boolean;
+    musicRootAccessible: boolean;
     originalStreamChecked: boolean;
     autoImportAvailable: false;
     importerCutoverAuthorized: false;
@@ -60,8 +63,17 @@ const importMessages: Record<NativeImportState, TranslationKey> = {
     no_library_match: "No exact library file matched an owned completed download.",
     stream_unavailable: "Downtify did not provide the required original audio range.",
     header_unverified: "The remote audio format could not be verified.",
-    original_stream_verified: "Original audio transfer is reachable. Automatic importing is not enabled yet.",
+    original_stream_verified: "Original audio transfer is reachable. This check does not import music.",
 };
+
+/** Read-only evidence from the API; none of these checks authorizes disk writes. */
+const setupChecks: { key: "musicRootAccessible" | "serverVerified" |
+    "accountVerified" | "originalStreamChecked"; label: TranslationKey }[] = [
+    { key: "musicRootAccessible", label: "Music directory access" },
+    { key: "serverVerified", label: "Downtify server identity" },
+    { key: "accountVerified", label: "Paired Downtify account" },
+    { key: "originalStreamChecked", label: "Original audio sample" },
+];
 
 
 /** Only known, sanitized server states may be shown; never display raw errors. */
@@ -161,6 +173,7 @@ export function DowntifySection() {
     const [error, setError] = useState(false);
     const [importChecking, setImportChecking] = useState(false);
     const [importFeedback, setImportFeedback] = useState<TranslationKey | null>(null);
+    const [importReadiness, setImportReadiness] = useState<NativeImportReadiness | null>(null);
     const [nativeStatus, setNativeStatus] = useState<NativeAutoImportStatus | null>(null);
     const [nativeAck, setNativeAck] = useState(false);
     const [nativeBusy, setNativeBusy] = useState(false);
@@ -233,6 +246,8 @@ export function DowntifySection() {
         setControls(controlsFromStatus(result));
         setToken("");
         setShowPairing(false);
+        setImportReadiness(null);
+        setImportFeedback(null);
         setAck(false);
         setFeedback(t("Downtify account paired. All features remain disabled."));
     });
@@ -243,17 +258,21 @@ export function DowntifySection() {
         });
         setStatus(result);
         setControls(controlsFromStatus(result));
+        setImportReadiness(null);
+        setImportFeedback(null);
         setAck(false);
         setFeedback(t("Downtify settings saved."));
     });
     const checkNativeImport = async () => {
         if (importChecking || pending || !ownerMatches) return;
         setImportChecking(true);
+        setImportReadiness(null);
         setImportFeedback(null);
         try {
             const result = await api.get<NativeImportReadiness>("/downtify-integration/import-readiness");
             // Even a successful 64-byte audio probe is NOT a file import or
             // approval to shut down a different writer on the music volume.
+            setImportReadiness(result);
             setImportFeedback(importMessages[result.state] || importMessages.unavailable);
         } catch {
             setImportFeedback(importMessages.unavailable);
@@ -523,12 +542,30 @@ export function DowntifySection() {
                                         <button type="button" onClick={checkNativeImport}
                                             disabled={!ownerMatches || importChecking || pending || !status?.enabled}
                                             className="rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-40">
-                                            {importChecking ? t("Checking audio transfer...") : t("Test direct audio transfer")}
+                                            {importChecking ? t("Checking Downtify setup...") : t("Check Downtify setup")}
                                         </button>
                                         {importFeedback && (
                                             <p role="status" className="text-xs text-[var(--text-secondary)]">
                                                 {t(importFeedback)}
                                             </p>
+                                        )}
+                                        {importReadiness && (
+                                            <div className="space-y-2" aria-label={t("Read-only setup checks")}>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {t("These checks do not import music or confirm that another importer is stopped.")}
+                                                </p>
+                                                <ul className="space-y-1 text-xs">
+                                                    {setupChecks.map(check => (
+                                                        <li key={check.key} className="flex flex-wrap items-center justify-between gap-2">
+                                                            <span className="text-[var(--text-secondary)]">{t(check.label)}</span>
+                                                            <span className={importReadiness[check.key] === true
+                                                                ? "text-green-300" : "text-[var(--text-muted)]"}>
+                                                                {t(importReadiness[check.key] === true ? "Verified" : "Not verified")}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
