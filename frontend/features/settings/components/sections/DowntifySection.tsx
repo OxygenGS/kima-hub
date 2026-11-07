@@ -297,6 +297,7 @@ export function DowntifySection() {
                                                     <input type="radio" name="downtify-usage" value={option.value}
                                                         checked={usage === option.value}
                                                         onChange={() => chooseUsage(option.value)}
+                                                        disabled={!ownerMatches || pending}
                                                         className="mt-1 accent-[var(--brand)]" />
                                                     <span className="space-y-1">
                                                         <span className="block text-sm font-medium text-white">{t(option.label)}</span>
