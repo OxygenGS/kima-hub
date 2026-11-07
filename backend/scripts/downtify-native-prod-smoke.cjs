@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * Production-compiled isolated Downtify audio canary.
+ * Runs under a normal Node 24 process WITHOUT the Jest music-metadata mock.
+ * Uses one synthetic FLAC and a private temporary /music stand-in. Does not
+ * read, modify, mount or contact the actual Kima music library or Downtify.
+ */
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
+
+const { verifyNativeTemporaryRecording } = require("../dist/services/downtifyNativeAudioVerification.js");
+const { publishNativeAudio } = require("../dist/services/downtifyAtomicPublisher.js");
+const { nativeImportDestination, ensureNativeImportDestination } =
+    require("../dist/services/downtifyNativeImportWorkspace.js");
+
+const spotifyId = "0123456789ABCDEFGHIJKL";
+const isrc = "USABC1234567";
+let scratch = "";
+
+async function main() {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), "kima-native-prod-canary-"));
+    const root = path.join(scratch, "music");
+    const original = path.join(scratch, "original.flac");
+    fs.mkdirSync(root, { mode: 0o700 });
+    const ffmpeg = spawnSync("/usr/bin/ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+        "-metadata", "ISRC=" + isrc,
+        "-c:a", "flac", "-y", original,
+    ], { timeout: 20000 });
+    if (ffmpeg.status !== 0 || ffmpeg.error) {
+        throw new Error("FFmpeg cannot generate synthetic source");
+    }
+    fs.chmodSync(original, 0o600);
+    const bytes = fs.readFileSync(original);
+    const expected = {
+        spotifyId, expectedSpotifyId: spotifyId,
+        isrc, durationMs: 2000, extension: ".flac",
+    };
+    const source = {
+        bytes: bytes.length,
+        sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+    };
+
+    // Crucially this invokes the production-compiled default metadata
+    // importer: if an ESM-only music-metadata update breaks CJS runtime,
+    // this smoke test fails even if all mocked Jest tests are green.
+    const checked = await verifyNativeTemporaryRecording(original, expected, source);
+    if (checked.state !== "verified" || !checked.verifiedForPublication) {
+        throw new Error("Compiled production FLAC verification failed: " + checked.state);
+    }
+    const wrong = await verifyNativeTemporaryRecording(original, {
+        ...expected, isrc: "USZZZ1234567",
+    }, source);
+    if (wrong.state !== "recording_needs_review" || wrong.verifiedForPublication) {
+        throw new Error("Wrong recording ISRC was not rejected");
+    }
+
+    const relative = nativeImportDestination(
+        "Synthetic Artist", "Full Audio Canary", spotifyId, ".flac",
+    );
+    if (!relative) throw new Error("Could not derive safe Singles destination");
+    const prepared = await ensureNativeImportDestination(root, relative);
+    if (prepared.state !== "ready") {
+        throw new Error("Synthetic music root was not accepted");
+    }
+    const input = () => ({
+        musicRoot: root, relativeTarget: relative,
+        expectedBytes: bytes.length,
+        chunks: fs.createReadStream(original, { highWaterMark: 8192 }),
+        verifyTempFile: async (file, proof) => (
+            await verifyNativeTemporaryRecording(file, expected, proof)
+        ).verifiedForPublication,
+    });
+    const published = await publishNativeAudio(input());
+    if (published.state !== "published" || published.sha256 !== source.sha256 ||
+        published.libraryImportVerified || !published.filesPublished) {
+        throw new Error("Verified atomic native publication failed: " + published.state);
+    }
+    const local = path.join(root, relative);
+    if (!fs.readFileSync(local).equals(bytes)) {
+        throw new Error("Original bytes changed during atomic publication");
+    }
+    const before = fs.statSync(local);
+    const duplicate = await publishNativeAudio(input());
+    const after = fs.statSync(local);
+    if (duplicate.state !== "already_present_same_bytes" ||
+        duplicate.filesPublished || before.ino !== after.ino) {
+        throw new Error("No-overwrite native duplicate guard failed");
+    }
+    const files = fs.readdirSync(path.dirname(local));
+    if (files.some(name => name.startsWith(".kima-import-"))) {
+        throw new Error("Temporary media file leaked after publication");
+    }
+    process.stdout.write("Native Downtify compiled-audio canary passed (isolated; no scanner receipt)\n");
+}
+
+main().catch(error => {
+    process.stderr.write("Native Downtify compiled-audio canary failed: " +
+        String(error instanceof Error ? error.message : "unknown error") + "\n");
+    process.exitCode = 1;
+}).finally(() => {
+    if (scratch) {
+        fs.rmSync(scratch, { recursive: true, force: true });
+    }
+});
