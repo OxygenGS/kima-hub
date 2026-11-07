@@ -100,13 +100,15 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             remoteUserId: settings.expectedUserId,
         };
         const env = await getDowntifyRuntimeEnv();
-        const queue = await getVerifiedNativeImportQueue(owner.kimaUserId, env);
-        if (queue.state !== "ready") return outcome("unavailable");
-
+        // Read the library cursor BEFORE the queue, so a remote track
+        // completed between the two reads is considered on a later cycle
+        // rather than advancing the cursor past a missing queue receipt.
         const library = await getVerifiedNativeLibraryChanges(
             owner.kimaUserId, settings.nativeImportLibraryCursor, env,
         );
         if (library.state !== "ready") return outcome("unavailable");
+        const queue = await getVerifiedNativeImportQueue(owner.kimaUserId, env);
+        if (queue.state !== "ready") return outcome("unavailable");
         const observed = await discoverNativeCompleted(owner, queue.queue, {
             cursor: library.cursor, full: library.full, tracks: library.tracks,
         });
