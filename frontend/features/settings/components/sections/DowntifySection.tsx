@@ -191,7 +191,10 @@ export function DowntifySection() {
             description={t("Manage optional services without changing your existing music importer.")}
         >
             {!loaded && <p role="status" className="py-3 text-sm text-[var(--text-muted)]">{t("Loading...")}</p>}
-            {loaded && (
+            {loaded && status === null && (
+                <p role="alert" className="py-2 text-sm text-red-300">{feedback || t("Could not load Downtify settings.")}</p>
+            )}
+            {loaded && status !== null && (
                 <div className="space-y-5">
                     {legacyEnv ? (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
