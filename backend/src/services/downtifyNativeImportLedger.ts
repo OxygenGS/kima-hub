@@ -11,7 +11,10 @@
  * Once claimed, no automatic retry after worker crash, timeout, file write,
  * scan outage or uncertain outcome. Manual reconciliation is mandatory.
  */
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { constants as fsFlags, promises as fs } from "fs";
+import * as path from "path";
+import { config } from "../config";
 import { prisma } from "../utils/db";
 
 export type NativeImportStatus =
@@ -304,4 +307,181 @@ export async function getNativeImportSummary(
         inReview: count("claimed") + count("review") + count("uncertain") +
             count("published_pending_scan"),
     };
+}
+
+
+/**
+ * Record a published file only after the verified source has been atomically
+ * installed by the no-overwrite publisher. This stores evidence, not a Kima
+ * library receipt. No operation can reset a previous state to "ready".
+ */
+export interface NativePublishedFile {
+    expectedBytes: number;
+    relativeTarget: string;
+    fullSha256: string;
+    remoteLibraryTrackId: string;
+}
+const SHA256 = /^[0-9a-f]{64}$/;
+const TRACK_ID = /^t[0-9a-f]{16}$/;
+const ALLOWED_AUDIO = new Set([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"]);
+function safeLocalTarget(p: string): boolean {
+    if (typeof p !== "string" || p.length > 1024 || path.isAbsolute(p) ||
+        p.includes("\\") || p.includes("\0")) return false;
+    const parts = p.split("/");
+    return parts.length >= 3 && parts.length <= 8 &&
+        parts[0] === "Singles" &&
+        parts.every(x => x.length > 0 && x.length <= 180 &&
+            x !== "." && x !== ".." && !/[<>:"\\|?*\u0000-\u001f\u007f]/.test(x)) &&
+        ALLOWED_AUDIO.has(path.posix.extname(p).toLowerCase());
+}
+
+export async function recordNativePublished(
+    owner: PinnedImportOwner, id: string, token: string, file: NativePublishedFile,
+): Promise<boolean> {
+    if (!validOwner(owner) || !/^[0-9a-f-]{36}$/.test(token) ||
+        !Number.isSafeInteger(file.expectedBytes) ||
+        file.expectedBytes < 64 || file.expectedBytes > 256 * 1024 * 1024 ||
+        !safeLocalTarget(file.relativeTarget) ||
+        !SHA256.test(file.fullSha256) ||
+        !TRACK_ID.test(file.remoteLibraryTrackId)) return false;
+    try {
+        const changed = await prisma.downtifyNativeImport.updateMany({
+            where: {
+                id, status: "claimed", claimToken: token,
+                ownerKimaUserId: owner.kimaUserId,
+                remoteServerId: owner.remoteServerId,
+                remoteUserId: owner.remoteUserId,
+            },
+            data: {
+                status: "published_pending_scan",
+                remoteLibraryTrackId: file.remoteLibraryTrackId,
+                expectedBytes: file.expectedBytes,
+                outputRelativePath: file.relativeTarget,
+                fullSha256: file.fullSha256,
+            },
+        });
+        return changed.count === 1;
+    } catch {
+        // An uncertain DB acknowledgement must be reviewed rather than
+        // automatically re-publishing a file that might already be on disk.
+        return false;
+    }
+}
+
+export type NativeIndexedReceipt =
+    | { state: "imported"; indexedTrackId: string }
+    | { state: "not_indexed" | "not_verified" | "blocked" };
+
+/**
+ * Confirm a Kima scanner receipt plus the EXACT physically present file hash,
+ * not merely remote 'done' or the publisher's returned success flag.
+ *
+ * The file is opened O_NOFOLLOW; all directory ancestors are checked, and
+ * its inode/size/timestamps must remain unchanged during the entire hash.
+ * A negative outcome never deletes or re-uploads any recording.
+ */
+export async function confirmNativeIndexed(
+    owner: PinnedImportOwner, id: string, token: string,
+    musicRoot: string = config.music.musicPath,
+): Promise<NativeIndexedReceipt> {
+    if (!validOwner(owner) || !/^[0-9a-f-]{36}$/.test(token)) {
+        return { state: "blocked" };
+    }
+    const entry = await prisma.downtifyNativeImport.findFirst({
+        where: {
+            id, ownerKimaUserId: owner.kimaUserId,
+            remoteServerId: owner.remoteServerId,
+            remoteUserId: owner.remoteUserId,
+            claimToken: token, status: "published_pending_scan",
+        },
+        select: {
+            outputRelativePath: true,
+            expectedBytes: true,
+            fullSha256: true,
+        },
+    });
+    if (!entry?.outputRelativePath || !safeLocalTarget(entry.outputRelativePath) ||
+        !entry.fullSha256 || !SHA256.test(entry.fullSha256) ||
+        !entry.expectedBytes || !Number.isSafeInteger(entry.expectedBytes)) {
+        return { state: "not_verified" };
+    }
+    const rel = entry.outputRelativePath;
+    const track = await prisma.track.findUnique({
+        where: { filePath: rel },
+        select: {
+            id: true, fileSize: true, missingSince: true, corrupt: true,
+            album: { select: { location: true } },
+        },
+    });
+    if (!track || track.fileSize !== entry.expectedBytes ||
+        track.missingSince !== null || track.corrupt ||
+        track.album.location !== "LIBRARY") {
+        return { state: "not_indexed" };
+    }
+    if (!path.isAbsolute(musicRoot) || musicRoot === "/" ||
+        path.resolve(musicRoot) !== musicRoot) return { state: "not_verified" };
+
+    let file: Awaited<ReturnType<typeof fs.open>> | undefined;
+    try {
+        const rootStat = await fs.lstat(musicRoot);
+        if (!rootStat.isDirectory() || rootStat.isSymbolicLink() ||
+            await fs.realpath(musicRoot) !== musicRoot) {
+            return { state: "not_verified" };
+        }
+        const parts = rel.split("/");
+        let cursor = musicRoot;
+        for (let i = 0; i < parts.length - 1; i++) {
+            cursor = path.join(cursor, parts[i]);
+            const stat = await fs.lstat(cursor);
+            if (!stat.isDirectory() || stat.isSymbolicLink() ||
+                stat.dev !== rootStat.dev ||
+                await fs.realpath(cursor) !== cursor) {
+                return { state: "not_verified" };
+            }
+        }
+        const absoluteFile = path.join(cursor, parts[parts.length - 1]);
+        file = await fs.open(absoluteFile, fsFlags.O_RDONLY | fsFlags.O_NOFOLLOW);
+        const first = await file.stat();
+        if (!first.isFile() || first.dev !== rootStat.dev ||
+            first.size !== entry.expectedBytes) return { state: "not_verified" };
+        const hash = createHash("sha256");
+        let offset = 0;
+        while (offset < first.size) {
+            const buffer = Buffer.allocUnsafe(Math.min(128 * 1024, first.size - offset));
+            const { bytesRead } = await file.read(buffer, 0, buffer.byteLength, offset);
+            if (bytesRead <= 0) return { state: "not_verified" };
+            hash.update(buffer.subarray(0, bytesRead));
+            offset += bytesRead;
+        }
+        const last = await file.stat();
+        if (last.dev !== first.dev || last.ino !== first.ino ||
+            last.size !== first.size || last.mtimeMs !== first.mtimeMs ||
+            last.ctimeMs !== first.ctimeMs ||
+            hash.digest("hex") !== entry.fullSha256) {
+            return { state: "not_verified" };
+        }
+    } catch {
+        return { state: "not_verified" };
+    } finally {
+        if (file) await file.close().catch(() => undefined);
+    }
+    // A concurrent confirmation wins exactly once. This cannot update
+    // another import, a changed claim or a row manually held for review.
+    const changed = await prisma.downtifyNativeImport.updateMany({
+        where: {
+            id, status: "published_pending_scan", claimToken: token,
+            ownerKimaUserId: owner.kimaUserId,
+            remoteServerId: owner.remoteServerId,
+            remoteUserId: owner.remoteUserId,
+            fullSha256: entry.fullSha256,
+            outputRelativePath: rel,
+        },
+        data: {
+            status: "imported", indexedTrackId: track.id,
+            reviewReason: null,
+        },
+    });
+    return changed.count === 1
+        ? { state: "imported", indexedTrackId: track.id }
+        : { state: "blocked" };
 }
