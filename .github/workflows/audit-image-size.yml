@@ -7,7 +7,7 @@ on:
       image_tag:
         description: "Immutable published image tag (e.g. v1.11.7)"
         required: true
-        default: "v1.11.7"
+        default: "v1.19.0"
         type: string
 
 permissions:
