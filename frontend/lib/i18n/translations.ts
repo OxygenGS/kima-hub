@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Music storage is unavailable. Automatic importing is paused until the correct disk returns.": "Music storage is unavailable. Automatic importing is paused until the correct disk returns.",
     "Could not load automatic import settings.": "Could not load automatic import settings.",
     "Confirm that the old importer has been stopped first.": "Confirm that the old importer has been stopped first.",
     "Automatic importing enabled.": "Automatic importing enabled.",
@@ -2203,6 +2204,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Music storage is unavailable. Automatic importing is paused until the correct disk returns.": "De muziekopslag is niet beschikbaar. Automatisch importeren wordt hervat zodra de juiste schijf weer beschikbaar is.",
     "Could not load automatic import settings.": "Kon de instellingen voor automatische import niet ophalen.",
     "Confirm that the old importer has been stopped first.": "Bevestig eerst dat er geen oude importer meer naar dezelfde muziekbibliotheek schrijft.",
     "Automatic importing enabled.": "Automatisch importeren ingeschakeld.",
