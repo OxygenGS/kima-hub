@@ -1,9 +1,15 @@
+import { createHash } from "crypto";
+import { promises as fs } from "fs";
+import { tmpdir } from "os";
+import * as path from "path";
 import { prisma } from "../../utils/db";
 import {
     claimNativeImport,
+    confirmNativeIndexed,
     discoverNativeCompleted,
     getNativeImportSummary,
     holdNativeImportForReview,
+    recordNativePublished,
     recordNativeBaseline,
     selectOwnedCompletedSpotifyJobs,
 } from "../downtifyNativeImportLedger";
@@ -15,6 +21,7 @@ jest.mock("../../utils/db", () => ({
             findFirst: jest.fn(), createMany: jest.fn(),
             updateMany: jest.fn(), groupBy: jest.fn(),
         },
+        track: { findUnique: jest.fn() },
         $transaction: jest.fn(),
     },
 }));
@@ -25,6 +32,7 @@ const importsCreate = prisma.downtifyNativeImport.createMany as jest.Mock;
 const importsFind = prisma.downtifyNativeImport.findFirst as jest.Mock;
 const importsUpdate = prisma.downtifyNativeImport.updateMany as jest.Mock;
 const importsGroups = prisma.downtifyNativeImport.groupBy as jest.Mock;
+const trackFind = prisma.track.findUnique as jest.Mock;
 const transaction = prisma.$transaction as jest.Mock;
 const owner = {
     kimaUserId: "admin-1",
@@ -236,5 +244,141 @@ describe("Native import discovery and durable claims", () => {
             enabled: true, baselineReady: true, waiting: 2, inReview: 4,
         });
         expect(JSON.stringify(result)).not.toContain(owner.remoteServerId);
+    });
+});
+
+
+describe("Native import publication ledger and physical Kima index receipt", () => {
+    const token = "12345678-1234-1234-1234-123456789abc";
+    const id = "clvabc1234cuid";
+    const relative = "Singles/Artist/Track.flac";
+    const audio = Buffer.concat([Buffer.from("fLaC"), Buffer.alloc(512, 0x55)]);
+    const sha = createHash("sha256").update(audio).digest("hex");
+    let musicRoot = "";
+    const baseFile = () => path.join(musicRoot, "Singles", "Artist", "Track.flac");
+
+    beforeEach(async () => {
+        musicRoot = await fs.mkdtemp(path.join(tmpdir(), "kima-index-receipt-"));
+        await fs.mkdir(path.join(musicRoot, "Singles", "Artist"), { recursive: true });
+        await fs.writeFile(baseFile(), audio, { mode: 0o600 });
+        importsFind.mockResolvedValue({
+            outputRelativePath: relative,
+            expectedBytes: audio.length,
+            fullSha256: sha,
+        });
+        trackFind.mockResolvedValue({
+            id: "local-scanned-track-1", fileSize: audio.length,
+            missingSince: null, corrupt: false,
+            album: { location: "LIBRARY" },
+        });
+    });
+    afterEach(async () => {
+        await fs.rm(musicRoot, { recursive: true, force: true });
+    });
+
+    it("records a published file while preserving an unverified scanner state", async () => {
+        expect(await recordNativePublished(owner, id, token, {
+            expectedBytes: audio.length,
+            relativeTarget: relative, fullSha256: sha,
+            remoteLibraryTrackId: "t0123456789abcdef",
+        })).toBe(true);
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                id, claimToken: token, status: "claimed",
+                ownerKimaUserId: "admin-1",
+            }),
+            data: expect.objectContaining({
+                status: "published_pending_scan",
+                fullSha256: sha,
+                outputRelativePath: relative,
+            }),
+        });
+    });
+
+    it("rejects unsafe paths or missing source identity even before database writes", async () => {
+        const result = await recordNativePublished(owner, id, token, {
+            expectedBytes: audio.length,
+            relativeTarget: "../.env", fullSha256: sha,
+            remoteLibraryTrackId: "t0123456789abcdef",
+        });
+        expect(result).toBe(false);
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("marks an import complete only after its Kima Track and physical hash match", async () => {
+        const receipt = await confirmNativeIndexed(owner, id, token, musicRoot);
+        expect(receipt).toEqual({
+            state: "imported", indexedTrackId: "local-scanned-track-1",
+        });
+        expect(trackFind).toHaveBeenCalledWith({
+            where: { filePath: relative },
+            select: {
+                id: true, fileSize: true, missingSince: true,
+                corrupt: true, album: { select: { location: true } },
+            },
+        });
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                status: "published_pending_scan",
+                claimToken: token, fullSha256: sha,
+            }),
+            data: {
+                status: "imported",
+                indexedTrackId: "local-scanned-track-1",
+                reviewReason: null,
+            },
+        });
+    });
+
+    it("holds a missing or unindexed local track rather than claiming imported", async () => {
+        trackFind.mockResolvedValueOnce(null);
+        expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+            .toBe("not_indexed");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("rejects an absent DAS file without touching the Kima track row", async () => {
+        await fs.unlink(baseFile());
+        expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+            .toBe("not_verified");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("does not accept a different recording under an identical filename", async () => {
+        await fs.writeFile(baseFile(), Buffer.alloc(audio.length, 0x33));
+        expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+            .toBe("not_verified");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("rejects a symlink to a file outside the intended library inode", async () => {
+        const external = path.join(musicRoot, "Other.flac");
+        await fs.rename(baseFile(), external);
+        await fs.symlink(external, baseFile());
+        expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+            .toBe("not_verified");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("does not mark a corrupt Kima Track, missing association, or catalog-only album as imported", async () => {
+        for(const data of [
+            { id: "x", fileSize: audio.length, missingSince: new Date(), corrupt: false,
+                album: { location: "LIBRARY" } },
+            { id: "x", fileSize: audio.length, missingSince: null, corrupt: true,
+                album: { location: "LIBRARY" } },
+            { id: "x", fileSize: audio.length, missingSince: null, corrupt: false,
+                album: { location: "CATALOG" } },
+        ]) {
+            trackFind.mockResolvedValueOnce(data);
+            expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+                .toBe("not_indexed");
+        }
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("cannot mark imported if another worker changed the claim after scanning", async () => {
+        importsUpdate.mockResolvedValueOnce({ count: 0 });
+        expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)
+            .toBe("blocked");
     });
 });
