@@ -9,6 +9,7 @@ import {
     discoverNativeCompleted,
     getNativeImportSummary,
     holdNativeImportForReview,
+    releaseNativeUnwrittenClaim,
     recordNativePublished,
     recordNativeBaseline,
     selectOwnedCompletedSpotifyJobs, selectFreshNativeSongs,
@@ -297,6 +298,46 @@ describe("Native import discovery and durable claims", () => {
     it("does not claim while disabled even if an import row is ready", async () => {
         expect((await claimNativeImport(owner, "clvabc1234cuid")).state).toBe("blocked");
         expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("releases only explicitly unwritten claims, preserving durable backoff history", async () => {
+        const token="12345678-1234-1234-1234-123456789abc";
+        const changed=await releaseNativeUnwrittenClaim(
+            owner,"clvabc1234cuid",token,"remote_temporarily_unavailable",
+        );
+        expect(changed).toBe(true);
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where:expect.objectContaining({
+                id:"clvabc1234cuid",status:"claimed",
+                claimToken:token,ownerKimaUserId:owner.kimaUserId,
+                remoteServerId:owner.remoteServerId,
+            }),
+            data:{
+                status:"ready",claimToken:null,
+                reviewReason:"remote_temporarily_unavailable",
+            },
+        });
+        expect(importsUpdate.mock.calls[0][0].data.claimedAt).toBeUndefined();
+    });
+    it("does not automatically release a claim after an unknown DB outcome", async () => {
+        importsUpdate.mockRejectedValueOnce(new Error("temporary database outage"));
+        expect(await releaseNativeUnwrittenClaim(
+            owner,"clvabc1234cuid",
+            "12345678-1234-1234-1234-123456789abc",
+            "storage_temporarily_unavailable",
+        )).toBe(false);
+    });
+    it("applies the same 15-minute cooldown to findFirst and claim CAS", async () => {
+        paired.mockResolvedValue(pairing(true,new Date()));
+        const result=await claimNativeImport(owner,"clvabc1234cuid");
+        expect(result.state).toBe("claimed");
+        const findQuery=importsFind.mock.calls[0][0].where;
+        const updateQuery=importsUpdate.mock.calls[0][0].where;
+        expect(findQuery.OR).toBeDefined();
+        expect(updateQuery.OR).toBeDefined();
+        expect(findQuery.OR[0]).toEqual({claimedAt:null});
+        expect(findQuery.OR[1].claimedAt.lt).toBeInstanceOf(Date);
+        expect(findQuery.OR[1].claimedAt.lt.getTime()).toBeLessThan(Date.now());
     });
 
     it("can hold a claimed row for human review but never reset it to ready", async () => {
