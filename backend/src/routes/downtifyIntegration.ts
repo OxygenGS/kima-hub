@@ -6,6 +6,9 @@
 import { Router } from "express";
 import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
+import {
+    getNativeAutoImportStatus, setNativeAutoImport, NativeImportSetupError,
+} from "../services/downtifyNativeAutoImportSettings";
 import { z } from "zod";
 import { requireAdmin } from "../middleware/auth";
 import {
@@ -63,6 +66,45 @@ router.get("/import-readiness", async (req, res) => {
         return res.status(503).json({ state: "unavailable",
             autoImportAvailable: false, importerCutoverAuthorized: false,
             libraryImportVerified: false, filesChanged: false });
+    }
+});
+
+/**
+ * Normal one-switch native importer controls. A new enable requires an
+ * explicit one-time single-writer acknowledgement; no browser path, token
+ * or free-form command is accepted.
+ */
+router.get("/native-import", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        return res.json(await getNativeAutoImportStatus(req.user.id));
+    } catch {
+        return res.status(503).json({ state: "unavailable", enabled: false });
+    }
+});
+
+router.post("/native-import", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    const schema = z.object({
+        enabled: z.boolean(),
+        acknowledgeSingleWriter: z.boolean(),
+    }).strict();
+    try {
+        const body = schema.parse(req.body);
+        return res.json(await setNativeAutoImport(
+            req.user.id, body.enabled, body.acknowledgeSingleWriter,
+        ));
+    } catch (err) {
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ state: "invalid_input" });
+        }
+        if (err instanceof NativeImportSetupError) {
+            const status = err.state === "unauthorized" ? 403 :
+                err.state === "not_paired" ? 404 :
+                err.state === "source_unavailable" ? 503 : 409;
+            return res.status(status).json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
     }
 });
 
