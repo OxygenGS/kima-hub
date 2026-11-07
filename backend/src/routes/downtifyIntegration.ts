@@ -4,6 +4,8 @@
  * outbound GET requests only, and a saved pairing starts completely OFF.
  */
 import { Router } from "express";
+import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
+import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
 import { z } from "zod";
 import { requireAdmin } from "../middleware/auth";
 import {
@@ -46,6 +48,23 @@ function handleError(res: import("express").Response, err: unknown) {
     // Never serialize exception messages, axios config, URLs or tokens.
     return res.status(503).json({ state: "unavailable" });
 }
+
+/**
+ * Read-only transport and storage feasibility. It cannot copy/download an
+ * entire file or start the native importer, and returns no paths or secrets.
+ * Frontend controls may not treat this as safe importer-cutover approval.
+ */
+router.get("/import-readiness", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unbound" });
+    try {
+        const env = await getDowntifyRuntimeEnv();
+        return res.json(await inspectNativeDowntifyImport(req.user.id, env));
+    } catch {
+        return res.status(503).json({ state: "unavailable",
+            autoImportAvailable: false, importerCutoverAuthorized: false,
+            libraryImportVerified: false, filesChanged: false });
+    }
+});
 
 router.get("/", async (req, res) => {
     if (!req.user) return res.status(401).json({ state: "unauthorized" });
