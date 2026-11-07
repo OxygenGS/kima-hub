@@ -87,14 +87,16 @@ export function selectOwnedCompletedSpotifyJobs(
 
 async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
     paired: boolean; enabled: boolean; baselineAt: Date | null;
+    libraryCursor: number | null;
 }> {
-    if (!validOwner(owner)) return { paired: false, enabled: false, baselineAt: null };
+    if (!validOwner(owner)) return { paired: false, enabled: false, baselineAt: null, libraryCursor: null };
     const row = await prisma.downtifyIntegration.findUnique({
         where: { id: "default" },
         select: {
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true,
         },
     });
     const paired = row?.ownerKimaUserId === owner.kimaUserId &&
@@ -104,6 +106,7 @@ async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
     return {
         paired, enabled: paired && row?.nativeImportEnabled === true,
         baselineAt: paired ? row?.nativeImportBaselineAt || null : null,
+        libraryCursor: paired ? row?.nativeImportLibraryCursor ?? null : null,
     };
 }
 
@@ -119,16 +122,19 @@ async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
 export async function recordNativeBaseline(
     owner: PinnedImportOwner,
     queueSnapshot: unknown,
+    libraryCursor: number,
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
     const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
     if (selection.state !== "ok" || !validOwner(owner) ||
-        selection.ambiguous > 0) {
+        !Number.isSafeInteger(libraryCursor) || libraryCursor < 0 ||
+        libraryCursor > 2_147_483_647 || selection.ambiguous > 0) {
         // Never silently omit an ambiguous pre-existing song from the
         // initial baseline: it might later appear unique and be reimported.
         return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.paired || identity.enabled || identity.baselineAt) {
+    if (!identity.paired || identity.enabled || identity.baselineAt ||
+        identity.libraryCursor !== null) {
         return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
     }
     try {
@@ -140,8 +146,12 @@ export async function recordNativeBaseline(
                     expectedUserId: owner.remoteUserId,
                     enabled: true, nativeImportEnabled: false,
                     nativeImportBaselineAt: null,
+                    nativeImportLibraryCursor: null,
                 },
-                data: { nativeImportBaselineAt: new Date() },
+                data: {
+                    nativeImportBaselineAt: new Date(),
+                    nativeImportLibraryCursor: libraryCursor,
+                },
             });
             if (changed.count !== 1) throw new Error("baseline race");
             if (selection.songs.length === 0) return 0;
@@ -163,37 +173,125 @@ export async function recordNativeBaseline(
     }
 }
 
-/** Persist *newly* completed songs only while native auto-import was enabled. */
+/**
+ * Select only newly published, owner-attributed Spotify files from an
+ * INCREMENTAL authenticated mobile library changefeed.
+ *
+ * Queue visibility alone does NOT prove newness: old "done" rows can
+ * disappear or reappear. Require exact matching filename, one queue job,
+ * one mobile track row and a defensible remote library "added" timestamp
+ * after Kima's first-activation baseline. Missing timestamps fail closed.
+ */
+export function selectFreshNativeSongs(
+    queueSnapshot: unknown, changedTracks: unknown, remoteUserId: number,
+    baselineAt: Date,
+): Selection {
+    if (!Array.isArray(queueSnapshot) || queueSnapshot.length > MAX_QUEUE_ROWS ||
+        !Array.isArray(changedTracks) || changedTracks.length > 100000 ||
+        !(baselineAt instanceof Date) || !Number.isFinite(baselineAt.getTime())) {
+        return { state: "invalid_snapshot", songs: [], ambiguous: 0 };
+    }
+    const queueByFile = new Map<string, NativeSongObservation[]>();
+    for(const entry of queueSnapshot) {
+        if (!record(entry) || entry.status !== "done" ||
+            !Array.isArray(entry.user_ids) ||
+            !entry.user_ids.includes(remoteUserId) || !record(entry.song) ||
+            (entry.song.source !== undefined && entry.song.source !== "spotify") ||
+            typeof entry.song.song_id !== "string" ||
+            !SPOTIFY_ID.test(entry.song.song_id) ||
+            typeof entry.filename !== "string" ||
+            entry.filename.length > 1024) continue;
+        const old = queueByFile.get(entry.filename) || [];
+        old.push({ spotifyTrackId: entry.song.song_id, source: "spotify" });
+        queueByFile.set(entry.filename, old);
+    }
+    const tracks = new Map<string, number>();
+    for (const entry of changedTracks) {
+        if (!record(entry) || typeof entry.file !== "string" ||
+            typeof entry.id !== "string" || !/^t[0-9a-f]{16}$/.test(entry.id) ||
+            typeof entry.added !== "number" || !Number.isSafeInteger(entry.added)) {
+            continue;
+        }
+        // Do not import old files that were merely retagged or reappeared in
+        // the changefeed. 30 seconds accommodate minor server clock skew.
+        if (entry.added < Math.floor(baselineAt.getTime()/1000) - 30) continue;
+        tracks.set(entry.file, (tracks.get(entry.file)||0)+1);
+    }
+    const ids=new Map<string,number>();
+    for (const [filename, count] of tracks) {
+        const jobs=queueByFile.get(filename)||[];
+        if (count !== 1 || jobs.length !== 1) {
+            // ambiguous matching jobs are never actionable
+            continue;
+        }
+        const id=jobs[0].spotifyTrackId;
+        ids.set(id, (ids.get(id)||0)+1);
+    }
+    const songs:NativeSongObservation[]=[];
+    let ambiguous=0;
+    for(const [id,count] of ids) {
+        if(count===1)songs.push({spotifyTrackId:id,source:"spotify"});
+        else ambiguous++;
+    }
+    return {state:"ok",songs,ambiguous};
+}
+
+/** Advance a Downtify library cursor atomically with new eligible claims.
+ * A full-reset snapshot is treated as baseline ONLY, not new songs.
+ */
 export async function discoverNativeCompleted(
     owner: PinnedImportOwner, queueSnapshot: unknown,
+    changes: { cursor: number; full: boolean; tracks: unknown[] },
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
-    const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
-    if (selection.state !== "ok" || !validOwner(owner)) {
+    if (!validOwner(owner) || !Number.isSafeInteger(changes.cursor) ||
+        changes.cursor < 0 || changes.cursor > 2_147_483_647 ||
+        typeof changes.full !== "boolean" || !Array.isArray(changes.tracks)) {
         return { state: "invalid_snapshot", count: 0, ambiguous: 0 };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.enabled || !identity.baselineAt) {
-        return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
+    if (!identity.enabled || !identity.baselineAt ||
+        identity.libraryCursor === null || changes.cursor < identity.libraryCursor) {
+        return { state: "blocked", count: 0, ambiguous: 0 };
     }
-    if (selection.songs.length === 0) {
+    const selection = changes.full
+        ? { state: "ok" as const, songs: [], ambiguous: 0 }
+        : selectFreshNativeSongs(queueSnapshot, changes.tracks,
+            owner.remoteUserId, identity.baselineAt);
+    if (selection.state !== "ok") {
+        return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
+    }
+    if (changes.cursor === identity.libraryCursor) {
         return { state: "recorded", count: 0, ambiguous: selection.ambiguous };
     }
-    // Unique constraint is the durable idempotency boundary across workers,
-    // restarts and previous baseline snapshots. No upsert resets an old state.
     try {
-        const created = await prisma.downtifyNativeImport.createMany({
-            data: selection.songs.map(song => ({
-                ownerKimaUserId: owner.kimaUserId,
-                remoteServerId: owner.remoteServerId,
-                remoteUserId: owner.remoteUserId,
-                spotifyTrackId: song.spotifyTrackId,
-                status: "ready",
-            })),
-            skipDuplicates: true,
+        const count = await prisma.$transaction(async tx => {
+            const changed = await tx.downtifyIntegration.updateMany({
+                where: {
+                    id: "default", ownerKimaUserId: owner.kimaUserId,
+                    expectedServerId: owner.remoteServerId,
+                    expectedUserId: owner.remoteUserId,
+                    nativeImportEnabled: true,
+                    nativeImportLibraryCursor: identity.libraryCursor,
+                },
+                data: { nativeImportLibraryCursor: changes.cursor },
+            });
+            if(changed.count!==1)throw new Error("cursor race");
+            if(selection.songs.length===0)return 0;
+            const created = await tx.downtifyNativeImport.createMany({
+                data: selection.songs.map(song => ({
+                    ownerKimaUserId: owner.kimaUserId,
+                    remoteServerId: owner.remoteServerId,
+                    remoteUserId: owner.remoteUserId,
+                    spotifyTrackId: song.spotifyTrackId,
+                    status: "ready",
+                })),
+                skipDuplicates: true,
+            });
+            return created.count;
         });
-        return { state: "recorded", count: created.count, ambiguous: selection.ambiguous };
+        return {state:"recorded",count,ambiguous:selection.ambiguous};
     } catch {
-        return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
+        return {state:"blocked",count:0,ambiguous:selection.ambiguous};
     }
 }
 
@@ -213,7 +311,8 @@ export async function claimNativeImport(
         return { state: "blocked" };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.enabled || !identity.baselineAt) return { state: "blocked" };
+    if (!identity.enabled || !identity.baselineAt ||
+        identity.libraryCursor === null) return { state: "blocked" };
     const token = randomUUID();
     try {
         return await prisma.$transaction(async tx => {
@@ -225,13 +324,16 @@ export async function claimNativeImport(
                     ownerKimaUserId: true, expectedServerId: true,
                     expectedUserId: true, enabled: true,
                     nativeImportEnabled: true, nativeImportBaselineAt: true,
+                    nativeImportLibraryCursor: true,
                 },
             });
             if (pairing?.ownerKimaUserId !== owner.kimaUserId ||
                 pairing.expectedServerId !== owner.remoteServerId ||
                 pairing.expectedUserId !== owner.remoteUserId ||
                 !pairing.enabled || !pairing.nativeImportEnabled ||
-                !pairing.nativeImportBaselineAt) return { state: "blocked" } as const;
+                !pairing.nativeImportBaselineAt ||
+                pairing.nativeImportLibraryCursor === null)
+                return { state: "blocked" } as const;
             const row = await tx.downtifyNativeImport.findFirst({
                 where: {
                     id, ownerKimaUserId: owner.kimaUserId,
@@ -302,7 +404,7 @@ export async function getNativeImportSummary(
     const count = (status: string) => rows.find(row => row.status === status)?._count._all ?? 0;
     return {
         enabled: identity.enabled,
-        baselineReady: !!identity.baselineAt,
+        baselineReady: !!identity.baselineAt && identity.libraryCursor !== null,
         waiting: count("ready"),
         inReview: count("claimed") + count("review") + count("uncertain") +
             count("published_pending_scan"),
