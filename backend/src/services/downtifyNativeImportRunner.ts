@@ -112,7 +112,11 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
         const observed = await discoverNativeCompleted(owner, queue.queue, {
             cursor: library.cursor, full: library.full, tracks: library.tracks,
         });
-        if (observed.state !== "recorded") return outcome("unavailable");
+        if (observed.state !== "recorded" && observed.state !== "deferred") {
+            return outcome("unavailable");
+        }
+        // A deferred cursor does not stop reconciliation of already-published
+        // files or already-approved claims from earlier cycles.
         newJobs = observed.count;
         if (observed.ambiguous > 0) {
             // A duplicate remote job is not a unique source. Never guess.
