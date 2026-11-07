@@ -42,6 +42,9 @@ export interface VerifiedOriginalSource {
     durationSeconds: number;
     expectedBytes: number;
     chunks: AudioStream;
+    /** Close the authenticated response if identity checks abort before
+     * consumption. No upstream connection may be left open. */
+    cancel: () => void;
     autoImportApproved: false;
     libraryImportVerified: false;
 }
@@ -236,6 +239,7 @@ export async function openNativeDowntifyOriginal(
             album: typeof row.album === "string" ? row.album : "",
             durationSeconds: duration, expectedBytes: size,
             chunks: boundedOriginalBytes(stream.data, size),
+            cancel: abort,
             autoImportApproved: false, libraryImportVerified: false,
         };
     } catch (error: unknown) {
