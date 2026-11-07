@@ -11,7 +11,7 @@ import {
     holdNativeImportForReview,
     recordNativePublished,
     recordNativeBaseline,
-    selectOwnedCompletedSpotifyJobs,
+    selectOwnedCompletedSpotifyJobs, selectFreshNativeSongs,
 } from "../downtifyNativeImportLedger";
 
 jest.mock("../../utils/db", () => ({
@@ -48,6 +48,7 @@ const queue = (ids: number[] = [7], songId = SPOTIFY_ID) => [{
     song: { source: "spotify", song_id: songId },
 }];
 const pairing = (enabled = false, baselineAt: Date | null = null) => ({
+    nativeImportLibraryCursor: baselineAt ? 8 : null,
     ownerKimaUserId: owner.kimaUserId,
     expectedServerId: owner.remoteServerId,
     expectedUserId: owner.remoteUserId,
@@ -96,9 +97,36 @@ describe("Native Downtify import queue selection", () => {
     });
 });
 
+describe("New-only mobile library cursors", () => {
+    it("excludes completed jobs that did not arrive as a new library entry", () => {
+        const now = new Date();
+        expect(selectFreshNativeSongs(queue(), [], 7, now).songs).toEqual([]);
+        expect(selectFreshNativeSongs(queue(), [{
+            id: "t0123456789abcdef", file: "untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)-86400,
+        }], 7, now).songs).toEqual([]);
+    });
+    it("admits only a newly added track with an exact owner-bound job and timestamp", () => {
+        const now = new Date();
+        expect(selectFreshNativeSongs(queue(), [{
+            id: "t0123456789abcdef", file: "untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }], 7, now).songs).toEqual([
+            {spotifyTrackId:SPOTIFY_ID,source:"spotify"},
+        ]);
+    });
+    it("rejects duplicate library filenames and jobs from a different remote user", () => {
+        const now = new Date();
+        const row = {id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added:Math.floor(now.getTime()/1000)+60};
+        expect(selectFreshNativeSongs(queue([8]), [row], 7, now).songs).toEqual([]);
+        expect(selectFreshNativeSongs(queue(), [row,row], 7, now).songs).toEqual([]);
+    });
+});
+
 describe("Durable native import baseline", () => {
     it("stores all pre-existing completed jobs as baseline in one transaction", async () => {
-        const result = await recordNativeBaseline(owner, queue());
+        const result = await recordNativeBaseline(owner, queue(), 8);
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(transaction).toHaveBeenCalledTimes(1);
         expect(integrationUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -122,32 +150,32 @@ describe("Durable native import baseline", () => {
 
     it("does not reset a baseline or seed history when already initialized or enabled", async () => {
         paired.mockResolvedValueOnce(pairing(false, new Date()));
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
         paired.mockResolvedValueOnce(pairing(true, new Date()));
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("fails closed if the pairing changed or no longer belongs to this user", async () => {
         paired.mockResolvedValueOnce({ ...pairing(), expectedUserId: 200 });
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("does not seed a partial baseline with an ambiguous old job", async () => {
-        expect((await recordNativeBaseline(owner, [...queue(), ...queue()])).state)
+        expect((await recordNativeBaseline(owner, [...queue(), ...queue()], 8)).state)
             .toBe("invalid_snapshot");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("rolls back on compare-and-swap conflict", async () => {
         integrationUpdate.mockResolvedValueOnce({ count: 0 });
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8)).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
     it("accepts an empty baseline without any file or remote changes", async () => {
-        expect(await recordNativeBaseline(owner, [])).toMatchObject({
+        expect(await recordNativeBaseline(owner, [], 8)).toMatchObject({
             state: "recorded", count: 0,
         });
         expect(importsCreate).not.toHaveBeenCalled();
@@ -156,16 +184,25 @@ describe("Durable native import baseline", () => {
 
 describe("Native import discovery and durable claims", () => {
     it("cannot discover new songs while disabled or before baseline", async () => {
-        expect((await discoverNativeCompleted(owner, queue())).state).toBe("blocked");
+        expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000),
+}]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
         paired.mockResolvedValueOnce(pairing(true, null));
-        expect((await discoverNativeCompleted(owner, queue())).state).toBe("blocked");
+        expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000),
+}]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
     it("uses a unique createMany skipDuplicates instead of resetting existing jobs", async () => {
         paired.mockResolvedValueOnce(pairing(true, new Date()));
-        const result = await discoverNativeCompleted(owner, queue());
+        const result = await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000),
+}]});
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(importsCreate).toHaveBeenCalledWith({
             data: [{
