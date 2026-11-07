@@ -2,6 +2,7 @@ import { Readable } from "stream";
 import type { AxiosInstance } from "axios";
 import {
     boundedOriginalBytes,
+    getVerifiedNativeLibraryChanges,
     openNativeDowntifyOriginal,
 } from "../downtifyNativeOriginalTransport";
 
@@ -59,7 +60,7 @@ function remote(overrides: Partial<Fixture> = {}) {
         if (url.endsWith("/api/server/info")) return { status: 200, data: state.server };
         if (url.endsWith("/api/auth/status")) return { status: 200, data: state.auth };
         if (url.endsWith("/api/queue")) return { status: 200, data: state.queue };
-        if (url.endsWith("/api/v1/library?since=0")) return { status: 200, data: state.library };
+        if (url.includes("/api/v1/library?since=")) return { status: 200, data: state.library };
         if (url.endsWith("/stream?format=original")) return state.stream;
         throw Error("unexpected URL " + url);
     });
@@ -180,6 +181,64 @@ describe("Native Downtify original audio transport (no file writes)", () => {
             }, data: Readable.from([bytes]),
         } });
         expect((await load()).state).toBe("stream_unavailable");
+    });
+});
+
+describe("Owner-verified incremental remote library feed", () => {
+    const fetch = (since: number, changes: Partial<typeof library> = {}) => {
+        const { get } = remote({library: {
+            ...library, full: since === 0, cursor: since+1, ...changes,
+        }});
+        const load = () => getVerifiedNativeLibraryChanges(
+            owner, since, env,
+            {http:{get} as unknown as Pick<AxiosInstance,"get">},
+        );
+        return {get,load};
+    };
+
+    it("gets a full library cursor baseline without revealing any local music paths", async () => {
+        const {get,load}=fetch(0);
+        const result=await load();
+        expect(result.state).toBe("ready");
+        if(result.state!=="ready")throw Error("unreachable");
+        expect(result.full).toBe(true);
+        expect(result.cursor).toBe(1);
+        expect(get).toHaveBeenCalledTimes(3);
+        expect(get.mock.calls[0][1].headers.Authorization).toBeUndefined();
+        expect(get.mock.calls[2][1].headers.Authorization).toBe("Bearer "+token);
+    });
+
+    it("fetches only remote changes after the verified baseline cursor", async () => {
+        const {get,load}=fetch(42);
+        const result=await load();
+        expect(result.state).toBe("ready");
+        if(result.state!=="ready")throw Error("unreachable");
+        expect(result.full).toBe(false);
+        expect(result.cursor).toBe(43);
+        expect(get.mock.calls[2][0]).toContain("since=42");
+    });
+
+    it("rejects a rollback or corrupted remote library sequence", async () => {
+        const {load}=fetch(42,{cursor:40});
+        expect((await load()).state).toBe("incompatible");
+    });
+
+    it("fails closed when the paired server identity has changed", async () => {
+        const {get}=remote({server:{...server,server_id:"another-server"}});
+        const result=await getVerifiedNativeLibraryChanges(
+            owner,0,env,{http:{get} as unknown as Pick<AxiosInstance,"get">},
+        );
+        expect(result.state).toBe("incompatible");
+        expect(get).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects foreign account identity before retrieving any private library rows", async () => {
+        const {get}=remote({auth:{...auth,user:{id:123,username:"downloader"}}});
+        const result=await getVerifiedNativeLibraryChanges(
+            owner,0,env,{http:{get} as unknown as Pick<AxiosInstance,"get">},
+        );
+        expect(result.state).toBe("unauthorized");
+        expect(get).toHaveBeenCalledTimes(2);
     });
 });
 
