@@ -1,4 +1,7 @@
 import { prisma } from "../../utils/db";
+import {
+    initializeNativeMusicVolume, verifyNativeMusicVolume,
+} from "../downtifyNativeMountProof";
 import { getDowntifyRuntimeEnv } from "../downtifyIntegrationSettings";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
@@ -8,6 +11,11 @@ import {
     getNativeAutoImportStatus, setNativeAutoImport,
 } from "../downtifyNativeAutoImportSettings";
 
+jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } }));
+jest.mock("../downtifyNativeMountProof", () => ({
+    initializeNativeMusicVolume: jest.fn(),
+    verifyNativeMusicVolume: jest.fn(),
+}));
 jest.mock("../../utils/db", () => ({
     prisma: {
         downtifyIntegration: {
@@ -35,12 +43,16 @@ const library = getVerifiedNativeLibraryChanges as jest.Mock;
 const baseline = recordNativeBaseline as jest.Mock;
 const summary = getNativeImportSummary as jest.Mock;
 const serverId = "server_identity_123";
+const PROOF = "11111111-1111-4111-8111-111111111111";
+const initVolume = initializeNativeMusicVolume as jest.Mock;
+const verifyVolume = verifyNativeMusicVolume as jest.Mock;
 const admin = "owner-1";
 let record = {
     ownerKimaUserId: admin, expectedServerId: serverId,
     expectedUserId: 7, enabled: true,
     nativeImportEnabled: false, nativeImportBaselineAt: null as Date | null,
     nativeImportLibraryCursor: null as number | null,
+    nativeImportMountProof: null as string | null,
 };
 
 beforeEach(() => {
@@ -50,6 +62,7 @@ beforeEach(() => {
         expectedUserId: 7, enabled: true,
         nativeImportEnabled: false, nativeImportBaselineAt: null,
         nativeImportLibraryCursor: null,
+        nativeImportMountProof: null,
     };
     find.mockImplementation(async () => record);
     update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
@@ -59,9 +72,12 @@ beforeEach(() => {
     runtime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
     queue.mockResolvedValue({ state: "ready", queue: [] });
     library.mockResolvedValue({state:"ready",cursor:7,full:true,tracks:[]});
+    initVolume.mockResolvedValue(PROOF);
+    verifyVolume.mockResolvedValue(true);
     baseline.mockImplementation(async () => {
         record.nativeImportBaselineAt = new Date();
         record.nativeImportLibraryCursor = 7;
+        record.nativeImportMountProof = PROOF;
         return { state: "recorded", count: 0, ambiguous: 0 };
     });
     summary.mockImplementation(async () => ({
@@ -118,7 +134,7 @@ describe("One-switch Downtify native import activation", () => {
         expect(queue).toHaveBeenCalledTimes(1);
         expect(baseline).toHaveBeenCalledWith({
             kimaUserId: admin, remoteServerId: serverId, remoteUserId: 7,
-        }, [], 7);
+        }, [], 7, PROOF);
         expect(library).toHaveBeenCalledWith(admin, 0, expect.any(Object));
         expect(update).toHaveBeenCalledWith({
             where: expect.objectContaining({
@@ -154,6 +170,7 @@ describe("One-switch Downtify native import activation", () => {
         record.nativeImportEnabled = true;
         record.nativeImportBaselineAt = new Date();
         record.nativeImportLibraryCursor = 7;
+        record.nativeImportMountProof = PROOF;
         const state = await setNativeAutoImport(admin, false, false);
         expect(state.enabled).toBe(false);
         expect(state.baselineReady).toBe(true);
@@ -165,9 +182,28 @@ describe("One-switch Downtify native import activation", () => {
         expect(queue).not.toHaveBeenCalled();
     });
 
+    it("never enables the importer while the original DAS volume proof is missing", async () => {
+        record.nativeImportBaselineAt = new Date();
+        record.nativeImportLibraryCursor = 7;
+        record.nativeImportMountProof = PROOF;
+        verifyVolume.mockResolvedValueOnce(false);
+        await expect(setNativeAutoImport(admin,true,true))
+            .rejects.toMatchObject({state:"storage_unavailable"});
+        expect(update).not.toHaveBeenCalled();
+        expect(queue).not.toHaveBeenCalled();
+        expect(baseline).not.toHaveBeenCalled();
+    });
+    it("does not create a volume marker for an unavailable remote source", async () => {
+        queue.mockResolvedValueOnce({state:"unavailable",queue:[]});
+        await expect(setNativeAutoImport(admin,true,true))
+            .rejects.toMatchObject({state:"source_unavailable"});
+        expect(initVolume).not.toHaveBeenCalled();
+    });
+
     it("does not reseed a complete baseline when a paused importer is re-enabled", async () => {
         record.nativeImportBaselineAt = new Date();
         record.nativeImportLibraryCursor = 7;
+        record.nativeImportMountProof = PROOF;
         await setNativeAutoImport(admin, true, true);
         expect(baseline).not.toHaveBeenCalled();
         expect(queue).not.toHaveBeenCalled();
