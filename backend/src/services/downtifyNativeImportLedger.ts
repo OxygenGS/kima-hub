@@ -120,8 +120,11 @@ export async function recordNativeBaseline(
     queueSnapshot: unknown,
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
     const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
-    if (selection.state !== "ok" || !validOwner(owner)) {
-        return { state: "invalid_snapshot", count: 0, ambiguous: 0 };
+    if (selection.state !== "ok" || !validOwner(owner) ||
+        selection.ambiguous > 0) {
+        // Never silently omit an ambiguous pre-existing song from the
+        // initial baseline: it might later appear unique and be reimported.
+        return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
     }
     const identity = await pinnedIdentity(owner);
     if (!identity.paired || identity.enabled || identity.baselineAt) {
