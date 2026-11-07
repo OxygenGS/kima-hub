@@ -101,7 +101,8 @@ router.post("/native-import", async (req, res) => {
         if (err instanceof NativeImportSetupError) {
             const status = err.state === "unauthorized" ? 403 :
                 err.state === "not_paired" ? 404 :
-                err.state === "source_unavailable" ? 503 : 409;
+                (err.state === "source_unavailable" ||
+                    err.state === "storage_unavailable") ? 503 : 409;
             return res.status(status).json({ state: err.state });
         }
         return res.status(503).json({ state: "unavailable" });
