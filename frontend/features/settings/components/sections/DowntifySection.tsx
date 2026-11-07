@@ -356,6 +356,8 @@ export function DowntifySection() {
                                                 <button type="button" onClick={() => {
                                                     setShowPairing(value => !value);
                                                     setToken("");
+                                                    setImportReadiness(null);
+                                                    setImportFeedback(null);
                                                 }} disabled={pending}
                                                     aria-expanded={showPairing}
                                                     aria-controls="downtify-pairing-form"
@@ -553,6 +555,7 @@ export function DowntifySection() {
                                             <div className="space-y-2" aria-label={t("Read-only setup checks")}>
                                                 <p className="text-xs text-[var(--text-muted)]">
                                                     {t("These checks do not import music or confirm that another importer is stopped.")}
+                                                    {" "}{t("Music folder access does not prove that the correct disk is mounted.")}
                                                 </p>
                                                 <ul className="space-y-1 text-xs">
                                                     {setupChecks.map(check => (
