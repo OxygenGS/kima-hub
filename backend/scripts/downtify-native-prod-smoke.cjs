@@ -34,7 +34,10 @@ async function main() {
         "-c:a", "flac", "-y", original,
     ], { timeout: 20000 });
     if (ffmpeg.status !== 0 || ffmpeg.error) {
-        throw new Error("FFmpeg cannot generate synthetic source");
+        throw new Error("FFmpeg cannot generate synthetic source: " +
+            (ffmpeg.error ? String(ffmpeg.error.message) :
+                "exit " + ffmpeg.status + ": " +
+                String(ffmpeg.stderr || "").slice(0, 350)));
     }
     fs.chmodSync(original, 0o600);
     const bytes = fs.readFileSync(original);
@@ -100,12 +103,26 @@ async function main() {
     process.stdout.write("Native Downtify compiled-audio canary passed (isolated; no scanner receipt)\n");
 }
 
-main().catch(error => {
+// The smoke imports the real production dependency graph, which may open
+// Redis/Prisma handles. Terminate this standalone CI-only process explicitly
+// after its assertions and cleanup, never hold CI jobs open indefinitely.
+// This is not used by the Kima runtime or any live worker.
+function cleanupScratch() {
+    if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+}
+const watchdog = setTimeout(() => {
+    process.stderr.write("Native Downtify compiled-audio canary timed out\n");
+    try { cleanupScratch(); } catch {}
+    process.exit(1);
+}, 90000);
+main().then(() => {
+    clearTimeout(watchdog);
+    cleanupScratch();
+    process.exit(0);
+}, error => {
+    clearTimeout(watchdog);
     process.stderr.write("Native Downtify compiled-audio canary failed: " +
         String(error instanceof Error ? error.message : "unknown error") + "\n");
-    process.exitCode = 1;
-}).finally(() => {
-    if (scratch) {
-        fs.rmSync(scratch, { recursive: true, force: true });
-    }
+    try { cleanupScratch(); } catch {}
+    process.exit(1);
 });
