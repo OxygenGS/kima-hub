@@ -1,7 +1,5 @@
 name: Nonroot AIO production wiring and unit guards
 on:
-  push:
-    branches: [feature/v111-nonroot-production-integration]
   pull_request:
     branches: [main]
     paths:
