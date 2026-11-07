@@ -5,8 +5,7 @@
 
 ALTER TABLE "DowntifyIntegration"
   ADD COLUMN "nativeImportEnabled" BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN "nativeImportBaselineAt" TIMESTAMP(3),
-  ADD COLUMN "nativeImportLibraryCursor" INTEGER;
+  ADD COLUMN "nativeImportBaselineAt" TIMESTAMP(3);
 
 CREATE TABLE "DowntifyNativeImport" (
   "id" TEXT NOT NULL,
