@@ -14,13 +14,18 @@ Most of Kima is configured in the web app, under **Settings**. Environment varia
 | Download Services | Lidarr | Admins |
 | Media Servers | Audiobookshelf | Admins |
 | P2P Networks | Soulseek | Admins |
-| AI & Artwork | Fanart.tv and AcoustID keys | Admins |
+| Integrations | Downtify connection test, encrypted device pairing and default-OFF feature switches | Admins |
+| Artwork | Fanart.tv and AcoustID keys, plus missing image repair | Admins |
+| Library Doctor | Read-only library health diagnostics and supported corrections | Admins |
+| Smart Download Inbox | Import evidence and album association review | Admins |
 | Storage | Music and download paths, the server address | Admins |
 | Library Enrichment | The five enrichment steps, worker counts, caches, the NVIDIA GPU switches, wipe and re-run | Admins |
 | Corrupt Tracks | Files that could not be read | Admins |
 | Users | Create and delete accounts, set roles | Admins |
 
 Streaming quality is Original (lossless), 320 kbps, 192 kbps or 128 kbps. Anything below Original is transcoded on the fly, and the transcoded files are cached.
+
+Downtify (v1.19.0) can be configured through **Settings → Integrations**. A pairing is stored encrypted in PostgreSQL, with per-request feature controls and no container restart. Existing Docker-managed `KIMA_DOWNTIFY_ENABLED` or `KIMA_DOWNTIFY_DEVICE_TOKEN` configurations are intentionally not overwritten; migrate deliberately. Advanced staging-source and audio verification remain operator-managed and OFF in database mode. See [Downtify settings](downtify-settings.md).
 
 ## Environment variables
 
@@ -50,7 +55,7 @@ With the split stack (`docker-compose.yml`), set both in a `.env` file next to t
 | `LOG_LEVEL` | `warn` in production, `debug` otherwise | One of `debug`, `info`, `warn`, `error`, `silent`. |
 | `TRANSCODE_CACHE_MAX_GB` | `10` | Size limit for cached transcoded audio. |
 | `MUSICBRAINZ_BASE_URL` | `https://musicbrainz.org/ws/2` | Point Kima at your own MusicBrainz mirror. |
-| `ACOUSTID_CLIENT_KEY` | a shared key | Your own AcoustID key, if you want to lift the shared key's rate limit. Also settable in Settings under AI & Artwork. |
+| `ACOUSTID_CLIENT_KEY` | a shared key | Your own AcoustID key, if you want to lift the shared key's rate limit. Also settable in Settings → Artwork. |
 | `DISABLE_CLAP` | unset | Set to `true` to stop the vibe analyzer from starting in the all-in-one image. Without it there are no sound vectors, so the vibe features do not work. |
 | `ADMIN_RESET_PASSWORD` | unset | Set it and restart to reset an administrator's password. Remove it afterwards, or the password resets again on every start. The reset signs that account out everywhere. |
 
@@ -62,8 +67,7 @@ With the split stack (`docker-compose.yml`), set both in a `.env` file next to t
 | --- | --- | --- |
 | `MUSIC_PATH` | `/path/to/your/music` | The folder on the host to mount at `/music`. |
 | `PORT` | `3030` | The port on the host. |
-| `VERSION` | `latest` | The image tag. |
-| `DOCKERHUB_USERNAME` | `chevron7locked` | The image namespace. |
+| `VERSION` | `v1.10.0` (conservative file fallback) | Explicit image tag; set `VERSION=v1.19.0` for the currently published stable version. Existing deployments must retain their actual pinned version until backed up and upgraded. |
 
 ### Audio analysis (split stack)
 
