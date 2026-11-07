@@ -1,9 +1,10 @@
 /**
- * Native Downtify importer D10 — dormant, destination-only publication primitive.
+ * Native Downtify importer — isolated, no-overwrite publication primitive.
  *
- * This module is NOT wired into routes, workers, timers or a setting. It MUST
- * only be called after an independently authenticated original file transfer,
- * complete decode, recording/ownership checks and a durable import claim.
+ * Only the internal owner-scoped import runner calls this after a verified
+ * original stream and a durable claim. A mandatory complete-recording
+ * verification callback runs before any file can appear in the library.
+ * There is no HTTP entrypoint for file paths; auto-import is OFF by default.
  *
  * No source deletion, renaming of existing media, overwriting, automatic
  * retry or database mutation is possible here. A successfully published file
