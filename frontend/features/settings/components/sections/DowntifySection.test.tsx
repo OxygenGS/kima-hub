@@ -222,7 +222,7 @@ describe("Simple Downtify Settings section", () => {
         const toggle = host.querySelector<HTMLInputElement>("#downtify-native-auto-import");
         expect(toggle?.checked).toBe(false);
         expect(toggle?.disabled).toBe(true);
-        expect(button("Test direct audio transfer")?.disabled).toBe(false);
+        expect(button("Check Downtify setup")?.disabled).toBe(false);
         expect(api.get).toHaveBeenCalledTimes(2);
         expect(api.post).not.toHaveBeenCalled();
     });
@@ -234,7 +234,8 @@ describe("Simple Downtify Settings section", () => {
             if (url === "/downtify-integration/import-readiness") {
                 return {
                     state: "original_stream_verified",
-                    originalStreamChecked: true,
+                    serverVerified: true, accountVerified: true,
+                    musicRootAccessible: true, originalStreamChecked: true,
                     autoImportAvailable: false,
                     importerCutoverAuthorized: false,
                     filesChanged: false,
@@ -243,18 +244,78 @@ describe("Simple Downtify Settings section", () => {
             return none;
         });
         await mount();
-        await click("Test direct audio transfer");
+        await click("Check Downtify setup");
         expect(api.get).toHaveBeenCalledWith("/downtify-integration/import-readiness");
         expect(host.textContent).toContain("Original audio transfer is reachable");
-        expect(host.textContent).toContain("Automatic importing is not enabled yet");
+        expect(host.textContent).toContain("This check does not import music.");
+        const checklist = host.querySelector('[aria-label="Read-only setup checks"]');
+        expect(checklist).not.toBeNull();
+        expect(checklist?.textContent).toContain("Downtify server identity");
+        expect(checklist?.textContent).toContain("Paired Downtify account");
+        expect(checklist?.textContent).toContain("Music directory access");
+        expect(checklist?.textContent).toContain("Original audio sample");
+        expect(checklist?.querySelectorAll("li")).toHaveLength(4);
+        expect([...checklist!.querySelectorAll("li")].every(row =>
+            row.textContent?.includes("Verified"))).toBe(true);
         expect(api.post).not.toHaveBeenCalled();
         expect(host.textContent).not.toContain("dtfy_");
+    });
+
+    it("explains an untested audio sample without treating setup as a failure or starting imports", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") return nativeOff;
+            if (url === "/downtify-integration/import-readiness") return {
+                state: "no_completed_track", serverVerified: true,
+                accountVerified: true, musicRootAccessible: true,
+                originalStreamChecked: false, autoImportAvailable: false,
+                importerCutoverAuthorized: false, filesChanged: false,
+                privatePath: "/private/music", deviceToken: "dtfy_private_secret",
+            };
+            return none;
+        });
+        await mount();
+        await click("Check Downtify setup");
+        const checklist = host.querySelector('[aria-label="Read-only setup checks"]');
+        expect(checklist).not.toBeNull();
+        expect(host.textContent).toContain("No completed download is available to test");
+        expect(checklist?.querySelectorAll("li")).toHaveLength(4);
+        expect([...checklist!.querySelectorAll("li")].map(row => row.textContent))
+            .toEqual([
+                expect.stringContaining("Music directory accessVerified"),
+                expect.stringContaining("Downtify server identityVerified"),
+                expect.stringContaining("Paired Downtify accountVerified"),
+                expect.stringContaining("Original audio sampleNot verified"),
+            ]);
+        expect(host.textContent).not.toContain("dtfy_private_secret");
+        expect(host.textContent).not.toContain("/private/music");
+        expect(api.post).not.toHaveBeenCalled();
+        expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked)
+            .toBe(false);
+    });
+
+    it("keeps the setup report private when a read-only probe fails", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") return nativeOff;
+            if (url === "/downtify-integration/import-readiness") {
+                throw new Error("private source dtfy_private_secret /some/host/path");
+            }
+            return none;
+        });
+        await mount();
+        await click("Check Downtify setup");
+        expect(host.textContent).toContain("Cannot check Downtify right now.");
+        expect(host.querySelector('[aria-label="Read-only setup checks"]')).toBeNull();
+        expect(host.textContent).not.toContain("dtfy_private_secret");
+        expect(host.textContent).not.toContain("/some/host/path");
+        expect(api.post).not.toHaveBeenCalled();
     });
 
     it("refuses a native import probe when Downtify features are disabled", async () => {
         vi.mocked(api.get).mockResolvedValueOnce(paired);
         await mount();
-        expect(button("Test direct audio transfer")?.disabled).toBe(true);
+        expect(button("Check Downtify setup")?.disabled).toBe(true);
         expect(api.get).toHaveBeenCalledTimes(1);
     });
 
