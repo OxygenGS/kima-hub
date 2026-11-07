@@ -25,6 +25,7 @@ import {
     discoverNativeCompleted,
     getNativeImportSummary,
     holdNativeImportForReview,
+    releaseNativeUnwrittenClaim,
     recordNativePublished,
     type PinnedImportOwner,
 } from "./downtifyNativeImportLedger";
@@ -149,6 +150,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 remoteUserId: owner.remoteUserId,
                 status: "ready",
                 discoveredAt: { gt: settings.nativeImportBaselineAt },
+                OR: [
+                    { claimedAt: null },
+                    { claimedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) } },
+                ],
             },
             select: { id: true, spotifyTrackId: true },
             orderBy: { discoveredAt: "asc" }, take: MAX_IMPORTS_PER_CYCLE,
@@ -161,6 +166,16 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 heldForReview++;
                 await holdNativeImportForReview(owner, claim.id, claim.claimToken, reason);
             };
+            // Only safe before publishNativeAudio: no destination file has
+            // been created, so the next 15-minute recheck cannot overwrite.
+            const deferUnwritten = async (
+                reason: "remote_temporarily_unavailable" |
+                    "storage_temporarily_unavailable",
+            ) => {
+                if (!await releaseNativeUnwrittenClaim(
+                    owner, claim.id, claim.claimToken, reason,
+                )) await hold("claim_state_uncertain");
+            };
             let cancelOriginal: (() => void) | undefined;
             try {
                 // No remote song, token or path comes from an HTTP request.
@@ -168,7 +183,13 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     owner.kimaUserId, claim.spotifyTrackId, env,
                 );
                 if (original.state !== "ready") {
-                    await hold("remote_source_unavailable");
+                    if (original.state === "unavailable" ||
+                        original.state === "stream_unavailable" ||
+                        original.state === "not_completed") {
+                        await deferUnwritten("remote_temporarily_unavailable");
+                    } else {
+                        await hold("remote_source_unavailable");
+                    }
                     continue;
                 }
                 cancelOriginal = original.cancel;
@@ -197,7 +218,11 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     config.music.musicPath, relativeTarget,
                 );
                 if (prepared.state !== "ready") {
-                    await hold("storage_unavailable");
+                    if (prepared.state === "storage_unavailable") {
+                        await deferUnwritten("storage_temporarily_unavailable");
+                    } else {
+                        await hold("unsafe_destination");
+                    }
                     continue;
                 }
                 if (!await livePair(owner)) {
