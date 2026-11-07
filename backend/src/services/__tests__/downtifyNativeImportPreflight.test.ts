@@ -1,6 +1,6 @@
 import type { AxiosInstance } from "axios";
 import { inspectNativeDowntifyImport } from "../downtifyNativeImportPreflight";
-import type { promises as fs } from "fs";
+import { promises as fs } from "fs";
 
 const TOKEN = "dtfy_synthetic_very_long_device_token_12345";
 const USER = "admin-only";
