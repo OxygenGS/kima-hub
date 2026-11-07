@@ -32,6 +32,7 @@ const paired = {
 const nativeOff = {
     state: "paused", enabled: false, baselineReady: false,
     awaitingImport: 0, needsReview: 0, legacyHostVerified: false,
+    storageReady: true,
 };
 let host: HTMLDivElement;
 let root: Root;
@@ -287,6 +288,24 @@ describe("Simple Downtify Settings section", () => {
         expect(host.textContent).toContain("Automatic importing enabled.");
         expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked).toBe(true);
         expect(host.textContent).not.toContain("dtfy_");
+    });
+
+    it("explains the missing music disk without disclosing private paths", async () => {
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled:true };
+            if (url === "/downtify-integration/native-import") return {
+                ...nativeOff, state:"enabled",enabled:true,
+                baselineReady:true,storageReady:false,
+            };
+            return none;
+        });
+        await mount();
+        expect(host.textContent).toContain(
+            "Music storage is unavailable. Automatic importing is paused until the correct disk returns."
+        );
+        expect(host.querySelector('[role="alert"]')?.textContent)
+            .toContain("Music storage is unavailable");
+        expect(api.post).not.toHaveBeenCalled();
     });
 
     it("pauses a running native importer with one click and no new confirmation", async () => {
