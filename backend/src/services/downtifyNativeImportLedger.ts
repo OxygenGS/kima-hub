@@ -236,6 +236,9 @@ export async function claimNativeImport(
                     id, ownerKimaUserId: owner.kimaUserId,
                     remoteServerId: owner.remoteServerId,
                     remoteUserId: owner.remoteUserId,
+                    // A previous pairing's unfinished claim must not be
+                    // revived after re-pairing and a fresh baseline.
+                    discoveredAt: { gt: pairing.nativeImportBaselineAt },
                 },
                 select: { id: true, status: true, spotifyTrackId: true },
             });
@@ -246,6 +249,7 @@ export async function claimNativeImport(
                     id, status: "ready", ownerKimaUserId: owner.kimaUserId,
                     remoteServerId: owner.remoteServerId,
                     remoteUserId: owner.remoteUserId,
+                    discoveredAt: { gt: pairing.nativeImportBaselineAt },
                 },
                 data: {
                     status: "claimed", claimToken: token, claimedAt: new Date(),
