@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Music folder access does not prove that the correct disk is mounted.": "Music folder access does not prove that the correct disk is mounted.",
     "Music directory access": "Music directory access",
     "Downtify server identity": "Downtify server identity",
     "Original audio sample": "Original audio sample",
@@ -2222,6 +2223,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Music folder access does not prove that the correct disk is mounted.": "Toegang tot de muziekmap bewijst niet dat de juiste schijf is aangekoppeld.",
     "Music directory access": "Toegang tot muziekmap",
     "Downtify server identity": "Identiteit van Downtify-server",
     "Original audio sample": "Origineel audiofragment",
