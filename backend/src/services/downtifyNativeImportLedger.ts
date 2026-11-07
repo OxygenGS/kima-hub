@@ -22,7 +22,7 @@ export type NativeImportStatus =
     | "imported" | "review" | "uncertain";
 export type LedgerState =
     | "recorded" | "already_seen" | "blocked" | "invalid_snapshot" | "not_found"
-    | "claimed" | "claimed_elsewhere" | "published_pending_scan"
+    | "claimed" | "claimed_elsewhere" | "published_pending_scan" | "deferred"
     | "uncertain";
 
 const SPOTIFY_ID = /^[A-Za-z0-9]{22}$/;
@@ -46,6 +46,8 @@ export type Selection = {
     songs: NativeSongObservation[];
     /** Ambiguous rows are rejected, never assumed to be distinct downloads. */
     ambiguous: number;
+    /** Changed files not yet attributable to a finished owner job. */
+    deferred?: number;
 };
 
 function record(v: unknown): v is Record<string, unknown> {
@@ -192,14 +194,20 @@ export function selectFreshNativeSongs(
         return { state: "invalid_snapshot", songs: [], ambiguous: 0 };
     }
     const queueByFile = new Map<string, NativeSongObservation[]>();
+    let activeOwnerSpotifyJobs = 0;
     for(const entry of queueSnapshot) {
-        if (!record(entry) || entry.status !== "done" ||
-            !Array.isArray(entry.user_ids) ||
+        if (!record(entry) || !Array.isArray(entry.user_ids) ||
             !entry.user_ids.includes(remoteUserId) || !record(entry.song) ||
             (entry.song.source !== undefined && entry.song.source !== "spotify") ||
             typeof entry.song.song_id !== "string" ||
-            !SPOTIFY_ID.test(entry.song.song_id) ||
-            typeof entry.filename !== "string" ||
+            !SPOTIFY_ID.test(entry.song.song_id)) continue;
+        if (entry.status === "downloading" || entry.status === "queued") {
+            // The library may expose the just-written file before the job
+            // exposes its final filename/status. Never consume that cursor.
+            activeOwnerSpotifyJobs++;
+            continue;
+        }
+        if (entry.status !== "done" || typeof entry.filename !== "string" ||
             entry.filename.length > 1024) continue;
         const old = queueByFile.get(entry.filename) || [];
         old.push({ spotifyTrackId: entry.song.song_id, source: "spotify" });
@@ -212,16 +220,21 @@ export function selectFreshNativeSongs(
             typeof entry.added !== "number" || !Number.isSafeInteger(entry.added)) {
             continue;
         }
-        // Do not import old files that were merely retagged or reappeared in
-        // the changefeed. 30 seconds accommodate minor server clock skew.
-        if (entry.added < Math.floor(baselineAt.getTime()/1000) - 30) continue;
+        // Require the first addition to be strictly AFTER activation:
+        // an old song retagged during a scan must never be imported.
+        // Do not allow a clock-skew grace period that admits older files.
+        if (entry.added <= Math.ceil(baselineAt.getTime()/1000)) continue;
         tracks.set(entry.file, (tracks.get(entry.file)||0)+1);
     }
     const ids=new Map<string,number>();
+    let deferred = 0;
     for (const [filename, count] of tracks) {
         const jobs=queueByFile.get(filename)||[];
         if (count !== 1 || jobs.length !== 1) {
-            // ambiguous matching jobs are never actionable
+            // A competing in-flight download may be the new file we see
+            // in the changefeed. Hold the ENTIRE cursor for another poll.
+            // Otherwise this one-time event is permanently lost.
+            if (activeOwnerSpotifyJobs > 0 && jobs.length === 0) deferred++;
             continue;
         }
         const id=jobs[0].spotifyTrackId;
@@ -233,7 +246,7 @@ export function selectFreshNativeSongs(
         if(count===1)songs.push({spotifyTrackId:id,source:"spotify"});
         else ambiguous++;
     }
-    return {state:"ok",songs,ambiguous};
+    return {state:"ok",songs,ambiguous,deferred};
 }
 
 /** Advance a Downtify library cursor atomically with new eligible claims.
@@ -259,6 +272,11 @@ export async function discoverNativeCompleted(
             owner.remoteUserId, identity.baselineAt);
     if (selection.state !== "ok") {
         return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
+    }
+    if (selection.deferred) {
+        // No cursor update and no partial insertion. On the next poll the
+        // completed queue row can be matched to this same library event.
+        return { state: "deferred", count: 0, ambiguous: selection.ambiguous };
     }
     if (changes.cursor === identity.libraryCursor) {
         return { state: "recorded", count: 0, ambiguous: selection.ambiguous };
