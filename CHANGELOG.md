@@ -1,8 +1,8 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.19.0 — release preparation (unpublished)
+## OxygenGS fork v1.19.0 — released 2026-11-07
 
-This source-only candidate adds the first administrator-managed Downtify integration settings to the OxygenGS fork. The already published v1.18.0 image and its existing downloads, music imports and DAS mounts are unchanged.
+Published [v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0) adds administrator-managed Downtify integration settings to the OxygenGS fork. Existing music imports, DAS mounts and external Importer v5 remain unchanged. Publishing a new image does not automatically upgrade any installation.
 
 ### Downtify pairing and configuration
 - PR #210: add Settings > Integrations > Downtify for administrators, with connection testing and explicit account pairing using a device token. Preserve English and Dutch user-facing copy.
@@ -16,10 +16,10 @@ This source-only candidate adds the first administrator-managed Downtify integra
 
 ### Data safety and release gate
 - Add one forward-only, default-OFF DowntifyIntegration PostgreSQL migration. Before any production upgrade, back up all persistent /data and independently verify a restore; image downgrade alone is not a database rollback.
-- Require the candidate PR security, database upgrade/restore, EN/NL browser tests, full-stack AIO smoke and native AMD64/ARM64 preflight on the exact final commit. Review residual native-image vulnerabilities before a separately approved stable tag and Docker publication.
-- This is unpublished release-preparation source. It does not authorize tagging, pushing an image, changing a running Proxmox installation, or altering Importer v5.
+- PR security, database upgrade/restore, EN/NL browser tests and full-stack AIO checks passed. Exact-source native [AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879), [stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/42397547487) and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) completed successfully. Residual image advisories remain documented in [image security](docs/image-security.md).
+- The published image is `ghcr.io/oxygengs/kima-hub:v1.19.0` for AMD64 and ARM64. It does **not** change a running Proxmox installation or Importer v5. Keep a tested complete `/data` backup and independent rollback procedure before deployment.
 
-## OxygenGS fork v1.18.0 — release preparation (unpublished)
+## OxygenGS fork v1.18.0 — released 2026-11-06
 
 Kima Hub v1.18.0 delivers the **first guarded stage** of the Unified Download Manager. The new `/downloads` screen combines a read-only Kima download overview with a user-owned Spotify link/request flow and selectively enabled Downtify checks. Existing Soulseek and Lidarr behavior stays intact. This is **not** the promised autonomous Downtify-to-DAS importer: Importer v5 remains the independent live importer.
 
@@ -39,10 +39,10 @@ Kima Hub v1.18.0 delivers the **first guarded stage** of the Unified Download Ma
 
 ### Upgrade and release boundaries
 - **Before an upgrade:** back up the **entire persistent `/data` volume**, verify an independent restore, retain the exact original Compose/Dockge project, configuration and music mounts, and ensure enough space for the new database tables. A version rollback **without a pre-upgrade `/data` restore is not safe** after these migrations.
-- Continue to use published `ghcr.io/oxygengs/kima-hub:v1.17.1` until the exact-commit v1.18.0 native AMD64/ARM64 preflight, residual image vulnerability review, explicit stable-release approval and GitHub publication all succeed. Do not deploy a source branch or unverified image to the live music server.
+- v1.18.0 was published after exact-source [native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42180411701), security review and [stable Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/42182749230). That publication did not deploy to any running installation.
 - A later, independently reviewed importer phase must establish verified physical mount identity, an immutable source-to-destination file handoff, copy checksums, duplicate/collision prevention, a Kima index/playback receipt, exclusive writer ownership and tested rollback **before** changing Importer v5.
 
-- **Release gate:** This entry is source-only release preparation, not evidence of a built/published stable image. Require exact-tag metadata validation, native architecture and Trivy preflight, vulnerability signoff, isolated upgrade/restore, and a separate publication authorization.
+- **Release record:** The [v1.18.0 GitHub Release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.18.0) contains the original versioned notes; these historical migration and security requirements remain applicable to upgrades from older images.
 
 
 ## OxygenGS fork v1.17.1 — released 2026-11-04
@@ -307,7 +307,7 @@ Docker image size optimization work since v1.11.7:
 - Automatically compare native main builds to the v1.11.7 baseline (PR #116). Native uncompressed image measurements versus v1.11.7: AMD64 1.729 GiB to 1.650 GiB (81.0 MiB, 4.57% smaller); ARM64 4.102 GiB to 3.843 GiB (265.3 MiB, 6.32% smaller). These are local image sizes, not compressed registry download sizes.
 - No database migrations, removed audio functionality, or production deployment changes.
 
-## OxygenGS fork v1.11.7 — release preparation (unpublished)
+## OxygenGS fork v1.11.7 — released 2026-10-25
 
 Performance, accessibility and localization refinements following the v1.11.5 published baseline (v1.11.6 was a development version, not confirmed as published):
 - Open artist pages faster when browsing the library: prefetch detail queries on card hover/focus and reuse the existing 10-minute React Query cache; only fall back to external discovery for genuine library 404 responses (PR #91).
@@ -322,7 +322,7 @@ Performance, accessibility and localization refinements following the v1.11.5 pu
 - Avoid repeated artist album sorting on unrelated renders (PR #109).
 - No database migrations, persistent-volume changes or installation-specific changes. Verify native AMD64/ARM64 image scans, full CI, and upgrade/rollback rehearsals before publishing.
 
-## OxygenGS fork v1.11.6 — release preparation (unpublished)
+## OxygenGS fork v1.11.6 — released 2026-10-24
 
 Development version superseded by v1.11.7 release preparation; no separate stable v1.11.6 publication is claimed here.
 
@@ -343,7 +343,7 @@ Patch release based on v1.11.3 with the consolidated Dutch interface work from m
 - Expand unit and public browser language-switching regressions; preserve user permissions and existing data formats.
 - No new database migrations or persistent-volume changes in this patch.
 
-## OxygenGS fork v1.11.3 — release preparation (unpublished)
+## OxygenGS fork v1.11.3 — released 2026-10-20
 
 Patch release for v1.11.2:
 - Hide Browse → Playlists import-by-URL controls and modal when album-request or track-download permission is missing, matching the server-side import policy.
