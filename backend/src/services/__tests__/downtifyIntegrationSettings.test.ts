@@ -47,6 +47,7 @@ type Row = {
     expectedUserId: number; expectedServerId: string;
     enabled: boolean; spotifyIntentsEnabled: boolean;
     trackSubmissionEnabled: boolean; reconciliationEnabled: boolean;
+    nativeImportEnabled: boolean; nativeImportBaselineAt: Date | null;
 };
 let row: Row | null = null;
 beforeEach(() => {
@@ -202,9 +203,12 @@ describe("Downtify authenticated owner pairing", () => {
         row!.enabled = true;
         row!.trackSubmissionEnabled = true;
         row!.spotifyIntentsEnabled = true;
+        row!.nativeImportEnabled = true;
+        row!.nativeImportBaselineAt = new Date();
         await pairDowntify("admin-1", pair, client(INFO, AUTH));
         expect(row).toMatchObject({
             enabled: false, spotifyIntentsEnabled: false, trackSubmissionEnabled: false,
+            nativeImportEnabled: false, nativeImportBaselineAt: null,
         });
     });
 });
