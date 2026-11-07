@@ -10,6 +10,10 @@
  * acknowledgement is operational and must not be claimed as host proof.
  */
 import { prisma } from "../utils/db";
+import { config } from "../config";
+import {
+    initializeNativeMusicVolume, verifyNativeMusicVolume,
+} from "./downtifyNativeMountProof";
 import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
 import { getNativeImportSummary, recordNativeBaseline } from "./downtifyNativeImportLedger";
 import {
@@ -29,7 +33,7 @@ export class NativeImportSetupError extends Error {
     constructor(public readonly state:
         | "not_paired" | "unauthorized" | "pairing_disabled" |
           "confirmation_required" | "source_unavailable" |
-          "invalid_baseline" | "changed_during_setup") {
+          "invalid_baseline" | "changed_during_setup" | "storage_unavailable") {
         super(state);
     }
 }
@@ -43,7 +47,7 @@ export async function getNativeAutoImportStatus(
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
-            nativeImportLibraryCursor: true,
+            nativeImportLibraryCursor: true, nativeImportMountProof: true,
         },
     });
     if (!row) return {
@@ -102,17 +106,30 @@ export async function setNativeAutoImport(
         remoteServerId: row.expectedServerId,
         remoteUserId: row.expectedUserId,
     };
-    if (!row.nativeImportBaselineAt || row.nativeImportLibraryCursor === null) {
+    if (!row.nativeImportBaselineAt && row.nativeImportLibraryCursor === null &&
+        !row.nativeImportMountProof) {
         const env = await getDowntifyRuntimeEnv();
         const queue = await getVerifiedNativeImportQueue(adminId, env);
         const library = await getVerifiedNativeLibraryChanges(adminId, 0, env);
         if (queue.state !== "ready" || library.state !== "ready" || !library.full) {
             throw new NativeImportSetupError("source_unavailable");
         }
-        const seeded = await recordNativeBaseline(owner, queue.queue, library.cursor);
+        // Only on explicit first activation and after the owner verified
+        // their actual music mount. The marker is on THAT filesystem.
+        const proof = await initializeNativeMusicVolume(config.music.musicPath);
+        if (!proof) throw new NativeImportSetupError("storage_unavailable");
+        const seeded = await recordNativeBaseline(
+            owner, queue.queue, library.cursor, proof,
+        );
         if (seeded.state !== "recorded") {
             throw new NativeImportSetupError("invalid_baseline");
         }
+    } else if (!row.nativeImportBaselineAt ||
+        row.nativeImportLibraryCursor === null ||
+        !await verifyNativeMusicVolume(
+            config.music.musicPath, row.nativeImportMountProof,
+        )) {
+        throw new NativeImportSetupError("storage_unavailable");
     }
     // Never use an unconditional update: an intervening re-pair resets
     // baseline and must invalidate this authorization.
@@ -124,6 +141,7 @@ export async function setNativeAutoImport(
             enabled: true, nativeImportEnabled: false,
             nativeImportBaselineAt: { not: null },
             nativeImportLibraryCursor: { not: null },
+            nativeImportMountProof: { not: null },
         },
         data: { nativeImportEnabled: true },
     });
