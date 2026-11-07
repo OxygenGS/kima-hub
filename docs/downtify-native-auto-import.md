@@ -1,0 +1,92 @@
+# Native Downtify auto-import — one control, conservative cutover
+
+**Development branch only. Not published or installed on any running Kima
+instance.** This feature replaces a separately managed downloader import
+script only **after** an explicit, independently tested single-writer
+cutover. The normal UI is designed to require no script edits or command
+line to use it after initial setup.
+
+## Intended user experience
+
+1. Connect Downtify once under **Settings → Integrations → Downtify**.
+2. Enable **Downloads bekijken** or the relevant individual-track requests.
+   This is independent from importing the remote file.
+3. Turn on **Gedownloade muziek automatisch toevoegen**.
+   The first activation requires confirming that any existing external
+   importer has been stopped and a tested complete Kima `/data` backup
+   is available. Kima cannot discover or disable external systemd timers
+   on other hosts. The acknowledgment is not technical proof.
+4. Kima creates an owner-bound baseline of already completed downloads,
+   then imports only newly observed individual Spotify tracks. Album
+   batches and arbitrary remote files are not automatically ingested.
+5. In **Settings** the administrator sees the number waiting and requiring
+   attention. Turning the switch OFF stops new claims; existing music,
+   remote jobs and the baseline remain untouched.
+
+## Implementation
+
+- **Discovery:** every two minutes, only with an enabled DB setting.
+  Revalidate the exact public Downtify server identity before sending an
+  encrypted device token. Revalidate exact remote user and numeric job
+  membership for every Spotify song. Do not ingest shared-account jobs.
+- **Baseline:** one atomic PostgreSQL transaction records completed
+  historical Spotify IDs. Subsequent restarts never reimport them.
+  Independent unique and CAS claims prevent two Kima workers from claiming
+  the same song. An uncertain claim stays held for review.
+- **Transfer:** fetch the untranscoded original over the official
+  authenticated mobile v1 track stream. Require exact response length and
+  bounded streaming; never use a remote path as a local destination.
+- **Verification:** the private destination temp must match a full local
+  SHA-256, recognized container, expected Spotify ISRC, expected duration,
+  completed FFmpeg decode and unchanged inode. Missing tags, unavailable
+  Spotify identity or contradictory evidence are rejected for review.
+- **Storage:** Kima creates only its dedicated
+  `Singles/Downtify/<Artist>/<Title> - <Spotify ID>.<extension>` tree
+  beneath the normal `/music` mount; no custom operator staging mount
+  or remote path is required. No-replace atomic hardlink publication keeps
+  existing files. The upstream source is never deleted.
+- **Index confirmation:** store the expected hash and target path as
+  `published_pending_scan` first, request the normal Kima scanner, then
+  confirm a non-corrupt LIBRARY Track record and the exact physical hash
+  before marking the ledger row imported. Downtify `done`, a remote
+  downloaded file, and successful local file publication are not enough.
+
+## Fail-safe limits
+
+- Up to **two new songs per cycle** and **256 MiB per file**.
+- A temporary file is private to the destination filesystem; if the
+  library mount disappears, becomes a symlink or changes permissions, Kima
+  stops rather than writing elsewhere.
+- No `rm -rf`, source deletion, album replacement, or forced overwrite.
+- Uncertain status, a failed decode, absent ISRC and unexpected storage
+  permissions never trigger an automatic retry of an already claimed job.
+- The imported flag is **not** automatically enabled by upgrading Kima,
+  connecting Downtify, enabling Spotify intents, or viewing the queue.
+- Other Kima accounts cannot replace the paired owner's token or enable
+  the native importer.
+- Do not attempt file publication across separate volume devices. The
+  dedicated temp and final target must share the same trusted filesystem.
+
+## Deployment and release gate
+
+No existing production host or imported music is touched by merging this
+code. Before enabling on an actual system, require:
+
+1. Native AMD64 and ARM64 builds, security and Prisma upgrade/restore
+   checks, end-to-end tests, an externally mounted music-volume canary
+   and an independently verified cold copy of the original `/data`.
+2. Confirm existing external import scripts/timers targeting **the same
+   library are stopped and prevented from automatically restarting**.
+   Save their definitions first and leave scripts backed up.
+3. With the native setting OFF, verify Downtify connectivity, storage
+   directory permissions, exact user identity and a direct original sample.
+4. Enable the native importer and download **one new test song**. Verify
+   identical bytes, no duplicate copy, the Kima index, playback and
+   surviving a restart/missing-mount simulation.
+5. Only after a successful canary and tested recovery remove the obsolete
+   external importer service/timer/script. Do **not** remove its music,
+   download directory, filesystem mounts, historical backups or audit data.
+
+Rolling back across the additive PostgreSQL migrations requires restoring
+the independently verified **pre-upgrade `/data`** backup; changing the
+Docker tag alone is not a database rollback.
