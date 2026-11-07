@@ -2,7 +2,8 @@ import { prisma } from "../../utils/db";
 import { spotifyService } from "../spotify";
 import { getDowntifyRuntimeEnv } from "../downtifyIntegrationSettings";
 import {
-    getVerifiedNativeImportQueue, openNativeDowntifyOriginal,
+    getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
+    openNativeDowntifyOriginal,
 } from "../downtifyNativeOriginalTransport";
 import {
     claimNativeImport, confirmNativeIndexed, discoverNativeCompleted,
@@ -29,6 +30,7 @@ jest.mock("../downtifyIntegrationSettings", () => ({
 }));
 jest.mock("../downtifyNativeOriginalTransport", () => ({
     getVerifiedNativeImportQueue: jest.fn(),
+    getVerifiedNativeLibraryChanges: jest.fn(),
     openNativeDowntifyOriginal: jest.fn(),
 }));
 jest.mock("../downtifyNativeImportLedger", () => ({
@@ -61,6 +63,7 @@ const owner = {
 const row = {
     enabled: true, nativeImportEnabled: true,
     nativeImportBaselineAt: new Date("2026-11-07T17:00:00Z"),
+    nativeImportLibraryCursor: 6,
     ownerKimaUserId: owner.kimaUserId, expectedServerId: owner.remoteServerId,
     expectedUserId: owner.remoteUserId,
 };
@@ -85,6 +88,7 @@ const pairing = mock(prisma.downtifyIntegration.findUnique);
 const imports = mock(prisma.downtifyNativeImport.findMany);
 const getRuntime = mock(getDowntifyRuntimeEnv);
 const getQueue = mock(getVerifiedNativeImportQueue);
+const getLibrary = mock(getVerifiedNativeLibraryChanges);
 const discover = mock(discoverNativeCompleted);
 const getSummary = mock(getNativeImportSummary);
 const claimImport = mock(claimNativeImport);
@@ -105,6 +109,7 @@ beforeEach(() => {
     imports.mockResolvedValue([]);
     getRuntime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
     getQueue.mockResolvedValue({ state: "ready", queue: [] });
+    getLibrary.mockResolvedValue({state:"ready",cursor:7,full:false,tracks:[]});
     discover.mockResolvedValue({ state: "recorded", count: 0, ambiguous: 0 });
     getSummary.mockResolvedValue({ enabled: true, baselineReady: true, waiting: 0, inReview: 0 });
     claimImport.mockResolvedValue(claim);
