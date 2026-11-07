@@ -45,6 +45,7 @@ type NativeAutoImportStatus = {
     awaitingImport: number;
     needsReview: number;
     legacyHostVerified: false;
+    storageReady: boolean;
 };
 const importMessages: Record<NativeImportState, TranslationKey> = {
     disabled: "Enable the Downtify queue first.",
@@ -483,6 +484,11 @@ export function DowntifySection() {
                                                     : t("Automatic import is currently off.")}
                                                 {" · "}{t("Waiting")}: {nativeStatus.awaitingImport}
                                                 {" · "}{t("Needs review")}: {nativeStatus.needsReview}
+                                            </p>
+                                        )}
+                                        {nativeStatus?.enabled && nativeStatus.storageReady === false && (
+                                            <p role="alert" className="text-xs text-amber-300">
+                                                {t("Music storage is unavailable. Automatic importing is paused until the correct disk returns.")}
                                             </p>
                                         )}
                                         {nativeFeedback && (
