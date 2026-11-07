@@ -115,6 +115,41 @@ describe("New-only mobile library cursors", () => {
             {spotifyTrackId:SPOTIFY_ID,source:"spotify"},
         ]);
     });
+    it("defers a new library event while the owner's Spotify job still downloads", () => {
+        const now = new Date();
+        const changed = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }];
+        const active = [{
+            ...queue()[0], status:"downloading", filename:null,
+        }];
+        const selection = selectFreshNativeSongs(active, changed, 7, now);
+        expect(selection.songs).toEqual([]);
+        expect(selection.deferred).toBe(1);
+        expect(selectFreshNativeSongs(queue(), changed, 7, now).songs)
+            .toEqual([{spotifyTrackId:SPOTIFY_ID,source:"spotify"}]);
+    });
+    it("does not defer for a foreign account's active download", () => {
+        const now = new Date();
+        const changed = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }];
+        const active = [{
+            ...queue()[0], status:"downloading", filename:null, user_ids:[8],
+        }];
+        const selection = selectFreshNativeSongs(active,changed,7,now);
+        expect(selection.deferred).toBe(0);
+    });
+    it("never treats a pre-activation recording as new even within thirty seconds", () => {
+        const now = new Date();
+        const justBefore = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)-1,
+        }];
+        expect(selectFreshNativeSongs(queue(),justBefore,7,now).songs).toEqual([]);
+    });
     it("rejects duplicate library filenames and jobs from a different remote user", () => {
         const now = new Date();
         const row = {id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
@@ -186,22 +221,34 @@ describe("Native import discovery and durable claims", () => {
     it("cannot discover new songs while disabled or before baseline", async () => {
         expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
     id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
-    added:Math.floor(Date.now()/1000),
+    added:Math.floor(Date.now()/1000)+60,
 }]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
         paired.mockResolvedValueOnce(pairing(true, null));
         expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
     id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
-    added:Math.floor(Date.now()/1000),
+    added:Math.floor(Date.now()/1000)+60,
 }]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
+    it("keeps the stored cursor unchanged while a recent owner download is active", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date()));
+        const newTrack={id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added:Math.floor(Date.now()/1000)+60};
+        const downloading=[{...queue()[0],status:"downloading",filename:null}];
+        const result=await discoverNativeCompleted(owner,downloading,
+            {cursor:9,full:false,tracks:[newTrack]});
+        expect(result).toEqual({state:"deferred",count:0,ambiguous:0});
+        expect(transaction).not.toHaveBeenCalled();
+        expect(integrationUpdate).not.toHaveBeenCalled();
+        expect(importsCreate).not.toHaveBeenCalled();
+    });
     it("uses a unique createMany skipDuplicates instead of resetting existing jobs", async () => {
         paired.mockResolvedValueOnce(pairing(true, new Date()));
         const result = await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
     id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
-    added:Math.floor(Date.now()/1000),
+    added:Math.floor(Date.now()/1000)+60,
 }]});
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(importsCreate).toHaveBeenCalledWith({
