@@ -151,7 +151,12 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
     it("only one of two simultaneous publishers can install a destination", async () => {
         const results = await Promise.all([publish(), publish()]);
         expect(results.filter(r => r.state === "published")).toHaveLength(1);
-        expect(results.filter(r => r.state === "already_present_same_bytes")).toHaveLength(1);
+        // The loser may see the winning hardlink before its directory
+        // fsync completes. A conservative "uncertain" result is correct:
+        // never claim a durable duplicate until that is independently known.
+        expect(results.filter(r => r.state === "already_present_same_bytes" ||
+            r.state === "uncertain")).toHaveLength(1);
+        expect(results.every(r => r.retryAllowed === false)).toBe(true);
         expect(await fs.readFile(target())).toEqual(audio);
         expect(await pending()).toEqual([]);
     });
