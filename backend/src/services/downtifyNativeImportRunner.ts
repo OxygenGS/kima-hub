@@ -33,6 +33,7 @@ import { ensureNativeImportDestination, nativeImportDestination } from "./downti
 import { publishNativeAudio } from "./downtifyAtomicPublisher";
 import { verifyNativeTemporaryRecording } from "./downtifyNativeAudioVerification";
 import { requestScan } from "../workers/scanRequest";
+import { verifyNativeMusicVolume } from "./downtifyNativeMountProof";
 
 const MAX_IMPORTS_PER_CYCLE = 2;
 let active = false;
@@ -66,13 +67,17 @@ async function livePair(owner: PinnedImportOwner): Promise<boolean> {
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportMountProof: true,
         },
     });
-    return current?.ownerKimaUserId === owner.kimaUserId &&
+    const stillPaired = current?.ownerKimaUserId === owner.kimaUserId &&
         current.expectedServerId === owner.remoteServerId &&
         current.expectedUserId === owner.remoteUserId &&
         current.enabled === true && current.nativeImportEnabled === true &&
         !!current.nativeImportBaselineAt;
+    return stillPaired && await verifyNativeMusicVolume(
+        config.music.musicPath, current.nativeImportMountProof,
+    );
 }
 
 export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
@@ -88,6 +93,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             select: {
                 enabled: true, nativeImportEnabled: true,
                 nativeImportBaselineAt: true, nativeImportLibraryCursor: true,
+                nativeImportMountProof: true,
                 ownerKimaUserId: true, expectedServerId: true,
                 expectedUserId: true,
             },
@@ -95,6 +101,11 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
         if (!settings?.enabled || !settings.nativeImportEnabled ||
             !settings.nativeImportBaselineAt ||
             settings.nativeImportLibraryCursor === null) return outcome("paused");
+        // A Docker bind target can survive USB/NAS loss as an empty, writable
+        // local directory. The on-volume marker is mandatory before any I/O.
+        if (!await verifyNativeMusicVolume(
+            config.music.musicPath, settings.nativeImportMountProof,
+        )) return outcome("unavailable");
         const owner: PinnedImportOwner = {
             kimaUserId: settings.ownerKimaUserId,
             remoteServerId: settings.expectedServerId,
