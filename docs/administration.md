@@ -19,7 +19,7 @@ Enrichment is how Kima works out what is in your library. It runs in the backgro
 - **Sync New:** sync the library (and Audiobookshelf, when connected) and enrich what is new.
 - **Retry what didn't work:** run every incomplete song again. Complete songs are skipped and nothing is deleted.
 - **Start over on everything** (admin): process the whole library again. Existing matches are kept and nothing is deleted. It takes about as long as a first enrichment (see [enrichment settings](#library-enrichment)).
-- **Wipe and re-run** (admin): clear what Kima worked out about your music (which recording each track is, audio analysis, vibe data, the vibe map, artist bios and similar artists) and work it out again. Your music, playlists, plays, likes and edits stay. It takes about as long as a first enrichment (roughly 1 minute per 100 songs with a GPU; see [enrichment settings](#library-enrichment)), and the vibe map comes back when it finishes. Use it after upgrading to 1.11, which changes how everything is worked out.
+- **Wipe and re-run** (admin): clear what Kima worked out about your music (which recording each track is, audio analysis, vibe data, the vibe map, artist bios and similar artists) and work it out again. Your music, playlists, plays, likes and edits stay. It takes about as long as a first enrichment (roughly 1 minute per 100 songs with a GPU; see [enrichment settings](#library-enrichment)), and the vibe map comes back when it finishes. Only use it when a full re-enrichment is deliberately needed; upgrading to v1.19.0 does not by itself require wiping analysis results.
 - **Pause**, **Resume** and **Stop** appear while enrichment is running.
 
 Two switches below them, **Auto sync library** and **Auto enrich metadata**, keep library changes and new content up to date automatically.
@@ -51,7 +51,7 @@ Kima runs its background work through job queues. A dashboard for them (Bull Boa
 
 ## Backups
 
-Everything Kima keeps apart from your music is in `/data` inside the container: the database, Redis, the generated secrets and the caches. See [configuration.md](configuration.md#storage-paths). Back up the volume or the folder mounted there. Stop the container first so the database files are consistent.
+Everything Kima keeps apart from your music is in `/data` inside the container: the database, Redis, the generated secrets and the caches. See [configuration.md](configuration.md#storage-paths). Before upgrading, stop application writes and back up the entire original volume or bind-mounted directory. **Verify an independent restore** into a different location before relying on that backup. See [safe updates](safe-aio-updates.md).
 
 Keep the copy of `/data/secrets` with the database. Without the encryption key, the credentials saved in Settings cannot be read.
 
@@ -61,4 +61,4 @@ Keep the copy of `/data/secrets` with the database. Without the encryption key, 
 
 ## Updating
 
-See [install.md](install.md#updating).
+See [install.md](install.md#updating-an-existing-installation) and [safe updates](safe-aio-updates.md) for the current published version and rollback requirements.

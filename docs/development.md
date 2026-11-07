@@ -98,4 +98,4 @@ The root `Dockerfile` builds the all-in-one image. `docker-compose.yml` builds t
 
 ## Releases
 
-Stable releases are built from explicitly tagged `main` commits by `.github/workflows/docker-publish.yml`, scanned separately on native AMD64 and ARM64 runners, and published to **GitHub Container Registry (GHCR)** only. The optional **Pre-release Image** workflow is manual-only and does not change the stable tag or `:latest`. See [release channels](install.md#release-channels).
+Stable releases are built from explicitly tagged `main` commits by `.github/workflows/docker-publish.yml`, scanned separately on native AMD64 and ARM64 runners, and published to **GitHub Container Registry (GHCR)** only. The optional **Pre-release Image** workflow is manual-only and does not change the stable tag or `:latest`. See [release and security notes](install.md#release-and-security-notes).
