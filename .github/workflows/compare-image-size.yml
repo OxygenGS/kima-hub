@@ -1,14 +1,9 @@
 name: Compare Docker Image Size
 
-# Runs automatically when this workflow lands on main, and can be repeated
-# after Dockerfile changes. Does not publish or run the application.
+# Manual-only capacity audit. Native images are already built by PR and
+# release preflight checks; do not launch two extra 180-minute builds on pushes.
+# This workflow never publishes or deploys.
 on:
-  push:
-    branches: [main]
-    paths:
-      - Dockerfile
-      - .github/workflows/compare-image-size.yml
-      - .github/ci/report-image-size.py
   workflow_dispatch:
 
 permissions:
@@ -17,7 +12,7 @@ permissions:
 
 jobs:
   compare:
-    name: Compare native ${{ matrix.arch }} to v1.11.7
+    name: Compare native ${{ matrix.arch }} to v1.19.0
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker pull --platform "linux/$ARCH" "ghcr.io/${OWNER,,}/kima-hub:v1.11.7"
+          docker pull --platform "linux/$ARCH" "ghcr.io/${OWNER,,}/kima-hub:v1.19.0"
       - name: Build current main natively, never push
         uses: docker/build-push-action@v5
         with:
@@ -61,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          baseline="ghcr.io/${OWNER,,}/kima-hub:v1.11.7"
+          baseline="ghcr.io/${OWNER,,}/kima-hub:v1.19.0"
           current="kima:main-size-comparison"
           test "$(docker image inspect "$current" --format '{{.Architecture}}')" = "$ARCH"
           test "$(docker image inspect "$baseline" --format '{{.Architecture}}')" = "$ARCH"
@@ -76,7 +71,7 @@ jobs:
           with open("comparison.md", "w") as f:
               f.write(f"### Native {arch} image size comparison\n")
               f.write("| Version | Local uncompressed image size |\n|---|---:|\n")
-              f.write(f"| v1.11.7 | {old / 1024**3:.3f} GiB |\n")
+              f.write(f"| v1.19.0 | {old / 1024**3:.3f} GiB |\n")
               f.write(f"| main | {new / 1024**3:.3f} GiB |\n")
               f.write(f"\n**Difference:** {delta / 1024**2:+.1f} MiB ({pct:+.2f}% smaller)\n\n")
               f.write("These values are uncompressed local image sizes, **not registry download sizes**.\n")

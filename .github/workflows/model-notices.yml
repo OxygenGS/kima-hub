@@ -2,7 +2,7 @@ name: Model notice preservation (NO PUBLISH)
 
 on:
   push:
-    branches: [main, feature/upstream-v111-implementation]
+    branches: [main]
     paths:
       - services/audio-analyzer/models/**
       - services/audio-analyzer/pb/LICENSE-upf-models

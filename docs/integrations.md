@@ -2,6 +2,20 @@
 
 Kima works on its own. Each service below is optional and set up in **Settings**; most are for admins only. What Kima sends to each is listed in [PRIVACY.md](../PRIVACY.md).
 
+## Downtify (from v1.19.0)
+
+Downtify is an **optional** integration for manually preparing and submitting individual Spotify tracks. It does not replace the existing Kima library importer or copy music to storage.
+
+1. Sign in as a Kima administrator and open **Settings → Integrations → Downtify**.
+2. Enter the Downtify server address reachable from the Kima backend and a **paired-device token** (not the account password).
+3. Test the connection, then pair the device. The token is encrypted at rest and never displayed back to the browser.
+4. Enable the required controls individually. Saving Spotify track requests does not start downloads; manual track submission requires an explicit acknowledgement.
+5. Use the **Downloads** screen to inspect your permitted saved requests and owner-verified remote queue.
+
+If Docker already manages a Downtify integration or device token, the browser refuses to replace it until the operator explicitly migrates configuration. Audio/source inspection stays disabled in database-pairing mode without a separately reviewed read-only staging mount. No unattended album/playlist import, file deletion, DAS transfer or Importer v5 cutover is provided.
+
+[Detailed Downtify setup](downtify-settings.md) · [Unified Download Manager](unified-download-manager.md) · [User permissions](user-permissions.md)
+
 ## Lidarr
 
 [Lidarr](https://lidarr.audio/) finds and downloads music. With Lidarr connected, Kima can request an album you do not own, and it adds the album to your library when the download finishes.
@@ -82,7 +96,7 @@ Spotify playlists are read from their public pages, so you do not need to connec
 
 ## Artwork and identification keys
 
-Under **Settings > AI & Artwork**:
+Under **Settings → Artwork**:
 
 - **Fanart.tv** supplies extra artist artwork. Turn it on and add a key from fanart.tv.
 - **AcoustID** identifies files that have missing tags, by audio fingerprint. Kima has a shared key built in. You can add your own to avoid the shared key's rate limit.
