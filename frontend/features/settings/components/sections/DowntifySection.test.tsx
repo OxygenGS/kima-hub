@@ -31,6 +31,7 @@ const paired = {
 };
 let host: HTMLDivElement;
 let root: Root;
+
 const mount = async () => {
     await act(async () => { root.render(<DowntifySection />); });
 };
@@ -39,9 +40,14 @@ const button = (label: string) => [...host.querySelectorAll("button")]
 const click = async (label: string) => {
     const b = button(label);
     expect(b, "Missing button: " + label).toBeDefined();
-    await act(async () => {
-        b?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await act(async () => { b?.click(); });
+};
+const choose = async (value: "off" | "queue" | "requests" | "downloads") => {
+    const radio = host.querySelector<HTMLInputElement>(
+        'input[type="radio"][name="downtify-usage"][value="' + value + '"]'
+    );
+    expect(radio, "Missing mode: " + value).not.toBeNull();
+    await act(async () => { radio?.click(); });
 };
 
 beforeEach(() => {
@@ -57,40 +63,124 @@ afterEach(async () => {
     host.remove();
 });
 
-describe("Downtify Settings section", () => {
-    it("starts unpaired, loads admin status and does not call remote APIs automatically", async () => {
+describe("Simple Downtify Settings section", () => {
+    it("shows one-time pairing only before a connection exists, never sends automatic requests", async () => {
         await mount();
         expect(api.get).toHaveBeenCalledWith("/downtify-integration");
+        expect(host.textContent).toContain("Connect Downtify");
         expect(host.textContent).toContain("Pair Downtify account");
-        expect(host.textContent).toContain("Test Downtify connection");
         expect(button("Pair Downtify account")?.disabled).toBe(true);
+        expect(host.querySelector("#downtify-token")).not.toBeNull();
+        expect(host.querySelector('[name="downtify-usage"]')).toBeNull();
         expect(api.post).not.toHaveBeenCalled();
     });
 
-    it("never prints saved tokens or unlocks a download after initial load", async () => {
+    it("shows a linked account and simple choices but hides the stored connection form", async () => {
         vi.mocked(api.get).mockResolvedValueOnce(paired);
         await mount();
+        expect(host.textContent).toContain("Downtify account linked");
         expect(host.textContent).toContain("remote-owner");
-        expect(host.textContent).toContain("Save Spotify track requests");
-        expect(host.textContent).toContain("Enable manual Downtify track submission");
-        expect(host.textContent).toContain("Advanced audio and staging verification");
-        const secret = host.querySelector<HTMLInputElement>("#downtify-token");
-        expect(secret?.value).toBe("");
-        expect(secret?.type).toBe("password");
-        expect(button("Save Downtify settings")?.disabled).toBe(false);
+        expect(host.textContent).toContain("Features paused");
+        expect(host.textContent).toContain("What do you want to do with Downtify?");
+        expect(host.querySelector<HTMLInputElement>('input[value="off"]')?.checked).toBe(true);
+        expect(host.querySelector("#downtify-token")).toBeNull();
+        expect(host.textContent).not.toContain("dtfy_");
+        expect(button("Save choice")?.disabled).toBe(true);
         expect(api.post).not.toHaveBeenCalled();
     });
 
-    it("probes the encrypted saved pairing without putting credentials in the browser", async () => {
+    it("tests the stored encrypted device without exposing it in any browser payload", async () => {
         vi.mocked(api.get).mockResolvedValueOnce(paired);
         await mount();
-        await click("Test Downtify connection");
+        await click("Test connection");
         expect(api.post).toHaveBeenCalledWith("/downtify-integration/test", {});
         expect(host.textContent).toContain("Downtify connection verified.");
         expect(host.textContent).not.toContain("dtfy_");
     });
 
-    it("does not override an operator's existing Docker-managed integration", async () => {
+    it("reveals token replacement only after the operator chooses to change connection", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        expect(host.querySelector("#downtify-url")).toBeNull();
+        await click("Change connection");
+        expect(host.querySelector<HTMLInputElement>("#downtify-token")?.value).toBe("");
+        expect(host.querySelector<HTMLInputElement>("#downtify-token")?.type).toBe("password");
+        expect(button("Replace Downtify pairing")?.disabled).toBe(true);
+        await click("Close connection settings");
+        expect(host.querySelector("#downtify-token")).toBeNull();
+    });
+
+    it("does not send any change until Save choice is pressed", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        await choose("queue");
+        expect(host.textContent).toContain("Unsaved changes");
+        expect(api.post).not.toHaveBeenCalled();
+        expect(button("Save choice")?.disabled).toBe(false);
+        vi.mocked(api.post).mockResolvedValueOnce({ ...paired, enabled: true });
+        await click("Save choice");
+        expect(api.post).toHaveBeenCalledWith("/downtify-integration/controls", {
+            enabled: true, spotifyIntentsEnabled: false,
+            trackSubmissionEnabled: false, reconciliationEnabled: false,
+            acknowledgeTrackSubmission: false,
+        });
+        expect(host.textContent).toContain("Downtify settings saved.");
+        expect(button("Save choice")?.disabled).toBe(true);
+    });
+
+    it("maps Spotify requests to request storage without enabling downloads", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        await choose("requests");
+        vi.mocked(api.post).mockResolvedValueOnce({
+            ...paired, enabled: true, spotifyIntentsEnabled: true,
+        });
+        await click("Save choice");
+        expect(api.post).toHaveBeenCalledWith("/downtify-integration/controls", {
+            enabled: true, spotifyIntentsEnabled: true,
+            trackSubmissionEnabled: false, reconciliationEnabled: false,
+            acknowledgeTrackSubmission: false,
+        });
+    });
+
+    it("requires fresh confirmation before permitting manual downloads", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        await choose("downloads");
+        expect(button("Save choice")?.disabled).toBe(true);
+        expect(api.post).not.toHaveBeenCalled();
+        const consent = host.querySelector<HTMLInputElement>("#downtify-dispatch-ack");
+        expect(consent?.checked).toBe(false);
+        await act(async () => { consent?.click(); });
+        expect(button("Save choice")?.disabled).toBe(false);
+        vi.mocked(api.post).mockResolvedValueOnce({
+            ...paired, enabled: true, spotifyIntentsEnabled: true,
+            trackSubmissionEnabled: true,
+        });
+        await click("Save choice");
+        expect(api.post).toHaveBeenCalledWith("/downtify-integration/controls", {
+            enabled: true, spotifyIntentsEnabled: true,
+            trackSubmissionEnabled: true, reconciliationEnabled: false,
+            acknowledgeTrackSubmission: true,
+        });
+    });
+
+    it("keeps completed-job checks an explicit advanced opt-in", async () => {
+        vi.mocked(api.get).mockResolvedValueOnce(paired);
+        await mount();
+        await choose("requests");
+        await click("More options");
+        const toggle = host.querySelector<HTMLInputElement>("#downtify-reconciliation");
+        expect(toggle?.checked).toBe(false);
+        expect(toggle?.disabled).toBe(false);
+        await act(async () => { toggle?.click(); });
+        expect(toggle?.checked).toBe(true);
+        await choose("off");
+        expect(host.querySelector<HTMLInputElement>("#downtify-reconciliation")?.checked).toBe(false);
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("leaves a Docker-managed integration completely untouched", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({
             ...none, source: "environment", configured: true, enabled: true,
             tokenConfigured: true,
@@ -98,23 +188,25 @@ describe("Downtify Settings section", () => {
         await mount();
         expect(host.textContent).toContain("already configured through Docker environment variables");
         expect(host.querySelector("#downtify-token")).toBeNull();
-        expect(button("Pair Downtify account")).toBeUndefined();
+        expect(host.querySelector('[name="downtify-usage"]')).toBeNull();
         expect(api.post).not.toHaveBeenCalled();
     });
 
-    it("hides controls if the pairing belongs to a different Kima administrator", async () => {
+    it("does not expose controls or replacement to another Kima administrator", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({
             ...paired, ownerMatches: false,
         });
         await mount();
         expect(host.textContent).toContain("another Kima administrator");
-        const enabled = host.querySelector<HTMLInputElement>("#downtify-enabled");
-        expect(enabled?.disabled).toBe(true);
-        expect(button("Save Downtify settings")?.disabled).toBe(true);
+        expect(button("Change connection")).toBeUndefined();
+        expect(host.querySelector("#downtify-token")).toBeNull();
+        const radio = host.querySelector<HTMLInputElement>('input[value="queue"]');
+        expect(radio?.disabled).toBe(true);
+        expect(button("Save choice")?.disabled).toBe(true);
         expect(api.post).not.toHaveBeenCalled();
     });
 
-    it("redacts API failures instead of displaying private upstream credentials", async () => {
+    it("redacts failures instead of displaying private remote tokens or errors", async () => {
         vi.mocked(api.get).mockRejectedValueOnce(new Error("dtfy_private_secret"));
         await mount();
         expect(host.querySelector('[role="alert"]')?.textContent)
