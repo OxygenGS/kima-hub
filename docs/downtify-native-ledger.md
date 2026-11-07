@@ -67,6 +67,28 @@ the owner authentication, safe source stream and index-confirmed file
 publication must be wired together first. Do not flip
 `nativeImportEnabled` by editing the database directly.
 
+## Kima's final scanner receipt (new, dormant)
+
+A future worker may call `recordNativePublished` only after a complete
+audio verification and successful atomic no-overwrite publication.
+That transition stores the target's relative Singles/ path, exact byte
+count, SHA-256 and remote library ID, then advances the durable claim to
+`published_pending_scan`. It **does not** mark the import complete.
+
+`confirmNativeIndexed` must then independently check the Kima `Track`
+row at that exact relative path, with a LIBRARY album, non-corrupt
+status and matching file size. It opens the physical file on the
+approved music mount using `O_NOFOLLOW`, rejects symlinks and nested
+mounts, hashes the entire file and verifies stable inode, size and
+timestamps. Only then does a compare-and-swap advance the ledger to
+`imported` with the local scanner track ID.
+
+Any missing file, offline DAS, changed hash, index failure or stale
+claim stays unconfirmed; no automatic re-copy or deletion is triggered.
+A database scanner receipt still does not, by itself, prove that
+every external music player has successfully streamed the file.
+All of these operations remain **unwired to a user-facing switch**.
+
 ## Direct source transfer (new, read-only)
 
 The internal `downtifyNativeOriginalTransport` module can resolve a
