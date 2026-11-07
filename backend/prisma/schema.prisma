@@ -709,6 +709,8 @@ model DowntifyIntegration {
   // Future native importer: schema exists but NO route/worker can enable it.
   nativeImportEnabled     Boolean  @default(false)
   nativeImportBaselineAt  DateTime?
+  // Downtify mobile library sync cursor at first activation and after safe discovery.
+  nativeImportLibraryCursor Int?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
