@@ -17,6 +17,7 @@ function publish(bytes: Buffer = audio, relativeTarget = DEST) {
         relativeTarget,
         expectedBytes: bytes.length,
         chunks: stream(bytes.subarray(0, 100), bytes.subarray(100)),
+        verifyTempFile: async () => true,
     });
 }
 const target = () => path.join(root, "Singles", "Artist", "01 - Song.flac");
@@ -105,6 +106,7 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
         const result = await publishNativeAudio({
             musicRoot: root, relativeTarget: DEST, expectedBytes: audio.length,
             chunks: stream(audio.subarray(0, 100)),
+            verifyTempFile: async () => true,
         });
         expect(result.state).toBe("incomplete_source");
         expect(result.filesPublished).toBe(false);
@@ -116,6 +118,7 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
         const result = await publishNativeAudio({
             musicRoot: root, relativeTarget: DEST, expectedBytes: 64,
             chunks: stream(audio),
+            verifyTempFile: async () => true,
         });
         expect(result.state).toBe("incomplete_source");
         expect(result.filesPublished).toBe(false);
@@ -130,6 +133,7 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
             musicRoot: root, relativeTarget: DEST,
             expectedBytes: 256 * 1024 * 1024 + 1,
             chunks: untrusted(),
+            verifyTempFile: async () => true,
         });
         expect(result.state).toBe("invalid_source");
         expect(read).toBe(false);
@@ -161,6 +165,50 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
         expect(await pending()).toEqual([]);
     });
 
+    it("never publishes an unverified recording when the validator denies it", async () => {
+        const verifyTempFile = jest.fn().mockResolvedValue(false);
+        const result = await publishNativeAudio({
+            musicRoot: root, relativeTarget: DEST,
+            expectedBytes: audio.length, chunks: stream(audio),
+            verifyTempFile,
+        });
+        expect(result.state).toBe("validation_failed");
+        expect(result.filesPublished).toBe(false);
+        expect(result.retryAllowed).toBe(false);
+        expect(verifyTempFile).toHaveBeenCalledWith(
+            expect.stringContaining(".kima-import-"),
+            { bytes: audio.length, sha256: createHash("sha256").update(audio).digest("hex") },
+        );
+        expect(await pending()).toEqual([]);
+        await expect(fs.stat(target())).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("refuses a temporary file changed during independent verification", async () => {
+        const result = await publishNativeAudio({
+            musicRoot: root, relativeTarget: DEST,
+            expectedBytes: audio.length, chunks: stream(audio),
+            verifyTempFile: async (file) => {
+                await fs.utimes(file, new Date(2000, 0, 1), new Date(2000, 0, 1));
+                return true;
+            },
+        });
+        expect(result.state).toBe("validation_failed");
+        expect(result.filesPublished).toBe(false);
+        await expect(fs.stat(target())).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("does not publish if the validator throws with upstream secret details", async () => {
+        const result = await publishNativeAudio({
+            musicRoot: root, relativeTarget: DEST,
+            expectedBytes: audio.length, chunks: stream(audio),
+            verifyTempFile: async () => { throw new Error("private-token-dtfy"); },
+        });
+        expect(result.state).toBe("unavailable");
+        expect(JSON.stringify(result)).not.toContain("private-token-dtfy");
+        expect(result.filesPublished).toBe(false);
+        expect(await pending()).toEqual([]);
+    });
+
     it("does not claim success if the stream errors mid-transfer", async () => {
         async function* failing(): AsyncGenerator<Buffer> {
             yield audio.subarray(0, 100);
@@ -169,6 +217,7 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
         const result = await publishNativeAudio({
             musicRoot: root, relativeTarget: DEST,
             expectedBytes: audio.length, chunks: failing(),
+            verifyTempFile: async () => true,
         });
         expect(result.state).toBe("unavailable");
         expect(result.retryAllowed).toBe(false);
