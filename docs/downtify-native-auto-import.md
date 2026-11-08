@@ -211,9 +211,19 @@ independent Spotify expectations. It verifies that the same
 production-compiled volume-proof code **rejects an empty writable fallback
 directory, rejects a replacement volume marker and accepts the original
 volume with unchanged audio on return**. It runs only with disposable
-temporary directories and generated FLAC. This is **not** a physical NAS/USB
-disconnect test, a live Downtify HTTP transfer, an importer worker end-to-end
-test or a scanner receipt. It cannot authorize public release by itself.
+temporary directories and generated FLAC/MP3. This is **not** a physical
+NAS/USB disconnect test, a live Downtify HTTP transfer, an importer
+worker end-to-end test or a scanner receipt. It cannot authorize public
+release by itself.
+
+For final candidate qualification, maintainers can opt in to the separate
+**Security E2E Tests** GitHub workflow by prefixing the pull-request title
+with `[E2E] `. The regular dependency/secret security scan still runs on
+every PR. This opt-in runs the existing disposable Docker + Playwright
+browser security suite rather than skipping it for the candidate; it does
+not connect to any production library or Downtify account. The suite is a
+supplemental gate and **does not** replace the external-volume/real-Downtify
+canary, backend source verification or a tested restore.
 
 No existing production host or imported music is touched by merging this
 code. Before enabling on an actual system, require:
