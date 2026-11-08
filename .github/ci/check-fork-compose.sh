@@ -8,13 +8,23 @@ python3 .github/ci/check-release-ui-fixture.py --self-test
 
 for file in docker-compose.prod.yml docker-compose.server.yml; do
     echo "Checking $file for safe fork image, data mounts and kernel settings..."
-    # Blank VERSION exercises the pinned stable fallback, not :latest.
-    VERSION= docker compose -f "$file" config --format json | python3 -c '
+    # Both config-only checks use a fake non-existent staging path.
+    # The production example requires an explicit MUSIC_PATH and forbids
+    # auto-creating that directory, while the optional server stack retains
+    # its independent conservative version fallback for now.
+    if [[ "$file" == docker-compose.prod.yml ]]; then
+        expected_default="ghcr.io/oxygengs/kima-hub:v1.19.0"
+    else
+        expected_default="ghcr.io/oxygengs/kima-hub:v1.10.0"
+    fi
+    synthetic_music="${RUNNER_TEMP:-/tmp}/kima-compose-ci-unmounted-library"
+    MUSIC_PATH="$synthetic_music" VERSION= docker compose -f "$file" config --format json | EXPECTED_PIN="$expected_default" python3 -c '
 import json, sys
 c = json.load(sys.stdin)
 svc = c["services"]["kima"]
 image = svc["image"]
-assert image == "ghcr.io/oxygengs/kima-hub:v1.10.0", image
+import os
+assert image == os.environ["EXPECTED_PIN"], image
 volumes = svc["volumes"]
 assert any(v.get("type") == "volume" and v.get("target") == "/data" and v.get("source") == "kima_data" for v in volumes), volumes
 assert any(v.get("type") == "bind" and v.get("target") == "/music" for v in volumes), volumes
@@ -25,7 +35,7 @@ print("Pinned stable configuration valid:", image)
 '
     # A synthetic new tag proves Dockge/Compose can select a future version
     # without changing the persistent mount. No image is pulled or published.
-    VERSION=v9.9.9 docker compose -f "$file" config --format json | python3 -c '
+    MUSIC_PATH="$synthetic_music" VERSION=v9.9.9 docker compose -f "$file" config --format json | python3 -c '
 import json, sys
 svc = json.load(sys.stdin)["services"]["kima"]
 assert svc["image"] == "ghcr.io/oxygengs/kima-hub:v9.9.9", svc["image"]
