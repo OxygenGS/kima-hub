@@ -542,6 +542,8 @@ describe("Simple Downtify Settings section", () => {
         await mount();
         expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.disabled).toBe(true);
         expect(host.querySelector("#downtify-native-cutover-ack")).toBeNull();
+        expect(button("Refresh import status")).toBeUndefined();
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')).toBeNull();
         expect(api.get).not.toHaveBeenCalledWith("/downtify-integration/native-import");
     });
 
