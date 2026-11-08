@@ -68,6 +68,21 @@ def main():
         ):
             raise AssertionError("Compose may create an unintended music directory")
 
+        # A non-existent *explicit* path may parse, but it must never be
+        # auto-created by the Compose example's bind-mount semantics.
+        missing = Path(work) / "not-mounted"
+        candidate["MUSIC_PATH"] = str(missing)
+        absent_result = config(candidate)
+        if absent_result.returncode != 0 or missing.exists():
+            raise AssertionError("Compose config created or rejected a harmless test path")
+        absent_volume = next(
+            v for v in json.loads(absent_result.stdout)["services"]["kima"]["volumes"]
+            if v["target"] == "/music"
+        )
+        if absent_volume.get("bind", {}).get("create_host_path") is not False:
+            raise AssertionError("Absent music path could be created during startup")
+        candidate["MUSIC_PATH"] = str(music)
+
         data_volumes = [
             v for v in service["volumes"] if v["target"] == "/data"
         ]
