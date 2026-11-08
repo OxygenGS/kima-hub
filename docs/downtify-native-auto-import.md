@@ -166,6 +166,14 @@ import. Never delete the source music or original host mounts.
 
 ## Deployment and release gate
 
+The compiled production-audio smoke test now also verifies that the same
+production-compiled volume-proof code **rejects an empty writable fallback
+directory, rejects a replacement volume marker and accepts the original
+volume with unchanged audio on return**. It runs only with disposable
+temporary directories and generated FLAC. This is **not** a physical NAS/USB
+disconnect test, a live Downtify HTTP transfer, an importer worker end-to-end
+test or a scanner receipt. It cannot authorize public release by itself.
+
 No existing production host or imported music is touched by merging this
 code. Before enabling on an actual system, require:
 
