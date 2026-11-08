@@ -7,8 +7,9 @@ name: Security Checks
 #
 # The security end-to-end suite builds the whole image, boots it and drives it
 # with a browser. It used to run on every pull request too, which meant every PR
-# built the same image TWICE: once here and once in pr-checks.yml. It now runs on
-# the weekly schedule and on demand, where the cost is worth paying.
+# built the same image TWICE: once here and once in pr-checks.yml.
+# It runs weekly, by manual workflow dispatch, or only when a PR title starts
+# with [E2E] (explicit release-candidate opt-in). Ordinary PRs stay fast.
 
 on:
     pull_request:
@@ -77,9 +78,9 @@ jobs:
 
     security-e2e:
         name: Security E2E Tests
-        # Weekly and on demand only. On a pull request this was a second full
-        # image build of the exact image pr-checks.yml had already built.
-        if: github.event_name != 'pull_request'
+        # Opt-in a single candidate by prefixing its PR title with [E2E].
+        # Ordinary PRs must not waste a second full image build.
+        if: github.event_name != 'pull_request' || startsWith(github.event.pull_request.title, '[E2E] ')
         runs-on: ubuntu-latest
         timeout-minutes: 30
 
