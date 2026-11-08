@@ -3,6 +3,14 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Downtify import activity": "Downtify import activity",
+    "Claimed / unresolved": "Claimed / unresolved",
+    "Waiting for library scan": "Waiting for library scan",
+    "Added to library": "Added to library",
+    "Refresh import status": "Refresh import status",
+    "Refreshing import status...": "Refreshing import status...",
+    "Could not refresh import status.": "Could not refresh import status.",
+    "Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.": "Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.",
     "Music folder access does not prove that the correct disk is mounted.": "Music folder access does not prove that the correct disk is mounted.",
     "Music directory access": "Music directory access",
     "Downtify server identity": "Downtify server identity",
@@ -2223,6 +2231,14 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Downtify import activity": "Downtify-importstatus",
+    "Claimed / unresolved": "Geclaimd / onduidelijk",
+    "Waiting for library scan": "Wacht op bibliotheekscan",
+    "Added to library": "Toegevoegd aan bibliotheek",
+    "Refresh import status": "Importstatus vernieuwen",
+    "Refreshing import status...": "Importstatus vernieuwen...",
+    "Could not refresh import status.": "Importstatus kon niet worden vernieuwd.",
+    "Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.": "Geclaimde downloads worden mogelijk nog verwerkt of moeten na een onderbreking worden gecontroleerd; Kima herhaalt onzekere schrijfacties nooit zomaar.",
     "Music folder access does not prove that the correct disk is mounted.": "Toegang tot de muziekmap bewijst niet dat de juiste schijf is aangekoppeld.",
     "Music directory access": "Toegang tot muziekmap",
     "Downtify server identity": "Identiteit van Downtify-server",
