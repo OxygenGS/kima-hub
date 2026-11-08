@@ -22,9 +22,13 @@ The normal Settings experience needs no host-script edits.
 4. Kima creates an owner-bound baseline of already completed downloads,
    then imports only newly observed individual Spotify tracks. Album
    batches and arbitrary remote files are not automatically ingested.
-5. In **Settings** the administrator sees the number waiting and requiring
-   attention. Turning the switch OFF stops new claims; existing music,
-   remote jobs and the baseline remain untouched.
+5. In **Settings** the administrator sees separate counters for jobs
+   waiting, claimed, waiting for an index receipt, fully imported, and
+   requiring review. **Refresh import status** reads local, owner-scoped
+   database aggregates and checks the registered music volume; it does
+   not poll Downtify, submit jobs, start scans or write music. Turning
+   the switch OFF stops new claims; existing music, remote jobs and
+   the baseline remain untouched.
 
 ## One-click read-only setup checks
 
@@ -53,6 +57,31 @@ This is an operational diagnostic, **not** a production acceptance test.
 A real full-file canary on the user's music volume, an independent backup
 and (for migrations) verification that other writers have stopped remain
 mandatory before a production cutover.
+
+## Import status semantics
+
+The status panel deliberately distinguishes five stages:
+
+| Stage | Meaning |
+| --- | --- |
+| Waiting | A newly discovered track is ready to be claimed. |
+| Claimed / unresolved | A worker claimed the job; after a crash it may remain unresolved, and Kima does not blindly retry uncertain writes. |
+| Waiting for library scan | The verified file was published, but Kima has not yet confirmed an exact indexed Track record and physical hash. This is **not** automatically a manual-review error. |
+| Added to library | The scanner and physical hash matched; this is the confirmed imported count. |
+| Needs review | The ledger explicitly placed the job in `review` or `uncertain`, requiring reconciliation before any new write. |
+
+All counts are scoped to the administrator's exact paired Downtify owner,
+server and account. Historical baseline jobs are deliberately excluded
+from the operational totals. Pausing the importer does not erase counts
+or music. The **Refresh import status** button is read-only: no remote
+queue check, new download, scanner trigger, or import retry runs merely
+because a user asks for the latest status.
+
+A claimed job can be transient while a worker is active or can remain
+unresolved after an interruption; treat this counter as diagnostic, not
+proof of continuous processing. A remote completed download is never
+reported as successfully imported without a matching local scanner
+receipt and full physical-file hash.
 
 ## Implementation
 
