@@ -83,11 +83,13 @@ beforeEach(() => {
     mockRuntime.mockResolvedValue({ KIMA_DOWNTIFY_DEVICE_TOKEN: TOKEN });
     mockNativeStatus.mockResolvedValue({
         state: "paused", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0, storageReady: false,
     });
     mockNativeControl.mockResolvedValue({
         state: "enabled", enabled: true, baselineReady: true,
-        awaitingImport: 0, needsReview: 0,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0, storageReady: true,
     });
     mockImportReadiness.mockResolvedValue({
         state: "original_stream_verified", serverVerified: true,
@@ -223,6 +225,28 @@ describe("Downtify Settings admin-only API", () => {
         });
         expect(bad.status).toBe(400);
         expect(mockNativeControl).not.toHaveBeenCalled();
+    });
+
+    it("returns sanitized owner-only import progress with no remote polling", async () => {
+        mockNativeStatus.mockResolvedValueOnce({
+            state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 1, awaitingScan: 2,
+            imported: 8, needsReview: 4, storageReady: true,
+        });
+        const res = await request(app).get(url + "/native-import")
+            .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+            state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 1, awaitingScan: 2,
+            imported: 8, needsReview: 4, storageReady: true,
+        });
+        expect(mockNativeStatus).toHaveBeenCalledWith("admin-1");
+        expect(mockRuntime).not.toHaveBeenCalled();
+        expect(mockImportReadiness).not.toHaveBeenCalled();
+        expect(JSON.stringify(res.body)).not.toContain(TOKEN);
+        expect(JSON.stringify(res.body)).not.toContain("/music");
+        expect(res.headers["cache-control"]).toBe("no-store");
     });
 
     it("forwards only a verified one-time acknowledgement to native importer settings", async () => {
