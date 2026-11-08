@@ -17,6 +17,8 @@ const { verifyNativeTemporaryRecording } = require("../dist/services/downtifyNat
 const { publishNativeAudio } = require("../dist/services/downtifyAtomicPublisher.js");
 const { nativeImportDestination, ensureNativeImportDestination } =
     require("../dist/services/downtifyNativeImportWorkspace.js");
+const { initializeNativeMusicVolume, verifyNativeMusicVolume } =
+    require("../dist/services/downtifyNativeMountProof.js");
 
 const spotifyId = "0123456789ABCDEFGHIJKL";
 const isrc = "USABC1234567";
@@ -27,6 +29,10 @@ async function main() {
     const root = path.join(scratch, "music");
     const original = path.join(scratch, "original.flac");
     fs.mkdirSync(root, { mode: 0o700 });
+    const volumeProof = await initializeNativeMusicVolume(root);
+    if (!volumeProof || !await verifyNativeMusicVolume(root, volumeProof)) {
+        throw new Error("Production-compiled music volume proof failed to initialize");
+    }
     const ffmpeg = spawnSync("/usr/bin/ffmpeg", [
         "-hide_banner", "-loglevel", "error", "-nostdin",
         "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
@@ -100,7 +106,36 @@ async function main() {
     if (files.some(name => name.startsWith(".kima-import-"))) {
         throw new Error("Temporary media file leaked after publication");
     }
-    process.stdout.write("Native Downtify compiled-audio canary passed (isolated; no scanner receipt)\n");
+
+    // Simulate the external volume disappearing but leaving an empty writable
+    // Docker bind target. The compiled guard must reject this fallback root.
+    // This is a disposable directory rename, NOT a real disk unmount.
+    const offline = path.join(scratch, "detached-test-volume");
+    fs.renameSync(root, offline);
+    fs.mkdirSync(root, { mode: 0o700 });
+    if (await verifyNativeMusicVolume(root, volumeProof)) {
+        throw new Error("Compiled volume proof accepted empty fallback storage");
+    }
+    if (fs.readdirSync(root).length !== 0) {
+        throw new Error("Fallback directory unexpectedly received a media file");
+    }
+    // An operator might accidentally initialize a different volume; the
+    // original identity must still be rejected after that wrong marker exists.
+    const wrongProof = await initializeNativeMusicVolume(root);
+    if (!wrongProof || wrongProof === volumeProof ||
+        await verifyNativeMusicVolume(root, volumeProof)) {
+        throw new Error("Compiled volume proof accepted replacement storage");
+    }
+    fs.rmSync(root, { recursive: true });
+    fs.renameSync(offline, root);
+    if (!await verifyNativeMusicVolume(root, volumeProof) ||
+        !fs.readFileSync(local).equals(bytes)) {
+        throw new Error("Compiled volume proof did not recover with original media");
+    }
+    process.stdout.write(
+        "Native Downtify compiled-audio and volume-continuity canary passed " +
+        "(isolated; no real mount, Downtify server or scanner receipt)\n",
+    );
 }
 
 // The smoke imports the real production dependency graph, which may open
