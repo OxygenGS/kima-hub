@@ -102,10 +102,18 @@ receipt and full physical-file hash.
 - **Transfer:** fetch the untranscoded original over the official
   authenticated mobile v1 track stream. Require exact response length and
   bounded streaming; never use a remote path as a local destination.
-- **Verification:** the private destination temp must match a full local
-  SHA-256, recognized container, expected Spotify ISRC, expected duration,
-  completed FFmpeg decode and unchanged inode. Missing tags, unavailable
-  Spotify identity or contradictory evidence are rejected for review.
+- **Verification:** the private destination temp must pass a complete
+  local SHA-256, recognized audio container, duration consistency,
+  full FFmpeg decode and unchanged-inode checks. If Downtify supplied an
+  embedded ISRC, it **must** match Spotify. Stock Downtify downloads
+  normally contain title and artist but no ISRC; for exactly that case,
+  Kima requires an exact match against the independently fetched Spotify
+  title, one credited artist, and duration (within 4 seconds) **in
+  addition to** the already verified owner-bound queue job and matching
+  remote library file. Wrong/invalid/conflicting ISRC or missing/mismatched
+  title, artist or duration is held for review. This fallback is not
+  acoustic fingerprinting and cannot prove the exact audio master or
+  distinguish identically tagged recordings of the same duration.
 - **Storage:** Kima creates only its dedicated
   `Singles/Downtify/<Artist>/<Title> - <Spotify ID>.<extension>` tree
   beneath the normal `/music` mount; no custom operator staging mount
@@ -116,6 +124,35 @@ receipt and full physical-file hash.
   confirm a non-corrupt LIBRARY Track record and the exact physical hash
   before marking the ledger row imported. Downtify `done`, a remote
   downloaded file, and successful local file publication are not enough.
+
+## Stock Downtify tag compatibility and limitations
+
+Current upstream Downtify normally writes title/artist/album metadata but
+does **not** promise an ISRC in downloaded MP3/FLAC files. Requiring
+an embedded ISRC for every download would make this feature functionally
+unavailable to ordinary users. The default import path therefore accepts
+**missing** ISRC only when all of the following are true:
+
+1. Exact paired server, owner and one completed Spotify job match exactly
+   one library track and a newly added post-baseline changefeed item.
+2. Independently fetched Spotify title, primary artist and duration match
+   the downloaded file's embedded title, at least one credited artist
+   and decoded duration (at most 4 seconds drift). Only case,
+   Unicode NFKC and whitespace normalization are allowed; substrings,
+   fuzzy matching, missing tags and artist guesses are rejected.
+3. No non-empty conflicting or malformed ISRC is present. If a valid
+   embedded ISRC exists, normal strict ISRC verification still applies.
+4. The complete source byte count and SHA-256, audio header, decode,
+   private temp permissions, durable file publication, volume identity
+   and independent Kima scanner receipt checks remain mandatory.
+
+Metadata alignment confirms which *track was requested*, not the exact
+recording/edition retrieved from YouTube or another provider. Kima does
+not claim acoustic recognition or a licensing guarantee. If the source
+returns a wrong performance with correctly copied title/artist/duration,
+the metadata-only fallback cannot discover it; review the recording
+manually and replace it through an appropriate workflow if necessary.
+This limitation must be disclosed in the stable release notes.
 
 ## Persistent music-volume identity (DAS/NAS safety)
 
@@ -153,9 +190,10 @@ import. Never delete the source music or original host mounts.
   music mount absent) releases only the exact authenticated one-use claim,
   with a persistent **15-minute cooldown**. This makes ordinary outages
   self-healing without manual terminal commands.
-- **After the first file write attempt**, failed decoding, missing ISRC,
-  destination conflict, uncertain publication or scanner failure never
-  restarts a copy automatically. Those tasks require reconciliation.
+- **After the first file write attempt**, failed decoding, conflicting
+  ISRC, missing or mismatched metadata, destination conflict, uncertain
+  publication or scanner failure never restarts a copy automatically.
+  Those tasks require reconciliation.
   File bytes and the original source are never deleted.
 - The imported flag is **not** automatically enabled by upgrading Kima,
   connecting Downtify, enabling Spotify intents, or viewing the queue.
@@ -166,7 +204,9 @@ import. Never delete the source music or original host mounts.
 
 ## Deployment and release gate
 
-The compiled production-audio smoke test now also verifies that the same
+The compiled production-audio smoke test also exercises **stock Downtify
+FLAC with no ISRC**, plus wrong-title and wrong-artist rejection against
+independent Spotify expectations. It verifies that the same
 production-compiled volume-proof code **rejects an empty writable fallback
 directory, rejects a replacement volume marker and accepts the original
 volume with unchanged audio on return**. It runs only with disposable
@@ -213,7 +253,9 @@ Docker tag alone is not a database rollback.
   publication rather than degrade to an unsafe copy.
 - **Permissions and evidence:** the mount must exist before activation,
   not be an unsafe symlink or writable by untrusted users, and support
-  the full-audio SHA-256, container, FFmpeg, ISRC and duration checks.
+  full-audio SHA-256, container, FFmpeg and duration verification;
+  any embedded ISRC must agree with Spotify, while missing ISRC requires
+  exact title, credited-artist and duration corroboration.
 - **No personal configuration:** no fixed IP address, host name, storage
   path, Proxmox CT ID, legacy script or shared Downtify staging mount
   is part of the feature.
