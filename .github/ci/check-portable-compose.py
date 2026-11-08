@@ -61,12 +61,15 @@ def main():
         if len(music_volumes) != 1:
             raise AssertionError("Expected exactly one music bind mount")
         volume = music_volumes[0]
-        if (
-            volume["type"] != "bind"
-            or volume["source"] != str(music)
-            or volume.get("bind", {}).get("create_host_path") is not False
-        ):
-            raise AssertionError("Compose may create an unintended music directory")
+        if volume["type"] != "bind":
+            raise AssertionError("Music volume type is not bind")
+        if volume["source"] != str(music):
+            raise AssertionError("Compose altered the configured music directory")
+        if volume.get("bind", {}).get("create_host_path") is not False:
+            flag = volume.get("bind", {}).get("create_host_path", "omitted")
+            raise AssertionError(
+                "Compose normalized create_host_path unexpectedly: " + str(flag)
+            )
 
         # A non-existent *explicit* path may parse, but it must never be
         # auto-created by the Compose example's bind-mount semantics.
