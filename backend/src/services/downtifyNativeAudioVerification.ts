@@ -117,8 +117,17 @@ function standardDowntifyTagsMatch(
     const artists: unknown[] = Array.isArray(embedded.artists)
         ? embedded.artists : [];
     const credited: unknown[] = [embedded.artist, ...artists];
-    if (credited.length > 32 ||
-        !credited.some(candidate => comparableText(candidate) === artist)) return false;
+    if (credited.length > 32) return false;
+    // Stock Downtify MP3 writes TPE1 as "Artist A; Artist B".
+    // Accept exactly one complete semicolon-delimited credit, NEVER
+    // substring/prefix matches or a comma split (band names contain commas).
+    const completeCredits = credited.flatMap(value =>
+        typeof value === "string" ? [value, ...value.split(";")] : [],
+    );
+    if (completeCredits.length > 64 ||
+        !completeCredits.some(candidate => comparableText(candidate) === artist)) {
+        return false;
+    }
     return typeof embedded.durationSeconds === "number" &&
         Number.isFinite(embedded.durationSeconds) &&
         embedded.durationSeconds > 0 &&
