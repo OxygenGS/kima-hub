@@ -96,6 +96,33 @@ describe("Complete private-recording audio verification (dormant)", () => {
         expect(await fs.readFile(temp)).toEqual(bytes);
     });
 
+    it("does not bypass full-byte SHA verification when stock audio lacks ISRC", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist",
+        });
+        const outcome = await verifyNativeTemporaryRecording(temp, recording, {
+            ...source, sha256: "b".repeat(64),
+        }, mock);
+        expect(outcome.state).toBe("hash_mismatch");
+        expect(outcome.verifiedForPublication).toBe(false);
+        expect(mock.parse).not.toHaveBeenCalled();
+        expect(mock.decode).not.toHaveBeenCalled();
+    });
+
+    it("does not treat a longer artist name as a credited artist match", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist Quartet",
+            artists: ["Example Artist Quartet"],
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, mock)).state)
+            .toBe("recording_needs_review");
+        expect(mock.decode).not.toHaveBeenCalled();
+    });
+
     it("still rejects a conflicting embedded ISRC even when title and artist agree", async () => {
         const wrong = deps();
         wrong.parse.mockResolvedValueOnce({
