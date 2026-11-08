@@ -95,13 +95,13 @@ Open `http://localhost:3030` to complete the first-run setup. Replace the exampl
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml) and set the version explicitly:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The new-installation image default is fixed at published `v1.19.0`, not `:latest`:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Do not replace the Compose project, `/music` or `/data` mounts when upgrading an existing installation.** The example Compose file has a conservative fallback version; `:latest` is not automatically promoted.
+**New installs:** `MUSIC_PATH` is mandatory; Docker Compose will not create an absent host music directory. An existing directory is not proof that a removable or network disk is mounted—verify the actual backing storage. **Existing installs:** keep the original Compose project, `/music` and `/data` mounts, and the running version pinned until a verified backup/restore and controlled upgrade. The fixed example tag never follows `:latest`.
 
 [Full installation guide](docs/install.md) · [Configuration](docs/configuration.md)
 
