@@ -50,13 +50,16 @@ let original = "";
 const importedFile = () => path.join(musicRoot, "Singles", "Downtify", "Test Artist",
     "Synthetic Track - " + spotifyId + ".flac");
 
-function synthesize(destination: string, frequency: number): void {
-    const result = spawnSync("/usr/bin/ffmpeg", [
+function synthesize(destination: string, frequency: number, embedIsrc = true): void {
+    const args = [
         "-hide_banner", "-loglevel", "error", "-nostdin",
         "-f", "lavfi", "-i", "sine=frequency=" + frequency + ":duration=2",
-        "-metadata", "ISRC=" + isrc, "-c:a", "flac",
-        "-y", destination,
-    ], { timeout: 20000 });
+        "-metadata", "title=Synthetic Track",
+        "-metadata", "artist=Test Artist",
+        ...(embedIsrc ? ["-metadata", "ISRC=" + isrc] : []),
+        "-c:a", "flac", "-y", destination,
+    ];
+    const result = spawnSync("/usr/bin/ffmpeg", args, { timeout: 20000 });
     if (result.status !== 0 || result.error) {
         // Synthetic input only: stdout/stderr cannot contain private media.
         // Never silently convert an absent FFmpeg binary into an audio failure.
@@ -74,11 +77,15 @@ function synthesize(destination: string, frequency: number): void {
  */
 async function realMetadata(file: string): Promise<{
     isrc: unknown; durationSeconds: unknown;
+    title: unknown; artist: unknown; artists: unknown;
 }> {
     const script = [
         "import { parseFile } from 'music-metadata';",
         "const meta = await parseFile(process.argv[1], {duration:true,skipCovers:true});",
         "console.log(JSON.stringify({isrc:meta.common.isrc ?? null,",
+        "title:meta.common.title ?? null,",
+        "artist:meta.common.artist ?? null,",
+        "artists:meta.common.artists ?? null,",
         "durationSeconds:meta.format.duration ?? null}));",
     ].join(" ");
     const result = spawnSync(process.execPath, [
@@ -94,6 +101,7 @@ async function realMetadata(file: string): Promise<{
     }
     return JSON.parse(result.stdout) as {
         isrc: unknown; durationSeconds: unknown;
+        title: unknown; artist: unknown; artists: unknown;
     };
 }
 
@@ -138,7 +146,9 @@ async function publish(file: string) {
                 tempPath,
                 {
                     spotifyId, expectedSpotifyId: spotifyId,
-                    isrc, durationMs: 2000, extension: ".flac",
+                    isrc, durationMs: 2000,
+                    title: "Synthetic Track", artist: "Test Artist",
+                    extension: ".flac",
                 },
                 source, {
                     parse: realMetadata,
@@ -152,6 +162,20 @@ async function publish(file: string) {
 }
 
 describe("Real-audio native import filesystem canary", () => {
+    it("publishes an actual FLAC with stock Downtify tags and NO ISRC exactly once", async () => {
+        const stock = path.join(scratch, "stock-downtify-no-isrc.flac");
+        synthesize(stock, 440, false);
+        const tags = await realMetadata(stock);
+        expect(tags.isrc).toBeNull();
+        expect(tags.title).toBe("Synthetic Track");
+        expect(tags.artist).toBe("Test Artist");
+        const { result, relative, hash } = await publish(stock);
+        expect(result.state).toBe("published");
+        const saved = await fs.readFile(path.join(musicRoot, relative));
+        expect(createHash("sha256").update(saved).digest("hex")).toBe(hash);
+        expect(saved).toEqual(await fs.readFile(stock));
+    });
+
     it("writes exactly once, verifies real FLAC decode+tags and waits for scanner receipt", async () => {
         const { result, relative, hash } = await publish(original);
         const originalBytes = await fs.readFile(original);
