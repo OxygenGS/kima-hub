@@ -254,6 +254,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                                 spotifyId: claim.spotifyTrackId,
                                 expectedSpotifyId: expected.spotifyId,
                                 isrc: expected.isrc, durationMs: expected.durationMs,
+                                title: expected.title, artist: expected.artist,
                                 extension,
                             },
                             source,

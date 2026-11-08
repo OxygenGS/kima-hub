@@ -49,7 +49,9 @@ async function main() {
     const bytes = fs.readFileSync(original);
     const expected = {
         spotifyId, expectedSpotifyId: spotifyId,
-        isrc, durationMs: 2000, extension: ".flac",
+        isrc, durationMs: 2000,
+        title: "Full Audio Canary", artist: "Synthetic Artist",
+        extension: ".flac",
     };
     const source = {
         bytes: bytes.length,
@@ -68,6 +70,72 @@ async function main() {
     }, source);
     if (wrong.state !== "recording_needs_review" || wrong.verifiedForPublication) {
         throw new Error("Wrong recording ISRC was not rejected");
+    }
+
+    // Real Downtify normally tags title and artist but not ISRC.
+    // Verify that production-compiled music-metadata accepts that format
+    // only with matching Spotify title + artist + duration.
+    const stock = path.join(scratch, "stock-downtify-no-isrc.flac");
+    const stockFfmpeg = spawnSync("/usr/bin/ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-f", "lavfi", "-i", "sine=frequency=330:duration=2",
+        "-metadata", "title=Full Audio Canary",
+        "-metadata", "artist=Synthetic Artist",
+        "-c:a", "flac", "-y", stock,
+    ], { timeout: 20000 });
+    if (stockFfmpeg.status !== 0 || stockFfmpeg.error) {
+        throw new Error("Could not generate no-ISRC staging audio");
+    }
+    fs.chmodSync(stock, 0o600);
+    const stockBytes = fs.readFileSync(stock);
+    const stockSource = {
+        bytes: stockBytes.length,
+        sha256: crypto.createHash("sha256").update(stockBytes).digest("hex"),
+    };
+    const stockCheck = await verifyNativeTemporaryRecording(stock, expected, stockSource);
+    if (stockCheck.state !== "verified" || !stockCheck.verifiedForPublication) {
+        throw new Error("Compiled parser rejected stock no-ISRC audio: " + stockCheck.state);
+    }
+    const spoofedTitle = await verifyNativeTemporaryRecording(
+        stock, { ...expected, title: "Different Song" }, stockSource,
+    );
+    if (spoofedTitle.state !== "recording_needs_review" ||
+        spoofedTitle.verifiedForPublication) {
+        throw new Error("No-ISRC fallback accepted incorrect Spotify title");
+    }
+    const spoofedArtist = await verifyNativeTemporaryRecording(
+        stock, { ...expected, artist: "Different Artist" }, stockSource,
+    );
+    if (spoofedArtist.state !== "recording_needs_review" ||
+        spoofedArtist.verifiedForPublication) {
+        throw new Error("No-ISRC fallback accepted incorrect Spotify artist");
+    }
+
+    // MP3 is stock Downtify's default format; the artist tag may contain
+    // multiple credits separated by semicolons. Verify the compiled parser
+    // and decoder handle an ordinary ID3-tagged MP3 with no ISRC.
+    const stockMp3 = path.join(scratch, "stock-downtify-default-no-isrc.mp3");
+    const mp3Ffmpeg = spawnSync("/usr/bin/ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-f", "lavfi", "-i", "sine=frequency=220:duration=2",
+        "-metadata", "title=Full Audio Canary",
+        "-metadata", "artist=Synthetic Artist; Guest Artist",
+        "-c:a", "libmp3lame", "-b:a", "192k", "-y", stockMp3,
+    ], { timeout: 20000 });
+    if (mp3Ffmpeg.status !== 0 || mp3Ffmpeg.error) {
+        throw new Error("Could not generate standard no-ISRC MP3 staging audio");
+    }
+    fs.chmodSync(stockMp3, 0o600);
+    const mp3Bytes = fs.readFileSync(stockMp3);
+    const mp3Source = {
+        bytes: mp3Bytes.length,
+        sha256: crypto.createHash("sha256").update(mp3Bytes).digest("hex"),
+    };
+    const mp3Check = await verifyNativeTemporaryRecording(
+        stockMp3, { ...expected, extension: ".mp3" }, mp3Source,
+    );
+    if (mp3Check.state !== "verified" || !mp3Check.verifiedForPublication) {
+        throw new Error("Compiled parser rejected standard no-ISRC MP3: " + mp3Check.state);
     }
 
     const relative = nativeImportDestination(
@@ -133,7 +201,7 @@ async function main() {
         throw new Error("Compiled volume proof did not recover with original media");
     }
     process.stdout.write(
-        "Native Downtify compiled-audio and volume-continuity canary passed " +
+        "Native Downtify compiled-audio (ISRC + FLAC/MP3 stock no-ISRC) and volume-continuity canary passed " +
         "(isolated; no real mount, Downtify server or scanner receipt)\n",
     );
 }
