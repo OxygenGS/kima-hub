@@ -52,6 +52,8 @@ jobs:
                   VERSION="v$(python3 -c 'import json; print(json.load(open("backend/package.json"))["version"])')"
                   python3 .github/ci/build-release-notes.py --tag "$VERSION" --output /tmp/ci-release-notes.md
                   test -s /tmp/ci-release-notes.md
+            - name: Verify production Compose music path and fixed stable fallback
+              run: python3 .github/ci/check-portable-compose.py
 
     public-privacy-audit:
         name: Block local installation details in public source
