@@ -26,6 +26,9 @@ export type NativeAutoImportStatus = {
     enabled: boolean;
     baselineReady: boolean;
     awaitingImport: number;
+    processing: number;
+    awaitingScan: number;
+    imported: number;
     needsReview: number;
     /** Read-only proof that the current music root matches its first-activation disk. */
     storageReady: boolean;
@@ -54,12 +57,14 @@ export async function getNativeAutoImportStatus(
     });
     if (!row) return {
         state: "unpaired", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0,
         storageReady: false,
     };
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
-        awaitingImport: 0, needsReview: 0,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0,
         storageReady: false,
     };
     const summary = await getNativeImportSummary({
@@ -75,6 +80,9 @@ export async function getNativeAutoImportStatus(
         enabled: summary.enabled,
         baselineReady: summary.baselineReady,
         awaitingImport: summary.waiting,
+        processing: summary.processing,
+        awaitingScan: summary.awaitingScan,
+        imported: summary.imported,
         needsReview: summary.inReview,
         storageReady,
     };

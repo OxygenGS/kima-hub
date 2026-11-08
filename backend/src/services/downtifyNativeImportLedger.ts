@@ -472,11 +472,25 @@ export async function holdNativeImportForReview(
     return saved.count === 1;
 }
 
+/** Non-sensitive, owner-scoped ledger aggregates for Settings. */
+export interface NativeImportSummary {
+    enabled: boolean;
+    baselineReady: boolean;
+    waiting: number;
+    processing: number;
+    awaitingScan: number;
+    imported: number;
+    inReview: number;
+}
+
 export async function getNativeImportSummary(
     owner: PinnedImportOwner,
-): Promise<{ enabled: boolean; baselineReady: boolean; waiting: number; inReview: number }> {
+): Promise<NativeImportSummary> {
     const identity = await pinnedIdentity(owner);
-    if (!identity.paired) return { enabled: false, baselineReady: false, waiting: 0, inReview: 0 };
+    if (!identity.paired) return {
+        enabled: false, baselineReady: false, waiting: 0, processing: 0,
+        awaitingScan: 0, imported: 0, inReview: 0,
+    };
     const rows = await prisma.downtifyNativeImport.groupBy({
         by: ["status"],
         where: {
@@ -486,14 +500,19 @@ export async function getNativeImportSummary(
         },
         _count: { _all: true },
     });
-    const count = (status: string) => rows.find(row => row.status === status)?._count._all ?? 0;
+    const count = (status: NativeImportStatus) =>
+        rows.find(row => row.status === status)?._count._all ?? 0;
     return {
         enabled: identity.enabled,
         baselineReady: !!identity.baselineAt && identity.libraryCursor !== null &&
             !!identity.mountProof,
         waiting: count("ready"),
-        inReview: count("claimed") + count("review") + count("uncertain") +
-            count("published_pending_scan"),
+        // A claim may survive an unexpected restart: never imply guaranteed progress.
+        processing: count("claimed"),
+        // Published files are not considered imported before the local scanner receipt.
+        awaitingScan: count("published_pending_scan"),
+        imported: count("imported"),
+        inReview: count("review") + count("uncertain"),
     };
 }
 

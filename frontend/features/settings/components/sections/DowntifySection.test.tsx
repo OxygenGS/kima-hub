@@ -31,8 +31,8 @@ const paired = {
 };
 const nativeOff = {
     state: "paused", enabled: false, baselineReady: false,
-    awaitingImport: 0, needsReview: 0,
-    storageReady: true,
+    awaitingImport: 0, processing: 0, awaitingScan: 0,
+    imported: 0, needsReview: 0, storageReady: true,
 };
 let host: HTMLDivElement;
 let root: Root;
@@ -341,6 +341,78 @@ describe("Simple Downtify Settings section", () => {
         expect(api.get).toHaveBeenCalledTimes(1);
     });
 
+    it("shows distinct owner-scoped import stages without treating indexing as an error", async () => {
+        const progress = {
+            ...nativeOff, state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 1, awaitingScan: 4,
+            imported: 8, needsReview: 2,
+        };
+        vi.mocked(api.get).mockImplementation(async (url) =>
+            url === "/downtify-integration" ? { ...paired, enabled: true } : progress);
+        await mount();
+        const activity = host.querySelector('dl[aria-label="Downtify import activity"]');
+        expect(activity).not.toBeNull();
+        const displayed = [...activity!.querySelectorAll("div")].map(item => [
+            item.querySelector("dt")?.textContent, item.querySelector("dd")?.textContent,
+        ]);
+        expect(displayed).toEqual([
+            ["Waiting", "3"],
+            ["Claimed / unresolved", "1"],
+            ["Waiting for library scan", "4"],
+            ["Added to library", "8"],
+            ["Needs review", "2"],
+        ]);
+        expect(host.textContent).toContain("Claimed downloads may still be processing");
+        expect(api.get).toHaveBeenCalledTimes(2);
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it("refreshes import counts only after the owner requests it without starting remote work", async () => {
+        let reads = 0;
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") {
+                reads++;
+                return { ...nativeOff, awaitingImport: reads, imported: reads - 1 };
+            }
+            throw new Error("Unexpected remote call: " + url);
+        });
+        await mount();
+        expect(reads).toBe(1);
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
+            .toContain("Waiting1");
+        await click("Refresh import status");
+        expect(reads).toBe(2);
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
+            .toContain("Waiting2");
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
+            .toContain("Added to library1");
+        expect(api.post).not.toHaveBeenCalled();
+        expect(api.get).not.toHaveBeenCalledWith("/downtify-integration/import-readiness");
+    });
+
+    it("redacts a failed status refresh without replacing previously confirmed counts", async () => {
+        let reads = 0;
+        vi.mocked(api.get).mockImplementation(async (url) => {
+            if (url === "/downtify-integration") return { ...paired, enabled: true };
+            if (url === "/downtify-integration/native-import") {
+                reads++;
+                if (reads === 1) return { ...nativeOff, imported: 9 };
+                throw new Error("dtfy_private_secret /private/music");
+            }
+            return none;
+        });
+        await mount();
+        await click("Refresh import status");
+        expect(host.querySelector('[role="alert"]')?.textContent)
+            .toContain("Could not refresh import status.");
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
+            .toContain("Added to library9");
+        expect(host.textContent).not.toContain("dtfy_private_secret");
+        expect(host.textContent).not.toContain("/private/music");
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
     it("keeps native importing OFF until the administrator confirms storage and single-writer safety", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({ ...paired, enabled: true });
         await mount();
@@ -470,6 +542,8 @@ describe("Simple Downtify Settings section", () => {
         await mount();
         expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.disabled).toBe(true);
         expect(host.querySelector("#downtify-native-cutover-ack")).toBeNull();
+        expect(button("Refresh import status")).toBeUndefined();
+        expect(host.querySelector('dl[aria-label="Downtify import activity"]')).toBeNull();
         expect(api.get).not.toHaveBeenCalledWith("/downtify-integration/native-import");
     });
 
