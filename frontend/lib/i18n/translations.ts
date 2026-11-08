@@ -3,6 +3,17 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Music folder access does not prove that the correct disk is mounted.": "Music folder access does not prove that the correct disk is mounted.",
+    "Music directory access": "Music directory access",
+    "Downtify server identity": "Downtify server identity",
+    "Original audio sample": "Original audio sample",
+    "Read-only setup checks": "Read-only setup checks",
+    "Verified": "Verified",
+    "Not verified": "Not verified",
+    "These checks do not import music or confirm that another importer is stopped.": "These checks do not import music or confirm that another importer is stopped.",
+    "Checking Downtify setup...": "Checking Downtify setup...",
+    "Check Downtify setup": "Check Downtify setup",
+    "Original audio transfer is reachable. This check does not import music.": "Original audio transfer is reachable. This check does not import music.",
     "Automatic import is paused because the verified music storage is unavailable.": "Automatic import is paused because the verified music storage is unavailable.",
     "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.": "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.",
     "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.": "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.",
@@ -37,7 +48,6 @@ export const english = {
     "No exact library file matched an owned completed download.": "No exact library file matched an owned completed download.",
     "Downtify did not provide the required original audio range.": "Downtify did not provide the required original audio range.",
     "The remote audio format could not be verified.": "The remote audio format could not be verified.",
-    "Original audio transfer is reachable. Automatic importing is not enabled yet.": "Original audio transfer is reachable. Automatic importing is not enabled yet.",
     "Automatic library import": "Automatic library import",
     "Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.": "Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.",
     "Checking audio transfer...": "Checking audio transfer...",
@@ -2213,6 +2223,17 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Music folder access does not prove that the correct disk is mounted.": "Toegang tot de muziekmap bewijst niet dat de juiste schijf is aangekoppeld.",
+    "Music directory access": "Toegang tot muziekmap",
+    "Downtify server identity": "Identiteit van Downtify-server",
+    "Original audio sample": "Origineel audiofragment",
+    "Read-only setup checks": "Alleen-lezen configuratiecontrole",
+    "Verified": "Geverifieerd",
+    "Not verified": "Niet geverifieerd",
+    "These checks do not import music or confirm that another importer is stopped.": "Deze controles importeren geen muziek en bevestigen niet of een andere importer gestopt is.",
+    "Checking Downtify setup...": "Downtify-configuratie controleren...",
+    "Check Downtify setup": "Downtify-configuratie controleren",
+    "Original audio transfer is reachable. This check does not import music.": "De originele audio is bereikbaar. Deze controle importeert geen muziek.",
     "Automatic import is paused because the verified music storage is unavailable.": "Automatisch importeren is gepauzeerd omdat de geverifieerde muziekopslag niet beschikbaar is.",
     "New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.": "Nieuwe installatie: er is geen eerdere importer om te stoppen. Bestaande installatie: stop andere importers die naar deze bibliotheek schrijven voordat je dit inschakelt.",
     "I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.": "Ik heb gecontroleerd dat de muziekopslag aangekoppeld en beschrijfbaar is, dat er een back-up is van een bestaande bibliotheek en dat geen andere importer hierin schrijft.",
@@ -2247,7 +2268,6 @@ export const dutch: Record<TranslationKey, string> = {
     "No exact library file matched an owned completed download.": "Geen exact bibliotheekbestand gevonden bij een afgeronde download van dit account.",
     "Downtify did not provide the required original audio range.": "Downtify leverde niet het verwachte deel van het originele audiobestand.",
     "The remote audio format could not be verified.": "De indeling van het externe audiobestand kon niet worden bevestigd.",
-    "Original audio transfer is reachable. Automatic importing is not enabled yet.": "Originele audiobestanden kunnen via Downtify worden opgehaald. Automatisch importeren is nog niet beschikbaar.",
     "Automatic library import": "Automatisch toevoegen aan muziekbibliotheek",
     "Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.": "Kima test het rechtstreeks ophalen van audio uit Downtify. Automatische import is nog niet beschikbaar. Laat de bestaande importer voorlopig draaien.",
     "Checking audio transfer...": "Audio-overdracht controleren...",
