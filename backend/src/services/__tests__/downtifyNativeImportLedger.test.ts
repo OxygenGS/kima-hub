@@ -359,18 +359,43 @@ describe("Native import discovery and durable claims", () => {
         }));
     });
 
-    it("summarizes the current owner without exposing remote IDs or filenames", async () => {
+    it("separates queued, claimed, pending-index, imported and review counts", async () => {
         paired.mockResolvedValueOnce(pairing(true, new Date()));
         importsGroups.mockResolvedValueOnce([
             { status: "ready", _count: { _all: 2 } },
             { status: "claimed", _count: { _all: 1 } },
+            { status: "published_pending_scan", _count: { _all: 4 } },
+            { status: "imported", _count: { _all: 7 } },
+            { status: "review", _count: { _all: 2 } },
             { status: "uncertain", _count: { _all: 3 } },
+            { status: "baseline", _count: { _all: 12 } },
         ]);
         const result = await getNativeImportSummary(owner);
         expect(result).toEqual({
-            enabled: true, baselineReady: true, waiting: 2, inReview: 4,
+            enabled: true, baselineReady: true, waiting: 2,
+            processing: 1, awaitingScan: 4, imported: 7, inReview: 5,
         });
         expect(JSON.stringify(result)).not.toContain(owner.remoteServerId);
+        expect(JSON.stringify(result)).not.toContain(SPOTIFY_ID);
+        expect(importsGroups).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({
+                ownerKimaUserId: owner.kimaUserId,
+                remoteServerId: owner.remoteServerId,
+                remoteUserId: owner.remoteUserId,
+            }),
+        }));
+    });
+
+    it("returns zero status counts for an unrelated or disabled pairing without reading ledger", async () => {
+        paired.mockResolvedValueOnce({
+            ...pairing(true, new Date()), expectedUserId: owner.remoteUserId + 1,
+        });
+        const result = await getNativeImportSummary(owner);
+        expect(result).toEqual({
+            enabled: false, baselineReady: false, waiting: 0, processing: 0,
+            awaitingScan: 0, imported: 0, inReview: 0,
+        });
+        expect(importsGroups).not.toHaveBeenCalled();
     });
 });
 
