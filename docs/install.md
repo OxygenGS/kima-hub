@@ -34,7 +34,7 @@ Open `http://localhost:3030` on the Docker host, finish setup and create the adm
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services before deploying.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services and additional music/download mounts before deploying. **That optional full-stack example retains an older default image tag:** set `VERSION=v1.19.0` explicitly for a new full-stack installation. The fail-closed `MUSIC_PATH` guard described below is specific to the recommended production AIO Compose example.
 
 For a **new** production Compose installation, the example defaults to the currently published and fixed `v1.19.0` image (never `:latest`). Set `MUSIC_PATH` to an existing **absolute path** to the intended music filesystem; Compose rejects a missing setting and does **not** create a missing host folder. For a NAS/DAS, independently confirm the correct disk or share is mounted: an existing but empty directory is not proof of storage identity.
 
