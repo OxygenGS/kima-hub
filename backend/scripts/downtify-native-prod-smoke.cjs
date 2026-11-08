@@ -111,6 +111,33 @@ async function main() {
         throw new Error("No-ISRC fallback accepted incorrect Spotify artist");
     }
 
+    // MP3 is stock Downtify's default format; the artist tag may contain
+    // multiple credits separated by semicolons. Verify the compiled parser
+    // and decoder handle an ordinary ID3-tagged MP3 with no ISRC.
+    const stockMp3 = path.join(scratch, "stock-downtify-default-no-isrc.mp3");
+    const mp3Ffmpeg = spawnSync("/usr/bin/ffmpeg", [
+        "-hide_banner", "-loglevel", "error", "-nostdin",
+        "-f", "lavfi", "-i", "sine=frequency=220:duration=2",
+        "-metadata", "title=Full Audio Canary",
+        "-metadata", "artist=Synthetic Artist; Guest Artist",
+        "-c:a", "libmp3lame", "-b:a", "192k", "-y", stockMp3,
+    ], { timeout: 20000 });
+    if (mp3Ffmpeg.status !== 0 || mp3Ffmpeg.error) {
+        throw new Error("Could not generate standard no-ISRC MP3 staging audio");
+    }
+    fs.chmodSync(stockMp3, 0o600);
+    const mp3Bytes = fs.readFileSync(stockMp3);
+    const mp3Source = {
+        bytes: mp3Bytes.length,
+        sha256: crypto.createHash("sha256").update(mp3Bytes).digest("hex"),
+    };
+    const mp3Check = await verifyNativeTemporaryRecording(
+        stockMp3, { ...expected, extension: ".mp3" }, mp3Source,
+    );
+    if (mp3Check.state !== "verified" || !mp3Check.verifiedForPublication) {
+        throw new Error("Compiled parser rejected standard no-ISRC MP3: " + mp3Check.state);
+    }
+
     const relative = nativeImportDestination(
         "Synthetic Artist", "Full Audio Canary", spotifyId, ".flac",
     );
@@ -174,7 +201,7 @@ async function main() {
         throw new Error("Compiled volume proof did not recover with original media");
     }
     process.stdout.write(
-        "Native Downtify compiled-audio (ISRC + stock no-ISRC) and volume-continuity canary passed " +
+        "Native Downtify compiled-audio (ISRC + FLAC/MP3 stock no-ISRC) and volume-continuity canary passed " +
         "(isolated; no real mount, Downtify server or scanner receipt)\n",
     );
 }
