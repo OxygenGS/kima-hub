@@ -205,7 +205,8 @@ import. Never delete the source music or original host mounts.
 ## Deployment and release gate
 
 The compiled production-audio smoke test also exercises **stock Downtify
-FLAC with no ISRC**, plus wrong-title and wrong-artist rejection against
+FLAC and default MP3 with no ISRC** (including semicolon-separated artists),
+plus wrong-title and wrong-artist rejection against
 independent Spotify expectations. It verifies that the same
 production-compiled volume-proof code **rejects an empty writable fallback
 directory, rejects a replacement volume marker and accepts the original
