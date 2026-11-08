@@ -46,6 +46,9 @@ type NativeAutoImportStatus = {
     enabled: boolean;
     baselineReady: boolean;
     awaitingImport: number;
+    processing: number;
+    awaitingScan: number;
+    imported: number;
     needsReview: number;
     storageReady: boolean;
 };
@@ -177,6 +180,7 @@ export function DowntifySection() {
     const [nativeStatus, setNativeStatus] = useState<NativeAutoImportStatus | null>(null);
     const [nativeAck, setNativeAck] = useState(false);
     const [nativeBusy, setNativeBusy] = useState(false);
+    const [nativeRefreshing, setNativeRefreshing] = useState(false);
     const [nativeFeedback, setNativeFeedback] = useState<TranslationKey | null>(null);
     const [nativeError, setNativeError] = useState(false);
 
@@ -280,8 +284,28 @@ export function DowntifySection() {
             setImportChecking(false);
         }
     };
+    const refreshNativeStatus = async () => {
+        if (nativeRefreshing || nativeBusy || pending || !ownerMatches) return;
+        setNativeRefreshing(true);
+        setNativeError(false);
+        setNativeFeedback(null);
+        try {
+            // Database aggregates and local volume check only; no Downtify polling,
+            // new claim, scanner request or media write.
+            const current = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(current);
+        } catch {
+            setNativeError(true);
+            setNativeFeedback("Could not refresh import status.");
+        } finally {
+            setNativeRefreshing(false);
+        }
+    };
+
     const toggleNativeAutoImport = async (enabled: boolean) => {
-        if (nativeBusy || !ownerMatches || !nativeStatus || pending) return;
+        if (nativeBusy || nativeRefreshing || !ownerMatches || !nativeStatus || pending) return;
         if (enabled && !nativeAck) {
             setNativeError(true);
             setNativeFeedback("Confirm the music storage, backup and other-importer checks first.");
@@ -500,7 +524,7 @@ export function DowntifySection() {
                                             <SettingsToggle id="downtify-native-auto-import"
                                                 checked={nativeStatus?.enabled === true}
                                                 disabled={!ownerMatches || !status?.enabled ||
-                                                    !nativeStatus || nativeBusy || pending ||
+                                                    !nativeStatus || nativeBusy || nativeRefreshing || pending ||
                                                     (!nativeStatus.enabled && !nativeAck)}
                                                 onChange={toggleNativeAutoImport} />
                                         </SettingsRow>
@@ -520,15 +544,40 @@ export function DowntifySection() {
                                             </label>
                                         )}
                                         {nativeStatus && (
-                                            <p className="text-xs text-[var(--text-muted)]">
-                                                {nativeStatus.enabled
-                                                    ? nativeStatus.storageReady
-                                                        ? t("Automatic import is active.")
-                                                        : t("Automatic import is paused because the verified music storage is unavailable.")
-                                                    : t("Automatic import is currently off.")}
-                                                {" · "}{t("Waiting")}: {nativeStatus.awaitingImport}
-                                                {" · "}{t("Needs review")}: {nativeStatus.needsReview}
-                                            </p>
+                                            <>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {nativeStatus.enabled
+                                                        ? nativeStatus.storageReady
+                                                            ? t("Automatic import is active.")
+                                                            : t("Automatic import is paused because the verified music storage is unavailable.")
+                                                        : t("Automatic import is currently off.")}
+                                                </p>
+                                                <dl aria-label={t("Downtify import activity")}
+                                                    className="grid grid-cols-2 gap-3 rounded-lg border border-white/10 p-3 text-xs sm:grid-cols-3">
+                                                    {([
+                                                        ["Waiting", nativeStatus.awaitingImport],
+                                                        ["Claimed / unresolved", nativeStatus.processing],
+                                                        ["Waiting for library scan", nativeStatus.awaitingScan],
+                                                        ["Added to library", nativeStatus.imported],
+                                                        ["Needs review", nativeStatus.needsReview],
+                                                    ] as const).map(([label, value]) => (
+                                                        <div key={label} className="space-y-1">
+                                                            <dt className="text-[var(--text-muted)]">{t(label)}</dt>
+                                                            <dd className="font-semibold text-white">{value}</dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                                <button type="button" onClick={refreshNativeStatus}
+                                                    disabled={!ownerMatches || nativeRefreshing || nativeBusy || pending}
+                                                    className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                    {nativeRefreshing ? t("Refreshing import status...") : t("Refresh import status")}
+                                                </button>
+                                                {nativeStatus.processing > 0 && (
+                                                    <p className="text-xs text-[var(--text-muted)]">
+                                                        {t("Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.")}
+                                                    </p>
+                                                )}
+                                            </>
                                         )}
                                         {nativeStatus?.baselineReady && nativeStatus.storageReady === false && (
                                             <p role="alert" className="text-xs text-amber-300">
