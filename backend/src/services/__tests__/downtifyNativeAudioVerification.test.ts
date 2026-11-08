@@ -175,6 +175,26 @@ describe("Complete private-recording audio verification (dormant)", () => {
             .toBe("verified");
     });
 
+    it("supports Downtify MP3 semicolon-separated credited artists, never prefixes", async () => {
+        const correct = deps();
+        correct.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Another Artist; Example Artist",
+            artists: null,
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, correct)).state)
+            .toBe("verified");
+
+        const wrong = deps();
+        wrong.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Another Artist; Example Artist Quartet",
+            artists: null,
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, wrong)).state)
+            .toBe("recording_needs_review");
+    });
+
     it("supports missing provider ISRC only if remaining metadata matches exactly", async () => {
         const mock = deps();
         mock.parse.mockResolvedValueOnce({
