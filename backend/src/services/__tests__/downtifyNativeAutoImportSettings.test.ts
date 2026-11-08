@@ -84,7 +84,7 @@ beforeEach(() => {
         enabled: record.nativeImportEnabled,
         baselineReady: !!record.nativeImportBaselineAt &&
             record.nativeImportLibraryCursor !== null,
-        waiting: 0, inReview: 0,
+        waiting: 0, processing: 0, awaitingScan: 0, imported: 0, inReview: 0,
     }));
 });
 
@@ -93,12 +93,30 @@ describe("One-switch Downtify native import activation", () => {
         const response = await getNativeAutoImportStatus(admin);
         expect(response).toEqual({
             state: "paused", enabled: false, baselineReady: false,
-            awaitingImport: 0, needsReview: 0,
+            awaitingImport: 0, processing: 0, awaitingScan: 0,
+            imported: 0, needsReview: 0,
             storageReady: true,
         });
         expect(JSON.stringify(response)).not.toContain(serverId);
         expect(runtime).not.toHaveBeenCalled();
         expect(queue).not.toHaveBeenCalled();
+    });
+
+    it("returns only owner-scoped aggregate counts, without remote details", async () => {
+        summary.mockResolvedValueOnce({
+            enabled: true, baselineReady: true, waiting: 3,
+            processing: 2, awaitingScan: 4, imported: 5, inReview: 1,
+        });
+        const result = await getNativeAutoImportStatus(admin);
+        expect(result).toEqual({
+            state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 2, awaitingScan: 4,
+            imported: 5, needsReview: 1, storageReady: true,
+        });
+        const payload = JSON.stringify(result);
+        expect(payload).not.toContain(serverId);
+        expect(payload).not.toContain(PROOF);
+        expect(payload).not.toContain("remoteUserId");
     });
 
     it("refuses an incorrect administrator without contacting Downtify", async () => {
@@ -130,7 +148,8 @@ describe("One-switch Downtify native import activation", () => {
         const result = await setNativeAutoImport(admin, true, true);
         expect(result).toEqual({
             state: "enabled", enabled: true, baselineReady: true,
-            awaitingImport: 0, needsReview: 0,
+            awaitingImport: 0, processing: 0, awaitingScan: 0,
+            imported: 0, needsReview: 0,
             storageReady: true,
         });
         expect(queue).toHaveBeenCalledTimes(1);
