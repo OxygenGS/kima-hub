@@ -30,6 +30,11 @@ def main():
     env.pop("VERSION", None)
     env["COMPOSE_PROJECT_NAME"] = "kima-ci-portable-install"
 
+    # Docker Compose may omit explicit false booleans from its normalized
+    # JSON model. Check the source contract as well as any emitted value.
+    if "bind:\n          create_host_path: false" not in COMPOSE.read_text():
+        raise AssertionError("Compose source must disable bind host-path creation")
+
     for absent in (None, ""):
         candidate = env.copy()
         if absent is not None:
@@ -65,11 +70,11 @@ def main():
             raise AssertionError("Music volume type is not bind")
         if volume["source"] != str(music):
             raise AssertionError("Compose altered the configured music directory")
-        if volume.get("bind", {}).get("create_host_path") is not False:
-            flag = volume.get("bind", {}).get("create_host_path", "omitted")
-            raise AssertionError(
-                "Compose normalized create_host_path unexpectedly: " + str(flag)
-            )
+        # A normalized config can omit an explicitly false create_host_path.
+        # Only a positive or non-boolean value is evidence of unsafe behavior.
+        host_path_setting = volume.get("bind", {}).get("create_host_path")
+        if host_path_setting not in (None, False):
+            raise AssertionError("Compose enabled automatic host-path creation")
 
         # A non-existent *explicit* path may parse, but it must never be
         # auto-created by the Compose example's bind-mount semantics.
@@ -82,7 +87,7 @@ def main():
             v for v in json.loads(absent_result.stdout)["services"]["kima"]["volumes"]
             if v["target"] == "/music"
         )
-        if absent_volume.get("bind", {}).get("create_host_path") is not False:
+        if absent_volume.get("bind", {}).get("create_host_path") not in (None, False):
             raise AssertionError("Absent music path could be created during startup")
         candidate["MUSIC_PATH"] = str(music)
 
