@@ -41,7 +41,7 @@ Kima displays four separate checks instead of only an overall error:
 
 | Check | What it verifies | What it does not prove |
 | --- | --- | --- |
-| Music directory access | The configured library root exists, is a directory and is accessible to the Kima backend | That an external disk is mounted at that path or supports no-replace atomic hardlinks |
+| Music directory access | The configured music-library root exists, is a directory and is readable/traversable by the Kima backend | That the dedicated Downtify destination is writable, the intended external disk is correctly mounted or no-replace hardlinks work |
 | Downtify server identity | The remote server presents the exact pinned Downtify API and server identity | That the source recording is correct |
 | Paired Downtify account | The saved device token authenticates as the pinned remote owner | That all remote jobs belong to this owner |
 | Original audio sample | A single matching owner-attributed completed track has an original 64-byte stream whose response and audio header are valid | Full-file integrity, ISRC, duration, successful import/index, or safe cutover |
@@ -166,14 +166,38 @@ the metadata-only fallback cannot discover it; review the recording
 manually and replace it through an appropriate workflow if necessary.
 This limitation must be disclosed in the stable release notes.
 
+## Root-owned NAS/DAS music libraries
+
+Root-owned Docker bind mounts frequently have `/music` permissions `775`
+and a root-owned, non-writable-to-Kima `/music/Singles`. This is supported.
+Kima does **not** need write permission on the entire music collection.
+
+At AIO startup the privileged bootstrap safely prepares **only**
+`/music/Singles/Downtify` if `Singles` already exists, making a new leaf
+owned by the unprivileged backend (mode `750`). It never recursively
+chowns, chmods, renames or deletes existing music. Existing foreign-owned
+Downtify directories are left untouched and flagged for operator review.
+Untrusted world-writable or non-root-group-writable ancestors fail closed.
+
+The read-only API check verifies `/music` is readable and traversable; it
+does **not** require `/music` to be writable. The dedicated importer still
+requires its own writable, trusted directory when the admin enables import.
+If the host mount is read-only, unmounted or foreign-owned, automatic
+import remains disabled and the UI reports storage unavailable. Do not
+run `chmod 777`, recursive `chown` or permission changes over the whole
+music library to resolve it.
+
 ## Persistent music-volume identity (DAS/NAS safety)
 
 A Docker bind mount can remain accessible as an empty local directory when
 its external backing disk disappears. Before the **first explicit enable**,
 Kima creates a private `.kima-native-music-volume` UUID marker inside the
-configured music root, after the administrator confirms the intended local or network music
-volume is mounted. The UUID is stored with the paired Downtify owner in PostgreSQL
-and reset whenever the pairing changes.
+**dedicated `/music/Singles/Downtify` importer directory** on the existing
+music filesystem, after the administrator confirms the intended local or
+network volume is mounted. An older, valid root-level marker from an earlier
+candidate is still recognized; any invalid one is rejected, never replaced.
+The UUID is stored with the paired Downtify owner in PostgreSQL and reset
+whenever the pairing changes.
 
 The import worker checks that exact marker **before** polling remote work
 and again immediately before exposing a new file to the library. A missing
