@@ -111,30 +111,9 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             remoteServerId: settings.expectedServerId,
             remoteUserId: settings.expectedUserId,
         };
-        const env = await getDowntifyRuntimeEnv();
-        // Read the library cursor BEFORE the queue, so a remote track
-        // completed between the two reads is considered on a later cycle
-        // rather than advancing the cursor past a missing queue receipt.
-        const library = await getVerifiedNativeLibraryChanges(
-            owner.kimaUserId, settings.nativeImportLibraryCursor, env,
-        );
-        if (library.state !== "ready") return outcome("unavailable");
-        const queue = await getVerifiedNativeImportQueue(owner.kimaUserId, env);
-        if (queue.state !== "ready") return outcome("unavailable");
-        const observed = await discoverNativeCompleted(owner, queue.queue, {
-            cursor: library.cursor, full: library.full, tracks: library.tracks,
-        });
-        if (observed.state !== "recorded" && observed.state !== "deferred") {
-            return outcome("unavailable");
-        }
-        // A deferred cursor does not stop reconciliation of already-published
-        // files or already-approved claims from earlier cycles.
-        newJobs = observed.count;
-        if (observed.ambiguous > 0) {
-            // A duplicate remote job is not a unique source. Never guess.
-            heldForReview += observed.ambiguous;
-        }
-
+        // Local scanner receipts must be reconciled even when Downtify or its
+        // credentials are temporarily unavailable. This work NEVER re-copies
+        // media or calls the remote server.
         // Finish index receipts from earlier cycles WITHOUT re-copying them.
         const waitingForIndex = await prisma.downtifyNativeImport.findMany({
             where: {
@@ -152,6 +131,30 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 owner, row.id, row.claimToken,
             );
             if (receipt.state === "imported") imported++;
+        }
+
+        const env = await getDowntifyRuntimeEnv();
+        // Read the library cursor BEFORE the queue, so a remote track
+        // completed between the two reads is considered on a later cycle
+        // rather than advancing the cursor past a missing queue receipt.
+        const library = await getVerifiedNativeLibraryChanges(
+            owner.kimaUserId, settings.nativeImportLibraryCursor, env,
+        );
+        if (library.state !== "ready") return outcome("unavailable", { imported });
+        const queue = await getVerifiedNativeImportQueue(owner.kimaUserId, env);
+        if (queue.state !== "ready") return outcome("unavailable", { imported });
+        const observed = await discoverNativeCompleted(owner, queue.queue, {
+            cursor: library.cursor, full: library.full, tracks: library.tracks,
+        });
+        if (observed.state !== "recorded" && observed.state !== "deferred") {
+            return outcome("unavailable", { imported });
+        }
+        // A deferred cursor does not stop reconciliation of already-published
+        // files or already-approved claims from earlier cycles.
+        newJobs = observed.count;
+        if (observed.ambiguous > 0) {
+            // A duplicate remote job is not a unique source. Never guess.
+            heldForReview += observed.ambiguous;
         }
 
         const ready = await prisma.downtifyNativeImport.findMany({
@@ -287,6 +290,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     await requestScan({
                         source: "downtify-native-import",
                         userId: owner.kimaUserId,
+                        // A concurrently running global scan might miss this
+                        // newly linked file. Give every published claim its own
+                        // dedupe key so no completion is lost to scan-full.
+                        downtifyNativeImportId: claim.id,
                     });
                 } catch {
                     // No automatic retry of the file installation.
