@@ -19,6 +19,7 @@ import {
     ensureNativeImportDestination, nativeImportDestination,
 } from "../downtifyNativeImportWorkspace";
 import { publishNativeAudio } from "../downtifyAtomicPublisher";
+import { initializeNativeMusicVolume, verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { verifyNativeTemporaryRecording } from "../downtifyNativeAudioVerification";
 import { decodeWithFfmpeg } from "../downtifyFullAudioEvidence";
 import {
@@ -162,6 +163,27 @@ async function publish(file: string) {
 }
 
 describe("Real-audio native import filesystem canary", () => {
+    it("writes only inside a pre-provisioned Downtify leaf, not a non-writable music root", async () => {
+        const privateLeaf = path.join(musicRoot, "Singles", "Downtify");
+        await fs.mkdir(privateLeaf, { recursive: true, mode: 0o750 });
+        await fs.chmod(musicRoot, 0o555);
+        try {
+            const proof = await initializeNativeMusicVolume(musicRoot);
+            expect(proof).not.toBeNull();
+            expect(await verifyNativeMusicVolume(musicRoot, proof)).toBe(true);
+            expect((await fs.readdir(musicRoot))).toEqual(["Singles"]);
+            expect((await fs.readdir(privateLeaf)))
+                .toContain(".kima-native-music-volume");
+            const { result, relative } = await publish(original);
+            expect(result.state).toBe("published");
+            expect(await fs.readFile(path.join(musicRoot, relative)))
+                .toEqual(await fs.readFile(original));
+            expect((await fs.readdir(musicRoot))).toEqual(["Singles"]);
+        } finally {
+            await fs.chmod(musicRoot, 0o700);
+        }
+    });
+
     it("publishes an actual FLAC with stock Downtify tags and NO ISRC exactly once", async () => {
         const stock = path.join(scratch, "stock-downtify-no-isrc.flac");
         synthesize(stock, 440, false);
