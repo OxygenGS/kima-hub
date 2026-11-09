@@ -219,7 +219,7 @@ describe("Native Downtify auto-import coordinator", () => {
         });
         expect(scan).toHaveBeenCalledWith({
             source: "downtify-native-import", userId: owner.kimaUserId,
-            downtifyNativeImportId: claim.id,
+            downtifyNativeImportId: "batch-" + claim.id,
         });
         expect(hold).not.toHaveBeenCalled();
     });
@@ -419,7 +419,7 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(publish).toHaveBeenCalledTimes(2);
     });
 
-    it("requests a separate library scan for each newly published import", async () => {
+    it("requests ONE scan after all new files in the batch are published", async () => {
         imports.mockResolvedValueOnce([]).mockResolvedValueOnce([
             { id: "clvitem1", spotifyTrackId: SPOTIFY },
             { id: "clvitem2", spotifyTrackId: SPOTIFY },
@@ -427,8 +427,11 @@ describe("Native Downtify auto-import coordinator", () => {
         claimImport.mockResolvedValueOnce({ ...claim, id: "clvitem1" })
             .mockResolvedValueOnce({ ...claim, id: "clvitem2" });
         await runNativeImportCycle();
-        expect(scan.mock.calls.map(call => call[0].downtifyNativeImportId))
-            .toEqual(["clvitem1", "clvitem2"]);
+        expect(scan).toHaveBeenCalledTimes(1);
+        expect(scan).toHaveBeenCalledWith({
+            source: "downtify-native-import", userId: owner.kimaUserId,
+            downtifyNativeImportId: "batch-clvitem1-clvitem2",
+        });
     });
 
     it("does not retry an import claimed in a prior process or after a crash", async () => {
