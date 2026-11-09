@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8e92b3e1b7d1969a337d038535d045dee663942e
+          ref: 5d5dc5ef10b705902ab36c357a768a5216e86d11
       - name: Assert the exact fully CI-green candidate is being released
         shell: bash
         env:
-          EXPECTED_SOURCE: 8e92b3e1b7d1969a337d038535d045dee663942e
+          EXPECTED_SOURCE: 5d5dc5ef10b705902ab36c357a768a5216e86d11
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -59,7 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          SOURCE_SHA: 8e92b3e1b7d1969a337d038535d045dee663942e
+          SOURCE_SHA: 5d5dc5ef10b705902ab36c357a768a5216e86d11
         run: |
           set -euo pipefail
           for attempt in $(seq 1 150); do
@@ -159,7 +159,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 8e92b3e1b7d1969a337d038535d045dee663942e
+          ref: 5d5dc5ef10b705902ab36c357a768a5216e86d11
       - name: Free runner disk for audio/ML image
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
@@ -310,7 +310,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$SOURCE_SHA" = "8e92b3e1b7d1969a337d038535d045dee663942e"
+          test "$SOURCE_SHA" = "5d5dc5ef10b705902ab36c357a768a5216e86d11"
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
           tag="downtify-v1.20.0-rc4"
           if gh release view "$tag" >/dev/null 2>&1; then
