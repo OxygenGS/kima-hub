@@ -1,6 +1,6 @@
 import type { AxiosInstance } from "axios";
 import { inspectNativeDowntifyImport } from "../downtifyNativeImportPreflight";
-import { promises as fs } from "fs";
+import { promises as fs, constants as fsConstants } from "fs";
 
 const TOKEN = "dtfy_synthetic_very_long_device_token_12345";
 const USER = "admin-only";
@@ -116,6 +116,18 @@ describe("Native Downtify import transport preflight", () => {
         expect(JSON.stringify(result)).not.toContain(TOKEN);
         expect(JSON.stringify(result)).not.toContain(filename);
         expect(JSON.stringify(result)).not.toContain(TRACK_ID);
+    });
+
+    it("checks the Downtify API on a readable music root without requesting write access", async () => {
+        mockMusic.access.mockImplementationOnce(async (_root: string, flags: number) => {
+            if ((flags & fsConstants.W_OK) !== 0) throw new Error("readonly music root");
+        });
+        const get = remote();
+        const result = await run(get);
+        expect(result.state).toBe("original_stream_verified");
+        expect(result.musicRootAccessible).toBe(true);
+        expect(mockMusic.access).toHaveBeenCalledWith("/music", fsConstants.R_OK | fsConstants.X_OK);
+        expect(get).toHaveBeenCalledTimes(5);
     });
 
     it("rejects old/unowned completed jobs instead of checking a different user's music", async () => {
