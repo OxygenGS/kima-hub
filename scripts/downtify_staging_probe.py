@@ -235,8 +235,8 @@ def probe(options: Options) -> dict:
 
     digest = source.hash_original(track["id"], size)
     return {
-        "state": "source_full_audio_verified",
-        "source_audio": "sha256_verified",
+        "state": "source_full_audio_read",
+        "source_audio": "sha256_computed",
         "source_bytes": size,
         "source_sha256": digest,
         "release_approved": False,
