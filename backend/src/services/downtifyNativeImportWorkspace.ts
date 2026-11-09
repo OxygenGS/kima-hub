@@ -8,6 +8,7 @@
 import { promises as fs } from "fs";
 import * as path from "path";
 import { safeNativeImportTarget } from "./downtifyAtomicPublisher";
+import { trustedNativeMusicDirectory } from "./downtifyNativeDirectorySafety";
 
 const AUDIO_EXT = new Set([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"]);
 const SPOTIFY = /^[A-Za-z0-9]{22}$/;
@@ -54,8 +55,7 @@ export async function ensureNativeImportDestination(
 
     try {
         const rootStat = await fs.lstat(musicRoot);
-        if (!rootStat.isDirectory() || rootStat.isSymbolicLink() ||
-            (rootStat.mode & 0o022) !== 0 ||
+        if (!trustedNativeMusicDirectory(rootStat) ||
             await fs.realpath(musicRoot) !== musicRoot) {
             return { state: "unsafe_destination" };
         }
@@ -70,9 +70,8 @@ export async function ensureNativeImportDestination(
                 }
             }
             const stat = await fs.lstat(current);
-            if (!stat.isDirectory() || stat.isSymbolicLink() ||
+            if (!trustedNativeMusicDirectory(stat) ||
                 stat.dev !== rootStat.dev ||
-                (stat.mode & 0o022) !== 0 ||
                 await fs.realpath(current) !== current) {
                 return { state: "unsafe_destination" };
             }
