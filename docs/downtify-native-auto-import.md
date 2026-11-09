@@ -119,8 +119,9 @@ receipt and full physical-file hash.
   beneath the normal `/music` mount; no custom operator staging mount
   or remote path is required. No-replace atomic hardlink publication keeps
   existing files. The upstream source is never deleted.
-- **Scan reliability:** each newly published Downtify ledger claim requests a
-  separately keyed scan, so an already-running generic scan cannot swallow
+- **Scan reliability:** each processing cycle requests a single scan **after**
+  all its newly published Downtify claims are committed. The batch gets a
+  distinct dedupe key, so a generic scan already in progress cannot swallow
   a later import's scan request. Pending physical-hash/index receipts are
   reconciled locally before any new Downtify HTTP calls; remote outages do not
   block confirmation of files that were already published. The scan still
