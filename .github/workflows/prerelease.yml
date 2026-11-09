@@ -4,6 +4,10 @@ name: Pre-release Image
 # The two platform-specific staging tags are pushed only after scanning the
 # EXACT image. The combined prerelease tag is built after both jobs succeed.
 on:
+  # One-time opt-in RC branch; stable tag workflows remain untouched.
+  push:
+    branches:
+      - rc/downtify-v1.20.0-rc1
   workflow_dispatch:
     inputs:
       tag_suffix:
@@ -27,8 +31,23 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
       short: ${{ steps.meta.outputs.short }}
       suffix: ${{ steps.meta.outputs.suffix }}
+      source: ${{ steps.meta.outputs.source }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: f96ae1f79b025d6116637a231dd5a4b33351e910
+      - name: Assert the exact fully CI-green candidate is being released
+        shell: bash
+        env:
+          EXPECTED_SOURCE: f96ae1f79b025d6116637a231dd5a4b33351e910
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          if [ "$EVENT_NAME" = "push" ]; then
+            test "$EVENT_REF" = "refs/heads/rc/downtify-v1.20.0-rc1"
+          fi
       - name: Validate fork version and changelog
         shell: bash
         run: |
@@ -39,7 +58,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          TAG_SUFFIX: ${{ inputs.tag_suffix }}
+          TAG_SUFFIX: ${{ github.event_name == 'push' && 'downtify-v1.20.0-rc1' || inputs.tag_suffix }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -49,6 +68,7 @@ jobs:
           fi
           short="$(git rev-parse --short=7 HEAD)"
           echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "suffix=$TAG_SUFFIX" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_OUTPUT"
 
@@ -70,10 +90,16 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: f96ae1f79b025d6116637a231dd5a4b33351e910
       - name: Free runner disk for audio/ML image
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
           df -h /
+      - name: Install SHA-256-verified Trivy before expensive native image build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/ci/install-trivy-verified.sh
       - uses: docker/setup-buildx-action@v3
       - name: Build and load native image - no registry push
         uses: docker/build-push-action@v5
@@ -87,7 +113,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_BUILD_TYPE=prerelease
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.validate.outputs.source }}
             org.opencontainers.image.version=prerelease-${{ needs.validate.outputs.short }}
           cache-from: type=gha,scope=prerelease-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=prerelease-${{ matrix.arch }}
@@ -97,11 +123,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect kima:prerelease-scan --format '{{.Architecture}}')" = "$EXPECTED"
-      - name: Install pinned Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.74.0
-          cache: true
+      - name: AIO smoke of the EXACT image intended for release
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          docker tag kima:prerelease-scan kima-hub:aio-ci-smoke
+          AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
       - name: Block fixable HIGH/CRITICAL vulnerabilities in this image
         env:
           ARCH: ${{ matrix.arch }}
@@ -142,6 +169,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
     steps:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -150,11 +179,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Compose, verify and publish candidate (never latest)
+        id: manifest
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
           SHORT: ${{ needs.validate.outputs.short }}
           SUFFIX: ${{ needs.validate.outputs.suffix }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ needs.validate.outputs.source }}
         shell: bash
         run: |
           set -euo pipefail
@@ -177,9 +207,12 @@ jobs:
           '
           digest="$(docker buildx imagetools inspect "$candidate" | sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-          # The moving :prerelease alias is changed only once the combined
-          # platform index has passed inspection.
-          docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          # The opt-in Downtify RC must not overwrite even the shared
+          # :prerelease alias; only immutable RC tags may be published.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
           {
             echo "### Verified multiarchitecture pre-release candidate"
             echo "Source commit: $SOURCE_SHA"
@@ -191,3 +224,84 @@ jobs:
             echo "Each native platform's exact loaded image passed vulnerability and secret scanning before GHCR staging."
             echo "NO stable tag, :latest update, merge, or production installation change."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-downtify-test-release:
+    name: Publish opt-in Downtify GitHub prerelease after audited images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/rc/downtify-v1.20.0-rc1'
+    needs: [validate, native-build, assemble]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Publish GitHub prerelease without altering stable releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          IMAGE: ${{ needs.validate.outputs.image }}
+          SOURCE_SHA: ${{ needs.validate.outputs.source }}
+          DIGEST: ${{ needs.assemble.outputs.digest }}
+          SHORT: ${{ needs.validate.outputs.short }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SOURCE_SHA" = "f96ae1f79b025d6116637a231dd5a4b33351e910"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          tag="downtify-v1.20.0-rc1"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::A release with this exact RC tag already exists; never silently replace it."
+            exit 1
+          fi
+          cat > /tmp/downtify-test-notes.md <<EOF
+          ## Downtify native auto-import — TEST RELEASE ONLY
+
+          This is an opt-in **release candidate**, NOT the next stable Kima Hub
+          release. It is built from the fully CI-green native-import candidate
+          commit \`$SOURCE_SHA\`. The shipped app's version field is still 1.19.0;
+          the container tag below identifies this experimental build.
+
+          **Scanned multiarchitecture image (amd64 + arm64):**
+          \`$IMAGE@$DIGEST\`
+
+          **Convenience tag (test only):**
+          \`$IMAGE:prerelease-downtify-v1.20.0-rc1\`
+
+          All images were built on native runners, tested with a disposable AIO
+          smoke suite, inspected for HIGH/CRITICAL vulnerability advisories,
+          and scanned for embedded secrets before publishing.
+
+          ### Before testing
+
+          - Use a **separate disposable Docker test installation** with
+            independent application data and music filesystem. Do NOT
+            overwrite the live v1.19.0 image tag or reuse its data volume.
+          - The native Downtify auto-import switch is OFF by default.
+          - Pair a test Downtify account under Kima Settings. Only enable
+            automatic import with a verified staging music mount and backup.
+          - Do not run an older external importer against the same directory
+            at the same time. Back up and verify restore of any data volume
+            before changing or upgrading it.
+          - A successful GitHub build is not proof of an actual real-world
+            Downtify transfer, artist-page indexing, playback or rollback.
+
+          ### What to test
+
+          Pair Downtify, activate the optional native importer, start a
+          genuinely NEW Spotify download, verify imported file hashes,
+          artist-page visibility and playback, then retry and restart
+          to ensure no duplicates. Confirm there are no source deletions,
+          unexpected overwrites or false "imported" counts.
+
+          Full testing protocol:
+          https://github.com/OxygenGS/kima-hub/blob/feat/downtify-native-auto-import/docs/downtify-staging-canary.md
+
+          **Do not promote this RC to stable until the real import and
+          independent storage/restore gates have passed.**
+          EOF
+          gh release create "$tag" \
+            --target "$SOURCE_SHA" \
+            --title "Kima Hub Downtify v1.20.0 RC1 — test only" \
+            --prerelease \
+            --notes-file /tmp/downtify-test-notes.md
+          echo "RC published from $SOURCE_SHA with immutable image $IMAGE@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
