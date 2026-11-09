@@ -400,6 +400,10 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
           df -h /
+      - name: Install SHA-256-verified Trivy v0.74.0 for arm64 image inspection
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/ci/install-trivy-verified.sh
       - uses: docker/setup-buildx-action@v3
       - name: Build native ARM64 AIO locally, never publish
         uses: docker/build-push-action@v5
@@ -427,10 +431,6 @@ jobs:
           path: frontend/test-results/release-ui/
           if-no-files-found: warn
           retention-days: 7
-      - name: Install SHA-256-verified Trivy v0.74.0 for arm64 image inspection
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: bash .github/ci/install-trivy-verified.sh
       - name: Record actual arm64 image HIGH/CRITICAL vulnerability findings
         timeout-minutes: 15
         run: |
