@@ -1,34 +1,119 @@
 name: Pre-release Image
 
-# Manual only. Each architecture builds on a native runner, never in QEMU.
+# Opt-in isolated RC on a gated same-repo draft PR, otherwise manual only.
+# Each architecture builds on a native runner, never in QEMU.
 # The two platform-specific staging tags are pushed only after scanning the
 # EXACT image. The combined prerelease tag is built after both jobs succeed.
 on:
-  workflow_dispatch:
-    inputs:
-      tag_suffix:
-        description: "Optional suffix only, e.g. v111-rc2 (do not type tag_suffix)"
-        required: false
-        type: string
-
+  # One-time isolated release for the exact in-repo RC PR, observable via PR checks.
+  # Never publish from the stable branch or an untrusted fork.
+  pull_request:
+    branches:
+      - feat/downtify-native-auto-import
+    types: [opened, synchronize, reopened]
 concurrency:
-  group: prerelease-${{ github.ref }}
+  group: prerelease-downtify-rc3
   cancel-in-progress: false
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   validate:
     name: Validate candidate release metadata and suffix
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     outputs:
       image: ${{ steps.meta.outputs.image }}
       short: ${{ steps.meta.outputs.short }}
       suffix: ${{ steps.meta.outputs.suffix }}
+      source: ${{ steps.meta.outputs.source }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: a3220826cec453e92a714749c3b11d8555365c41
+      - name: Assert the exact fully CI-green candidate is being released
+        shell: bash
+        env:
+          EXPECTED_SOURCE: a3220826cec453e92a714749c3b11d8555365c41
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          EXPECTED_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+            test "$PR_HEAD" = "rc/downtify-v1.20.0-rc3"
+            test "$PR_BASE" = "feat/downtify-native-auto-import"
+            test "$PR_HEAD_REPO" = "$EXPECTED_REPO"
+            test "$EVENT_REF" = "refs/pull/$PR_NUMBER/merge"
+          fi
+      - name: Wait for five successful exact-source GitHub CI workflows
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_SHA: a3220826cec453e92a714749c3b11d8555365c41
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 150); do
+            gh api "repos/$GH_REPO/actions/runs?head_sha=$SOURCE_SHA&per_page=100" > "$RUNNER_TEMP/source-ci.json"
+            if python3 - "$RUNNER_TEMP/source-ci.json" <<'PY'
+          import json,os,sys
+          data=json.load(open(sys.argv[1],encoding="utf-8"))
+          runs=data.get("workflow_runs",[])
+          names=("PR Checks","Fork Compatibility and Native AIO Checks",
+                 "Security Checks","Public Language UI",
+                 "Nonroot AIO production wiring and unit guards")
+          sha=os.environ["SOURCE_SHA"]
+          pending=[]
+          for name in names:
+              found=[r for r in runs if r.get("name")==name and r.get("head_sha")==sha
+                     and r.get("event")=="pull_request"]
+              if not found:
+                  pending.append(name+": missing")
+                  continue
+              latest=max(found,key=lambda r:(r.get("created_at",""),r.get("run_attempt",0)))
+              if latest.get("status")=="completed":
+                  if latest.get("conclusion")!="success":
+                      sys.exit("FAILED: "+name+" = "+str(latest.get("conclusion")))
+                  print("PASS: "+name)
+              else:
+                  pending.append(name+": "+str(latest.get("status")))
+          if pending:
+              print("WAITING: "+"; ".join(pending))
+              sys.exit(3)
+          PY
+            then
+              echo "Five exact-source workflows green; authorize isolated RC3 build."
+              break
+            else
+              code=$?
+              if [ "$code" != 3 ]; then exit 1; fi
+              if [ "$attempt" = 150 ]; then
+                echo "::error::Timed out waiting for verified source CI"
+                exit 1
+              fi
+              sleep 30
+            fi
+          done
+      - name: Refuse to reuse an already published RC3 tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view downtify-v1.20.0-rc3 >/dev/null 2>&1; then
+            echo "::error::RC3 already exists; no tag or image overwrite allowed."
+            exit 1
+          fi
       - name: Validate fork version and changelog
         shell: bash
         run: |
@@ -39,7 +124,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          TAG_SUFFIX: ${{ inputs.tag_suffix }}
+          TAG_SUFFIX: downtify-v1.20.0-rc3
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -49,6 +134,7 @@ jobs:
           fi
           short="$(git rev-parse --short=7 HEAD)"
           echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "suffix=$TAG_SUFFIX" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/${OWNER,,}/kima-hub" >> "$GITHUB_OUTPUT"
 
@@ -60,7 +146,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            # Playwright 1.58.2 does not support Chromium on Ubuntu 26.04.
+            # Match the proven browser/security CI runner; do not skip AIO smoke.
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -70,10 +158,16 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: a3220826cec453e92a714749c3b11d8555365c41
       - name: Free runner disk for audio/ML image
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
           df -h /
+      - name: Install SHA-256-verified Trivy before expensive native image build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/ci/install-trivy-verified.sh
       - uses: docker/setup-buildx-action@v3
       - name: Build and load native image - no registry push
         uses: docker/build-push-action@v5
@@ -87,7 +181,7 @@ jobs:
           build-args: |
             NEXT_PUBLIC_BUILD_TYPE=prerelease
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.validate.outputs.source }}
             org.opencontainers.image.version=prerelease-${{ needs.validate.outputs.short }}
           cache-from: type=gha,scope=prerelease-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=prerelease-${{ matrix.arch }}
@@ -97,11 +191,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect kima:prerelease-scan --format '{{.Architecture}}')" = "$EXPECTED"
-      - name: Install pinned Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.74.0
-          cache: true
+      - name: AIO smoke of the EXACT image intended for release
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          docker tag kima:prerelease-scan kima-hub:aio-ci-smoke
+          AIO_SMOKE_WITH_CLAP=1 bash .github/ci/v111-aio-runtime-smoke.sh
       - name: Block fixable HIGH/CRITICAL vulnerabilities in this image
         env:
           ARCH: ${{ matrix.arch }}
@@ -142,6 +237,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
     steps:
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -150,11 +247,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Compose, verify and publish candidate (never latest)
+        id: manifest
         env:
           IMAGE: ${{ needs.validate.outputs.image }}
           SHORT: ${{ needs.validate.outputs.short }}
           SUFFIX: ${{ needs.validate.outputs.suffix }}
-          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_SHA: ${{ needs.validate.outputs.source }}
         shell: bash
         run: |
           set -euo pipefail
@@ -177,9 +275,8 @@ jobs:
           '
           digest="$(docker buildx imagetools inspect "$candidate" | sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-          # The moving :prerelease alias is changed only once the combined
-          # platform index has passed inspection.
-          docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          # Do not change :latest, stable tags or the shared :prerelease alias.
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
           {
             echo "### Verified multiarchitecture pre-release candidate"
             echo "Source commit: $SOURCE_SHA"
@@ -191,3 +288,102 @@ jobs:
             echo "Each native platform's exact loaded image passed vulnerability and secret scanning before GHCR staging."
             echo "NO stable tag, :latest update, merge, or production installation change."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish-downtify-test-release:
+    name: Publish opt-in Downtify GitHub prerelease after audited images
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'rc/downtify-v1.20.0-rc3' && github.event.pull_request.base.ref == 'feat/downtify-native-auto-import' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [validate, native-build, assemble]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Publish GitHub prerelease without altering stable releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          IMAGE: ${{ needs.validate.outputs.image }}
+          SOURCE_SHA: ${{ needs.validate.outputs.source }}
+          DIGEST: ${{ needs.assemble.outputs.digest }}
+          SHORT: ${{ needs.validate.outputs.short }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$SOURCE_SHA" = "a3220826cec453e92a714749c3b11d8555365c41"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          tag="downtify-v1.20.0-rc3"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::A release with this exact RC tag already exists; never silently replace it."
+            exit 1
+          fi
+          cat > /tmp/downtify-test-notes.md <<EOF
+          ## Downtify native auto-import — TEST RELEASE ONLY
+
+          This is an opt-in **release candidate**, NOT the next stable Kima Hub
+          release. It is built from the fully CI-green native-import candidate
+          commit \`$SOURCE_SHA\`. The shipped app's version field is still 1.19.0;
+          the container tag below identifies this experimental build.
+
+          **Scanned multiarchitecture image (amd64 + arm64):**
+          \`$IMAGE@$DIGEST\`
+
+          **Convenience tag (test only):**
+          \`$IMAGE:prerelease-downtify-v1.20.0-rc3\`
+
+          All images were built on native runners, tested with a disposable AIO
+          smoke suite, inspected for HIGH/CRITICAL vulnerability advisories,
+          and scanned for embedded secrets before publishing.
+
+          ### Before testing
+
+          - RC3 is intentionally separate from stable v1.19.0 and :latest.
+            The maintainer has elected to validate it on an existing live
+            installation, not a disposable lab. This is higher-risk.
+          - BEFORE installing, verify an INDEPENDENT cold backup and actual
+            restore of the full persistent /data volume (including database);
+            preserve the current Compose/Dockge configuration and library.
+            A Docker image downgrade is NOT database rollback.
+          - RC3 fixes the read-only setup check on root:root 0775 music
+            mounts: no write permission to the entire /music is needed.
+          - AIO startup creates ONLY a private backend-owned
+            /music/Singles/Downtify directory (mode 0750) when safe, and
+            never takes over existing foreign-owned audio or folders.
+          - The private volume proof is stored inside this dedicated leaf,
+            with backward compatibility for previous valid root markers.
+          - Native auto-import remains OFF until explicit consent.
+          - Disable and prevent auto-restart of any previous importer
+            writing into the same music directory BEFORE native cutover.
+            Otherwise there are two writers and the migration is unsafe.
+          - Kima must be paired to the correct real Downtify API v1 server
+            and owner via Settings. A new track is needed after baseline;
+            old completed jobs are deliberately not imported.
+          - A passing CI build is not proof of real Downtify transfer,
+            correct audio, artist-page indexing, playback or recoverability.
+
+          ### What to test
+
+          First install RC3 with native auto-import OFF; repeat the read-only
+          Downtify setup check that failed on the previous candidate, then
+          verify normal Kima playback, modern clients and library integrity. After backup and single-writer cutover, pair
+          Downtify and run the four read-only setup checks. Activate native
+          import, start one genuinely NEW Spotify track after baseline,
+          verify source versus destination SHA-256, scanner receipt, artist
+          page and web/OpenSubsonic playback. Verify that two-track batches
+          do not duplicate scans and that unavailable Downtify/Redis
+          permits later local scan-only recovery. Check idempotence,
+          wrong/missing mount rejection and the independent data restore.
+          No existing media or remote original may be overwritten/deleted.
+
+          Full testing protocol:
+          https://github.com/OxygenGS/kima-hub/blob/feat/downtify-native-auto-import/docs/downtify-staging-canary.md
+
+          **Do not promote this RC to stable until the real import and
+          independent storage/restore gates have passed.**
+          EOF
+          gh release create "$tag" \
+            --target "$SOURCE_SHA" \
+            --title "Kima Hub Downtify v1.20.0 RC3 — test only" \
+            --prerelease \
+            --notes-file /tmp/downtify-test-notes.md
+          echo "RC published from $SOURCE_SHA with immutable image $IMAGE@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
