@@ -16,7 +16,7 @@ export interface ScanRequest {
     source: string;
     /** Download/album/import ids to reconcile after the walk. */
     downloadId?: string;
-    /** A native Downtify ledger row gets its own scan. Never share a live full-scan key. */
+    /** A native Downtify import batch or receipt retry has its own scan key. */
     downtifyNativeImportId?: string;
     albumMbid?: string;
     artistMbid?: string;
