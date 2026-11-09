@@ -204,6 +204,13 @@ import. Never delete the source music or original host mounts.
 
 ## Deployment and release gate
 
+For public release qualification use the [isolated Downtify staging
+acceptance runbook](downtify-staging-canary.md). It includes a
+**read-only real-server protocol/full-stream SHA-256 probe**, and
+separately specifies the mandatory Kima scanner, playback,
+mount-resilience and cold-restore proof. A source hash by itself
+does not establish a successful Kima import or authorize a release.
+
 The compiled production-audio smoke test also exercises **stock Downtify
 FLAC and default MP3 with no ISRC** (including semicolon-separated artists),
 plus wrong-title and wrong-artist rejection against
