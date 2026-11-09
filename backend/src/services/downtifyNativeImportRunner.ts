@@ -36,6 +36,9 @@ import { requestScan } from "../workers/scanRequest";
 import { verifyNativeMusicVolume } from "./downtifyNativeMountProof";
 
 const MAX_IMPORTS_PER_CYCLE = 2;
+// Only retry the SCAN of already-published files. This never reopens a
+// remote stream, alters an imported file or releases an uncertain claim.
+const PENDING_SCAN_RETRY_MS = 15 * 60 * 1000;
 let active = false;
 
 export interface NativeImportCycleResult {
@@ -122,15 +125,51 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 remoteUserId: owner.remoteUserId,
                 status: "published_pending_scan",
             },
-            select: { id: true, claimToken: true },
+            select: { id: true, claimToken: true, updatedAt: true },
             orderBy: { updatedAt: "asc" }, take: 30,
         });
-        for(const row of waitingForIndex) {
+        const staleReceipts: typeof waitingForIndex = [];
+        const scanRetryBefore = Date.now() - PENDING_SCAN_RETRY_MS;
+        for (const row of waitingForIndex) {
             if (!row.claimToken) continue;
-            const receipt = await confirmNativeIndexed(
-                owner, row.id, row.claimToken,
-            );
-            if (receipt.state === "imported") imported++;
+            const receipt = await confirmNativeIndexed(owner, row.id, row.claimToken);
+            if (receipt.state === "imported") {
+                imported++;
+            } else if (receipt.state === "not_indexed" &&
+                row.updatedAt instanceof Date &&
+                row.updatedAt.getTime() < scanRetryBefore) {
+                staleReceipts.push(row);
+            }
+        }
+        if (staleReceipts.length) {
+            // All outstanding rows share ONE throttled full scan. An earlier
+            // scan may have failed or may have missed a file added mid-walk.
+            // The retry key is separate from scan-full and initial import keys.
+            // Update the durable cooldown only AFTER Redis acknowledges the
+            // request. On a queue outage, the next cycle can try again.
+            try {
+                await requestScan({
+                    source: "downtify-native-receipt-retry",
+                    userId: owner.kimaUserId,
+                    downtifyNativeImportId: "pending-receipts",
+                });
+                const now = new Date();
+                for (const row of staleReceipts) {
+                    await prisma.downtifyNativeImport.updateMany({
+                        where: {
+                            id: row.id, claimToken: row.claimToken,
+                            status: "published_pending_scan",
+                            ownerKimaUserId: owner.kimaUserId,
+                            remoteServerId: owner.remoteServerId,
+                            remoteUserId: owner.remoteUserId,
+                            updatedAt: row.updatedAt,
+                        },
+                        data: { updatedAt: now },
+                    });
+                }
+            } catch {
+                // No media or import-claim state changes when scanning fails.
+            }
         }
 
         const env = await getDowntifyRuntimeEnv();
