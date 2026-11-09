@@ -16,6 +16,8 @@ export interface ScanRequest {
     source: string;
     /** Download/album/import ids to reconcile after the walk. */
     downloadId?: string;
+    /** A native Downtify ledger row gets its own scan. Never share a live full-scan key. */
+    downtifyNativeImportId?: string;
     albumMbid?: string;
     artistMbid?: string;
     spotifyImportJobId?: string;
@@ -39,6 +41,7 @@ export function scanDedupeKey(req: ScanRequest): string {
     // Redis key layout), so the namespace separator is '-'. Scope ids are
     // cuids/mbids, never containing '-', so scopes stay prefix-free.
     const scopeId =
+        (req.downtifyNativeImportId ? `downtify-${req.downtifyNativeImportId}` : undefined) ??
         req.downloadId ??
         req.albumMbid ??
         req.artistMbid ??
