@@ -119,6 +119,12 @@ receipt and full physical-file hash.
   beneath the normal `/music` mount; no custom operator staging mount
   or remote path is required. No-replace atomic hardlink publication keeps
   existing files. The upstream source is never deleted.
+- **Scan reliability:** each newly published Downtify ledger claim requests a
+  separately keyed scan, so an already-running generic scan cannot swallow
+  a later import's scan request. Pending physical-hash/index receipts are
+  reconciled locally before any new Downtify HTTP calls; remote outages do not
+  block confirmation of files that were already published. The scan still
+  must finish successfully before the import status becomes confirmed.
 - **Index confirmation:** store the expected hash and target path as
   `published_pending_scan` first, request the normal Kima scanner, then
   confirm a non-corrupt LIBRARY Track record and the exact physical hash
