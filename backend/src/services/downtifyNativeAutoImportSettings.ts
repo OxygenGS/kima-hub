@@ -19,6 +19,7 @@ import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
 import { getNativeImportSummary, recordNativeBaseline, retryOneProvenUnwrittenSpotifyClaim } from "./downtifyNativeImportLedger";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
+    openNativeDowntifyOriginal, type NativeSourceState,
 } from "./downtifyNativeOriginalTransport";
 
 export type NativeAutoImportStatus = {
@@ -92,6 +93,67 @@ export async function getNativeAutoImportStatus(
  * Explicit, one-claim recovery from the verified pre-write RC3 Spotify 403
  * state. Never auto-resets ambiguous/partially published imports.
  */
+export type NativeSourceDiagnosis = {
+    state: NativeSourceState | "none" | "paused" | "storage_unavailable";
+};
+
+/**
+ * Explicit owner-only diagnosis of ONE already-durable waiting import.
+ * It inspects source identity, the completed owner job, the exact library
+ * filename and original HTTP response headers. It never reads audio bytes
+ * into Kima, claims the row, schedules a scan or touches a local music file.
+ *
+ * This is intentionally separate from the generic setup preflight: that
+ * test may select ANOTHER working song and mask a missing source job here.
+ */
+export async function diagnoseWaitingNativeOriginal(
+    adminId: string,
+): Promise<NativeSourceDiagnosis> {
+    const row = await prisma.downtifyIntegration.findUnique({
+        where: { id: "default" },
+        select: {
+            ownerKimaUserId: true, expectedServerId: true,
+            expectedUserId: true, enabled: true,
+            nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true, nativeImportMountProof: true,
+        },
+    });
+    if (!row) throw new NativeImportSetupError("not_paired");
+    if (row.ownerKimaUserId !== adminId) {
+        throw new NativeImportSetupError("unauthorized");
+    }
+    if (!row.enabled || !row.nativeImportEnabled ||
+        !row.nativeImportBaselineAt ||
+        row.nativeImportLibraryCursor === null) return { state: "paused" };
+    if (!await verifyNativeMusicVolume(
+        config.music.musicPath, row.nativeImportMountProof,
+    )) return { state: "storage_unavailable" };
+
+    const waiting = await prisma.downtifyNativeImport.findFirst({
+        where: {
+            ownerKimaUserId: adminId,
+            remoteServerId: row.expectedServerId,
+            remoteUserId: row.expectedUserId,
+            status: "ready",
+            discoveredAt: { gt: row.nativeImportBaselineAt },
+        },
+        select: { spotifyTrackId: true },
+        orderBy: { discoveredAt: "asc" },
+    });
+    if (!waiting) return { state: "none" };
+
+    const env = await getDowntifyRuntimeEnv();
+    const original = await openNativeDowntifyOriginal(
+        adminId, waiting.spotifyTrackId, env,
+    );
+    if (original.state === "ready") {
+        // Only HTTP response headers were checked. Destroy the open response
+        // stream immediately; no full audio transfer, claim or file write.
+        original.cancel();
+    }
+    return { state: original.state };
+}
+
 export async function retrySafeSpotifyIdentityClaim(
     adminId: string, acknowledged: boolean,
 ): Promise<{ state: "requeued" | "none" | "blocked" }> {

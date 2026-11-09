@@ -345,6 +345,36 @@ the repair action. The next normal two-minute worker cycle rechecks
 Spotify embed identity, Downtify ownership, full original audio and
 publication safety from scratch.
 
+
+## Read-only diagnosis of a waiting original audio source
+
+The status counter **Waiting** can hide several different failures:
+the source job may no longer appear in Downtify's completed job queue,
+the mobile library file may be missing, the original stream headers
+may not match, or the remote connection may be temporarily unavailable.
+RC4 stored all three transient cases as `remote_temporarily_unavailable`,
+which is not sufficient to choose a safe remedy.
+
+For one waiting owner-bound track, an administrator can explicitly click
+**Diagnose waiting Downtify source**. This reads the linked server's
+public identity, authenticated owner, the exact completed queue row,
+the mobile library mapping and original stream *headers*, then closes
+the HTTP response without transferring audio bytes. It does not
+start a download, claim an import, update the database, schedule a scan,
+write a music file, or change the pairing. The API accepts NO client
+track ID, file path, token, or arbitrary server URL; it selects
+the oldest eligible owner-bound `ready` ledger row newer than the
+original baseline, verifies the original music mount and returns
+only a sanitized diagnostic state (never source identities or paths).
+
+**Why a generic setup check is not enough:** the four setup checks may
+pass for another completed track while the original requested job is
+missing. Downtify's completed queue rows may be cleared, and the
+mobile library may still retain their audio. A filename-only fallback
+would lose owner/Spotify job identity and is deliberately forbidden.
+A disappearing queue item needs an independently verified durable
+receipt, not a blind library scan or a database status reset.
+
 ## Common setup failures
 
 | Kima status | Safe next step |

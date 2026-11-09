@@ -8,7 +8,8 @@ import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
 import {
     getNativeAutoImportStatus, setNativeAutoImport,
-    retrySafeSpotifyIdentityClaim, NativeImportSetupError,
+    retrySafeSpotifyIdentityClaim, diagnoseWaitingNativeOriginal,
+    NativeImportSetupError,
 } from "../services/downtifyNativeAutoImportSettings";
 import { z } from "zod";
 import { requireAdmin } from "../middleware/auth";
@@ -115,6 +116,24 @@ router.post("/native-import", async (req, res) => {
  * Manual, one-claim recovery of a proven unwritten RC3 Spotify 403.
  * No free-form track ID, filesystem path or arbitrary review reason is accepted.
  */
+
+/**
+ * Read-only diagnostic for the *actual* oldest waiting job.
+ * No client-provided song ID, path or token; no media read or mutation.
+ */
+router.get("/native-import/source-diagnostic", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        return res.json(await diagnoseWaitingNativeOriginal(req.user.id));
+    } catch (err) {
+        if (err instanceof NativeImportSetupError) {
+            return res.status(err.state === "unauthorized" ? 403 : 404)
+                .json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
+    }
+});
+
 router.post("/native-import/retry-identity", async (req, res) => {
     if (!req.user) return res.status(401).json({ state: "unpaired" });
     try {

@@ -52,6 +52,28 @@ type NativeAutoImportStatus = {
     needsReview: number;
     storageReady: boolean;
 };
+type NativeSourceDiagnosis = {
+    state: keyof typeof nativeSourceDiagnosisMessages;
+};
+const nativeSourceDiagnosisMessages = {
+    "ready": "Downtify's original audio response is reachable for this waiting track; file content still needs verification.",
+    "not_completed": "This track is no longer in Downtify's completed download queue. Kima cannot prove ownership from a library filename alone.",
+    "stream_unavailable": "Downtify could not supply the original audio headers or exact file length for this track.",
+    "not_in_library": "The completed Downtify download is missing from the mobile music library.",
+    "ambiguous_library": "More than one Downtify library file matches this download; automatic import is blocked.",
+    "ambiguous_job": "Multiple completed Downtify jobs match this track; automatic import is blocked.",
+    "invalid_metadata": "Downtify returned incomplete or invalid metadata for this audio file.",
+    "unavailable": "Downtify's read-only source inspection could not finish. The connection or remote library may be unavailable.",
+    "unauthorized": "Downtify rejected the saved account or device identity.",
+    "incompatible": "Downtify returned an incompatible server or library response.",
+    "disabled": "The Downtify connection is disabled.",
+    "unbound": "This Kima account is not bound to the Downtify owner.",
+    "misconfigured": "The Downtify pairing is incomplete or invalid.",
+    "none": "There is no waiting track to inspect.",
+    "paused": "Automatic Downtify importing is paused.",
+    "storage_unavailable": "Kima cannot verify the music storage mounted at activation."
+} satisfies Record<string, TranslationKey>;
+
 const importMessages: Record<NativeImportState, TranslationKey> = {
     disabled: "Enable the Downtify queue first.",
     unbound: "Only the linked Kima administrator can check import readiness.",
@@ -183,6 +205,8 @@ export function DowntifySection() {
     const [nativeRefreshing, setNativeRefreshing] = useState(false);
     const [nativeFeedback, setNativeFeedback] = useState<TranslationKey | null>(null);
     const [nativeError, setNativeError] = useState(false);
+    const [sourceDiagnosticBusy, setSourceDiagnosticBusy] = useState(false);
+    const [sourceDiagnosticFeedback, setSourceDiagnosticFeedback] = useState<TranslationKey | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -330,6 +354,27 @@ export function DowntifySection() {
                 "Could not change automatic import settings.");
         } finally {
             setNativeBusy(false);
+        }
+    };
+
+    const diagnoseWaitingSource = async () => {
+        if (sourceDiagnosticBusy || nativeBusy || nativeRefreshing || pending ||
+            !ownerMatches || !nativeStatus?.enabled || !nativeStatus.storageReady ||
+            nativeStatus.awaitingImport < 1) return;
+        setSourceDiagnosticBusy(true);
+        setSourceDiagnosticFeedback(null);
+        try {
+            const result = await api.get<NativeSourceDiagnosis>(
+                "/downtify-integration/native-import/source-diagnostic",
+            );
+            setSourceDiagnosticFeedback(
+                nativeSourceDiagnosisMessages[result.state] ||
+                nativeSourceDiagnosisMessages.unavailable,
+            );
+        } catch {
+            setSourceDiagnosticFeedback(nativeSourceDiagnosisMessages.unavailable);
+        } finally {
+            setSourceDiagnosticBusy(false);
         }
     };
 
@@ -603,6 +648,23 @@ export function DowntifySection() {
                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
                                                     {nativeRefreshing ? t("Refreshing import status...") : t("Refresh import status")}
                                                 </button>
+                                                {nativeStatus.enabled && nativeStatus.storageReady &&
+                                                    nativeStatus.awaitingImport > 0 && (
+                                                    <div className="space-y-2">
+                                                        <button type="button" onClick={diagnoseWaitingSource}
+                                                            disabled={sourceDiagnosticBusy || nativeBusy || nativeRefreshing || pending || !ownerMatches}
+                                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                            {sourceDiagnosticBusy
+                                                                ? t("Checking the waiting Downtify source...")
+                                                                : t("Diagnose waiting Downtify source")}
+                                                        </button>
+                                                        {sourceDiagnosticFeedback && (
+                                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                {t(sourceDiagnosticFeedback)}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {nativeStatus.enabled && nativeStatus.storageReady &&
                                                     nativeStatus.needsReview > 0 && (
                                                     <div className="space-y-2">

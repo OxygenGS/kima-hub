@@ -569,6 +569,48 @@ describe("Simple Downtify Settings section", () => {
         expect(api.post).not.toHaveBeenCalled();
     });
 
+
+    it("diagnoses the actual pending Downtify source only when explicitly clicked", async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === "/downtify-integration") return {...paired,enabled:true};
+            if (url === "/downtify-integration/native-import") return {
+                ...nativeOff,state:"enabled",enabled:true,baselineReady:true,
+                awaitingImport:1,needsReview:1,storageReady:true,
+            };
+            if (url === "/downtify-integration/native-import/source-diagnostic") {
+                return {state:"not_completed",privatePath:"PRIVATE_VALUE",token:"dtfy_PRIVATE_VALUE"};
+            }
+            return {};
+        });
+        await mount();
+        expect(button("Diagnose waiting Downtify source")).not.toBeUndefined();
+        expect(api.get).not.toHaveBeenCalledWith(
+            "/downtify-integration/native-import/source-diagnostic"
+        );
+        await click("Diagnose waiting Downtify source");
+        expect(api.get).toHaveBeenCalledWith(
+            "/downtify-integration/native-import/source-diagnostic"
+        );
+        expect(api.post).not.toHaveBeenCalled();
+        expect(host.textContent).toContain(
+            "This track is no longer in Downtify's completed download queue."
+        );
+        expect(host.textContent).not.toContain("PRIVATE_VALUE");
+        expect(host.textContent).not.toContain("dtfy_PRIVATE_VALUE");
+    });
+
+    it("never offers the diagnostic to a paused importer or missing verified music mount", async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) =>
+            url === "/downtify-integration" ? {...paired,enabled:true} : {
+                ...nativeOff,state:"enabled",enabled:true,baselineReady:true,
+                awaitingImport:2,storageReady:false,
+            });
+        await mount();
+        expect(button("Diagnose waiting Downtify source")).toBeUndefined();
+        expect(api.get).not.toHaveBeenCalledWith(
+            "/downtify-integration/native-import/source-diagnostic"
+        );
+    });
     it("keeps native import strictly unavailable to a different Kima administrator", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({
             ...paired, ownerMatches: false,
