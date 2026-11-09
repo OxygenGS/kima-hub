@@ -19,11 +19,28 @@ export type NativeDirectoryInfo = {
     gid: number;
 };
 
-export function trustedNativeMusicDirectory(info: NativeDirectoryInfo): boolean {
+export type NativeServiceIdentity = { uid: number; groups: number[] };
+
+function runtimeIdentity(): NativeServiceIdentity {
+    return {
+        uid: typeof process.getuid === "function" ? process.getuid() : 0,
+        groups: [
+            typeof process.getgid === "function" ? process.getgid() : 0,
+            ...(typeof process.getgroups === "function" ? process.getgroups() : []),
+        ],
+    };
+}
+
+export function trustedNativeMusicDirectory(
+    info: NativeDirectoryInfo,
+    actor: NativeServiceIdentity = runtimeIdentity(),
+): boolean {
     if (!info.isDirectory() || info.isSymbolicLink()) return false;
     if ((info.mode & 0o002) !== 0) return false;
     // A privileged root:root group is the only acceptable writable group.
-    if ((info.mode & 0o020) !== 0 && !(info.uid === 0 && info.gid === 0)) {
+    if ((info.mode & 0o020) !== 0 &&
+        !(info.uid === 0 && info.gid === 0 &&
+            actor.uid !== 0 && !actor.groups.includes(0))) {
         return false;
     }
     return true;
