@@ -21,7 +21,7 @@ jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } })
 jest.mock("../../utils/db", () => ({
     prisma: {
         downtifyIntegration: { findUnique: jest.fn() },
-        downtifyNativeImport: { findMany: jest.fn() },
+        downtifyNativeImport: { findMany: jest.fn(), updateMany: jest.fn() },
     },
 }));
 jest.mock("../spotify", () => ({
@@ -94,6 +94,7 @@ const source = {
 const mock = (thing: unknown) => thing as jest.Mock;
 const pairing = mock(prisma.downtifyIntegration.findUnique);
 const imports = mock(prisma.downtifyNativeImport.findMany);
+const updateImports = mock(prisma.downtifyNativeImport.updateMany);
 const getRuntime = mock(getDowntifyRuntimeEnv);
 const getQueue = mock(getVerifiedNativeImportQueue);
 const getLibrary = mock(getVerifiedNativeLibraryChanges);
@@ -120,6 +121,7 @@ beforeEach(() => {
     pairing.mockResolvedValue(row);
     verifyVolume.mockResolvedValue(true);
     imports.mockResolvedValue([]);
+    updateImports.mockResolvedValue({ count: 1 });
     getRuntime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
     getQueue.mockResolvedValue({ state: "ready", queue: [] });
     getLibrary.mockResolvedValue({state:"ready",cursor:7,full:false,tracks:[]});
@@ -234,6 +236,63 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(result).toMatchObject({ state: "unavailable", imported: 1 });
         expect(confirm).toHaveBeenCalledWith(owner, "clvprevious", claim.claimToken);
         expect(getQueue).not.toHaveBeenCalled();
+        expect(getSource).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("schedules one delayed scanner-only recovery for stale receipts while remote is offline", async () => {
+        const stale = new Date("2026-01-01T00:00:00.000Z");
+        imports.mockResolvedValueOnce([
+            { id: "clvprevious1", claimToken: claim.claimToken, updatedAt: stale },
+            { id: "clvprevious2", claimToken: claim.claimToken, updatedAt: stale },
+        ]);
+        getLibrary.mockResolvedValueOnce({ state: "unavailable" });
+        const result = await runNativeImportCycle();
+        expect(result).toMatchObject({ state: "unavailable", published: 0 });
+        expect(scan).toHaveBeenCalledTimes(1);
+        expect(scan).toHaveBeenCalledWith({
+            source: "downtify-native-receipt-retry",
+            userId: owner.kimaUserId,
+            downtifyNativeImportId: "pending-receipts",
+        });
+        expect(updateImports).toHaveBeenCalledTimes(2);
+        expect(updateImports).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                id: "clvprevious1", claimToken: claim.claimToken,
+                status: "published_pending_scan", updatedAt: stale,
+                ownerKimaUserId: owner.kimaUserId,
+            }),
+            data: { updatedAt: expect.any(Date) },
+        });
+        expect(getSource).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("does not retry a fresh pending scan or an invalid physical receipt", async () => {
+        imports.mockResolvedValueOnce([
+            { id: "clvfresh", claimToken: claim.claimToken, updatedAt: new Date() },
+            { id: "clvunverified", claimToken: claim.claimToken,
+                updatedAt: new Date("2026-01-01T00:00:00.000Z") },
+        ]);
+        confirm.mockResolvedValueOnce({ state: "not_indexed" })
+            .mockResolvedValueOnce({ state: "not_verified" });
+        getLibrary.mockResolvedValueOnce({ state: "unavailable" });
+        await runNativeImportCycle();
+        expect(scan).not.toHaveBeenCalled();
+        expect(updateImports).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("preserves the retry deadline when Redis refuses a pending scan", async () => {
+        imports.mockResolvedValueOnce([{
+            id: "clvprevious", claimToken: claim.claimToken,
+            updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+        }]);
+        scan.mockRejectedValueOnce(new Error("Redis unavailable"));
+        getLibrary.mockResolvedValueOnce({ state: "unavailable" });
+        await runNativeImportCycle();
+        expect(scan).toHaveBeenCalledTimes(1);
+        expect(updateImports).not.toHaveBeenCalled();
         expect(getSource).not.toHaveBeenCalled();
         expect(publish).not.toHaveBeenCalled();
     });
