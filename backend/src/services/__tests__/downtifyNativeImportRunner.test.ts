@@ -215,8 +215,25 @@ describe("Native Downtify auto-import coordinator", () => {
         });
         expect(scan).toHaveBeenCalledWith({
             source: "downtify-native-import", userId: owner.kimaUserId,
+            downtifyNativeImportId: claim.id,
         });
         expect(hold).not.toHaveBeenCalled();
+    });
+
+    it("reconciles local receipts even when the remote Downtify server is down", async () => {
+        imports.mockResolvedValueOnce([{
+            id: "clvprevious", claimToken: claim.claimToken,
+        }]).mockResolvedValueOnce([]);
+        confirm.mockResolvedValueOnce({
+            state: "imported", indexedTrackId: "local-track-123",
+        });
+        getLibrary.mockResolvedValueOnce({ state: "unavailable" });
+        const result = await runNativeImportCycle();
+        expect(result).toMatchObject({ state: "unavailable", imported: 1 });
+        expect(confirm).toHaveBeenCalledWith(owner, "clvprevious", claim.claimToken);
+        expect(getQueue).not.toHaveBeenCalled();
+        expect(getSource).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
     });
 
     it("reconciles an already published file WITHOUT making another remote download", async () => {
@@ -339,6 +356,18 @@ describe("Native Downtify auto-import coordinator", () => {
         }));
         expect(claimImport).toHaveBeenCalledTimes(2);
         expect(publish).toHaveBeenCalledTimes(2);
+    });
+
+    it("requests a separate library scan for each newly published import", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([
+            { id: "clvitem1", spotifyTrackId: SPOTIFY },
+            { id: "clvitem2", spotifyTrackId: SPOTIFY },
+        ]);
+        claimImport.mockResolvedValueOnce({ ...claim, id: "clvitem1" })
+            .mockResolvedValueOnce({ ...claim, id: "clvitem2" });
+        await runNativeImportCycle();
+        expect(scan.mock.calls.map(call => call[0].downtifyNativeImportId))
+            .toEqual(["clvitem1", "clvitem2"]);
     });
 
     it("does not retry an import claimed in a prior process or after a crash", async () => {
