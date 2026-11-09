@@ -114,7 +114,9 @@ const scan = mock(requestScan);
 const verifyVolume = mock(verifyNativeMusicVolume);
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    // Clear one-shot mock outcomes, not only invocation history. An offline
+    // cycle may exit before consuming the next findMany/remote response.
+    jest.resetAllMocks();
     pairing.mockResolvedValue(row);
     verifyVolume.mockResolvedValue(true);
     imports.mockResolvedValue([]);
@@ -223,7 +225,7 @@ describe("Native Downtify auto-import coordinator", () => {
     it("reconciles local receipts even when the remote Downtify server is down", async () => {
         imports.mockResolvedValueOnce([{
             id: "clvprevious", claimToken: claim.claimToken,
-        }]).mockResolvedValueOnce([]);
+        }]);
         confirm.mockResolvedValueOnce({
             state: "imported", indexedTrackId: "local-track-123",
         });
