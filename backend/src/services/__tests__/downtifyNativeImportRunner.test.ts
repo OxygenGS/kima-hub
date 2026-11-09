@@ -216,7 +216,8 @@ describe("Native Downtify auto-import coordinator", () => {
         });
         expect(claimImport).toHaveBeenCalledWith(owner, job.id);
         expect(getSource).toHaveBeenCalledWith(owner.kimaUserId, SPOTIFY, expect.any(Object));
-        expect(getSpotify).toHaveBeenCalledWith(SPOTIFY);
+        expect(getEmbed).toHaveBeenCalledWith(SPOTIFY);
+        expect(getSpotify).not.toHaveBeenCalled();
         expect(workspace).toHaveBeenCalledWith("/music",
             "Singles/Downtify/Example/Test song.flac");
         expect(verify).toHaveBeenCalledTimes(1);
