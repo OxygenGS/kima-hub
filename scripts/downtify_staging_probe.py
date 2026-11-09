@@ -125,6 +125,9 @@ class Source:
                 raise ProbeError("original_stream_unavailable")
             if response.getheader("Content-Encoding", "identity").lower() != "identity":
                 raise ProbeError("unexpected_encoding")
+            transcoded = response.getheader("X-Downtify-Transcoded", "").strip().lower()
+            if transcoded and transcoded not in ("no", "original"):
+                raise ProbeError("unexpected_transcoding")
             content_type = response.getheader("Content-Type", "").split(";")[0].strip()
             if not (content_type.startswith("audio/")
                     or content_type == "application/octet-stream"):
@@ -186,6 +189,9 @@ def probe(options: Options) -> dict:
     if (not isinstance(library, dict) or library.get("full") is not True
             or not isinstance(library.get("tracks"), list)
             or not isinstance(library.get("cursor"), int)
+            or isinstance(library.get("cursor"), bool)
+            or library["cursor"] < 0
+            or len(library["tracks"]) > 100000
             or not isinstance(library.get("deleted"), list)):
         raise ProbeError("invalid_library_feed")
     if not options.spotify_id:
