@@ -102,6 +102,17 @@ receipt and full physical-file hash.
   source of automatically importable old music. Unique and CAS claims
   prevent two workers from claiming the same song. An uncertain claim
   stays held for review.
+- **Spotify identity:** the anonymous web-player token endpoint may return
+  HTTP 403. The importer first reads Spotify's public server-rendered
+  track embed with a fixed validated 22-character ID, and requires an
+  exact URI plus Spotify's title, credited artist and duration; it
+  cannot infer identity from Downtify file names alone. The legacy API
+  lookup is a compatibility fallback only when the embed is unavailable.
+  If both sources are unreachable before a file is opened for writing,
+  the single claim is released for a 15-minute retry; conflicting IDs
+  or durations remain held for review. No embed access tokens are
+  extracted, stored or sent to Spotify's API. The embed is a
+  version-sensitive public-page adapter and fails closed on changes.
 - **Transfer:** fetch the untranscoded original over the official
   authenticated mobile v1 track stream. Require exact response length and
   bounded streaming; never use a remote path as a local destination.

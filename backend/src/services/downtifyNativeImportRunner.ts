@@ -14,6 +14,7 @@ import * as path from "path";
 import { config } from "../config";
 import { prisma } from "../utils/db";
 import { spotifyService } from "./spotify";
+import { getSpotifyTrackEmbed } from "./downtifySpotifyEmbedEvidence";
 import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
@@ -250,15 +251,29 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     continue;
                 }
                 cancelOriginal = original.cancel;
-                const expected = await spotifyService.getTrackBySpotifyId(
-                    claim.spotifyTrackId,
-                );
-                if (!expected || expected.spotifyId !== claim.spotifyTrackId ||
+                // Prefer independent, token-free Spotify embed metadata.
+                // Only if the embed is temporarily unavailable, try the
+                // existing authorized track API path as a compatibility fallback.
+                // A mismatched embed ID must NEVER fall back to another source.
+                const embed = await getSpotifyTrackEmbed(claim.spotifyTrackId);
+                if (embed.state === "identity_mismatch") {
+                    await hold("spotify_identity_mismatch");
+                    continue;
+                }
+                const expected = embed.state === "ready" ? embed.track :
+                    await spotifyService.getTrackBySpotifyId(claim.spotifyTrackId);
+                if (!expected) {
+                    // No output path was opened yet. Release exclusively this
+                    // unwritten claim with the persistent 15-minute cooldown.
+                    await deferUnwritten("remote_temporarily_unavailable");
+                    continue;
+                }
+                if (expected.spotifyId !== claim.spotifyTrackId ||
                     !Number.isSafeInteger(expected.durationMs) ||
                     expected.durationMs < 1000 ||
                     Math.abs(expected.durationMs -
                         original.durationSeconds * 1000) > 4000) {
-                    await hold("spotify_identity_unavailable");
+                    await hold("spotify_identity_mismatch");
                     continue;
                 }
                 const extension = path.posix.extname(original.remoteFilename).toLowerCase();

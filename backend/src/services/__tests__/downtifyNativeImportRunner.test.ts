@@ -1,5 +1,6 @@
 import { prisma } from "../../utils/db";
 import { spotifyService } from "../spotify";
+import { getSpotifyTrackEmbed } from "../downtifySpotifyEmbedEvidence";
 import { getDowntifyRuntimeEnv } from "../downtifyIntegrationSettings";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
@@ -26,6 +27,9 @@ jest.mock("../../utils/db", () => ({
 }));
 jest.mock("../spotify", () => ({
     spotifyService: { getTrackBySpotifyId: jest.fn() },
+}));
+jest.mock("../downtifySpotifyEmbedEvidence", () => ({
+    getSpotifyTrackEmbed: jest.fn(),
 }));
 jest.mock("../downtifyIntegrationSettings", () => ({
     getDowntifyRuntimeEnv: jest.fn(),
@@ -106,6 +110,7 @@ const hold = mock(holdNativeImportForReview);
 const safeRetry = mock(releaseNativeUnwrittenClaim);
 const getSource = mock(openNativeDowntifyOriginal);
 const getSpotify = mock(spotifyService.getTrackBySpotifyId);
+const getEmbed = mock(getSpotifyTrackEmbed);
 const target = mock(nativeImportDestination);
 const workspace = mock(ensureNativeImportDestination);
 const publish = mock(publishNativeAudio);
@@ -132,6 +137,10 @@ beforeEach(() => {
     hold.mockResolvedValue(true);
     safeRetry.mockResolvedValue(true);
     getSource.mockImplementation(async () => ({ ...source, cancel: jest.fn() }));
+    getEmbed.mockResolvedValue({state:"ready",track:{
+        spotifyId: SPOTIFY, title: "Test song", artist: "Example",
+        durationMs: 200000, isrc: null,
+    }});
     getSpotify.mockResolvedValue({
         spotifyId: SPOTIFY, title: "Test song", artist: "Example",
         album: "Example album", durationMs: 200000, isrc: "USABC1234567",
@@ -313,18 +322,61 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(confirm).toHaveBeenCalledWith(owner, "clvprevious", claim.claimToken);
     });
 
-    it("holds unknown or conflicting Spotify identity for review without any file writes", async () => {
+    it("uses token-free Spotify embed identity without the blocked anonymous token endpoint", async () => {
         imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        await runNativeImportCycle();
+        expect(getEmbed).toHaveBeenCalledWith(SPOTIFY);
+        expect(getSpotify).not.toHaveBeenCalled();
+        expect(publish).toHaveBeenCalledTimes(1);
+    });
+
+    it("temporarily releases an unwritten claim when both public Spotify sources fail", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        getEmbed.mockResolvedValueOnce({state:"unavailable"});
         getSpotify.mockResolvedValueOnce(null);
         const result = await runNativeImportCycle();
-        expect(result).toMatchObject({
-            state: "checked", heldForReview: 1,
-            published: 0,
-        });
+        expect(result).toMatchObject({state:"checked",heldForReview:0,published:0});
+        expect(safeRetry).toHaveBeenCalledWith(
+            owner, claim.id, claim.claimToken, "remote_temporarily_unavailable",
+        );
         expect(publish).not.toHaveBeenCalled();
-        expect(scan).not.toHaveBeenCalled();
-        expect(hold).toHaveBeenCalledWith(owner, claim.id, claim.claimToken,
-            "spotify_identity_unavailable");
+        expect(hold).not.toHaveBeenCalled();
+    });
+
+    it("falls back to official Spotify Web API only when embed is unavailable", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        getEmbed.mockResolvedValueOnce({state:"unavailable"});
+        await runNativeImportCycle();
+        expect(getSpotify).toHaveBeenCalledWith(SPOTIFY);
+        expect(publish).toHaveBeenCalledTimes(1);
+    });
+
+    it("holds conflicting Spotify embed IDs without using any fallback or writing music", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        getEmbed.mockResolvedValueOnce({state:"identity_mismatch"});
+        const result=await runNativeImportCycle();
+        expect(result.heldForReview).toBe(1);
+        expect(hold).toHaveBeenCalledWith(
+            owner, claim.id, claim.claimToken, "spotify_identity_mismatch",
+        );
+        expect(getSpotify).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+        expect(safeRetry).not.toHaveBeenCalled();
+    });
+
+    it("holds an incompatible Spotify duration before any publication", async () => {
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        getEmbed.mockResolvedValueOnce({state:"ready",track:{
+            spotifyId:SPOTIFY,title:"Test song",artist:"Example",
+            durationMs:90000,isrc:null,
+        }});
+        const result=await runNativeImportCycle();
+        expect(result.heldForReview).toBe(1);
+        expect(hold).toHaveBeenCalledWith(
+            owner, claim.id, claim.claimToken, "spotify_identity_mismatch",
+        );
+        expect(publish).not.toHaveBeenCalled();
+        expect(safeRetry).not.toHaveBeenCalled();
     });
 
     it("automatically releases a verified pre-write remote outage without copying media", async () => {
