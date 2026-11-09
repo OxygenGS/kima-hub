@@ -37,8 +37,22 @@ describe('scanDedupeKey', () => {
             scanDedupeKey({ source: 'test', downloadId: 'dl_abc123' }),
             scanDedupeKey({ source: 'test', albumMbid: 'mbid-1' }),
             scanDedupeKey({ source: 'test', discoveryBatchId: 'batch7' }),
+            scanDedupeKey({ source: 'downtify-native-import', downtifyNativeImportId: 'clvitem1' }),
         ];
         for (const k of keys) assertValidJobId(k);
+    });
+
+    test('each Downtify import gets its own scan while scan-full is active', () => {
+        const first = scanDedupeKey({
+            source: 'downtify-native-import', downtifyNativeImportId: 'clvitem1',
+        });
+        const second = scanDedupeKey({
+            source: 'downtify-native-import', downtifyNativeImportId: 'clvitem2',
+        });
+        expect(first).toBe('scan-downtify-clvitem1');
+        expect(second).toBe('scan-downtify-clvitem2');
+        expect(first).not.toBe(second);
+        expect(first).not.toBe('scan-full');
     });
 
     test('scopes map to distinct keys and the unscoped scan is stable', () => {
