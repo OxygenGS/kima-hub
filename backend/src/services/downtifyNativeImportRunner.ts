@@ -211,6 +211,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             select: { id: true, spotifyTrackId: true },
             orderBy: { discoveredAt: "asc" }, take: MAX_IMPORTS_PER_CYCLE,
         });
+        // The scanner walks the entire music tree. Batch up to two claims per
+        // cycle, then request exactly one scan AFTER all links are visible.
+        // Every batch has its own dedupe key, distinct from a live scan-full.
+        const scanBatchIds: string[] = [];
         for (const candidate of ready) {
             // This CAS is the only entry to potentially writable work.
             const claim = await claimNativeImport(owner, candidate.id);
@@ -323,26 +327,29 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     continue;
                 }
                 published += installed.state === "published" ? 1 : 0;
-                // The scanner may be unavailable; the durable state remains
-                // published_pending_scan and this cycle never copies it again.
-                try {
-                    await requestScan({
-                        source: "downtify-native-import",
-                        userId: owner.kimaUserId,
-                        // A concurrently running global scan might miss this
-                        // newly linked file. Give every published claim its own
-                        // dedupe key so no completion is lost to scan-full.
-                        downtifyNativeImportId: claim.id,
-                    });
-                } catch {
-                    // No automatic retry of the file installation.
-                }
+                // Both newly linked and verified existing files need indexing.
+                scanBatchIds.push(claim.id);
             } catch {
                 await hold("import_incomplete");
             } finally {
                 // Stops an unused/unfinished authenticated HTTP stream.
                 // This also executes for all "continue" branches above.
                 cancelOriginal?.();
+            }
+        }
+
+        // One scan per finished batch. If Redis is unavailable or this cycle
+        // crashes before enqueueing, each durable pending receipt is retried
+        // later by the throttled scanner-only recovery above. NEVER recopy.
+        if (scanBatchIds.length) {
+            try {
+                await requestScan({
+                    source: "downtify-native-import",
+                    userId: owner.kimaUserId,
+                    downtifyNativeImportId: "batch-" + scanBatchIds.join("-"),
+                });
+            } catch {
+                // Durable published_pending_scan rows survive queue outages.
             }
         }
 
