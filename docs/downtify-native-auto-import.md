@@ -125,6 +125,11 @@ receipt and full physical-file hash.
   reconciled locally before any new Downtify HTTP calls; remote outages do not
   block confirmation of files that were already published. The scan still
   must finish successfully before the import status becomes confirmed.
+  A pending file that remains unindexed for at least 15 minutes triggers
+  one shared, deduplicated scanner-only retry. Repeated failures use a durable
+  15-minute cooldown; a Redis outage does not consume the next retry.
+  A failed physical hash or unsafe file is never treated as fixed by a scan.
+  This recovery never re-downloads or replaces the recording.
 - **Index confirmation:** store the expected hash and target path as
   `published_pending_scan` first, request the normal Kima scanner, then
   confirm a non-corrupt LIBRARY Track record and the exact physical hash
