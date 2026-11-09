@@ -125,7 +125,7 @@ class DowntifyStagingProbeTests(unittest.TestCase):
 
     def test_complete_source_hash_reads_original_without_writing(self):
         result = probe.probe(self.options(SPOTIFY_ID, full_audio=True))
-        self.assertEqual(result["state"], "source_full_audio_verified")
+        self.assertEqual(result["state"], "source_full_audio_read")
         self.assertEqual(result["source_bytes"], len(AUDIO))
         self.assertEqual(result["source_sha256"], hashlib.sha256(AUDIO).hexdigest())
         self.assertIn("/stream?format=original", self.server.request_paths[-1])
