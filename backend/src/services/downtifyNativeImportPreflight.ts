@@ -79,7 +79,9 @@ async function checkMusicRoot(root: string, reader: MusicAccess): Promise<boolea
         const stat = await reader.lstat(root);
         if (!stat.isDirectory() || stat.isSymbolicLink()) return false;
         if (await reader.realpath(root) !== path.resolve(root)) return false;
-        await reader.access(root, fsConstants.R_OK | fsConstants.W_OK);
+        // This is a read-only transport check. The destination-specific write
+        // and mount-marker checks run only on explicit import enablement.
+        await reader.access(root, fsConstants.R_OK | fsConstants.X_OK);
         return true;
     } catch {
         return false;
