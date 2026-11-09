@@ -92,7 +92,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
+            # Playwright 1.58.2 does not support Chromium on Ubuntu 26.04.
+            # Match the proven browser/security CI runner; do not skip AIO smoke.
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
