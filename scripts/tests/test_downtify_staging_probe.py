@@ -74,6 +74,9 @@ class FakeDowntify(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", mime)
         self.send_header("Content-Length", str(len(body)))
+        if (self.path.endswith("/stream?format=original")
+                and self.server.transcoded):
+            self.send_header("X-Downtify-Transcoded", self.server.transcoded)
         self.end_headers()
         self.wfile.write(body)
 
@@ -98,6 +101,7 @@ class DowntifyStagingProbeTests(unittest.TestCase):
         self.server.fixtures = fixture()
         self.server.audio = AUDIO
         self.server.redirect_stream = False
+        self.server.transcoded = None
         self.server.request_paths = []
         self.server.auth_headers = []
         self.base = "http://127.0.0.1:" + str(self.server.server_port)
@@ -162,6 +166,14 @@ class DowntifyStagingProbeTests(unittest.TestCase):
     def test_redirect_does_not_leak_bearer_to_third_party(self):
         self.server.redirect_stream = True
         self.fails("original_stream_unavailable", self.options(SPOTIFY_ID, True))
+
+    def test_transcoded_response_is_never_accepted_as_original(self):
+        self.server.transcoded = "opus/160"
+        self.fails("unexpected_transcoding", self.options(SPOTIFY_ID, True))
+
+    def test_invalid_feed_cursor_is_rejected(self):
+        self.server.fixtures["/api/v1/library?since=0"]["cursor"] = True
+        self.fails("invalid_library_feed", self.options())
 
     def test_mismatch_in_remote_stream_size_fails_closed(self):
         row = self.server.fixtures["/api/v1/library?since=0"]["tracks"][0]
