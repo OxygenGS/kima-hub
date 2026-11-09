@@ -62,7 +62,7 @@ export function parseSpotifyTrackEmbed(
             : typeof entity.name === "string" ? entity.name.trim() : "";
         const artist = typeof entity.subtitle === "string" ?
             entity.subtitle.trim() : "";
-        const durationMs = entity.duration;
+        const durationMs = typeof entity.duration === "number" ? entity.duration : NaN;
         if (title.length < 1 || title.length > 300 ||
             artist.length < 1 || artist.length > 300 ||
             !Number.isSafeInteger(durationMs) || durationMs < 1000 ||
