@@ -13,6 +13,7 @@
 import { createHash, randomUUID } from "crypto";
 import { constants as constants, promises as fs } from "fs";
 import * as path from "path";
+import { trustedNativeMusicDirectory } from "./downtifyNativeDirectorySafety";
 
 export type NativePublishState =
     | "published"
@@ -101,10 +102,9 @@ async function verifyExistingDirectories(root: string, parts: string[]): Promise
         for (const part of ["", ...parts]) {
             if (part) current = path.join(current, part);
             const stat = await fs.lstat(current);
-            if (!stat.isDirectory() || stat.isSymbolicLink() ||
-                // Another local actor must not be able to swap parent
-                // directories while an import is being published.
-                (stat.mode & 0o022) !== 0) return null;
+            // No world-writable/hostile-group-writable ancestors, even if
+            // their names or device numbers appear otherwise correct.
+            if (!trustedNativeMusicDirectory(stat)) return null;
             if (await fs.realpath(current) !== current) return null;
         }
         return current;
