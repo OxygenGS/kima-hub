@@ -1,13 +1,16 @@
 name: Pre-release Image
 
-# Manual only. Each architecture builds on a native runner, never in QEMU.
+# Opt-in isolated RC on a gated same-repo draft PR, otherwise manual only.
+# Each architecture builds on a native runner, never in QEMU.
 # The two platform-specific staging tags are pushed only after scanning the
 # EXACT image. The combined prerelease tag is built after both jobs succeed.
 on:
-  # One-time opt-in RC branch; stable tag workflows remain untouched.
-  push:
+  # One-time isolated release for the exact in-repo RC PR, observable via PR checks.
+  # Never publish from the stable branch or an untrusted fork.
+  pull_request:
     branches:
-      - rc/downtify-v1.20.0-rc1
+      - feat/downtify-native-auto-import
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       tag_suffix:
@@ -16,7 +19,7 @@ on:
         type: string
 
 concurrency:
-  group: prerelease-${{ github.ref }}
+  group: prerelease-downtify-rc1
   cancel-in-progress: false
 
 permissions:
@@ -42,11 +45,20 @@ jobs:
           EXPECTED_SOURCE: f96ae1f79b025d6116637a231dd5a4b33351e910
           EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          EXPECTED_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
-          if [ "$EVENT_NAME" = "push" ]; then
-            test "$EVENT_REF" = "refs/heads/rc/downtify-v1.20.0-rc1"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            test "$PR_NUMBER" = "224"
+            test "$PR_HEAD" = "rc/downtify-v1.20.0-rc1"
+            test "$PR_BASE" = "feat/downtify-native-auto-import"
+            test "$PR_HEAD_REPO" = "$EXPECTED_REPO"
+            test "$EVENT_REF" = "refs/pull/224/merge"
           fi
       - name: Validate fork version and changelog
         shell: bash
@@ -58,7 +70,7 @@ jobs:
         id: meta
         shell: bash
         env:
-          TAG_SUFFIX: ${{ github.event_name == 'push' && 'downtify-v1.20.0-rc1' || inputs.tag_suffix }}
+          TAG_SUFFIX: ${{ github.event_name == 'pull_request' && 'downtify-v1.20.0-rc1' || inputs.tag_suffix }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -227,7 +239,7 @@ jobs:
 
   publish-downtify-test-release:
     name: Publish opt-in Downtify GitHub prerelease after audited images
-    if: github.event_name == 'push' && github.ref == 'refs/heads/rc/downtify-v1.20.0-rc1'
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 224 && github.event.pull_request.head.ref == 'rc/downtify-v1.20.0-rc1' && github.event.pull_request.head.repo.full_name == github.repository
     needs: [validate, native-build, assemble]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
