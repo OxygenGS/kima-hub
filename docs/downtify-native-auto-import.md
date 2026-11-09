@@ -328,6 +328,23 @@ Docker tag alone is not a database rollback.
   path, Proxmox CT ID, legacy script or shared Downtify staging mount
   is part of the feature.
 
+## One-time safe recovery from RC3 Spotify HTTP 403
+
+RC3 could mark a genuinely new track `uncertain` with
+`spotify_identity_unavailable` when the anonymous Spotify token endpoint
+returned HTTP 403, **before opening any output file**. A new admin-only
+button, **Retry one safely unwritten Spotify lookup**, requeues at most
+ONE matching legacy claim per click. The server requires that the paired
+account, original activation baseline and exact disk proof still match;
+the claim must be at least 15 minutes old, have a valid claim token,
+and have NO remote library receipt, destination, bytes, hash, or scanner
+receipt. All conditions are enforced in a single compare-and-swap
+update. Any other `review` or `uncertain` state stays blocked. Refreshing
+the status page never triggers a retry, and no media file is modified by
+the repair action. The next normal two-minute worker cycle rechecks
+Spotify embed identity, Downtify ownership, full original audio and
+publication safety from scratch.
+
 ## Common setup failures
 
 | Kima status | Safe next step |

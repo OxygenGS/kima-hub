@@ -5,6 +5,7 @@ import * as path from "path";
 import { prisma } from "../../utils/db";
 import {
     claimNativeImport,
+    retryOneProvenUnwrittenSpotifyClaim,
     confirmNativeIndexed,
     discoverNativeCompleted,
     getNativeImportSummary,
@@ -219,6 +220,62 @@ describe("Durable native import baseline", () => {
         expect(importsCreate).not.toHaveBeenCalled();
     });
 });
+
+    it("requeues one old RC3 Spotify 403 only when every media receipt is empty", async () => {
+        paired.mockResolvedValueOnce(pairing(true, new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce({
+            id: "clvabc1234cuid", claimToken: "12345678-1234-1234-1234-123456789abc",
+        });
+        const result=await retryOneProvenUnwrittenSpotifyClaim(owner);
+        expect(result).toBe("requeued");
+        const where=importsFind.mock.calls[0][0].where;
+        expect(where).toMatchObject({
+            status: "uncertain",reviewReason:"spotify_identity_unavailable",
+            expectedBytes:null,outputRelativePath:null,fullSha256:null,
+            indexedTrackId:null,remoteLibraryTrackId:null,
+        });
+        expect(where.claimedAt.lt).toBeInstanceOf(Date);
+        expect(where.claimedAt.lt.getTime()).toBeLessThan(Date.now());
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                ...where, id:"clvabc1234cuid",
+                claimToken:"12345678-1234-1234-1234-123456789abc",
+            }),
+            data: {
+                status:"ready",claimToken:null,claimedAt:null,
+                reviewReason:"spotify_metadata_retry",
+            },
+        });
+    });
+
+    it("does not requeue pre-write Spotify claims from a different account", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date("2026-11-07")));
+        expect(await retryOneProvenUnwrittenSpotifyClaim({
+            ...owner,remoteUserId:999,
+        })).toBe("blocked");
+        expect(importsFind).not.toHaveBeenCalled();
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("does not retry an unknown claimToken or failed CAS acknowledgement", async () => {
+        paired.mockResolvedValue(pairing(true,new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce({id:"clvabc1234cuid",claimToken:null});
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("blocked");
+        expect(importsUpdate).not.toHaveBeenCalled();
+        importsFind.mockResolvedValueOnce({
+            id:"clvabc1234cuid",
+            claimToken:"12345678-1234-1234-1234-123456789abc",
+        });
+        importsUpdate.mockResolvedValueOnce({count:0});
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("blocked");
+    });
+
+    it("does not guess if no matching old unwritten identity claim exists", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce(null);
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("none");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
 
 describe("Native import discovery and durable claims", () => {
     it("cannot discover new songs while disabled or before baseline", async () => {

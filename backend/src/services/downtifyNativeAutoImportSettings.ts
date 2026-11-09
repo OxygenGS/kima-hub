@@ -16,7 +16,7 @@ import {
     initializeNativeMusicVolume, verifyNativeMusicVolume,
 } from "./downtifyNativeMountProof";
 import { getDowntifyRuntimeEnv } from "./downtifyIntegrationSettings";
-import { getNativeImportSummary, recordNativeBaseline } from "./downtifyNativeImportLedger";
+import { getNativeImportSummary, recordNativeBaseline, retryOneProvenUnwrittenSpotifyClaim } from "./downtifyNativeImportLedger";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
 } from "./downtifyNativeOriginalTransport";
@@ -86,6 +86,43 @@ export async function getNativeAutoImportStatus(
         needsReview: summary.inReview,
         storageReady,
     };
+}
+
+/**
+ * Explicit, one-claim recovery from the verified pre-write RC3 Spotify 403
+ * state. Never auto-resets ambiguous/partially published imports.
+ */
+export async function retrySafeSpotifyIdentityClaim(
+    adminId: string, acknowledged: boolean,
+): Promise<{ state: "requeued" | "none" | "blocked" }> {
+    if (!acknowledged) throw new NativeImportSetupError("confirmation_required");
+    const row = await prisma.downtifyIntegration.findUnique({
+        where: { id: "default" },
+        select: {
+            ownerKimaUserId: true, expectedServerId: true,
+            expectedUserId: true, enabled: true,
+            nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true, nativeImportMountProof: true,
+        },
+    });
+    if (!row) throw new NativeImportSetupError("not_paired");
+    if (row.ownerKimaUserId !== adminId) {
+        throw new NativeImportSetupError("unauthorized");
+    }
+    if (!row.enabled || !row.nativeImportEnabled ||
+        !row.nativeImportBaselineAt ||
+        row.nativeImportLibraryCursor === null) {
+        throw new NativeImportSetupError("pairing_disabled");
+    }
+    if (!await verifyNativeMusicVolume(
+        config.music.musicPath, row.nativeImportMountProof,
+    )) throw new NativeImportSetupError("storage_unavailable");
+
+    const state = await retryOneProvenUnwrittenSpotifyClaim({
+        kimaUserId: adminId, remoteServerId: row.expectedServerId,
+        remoteUserId: row.expectedUserId,
+    });
+    return { state };
 }
 
 export async function setNativeAutoImport(

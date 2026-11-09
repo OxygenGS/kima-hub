@@ -3,6 +3,11 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Only legacy Spotify lookup failures with proof that no audio was written can be retried. Other review items stay blocked.": "Only legacy Spotify lookup failures with proof that no audio was written can be retried. Other review items stay blocked.",
+    "Retry one safely unwritten Spotify lookup": "Retry one safely unwritten Spotify lookup",
+    "One verified unwritten Spotify lookup was released for safe retry.": "One verified unwritten Spotify lookup was released for safe retry.",
+    "No safely retryable Spotify lookup was found.": "No safely retryable Spotify lookup was found.",
+    "The claimed download cannot be safely retried.": "The claimed download cannot be safely retried.",
     "Downtify import activity": "Downtify import activity",
     "Claimed / unresolved": "Claimed / unresolved",
     "Waiting for library scan": "Waiting for library scan",
@@ -2231,6 +2236,11 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Only legacy Spotify lookup failures with proof that no audio was written can be retried. Other review items stay blocked.": "Alleen eerdere Spotify-opzoekfouten waarvan vaststaat dat er geen audio is geschreven kunnen opnieuw worden geprobeerd. Andere controlepunten blijven geblokkeerd.",
+    "Retry one safely unwritten Spotify lookup": "Probeer één veilig vastgezette Spotify-controle opnieuw",
+    "One verified unwritten Spotify lookup was released for safe retry.": "Eén gecontroleerde Spotify-opzoekfout zonder geschreven audio is vrijgegeven voor een veilige nieuwe poging.",
+    "No safely retryable Spotify lookup was found.": "Geen Spotify-opzoekfout gevonden die veilig opnieuw kan worden geprobeerd.",
+    "The claimed download cannot be safely retried.": "De vastgezette download kan niet veilig opnieuw worden geprobeerd.",
     "Downtify import activity": "Downtify-importstatus",
     "Claimed / unresolved": "Geclaimd / onduidelijk",
     "Waiting for library scan": "Wacht op bibliotheekscan",

@@ -535,6 +535,40 @@ describe("Simple Downtify Settings section", () => {
         expect(host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.checked).toBe(false);
     });
 
+    it("only offers metadata-only recovery for an enabled owner with review items", async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) => {
+            if (url === "/downtify-integration") return { ...paired,enabled:true };
+            if (url === "/downtify-integration/native-import") return {
+                ...nativeOff,state:"enabled",enabled:true,baselineReady:true,
+                needsReview:1,storageReady:true,
+            };
+            return {};
+        });
+        vi.mocked(api.post).mockResolvedValueOnce({state:"requeued"});
+        await mount();
+        expect(button("Retry one safely unwritten Spotify lookup")).not.toBeUndefined();
+        expect(api.post).not.toHaveBeenCalled();
+        await click("Retry one safely unwritten Spotify lookup");
+        expect(api.post).toHaveBeenCalledWith(
+            "/downtify-integration/native-import/retry-identity",
+            {acknowledgeSafeRetry:true},
+        );
+        expect(host.textContent).toContain(
+            "One verified unwritten Spotify lookup was released for safe retry."
+        );
+    });
+
+    it("does not offer a safe retry when no review exists or music storage is missing", async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) =>
+            url === "/downtify-integration" ? {...paired,enabled:true} : {
+                ...nativeOff,state:"enabled",enabled:true,baselineReady:true,
+                needsReview:1,storageReady:false,
+            });
+        await mount();
+        expect(button("Retry one safely unwritten Spotify lookup")).toBeUndefined();
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
     it("keeps native import strictly unavailable to a different Kima administrator", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({
             ...paired, ownerMatches: false,

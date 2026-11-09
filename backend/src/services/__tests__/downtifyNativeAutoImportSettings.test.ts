@@ -6,9 +6,9 @@ import { getDowntifyRuntimeEnv } from "../downtifyIntegrationSettings";
 import {
     getVerifiedNativeImportQueue, getVerifiedNativeLibraryChanges,
 } from "../downtifyNativeOriginalTransport";
-import { getNativeImportSummary, recordNativeBaseline } from "../downtifyNativeImportLedger";
+import { getNativeImportSummary, recordNativeBaseline, retryOneProvenUnwrittenSpotifyClaim } from "../downtifyNativeImportLedger";
 import {
-    getNativeAutoImportStatus, setNativeAutoImport,
+    getNativeAutoImportStatus, setNativeAutoImport, retrySafeSpotifyIdentityClaim,
 } from "../downtifyNativeAutoImportSettings";
 
 jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } }));
@@ -33,6 +33,7 @@ jest.mock("../downtifyNativeOriginalTransport", () => ({
 jest.mock("../downtifyNativeImportLedger", () => ({
     getNativeImportSummary: jest.fn(),
     recordNativeBaseline: jest.fn(),
+    retryOneProvenUnwrittenSpotifyClaim: jest.fn(),
 }));
 
 const find = prisma.downtifyIntegration.findUnique as jest.Mock;
@@ -42,6 +43,7 @@ const queue = getVerifiedNativeImportQueue as jest.Mock;
 const library = getVerifiedNativeLibraryChanges as jest.Mock;
 const baseline = recordNativeBaseline as jest.Mock;
 const summary = getNativeImportSummary as jest.Mock;
+const safeRetry = retryOneProvenUnwrittenSpotifyClaim as jest.Mock;
 const serverId = "server_identity_123";
 const PROOF = "11111111-1111-4111-8111-111111111111";
 const initVolume = initializeNativeMusicVolume as jest.Mock;
@@ -74,6 +76,7 @@ beforeEach(() => {
     library.mockResolvedValue({state:"ready",cursor:7,full:true,tracks:[]});
     initVolume.mockResolvedValue(PROOF);
     verifyVolume.mockResolvedValue(true);
+    safeRetry.mockResolvedValue("requeued");
     baseline.mockImplementation(async () => {
         record.nativeImportBaselineAt = new Date();
         record.nativeImportLibraryCursor = 7;
@@ -244,3 +247,40 @@ describe("One-switch Downtify native import activation", () => {
         expect(update).toHaveBeenCalledTimes(1);
     });
 });
+describe("Operator-authorized safe Spotify recovery", () => {
+    function enabled() {
+        record.nativeImportEnabled=true;
+        record.nativeImportBaselineAt=new Date("2026-11-08");
+        record.nativeImportLibraryCursor=12;
+        record.nativeImportMountProof=PROOF;
+    }
+    it("refuses attempts by a different admin or without explicit consent", async () => {
+        enabled();
+        await expect(retrySafeSpotifyIdentityClaim(admin,false))
+            .rejects.toMatchObject({state:"confirmation_required"});
+        await expect(retrySafeSpotifyIdentityClaim("stranger",true))
+            .rejects.toMatchObject({state:"unauthorized"});
+        expect(safeRetry).not.toHaveBeenCalled();
+    });
+    it("refuses a stopped importer or a missing music volume", async () => {
+        await expect(retrySafeSpotifyIdentityClaim(admin,true))
+            .rejects.toMatchObject({state:"pairing_disabled"});
+        enabled();
+        verifyVolume.mockResolvedValueOnce(false);
+        await expect(retrySafeSpotifyIdentityClaim(admin,true))
+            .rejects.toMatchObject({state:"storage_unavailable"});
+        expect(safeRetry).not.toHaveBeenCalled();
+    });
+    it("retries only the linked owner's narrowly proven prewrite claim", async () => {
+        enabled();
+        expect(await retrySafeSpotifyIdentityClaim(admin,true))
+            .toEqual({state:"requeued"});
+        expect(safeRetry).toHaveBeenCalledWith({
+            kimaUserId:admin,remoteServerId:serverId,remoteUserId:7,
+        });
+        expect(update).not.toHaveBeenCalled();
+        expect(runtime).not.toHaveBeenCalled();
+        expect(queue).not.toHaveBeenCalled();
+    });
+});
+

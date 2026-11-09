@@ -333,6 +333,37 @@ export function DowntifySection() {
         }
     };
 
+    const retrySafeMetadata = async () => {
+        if (nativeBusy || nativeRefreshing || pending || !ownerMatches ||
+            !nativeStatus?.enabled || !nativeStatus.storageReady ||
+            nativeStatus.needsReview < 1) return;
+        setNativeBusy(true);
+        setNativeFeedback(null);
+        setNativeError(false);
+        try {
+            const result = await api.post<{state: "requeued" | "none" | "blocked"}>(
+                "/downtify-integration/native-import/retry-identity",
+                { acknowledgeSafeRetry: true },
+            );
+            const fresh = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(fresh);
+            setNativeFeedback(result.state === "requeued"
+                ? "One verified unwritten Spotify lookup was released for safe retry."
+                : result.state === "none"
+                    ? "No safely retryable Spotify lookup was found."
+                    : "The claimed download cannot be safely retried.");
+            setNativeError(result.state === "blocked");
+        } catch (err) {
+            setNativeError(true);
+            setNativeFeedback(nativeSafeMessage[errorState(err)] ||
+                "The claimed download cannot be safely retried.");
+        } finally {
+            setNativeBusy(false);
+        }
+    };
+
     const chooseUsage = (value: Usage) => {
         setFeedback("");
         setAck(false);
@@ -572,6 +603,19 @@ export function DowntifySection() {
                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
                                                     {nativeRefreshing ? t("Refreshing import status...") : t("Refresh import status")}
                                                 </button>
+                                                {nativeStatus.enabled && nativeStatus.storageReady &&
+                                                    nativeStatus.needsReview > 0 && (
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs text-[var(--text-muted)]">
+                                                            {t("Only legacy Spotify lookup failures with proof that no audio was written can be retried. Other review items stay blocked.")}
+                                                        </p>
+                                                        <button type="button" onClick={retrySafeMetadata}
+                                                            disabled={nativeBusy || nativeRefreshing || pending || !ownerMatches}
+                                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                            {t("Retry one safely unwritten Spotify lookup")}
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 {nativeStatus.processing > 0 && (
                                                     <p className="text-xs text-[var(--text-muted)]">
                                                         {t("Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.")}

@@ -472,6 +472,55 @@ export async function holdNativeImportForReview(
     return saved.count === 1;
 }
 
+/**
+ * Operator-requested recovery of exactly ONE legacy RC3 Spotify-lookup 403.
+ * In RC3, spotify_identity_unavailable was written strictly before the
+ * importer called ensureNativeImportDestination or publishNativeAudio.
+ *
+ * This is NOT a general-purpose uncertain claim reset. Every evidence
+ * field must still be NULL, the source must be newer than the baseline,
+ * the claim must be older than 15 minutes, and the linked owner must match.
+ * Unexpected DB acknowledgements never schedule a second rewrite.
+ */
+export async function retryOneProvenUnwrittenSpotifyClaim(
+    owner: PinnedImportOwner,
+): Promise<"requeued" | "none" | "blocked"> {
+    const identity = await pinnedIdentity(owner);
+    if (!identity.paired || !identity.enabled || !identity.baselineAt ||
+        !identity.mountProof || identity.libraryCursor === null) return "blocked";
+    const where = {
+        ownerKimaUserId: owner.kimaUserId,
+        remoteServerId: owner.remoteServerId,
+        remoteUserId: owner.remoteUserId,
+        status: "uncertain",
+        reviewReason: "spotify_identity_unavailable",
+        discoveredAt: { gt: identity.baselineAt },
+        claimedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) },
+        expectedBytes: null, outputRelativePath: null, fullSha256: null,
+        remoteLibraryTrackId: null, indexedTrackId: null,
+    } as const;
+    try {
+        const row = await prisma.downtifyNativeImport.findFirst({
+            where, select: { id: true, claimToken: true },
+            orderBy: { updatedAt: "asc" },
+        });
+        if (!row) return "none";
+        if (!row.claimToken || !/^[0-9a-f-]{36}$/.test(row.claimToken)) {
+            return "blocked";
+        }
+        const changed = await prisma.downtifyNativeImport.updateMany({
+            where: { ...where, id: row.id, claimToken: row.claimToken },
+            data: {
+                status: "ready", claimToken: null, claimedAt: null,
+                reviewReason: "spotify_metadata_retry",
+            },
+        });
+        return changed.count === 1 ? "requeued" : "blocked";
+    } catch {
+        return "blocked";
+    }
+}
+
 /** Non-sensitive, owner-scoped ledger aggregates for Settings. */
 export interface NativeImportSummary {
     enabled: boolean;

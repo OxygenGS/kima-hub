@@ -7,7 +7,8 @@ import { Router } from "express";
 import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
 import {
-    getNativeAutoImportStatus, setNativeAutoImport, NativeImportSetupError,
+    getNativeAutoImportStatus, setNativeAutoImport,
+    retrySafeSpotifyIdentityClaim, NativeImportSetupError,
 } from "../services/downtifyNativeAutoImportSettings";
 import { z } from "zod";
 import { requireAdmin } from "../middleware/auth";
@@ -103,6 +104,34 @@ router.post("/native-import", async (req, res) => {
                 err.state === "not_paired" ? 404 :
                 (err.state === "source_unavailable" ||
                     err.state === "storage_unavailable") ? 503 : 409;
+            return res.status(status).json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
+    }
+});
+
+
+/**
+ * Manual, one-claim recovery of a proven unwritten RC3 Spotify 403.
+ * No free-form track ID, filesystem path or arbitrary review reason is accepted.
+ */
+router.post("/native-import/retry-identity", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        const body = z.object({
+            acknowledgeSafeRetry: z.literal(true),
+        }).strict().parse(req.body);
+        return res.json(await retrySafeSpotifyIdentityClaim(
+            req.user.id, body.acknowledgeSafeRetry,
+        ));
+    } catch (err) {
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ state: "invalid_input" });
+        }
+        if (err instanceof NativeImportSetupError) {
+            const status = err.state === "unauthorized" ? 403 :
+                err.state === "not_paired" ? 404 :
+                err.state === "storage_unavailable" ? 503 : 409;
             return res.status(status).json({ state: err.state });
         }
         return res.status(503).json({ state: "unavailable" });
