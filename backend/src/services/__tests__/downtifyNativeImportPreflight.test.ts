@@ -153,6 +153,37 @@ describe("Native Downtify import transport preflight", () => {
         expect(get).toHaveBeenCalledTimes(4);
     });
 
+    it("verifies one deterministic unique file with multiple distinct completed tracks", async () => {
+        const get = remote();
+        const otherFilename = "Artist/Album/03 - Different Song.flac";
+        const otherJob = { ...job, filename: otherFilename };
+        const otherTrack = {
+            ...library.tracks[0], id: "t1111111111111111", file: otherFilename,
+        };
+        get.mockResolvedValueOnce({ status: 200, data: server })
+            .mockResolvedValueOnce({ status: 200, data: auth })
+            .mockResolvedValueOnce({ status: 200, data: [otherJob, job] })
+            .mockResolvedValueOnce({
+                status: 200, data: { ...library, tracks: [otherTrack, library.tracks[0]] },
+            });
+        const result = await run(get);
+        expect(result.state).toBe("original_stream_verified");
+        const [url] = get.mock.calls[4];
+        expect(url).toContain("/api/v1/tracks/" + TRACK_ID + "/stream");
+        expect(get).toHaveBeenCalledTimes(5);
+    });
+
+    it("never samples a duplicated owner queue path even with multiple tracks", async () => {
+        const get = remote();
+        get.mockResolvedValueOnce({ status: 200, data: server })
+            .mockResolvedValueOnce({ status: 200, data: auth })
+            .mockResolvedValueOnce({ status: 200, data: [job, { ...job }] })
+            .mockResolvedValueOnce({ status: 200, data: library });
+        const result = await run(get);
+        expect(result.state).toBe("ambiguous");
+        expect(get).toHaveBeenCalledTimes(4);
+    });
+
     it("does not treat a byte-range failure or wrong audio as cutover permission", async () => {
         const get = remote();
         get.mockResolvedValueOnce({ status: 200, data: server })

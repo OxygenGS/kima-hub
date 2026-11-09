@@ -47,7 +47,10 @@ Kima displays four separate checks instead of only an overall error:
 | Original audio sample | A single matching owner-attributed completed track has an original 64-byte stream whose response and audio header are valid | Full-file integrity, ISRC, duration, successful import/index, or safe cutover |
 
 It is normal to see **three verified checks and an unverified sample** on a
-new Downtify library with no completed track. A completed Spotify track
+new Downtify library with no completed track. Where multiple completed
+tracks exist, the read-only probe chooses one stable, unambiguous
+owner-bound queue/library pair; duplicate paths or conflicting entries
+are never accepted as proof. A completed Spotify track
 and an exact unambiguous source-library match are necessary to test the
 original stream. The reason is shown without leaking file names, tokens
 or remote identifiers. Automatic import remains OFF unless explicitly
