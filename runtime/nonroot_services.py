@@ -105,9 +105,59 @@ def prepare_soulseek_import(music_root, backend_uid, backend_gid):
               + str(exc))
         return None
 
+def prepare_downtify_import(music_root, backend_uid, backend_gid):
+    """Prepare only /music/Singles/Downtify, never change an existing directory.
+
+    Bootstrap runs as root so it can create this isolated leaf under the
+    existing root-owned Singles directory without granting the backend write
+    access to /music or the remaining music collection. Failure is a warning,
+    and enabling imports will remain fail-closed. No file or old music folder
+    is moved, renamed, chmodded or chowned.
+    """
+    root = Path(music_root)
+    singles = root / 'Singles'
+    target = singles / 'Downtify'
+    try:
+        for parent in (root, singles, target):
+            check_path(parent)
+            if parent.exists() and not parent.is_dir():
+                raise RuntimeError('Expected directory: ' + str(parent))
+        if not root.is_dir() or not singles.is_dir():
+            raise RuntimeError('Existing music and Singles folders required')
+        root_dev = root.lstat().st_dev
+        for parent in (root, singles):
+            st = parent.lstat()
+            mode = stat.S_IMODE(st.st_mode)
+            if st.st_dev != root_dev or mode & 0o002 or (
+                mode & 0o020 and not (st.st_uid == 0 and st.st_gid == 0)
+            ):
+                raise RuntimeError('Unsafe or unexpected music directory permissions')
+        if target.exists():
+            st = target.lstat()
+            if st.st_dev != root_dev or st.st_uid != backend_uid or (
+                stat.S_IMODE(st.st_mode) & 0o022
+            ):
+                raise RuntimeError('Existing Downtify directory is not privately backend-owned')
+            return target
+
+        target.mkdir(mode=0o750)
+        try:
+            os.chown(target, backend_uid, backend_gid, follow_symlinks=False)
+            os.chmod(target, 0o750)
+        except OSError:
+            target.rmdir()
+            raise
+        return target
+    except (OSError, RuntimeError) as exc:
+        print('WARNING: Native Downtify target is not writable. '
+              'Check the real mounted /music/Singles/Downtify directory; '
+              'no automatic importer is enabled: ' + str(exc))
+        return None
+
+
 def configure():
     # Only independently prepared, exclusively mounted volumes are supported.
-    # Only the dedicated Soulseek import leaf may be created under /music.
+    # Only dedicated Soulseek and Downtify leaves may be created under /music.
     # Existing music files, parents, secrets, database and models are never chowned.
     for user in sorted(set(USERS.values())):
         for path in ('/music', '/app/models', '/app/audio-analyzer', '/app/audio-analyzer-clap'):
@@ -131,6 +181,11 @@ def configure():
         if subprocess.run(['gosu', 'kimabackend', 'test', '-w', str(import_dir)], check=False).returncode != 0:
             print('WARNING: Soulseek import folder is not writable by the non-root backend; '
                   'check host bind-mount permissions')
+    native_dir = prepare_downtify_import('/music', backend.pw_uid, backend.pw_gid)
+    if native_dir is not None:
+        if subprocess.run(['gosu', 'kimabackend', 'test', '-w', str(native_dir)], check=False).returncode != 0:
+            print('WARNING: Downtify import folder is not writable by the non-root backend; '
+                  'check host bind-mount permissions')
     for root, paths in inventory.items():
         Path(root).mkdir(parents=True, exist_ok=True)
         for path in paths:
@@ -140,7 +195,7 @@ def configure():
             os.chmod(path, mode)
     with CONF.open('w') as handle:
         parser.write(handle)
-    print('AIO service identities: nonroot backend/audio, limited shared GPU IPC; only dedicated Soulseek import may be writable')
+    print('AIO service identities: nonroot backend/audio, limited shared GPU IPC; dedicated Soulseek/Downtify leaves only')
 
 
 def launch(service):
