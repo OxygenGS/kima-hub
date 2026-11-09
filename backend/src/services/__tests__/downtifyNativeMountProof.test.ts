@@ -7,7 +7,7 @@ import {
 
 let scratch: string;
 let music: string;
-const marker = () => path.join(music, ".kima-native-music-volume");
+const marker = () => path.join(music, "Singles", "Downtify", ".kima-native-music-volume");
 beforeEach(async () => {
     scratch = await fs.mkdtemp(path.join(tmpdir(), "kima-native-volume-"));
     music = path.join(scratch, "music");
@@ -27,7 +27,42 @@ describe("Persistent on-volume identity guard (temporary test mount only)", () =
         expect(stat.isFile()).toBe(true);
         expect(stat.mode & 0o077).toBe(0);
         expect((await fs.readdir(music)).filter(name => name.startsWith(".kima-native")))
-            .toEqual([".kima-native-music-volume"]);
+            .toEqual([]);
+        expect((await fs.readdir(path.dirname(marker()))).filter(name =>
+            name.startsWith(".kima-native"))).toEqual([".kima-native-music-volume"]);
+    });
+
+    it("can initialize in an existing private Singles/Downtify directory with a non-writable parent", async () => {
+        await fs.mkdir(path.dirname(marker()), { recursive: true, mode: 0o750 });
+        await fs.chmod(music, 0o555);
+        try {
+            const token = await initializeNativeMusicVolume(music);
+            expect(token).not.toBeNull();
+            expect(await verifyNativeMusicVolume(music, token)).toBe(true);
+            expect((await fs.stat(marker())).mode & 0o077).toBe(0);
+        } finally {
+            await fs.chmod(music, 0o700);
+        }
+    });
+
+    it("supports a valid legacy marker in the root without relocating it", async () => {
+        const token = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const legacy = path.join(music, ".kima-native-music-volume");
+        await fs.writeFile(legacy, "kima-native-volume-v1:" + token + "\n", {
+            mode: 0o600,
+        });
+        expect(await initializeNativeMusicVolume(music)).toBe(token);
+        expect(await verifyNativeMusicVolume(music, token)).toBe(true);
+        await expect(fs.stat(marker())).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("refuses an invalid legacy marker instead of creating a second proof", async () => {
+        await fs.writeFile(path.join(music, ".kima-native-music-volume"), "bogus", {
+            mode: 0o600,
+        });
+        expect(await initializeNativeMusicVolume(music)).toBeNull();
+        expect(await fs.readdir(music)).toContain(".kima-native-music-volume");
+        await expect(fs.stat(marker())).rejects.toMatchObject({ code: "ENOENT" });
     });
 
     it("refuses an empty local fallback directory after the expected disk disappears", async () => {
