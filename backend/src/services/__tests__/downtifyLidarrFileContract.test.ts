@@ -5,7 +5,7 @@
  * release gate and MUST NOT be inferred from a passing contract test.
  */
 import { createHash } from "crypto";
-import { promises as fs } from "fs";
+import { constants, promises as fs } from "fs";
 import { tmpdir } from "os";
 import * as path from "path";
 import {
@@ -103,7 +103,7 @@ describe("Downtify staged file -> Lidarr ManualImport -> immutable Kima file rec
             });
             // Emulate Lidarr choosing the final path; Kima never writes it.
             await fs.mkdir(path.dirname(localFinal), { recursive: true });
-            await fs.copyFile(stage.local, localFinal, fs.constants.COPYFILE_EXCL);
+            await fs.copyFile(stage.local, localFinal, constants.COPYFILE_EXCL);
             commandSubmitted = true;
             return { data: { id: 101 } };
         });
