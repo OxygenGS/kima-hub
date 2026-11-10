@@ -56,9 +56,11 @@ export async function verifySharedLidarrStaging(
             constants.O_WRONLY | constants.O_CREAT |
             constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
         const st = await handle.stat();
+        // Pin the newly created inode before checking its attributes so
+        // even a failed permission/type check can clean up our own probe.
+        identity = {dev: st.dev, ino: st.ino};
         if (!st.isFile() || st.dev !== dir.dev || st.nlink !== 1 ||
             (st.mode & 0o077) !== 0) return false;
-        identity = {dev: st.dev, ino: st.ino};
         await handle.writeFile("kima-lidarr-visibility-v1\n", {encoding:"utf8"});
         await handle.sync();
         const response = await lidarr.get("/api/v1/filesystem/type", {
