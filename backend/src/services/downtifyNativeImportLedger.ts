@@ -20,7 +20,8 @@ import { prisma } from "../utils/db";
 
 export type NativeImportStatus =
     | "baseline" | "ready" | "claimed" | "published_pending_scan"
-    | "imported" | "review" | "uncertain";
+    | "imported" | "review" | "uncertain"
+    | "staged_pending_lidarr" | "lidarr_submitting" | "lidarr_waiting";
 export type LedgerState =
     | "recorded" | "already_seen" | "blocked" | "invalid_snapshot" | "not_found"
     | "claimed" | "claimed_elsewhere" | "published_pending_scan" | "deferred"
