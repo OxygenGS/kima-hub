@@ -51,6 +51,13 @@ type NativeAutoImportStatus = {
     imported: number;
     needsReview: number;
     storageReady: boolean;
+    target?: "kima" | "lidarr";
+    lidarrStageReady?: boolean;
+    lidarrDownloads?: string | null;
+    lidarrMusic?: string | null;
+    lidarrPending?: number;
+    lidarrNeedsMatch?: number;
+    lidarrImported?: number;
 };
 type NativeSourceDiagnosis = {
     state: keyof typeof nativeSourceDiagnosisMessages;
@@ -113,6 +120,16 @@ const nativeSafeMessage: Record<string, TranslationKey> = {
     storage_unavailable: "Kima cannot verify the music storage. Check its mount and write permissions.",
 };
 
+const targetSafeMessage: Record<string, TranslationKey> = {
+    pause_first: "Pause automatic importing before changing the final library.",
+    outstanding_work: "Resolve waiting or claimed jobs before changing import ownership.",
+    invalid_staging: "The shared downloads or Lidarr music path is invalid or unavailable.",
+    lidarr_unavailable: "Lidarr must be connected and its music root verified first.",
+    acknowledgment_required: "Confirm the shared downloads volume and backup before switching.",
+    changed_during_setup: "Downtify pairing changed during setup. Reload settings and try again.",
+    unauthorized: "Only the linked administrator can manage automatic import.",
+    unavailable: "Could not update the import destination.",
+};
 const disabled: DowntifyControls = {
     enabled: false, spotifyIntentsEnabled: false,
     trackSubmissionEnabled: false, reconciliationEnabled: false,
@@ -207,6 +224,11 @@ export function DowntifySection() {
     const [nativeError, setNativeError] = useState(false);
     const [sourceDiagnosticBusy, setSourceDiagnosticBusy] = useState(false);
     const [sourceDiagnosticFeedback, setSourceDiagnosticFeedback] = useState<TranslationKey | null>(null);
+    const [targetChoice, setTargetChoice] = useState<"kima" | "lidarr">("kima");
+    const [lidarrDownloads, setLidarrDownloads] = useState("/downloads");
+    const [lidarrMusic, setLidarrMusic] = useState("/music");
+    const [targetAck, setTargetAck] = useState(false);
+    const [targetFeedback, setTargetFeedback] = useState<TranslationKey | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -228,7 +250,13 @@ export function DowntifySection() {
         }
         let active = true;
         void api.get<NativeAutoImportStatus>("/downtify-integration/native-import")
-            .then(result => { if (active) setNativeStatus(result); })
+            .then(result => {
+                if (!active) return;
+                setNativeStatus(result);
+                setTargetChoice(result.target === "lidarr" ? "lidarr" : "kima");
+                setLidarrDownloads(result.lidarrDownloads || "/downloads");
+                setLidarrMusic(result.lidarrMusic || "/music");
+            })
             .catch(() => {
                 if (active) setNativeFeedback("Could not load automatic import settings.");
             });
@@ -375,6 +403,35 @@ export function DowntifySection() {
             setSourceDiagnosticFeedback(nativeSourceDiagnosisMessages.unavailable);
         } finally {
             setSourceDiagnosticBusy(false);
+        }
+    };
+
+    const saveNativeTarget = async () => {
+        if (nativeBusy || nativeRefreshing || pending || !ownerMatches ||
+            !nativeStatus || nativeStatus.enabled || !targetAck) return;
+        setNativeBusy(true);
+        setTargetFeedback(null);
+        try {
+            await api.post("/downtify-integration/native-import/target", {
+                target: targetChoice,
+                lidarrDownloads: targetChoice === "lidarr" ? lidarrDownloads.trim() : null,
+                lidarrMusic: targetChoice === "lidarr" ? lidarrMusic.trim() : null,
+                acknowledge: true,
+            });
+            const fresh = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(fresh);
+            setTargetChoice(fresh.target === "lidarr" ? "lidarr" : "kima");
+            setLidarrDownloads(fresh.lidarrDownloads || "/downloads");
+            setLidarrMusic(fresh.lidarrMusic || "/music");
+            setTargetAck(false);
+            setTargetFeedback("Import destination saved. Automatic importing remains off.");
+        } catch (err) {
+            setTargetFeedback(targetSafeMessage[errorState(err)] ||
+                targetSafeMessage.unavailable);
+        } finally {
+            setNativeBusy(false);
         }
     };
 
@@ -610,6 +667,67 @@ export function DowntifySection() {
                                             </p>
                                         )}
                                         {nativeStatus && !nativeStatus.enabled && (
+                                            <div className="space-y-3 rounded-lg border border-white/10 p-3">
+                                                <p className="text-xs font-semibold text-white">
+                                                    {t("Choose who manages downloaded music")}
+                                                </p>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {t("Kima can index music independently, or send verified downloads to Lidarr to organise artists and albums. Switching never migrates existing songs.")}
+                                                </p>
+                                                <div className="flex flex-col gap-2 text-xs text-[var(--text-secondary)]">
+                                                    <label className="flex items-center gap-2">
+                                                        <input type="radio" name="downtify-final-owner" value="kima"
+                                                            checked={targetChoice === "kima"}
+                                                            onChange={() => { setTargetChoice("kima"); setTargetAck(false); }}
+                                                            disabled={nativeBusy || pending} />
+                                                        {t("Kima manages music (no Lidarr required)")}
+                                                    </label>
+                                                    <label className="flex items-center gap-2">
+                                                        <input type="radio" name="downtify-final-owner" value="lidarr"
+                                                            checked={targetChoice === "lidarr"}
+                                                            onChange={() => { setTargetChoice("lidarr"); setTargetAck(false); }}
+                                                            disabled={nativeBusy || pending} />
+                                                        {t("Lidarr manages artists, albums and files")}
+                                                    </label>
+                                                </div>
+                                                {targetChoice === "lidarr" && (
+                                                    <div className="space-y-2">
+                                                        <SettingsRow label={t("Shared downloads path inside Lidarr")}
+                                                            description={t("This must point to the same shared downloads filesystem Kima uses, but from Lidarr's container.")}>
+                                                            <SettingsInput id="downtify-lidarr-downloads"
+                                                                value={lidarrDownloads} onChange={setLidarrDownloads}
+                                                                disabled={nativeBusy || pending} />
+                                                        </SettingsRow>
+                                                        <SettingsRow label={t("Lidarr-managed music root")}
+                                                            description={t("Select Lidarr's existing music root, not a staging folder. Kima verifies its own music mount separately.")}>
+                                                            <SettingsInput id="downtify-lidarr-music"
+                                                                value={lidarrMusic} onChange={setLidarrMusic}
+                                                                disabled={nativeBusy || pending} />
+                                                        </SettingsRow>
+                                                    </div>
+                                                )}
+                                                <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                                    <input type="checkbox" id="downtify-lidarr-target-ack"
+                                                        checked={targetAck} onChange={e=>setTargetAck(e.target.checked)}
+                                                        disabled={nativeBusy || pending} />
+                                                    {t("I have verified both mounts, existing music backups, and that only Lidarr will manage the final library.")}
+                                                </label>
+                                                <button type="button" onClick={saveNativeTarget}
+                                                    disabled={!targetAck || nativeBusy || nativeRefreshing || pending ||
+                                                        !ownerMatches || targetChoice === (nativeStatus.target || "kima") &&
+                                                        (targetChoice === "kima" ||
+                                                            (lidarrDownloads === nativeStatus.lidarrDownloads &&
+                                                             lidarrMusic === nativeStatus.lidarrMusic))}
+                                                    className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                    {t("Save import destination")}
+                                                </button>
+                                                {targetFeedback && <p role="status" className="text-xs text-[var(--text-muted)]">
+                                                    {t(targetFeedback)}
+                                                </p>}
+                                            </div>
+                                        )}
+
+                                        {nativeStatus && !nativeStatus.enabled && (
                                             <label className="flex items-start gap-3 rounded-lg border border-white/10 p-3 text-xs text-[var(--text-secondary)]">
                                                 <input type="checkbox" id="downtify-native-cutover-ack"
                                                     checked={nativeAck}
@@ -635,6 +753,11 @@ export function DowntifySection() {
                                                         ["Claimed / unresolved", nativeStatus.processing],
                                                         ["Waiting for library scan", nativeStatus.awaitingScan],
                                                         ["Added to Kima library", nativeStatus.imported],
+                                                        ...(nativeStatus.target === "lidarr"
+                                                            ? [
+                                                                ["Waiting for Lidarr", nativeStatus.lidarrPending ?? 0],
+                                                                ["Lidarr import confirmed", nativeStatus.lidarrImported ?? 0],
+                                                            ] as const : []),
                                                         ["Needs review", nativeStatus.needsReview],
                                                     ] as const).map(([label, value]) => (
                                                         <div key={label} className="space-y-1">
@@ -643,10 +766,16 @@ export function DowntifySection() {
                                                         </div>
                                                     ))}
                                                 </dl>
-                                                {nativeStatus.imported > 0 && (
+                                                {nativeStatus.imported > 0 && nativeStatus.target !== "lidarr" && (
                                                     <p className="text-xs text-[var(--text-muted)]"
                                                         role="note">
                                                         {t("This confirms indexing in Kima only. Native Downtify imports are not automatically registered in Lidarr. Do not manually move indexed files: their paths and hashes are verified by Kima.")}
+                                                    </p>
+                                                )}
+                                                {nativeStatus.target === "lidarr" &&
+                                                    (nativeStatus.lidarrNeedsMatch ?? 0) > 0 && (
+                                                    <p role="status" className="text-xs text-[var(--text-muted)]">
+                                                        {t("Some staged tracks need a unique MusicBrainz artist/album match in Lidarr. No duplicate import will be started.")}
                                                     </p>
                                                 )}
                                                 <button type="button" onClick={refreshNativeStatus}
