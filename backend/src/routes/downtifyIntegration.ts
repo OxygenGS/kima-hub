@@ -4,6 +4,7 @@
  * outbound GET requests only, and a saved pairing starts completely OFF.
  */
 import { Router } from "express";
+import { setNativeLidarrTarget, TargetSetupError } from "../services/downtifyLidarrTargetSettings";
 import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
 import {
@@ -111,6 +112,34 @@ router.post("/native-import", async (req, res) => {
     }
 });
 
+
+/**
+ * Explicit owner-only destination selection. No user-supplied local path.
+ * Stage and Lidarr roots are validated while the importer is paused.
+ */
+router.post("/native-import/target", async (req,res) => {
+    if (!req.user) return res.status(401).json({state:"unpaired"});
+    const schema=z.object({
+        target:z.enum(["kima","lidarr"]),
+        lidarrDownloads:z.string().max(1024).nullable(),
+        lidarrMusic:z.string().max(1024).nullable(),
+        acknowledge:z.literal(true),
+    }).strict();
+    try {
+        const body=schema.parse(req.body);
+        return res.json(await setNativeLidarrTarget(req.user.id,body.target,
+            body.lidarrDownloads,body.lidarrMusic,body.acknowledge));
+    }catch(err){
+        if(err instanceof z.ZodError)return res.status(400).json({state:"invalid_input"});
+        if(err instanceof TargetSetupError){
+            const code=err.state==="unauthorized"?403:
+                err.state==="not_paired"?404:
+                err.state==="lidarr_unavailable"?503:409;
+            return res.status(code).json({state:err.state});
+        }
+        return res.status(503).json({state:"unavailable"});
+    }
+});
 
 /**
  * Manual, one-claim recovery of a proven unwritten RC3 Spotify 403.

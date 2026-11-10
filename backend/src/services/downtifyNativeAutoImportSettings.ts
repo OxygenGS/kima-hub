@@ -11,6 +11,7 @@
  * remote jobs are recorded as a baseline and never imported.
  */
 import { prisma } from "../utils/db";
+import { validateLidarrMountMapping } from "./downtifyLidarrMounts";
 import { config } from "../config";
 import {
     initializeNativeMusicVolume, verifyNativeMusicVolume,
@@ -33,6 +34,10 @@ export type NativeAutoImportStatus = {
     needsReview: number;
     /** Read-only proof that the current music root matches its first-activation disk. */
     storageReady: boolean;
+    target: "kima" | "lidarr";
+    lidarrStageReady: boolean;
+    lidarrDownloads: string | null;
+    lidarrMusic: string | null;
 };
 
 export class NativeImportSetupError extends Error {
@@ -54,28 +59,47 @@ export async function getNativeAutoImportStatus(
             expectedUserId: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
             nativeImportLibraryCursor: true, nativeImportMountProof: true,
+            nativeImportTarget: true, nativeLidarrLocalDownloads: true,
+            nativeLidarrRemoteDownloads: true,
+            nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
         },
     });
     if (!row) return {
         state: "unpaired", enabled: false, baselineReady: false,
         awaitingImport: 0, processing: 0, awaitingScan: 0,
         imported: 0, needsReview: 0,
-        storageReady: false,
+        storageReady: false, target: "kima", lidarrStageReady: false,
+        lidarrDownloads: null, lidarrMusic: null,
     };
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
         awaitingImport: 0, processing: 0, awaitingScan: 0,
         imported: 0, needsReview: 0,
-        storageReady: false,
+        storageReady: false, target: "kima", lidarrStageReady: false,
+        lidarrDownloads: null, lidarrMusic: null,
     };
     const summary = await getNativeImportSummary({
         kimaUserId: adminId,
         remoteServerId: row.expectedServerId,
         remoteUserId: row.expectedUserId,
     });
-    const storageReady = await verifyNativeMusicVolume(
+    const musicReady = await verifyNativeMusicVolume(
         config.music.musicPath, row.nativeImportMountProof,
     );
+    const target = row.nativeImportTarget === "lidarr" ? "lidarr" : "kima";
+    const lidarrStageReady = target === "lidarr" &&
+        !!row.nativeLidarrLocalDownloads &&
+        !!row.nativeLidarrRemoteDownloads &&
+        !!row.nativeLidarrRemoteMusic &&
+        validateLidarrMountMapping({
+            kimaDownloads: row.nativeLidarrLocalDownloads,
+            lidarrDownloads: row.nativeLidarrRemoteDownloads,
+            kimaMusic: config.music.musicPath,
+            lidarrMusic: row.nativeLidarrRemoteMusic,
+        }) &&
+        await verifyNativeMusicVolume(
+            row.nativeLidarrLocalDownloads, row.nativeLidarrStageMountProof,
+        );
     return {
         state: summary.enabled ? "enabled" : "paused",
         enabled: summary.enabled,
@@ -85,7 +109,10 @@ export async function getNativeAutoImportStatus(
         awaitingScan: summary.awaitingScan,
         imported: summary.imported,
         needsReview: summary.inReview,
-        storageReady,
+        storageReady: musicReady && (target === "kima" || !!lidarrStageReady),
+        target, lidarrStageReady: !!lidarrStageReady,
+        lidarrDownloads: row.nativeLidarrRemoteDownloads,
+        lidarrMusic: row.nativeLidarrRemoteMusic,
     };
 }
 
@@ -197,6 +224,9 @@ export async function setNativeAutoImport(
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
             nativeImportLibraryCursor: true, nativeImportMountProof: true,
+            nativeImportTarget: true, nativeLidarrLocalDownloads: true,
+            nativeLidarrRemoteDownloads: true,
+            nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
         },
     });
     if (!row) throw new NativeImportSetupError("not_paired");
@@ -214,6 +244,19 @@ export async function setNativeAutoImport(
     if (!row.enabled) throw new NativeImportSetupError("pairing_disabled");
     if (!acknowledged) throw new NativeImportSetupError("confirmation_required");
     if (row.nativeImportEnabled) return getNativeAutoImportStatus(adminId);
+    if (row.nativeImportTarget === "lidarr") {
+        const kimaDownloads = row.nativeLidarrLocalDownloads;
+        const lidarrDownloads = row.nativeLidarrRemoteDownloads;
+        const lidarrMusic = row.nativeLidarrRemoteMusic;
+        if (!kimaDownloads || !lidarrDownloads || !lidarrMusic ||
+            !validateLidarrMountMapping({
+                kimaDownloads, lidarrDownloads,
+                kimaMusic: config.music.musicPath, lidarrMusic,
+            }) ||
+            !await verifyNativeMusicVolume(
+                kimaDownloads, row.nativeLidarrStageMountProof,
+            )) throw new NativeImportSetupError("storage_unavailable");
+    }
 
     const owner = {
         kimaUserId: adminId,
