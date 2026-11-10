@@ -109,6 +109,7 @@ describe("One-switch Downtify native import activation", () => {
             lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
             storageReady: true, target: "kima", lidarrStageReady: false,
             lidarrDownloads: null, lidarrMusic: null,
+            allowArtistCreation: false,
         });
         expect(JSON.stringify(response)).not.toContain(serverId);
         expect(runtime).not.toHaveBeenCalled();
@@ -128,6 +129,7 @@ describe("One-switch Downtify native import activation", () => {
             lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
             target: "kima", lidarrStageReady: false,
             lidarrDownloads: null, lidarrMusic: null,
+            allowArtistCreation: false,
         });
         const payload = JSON.stringify(result);
         expect(payload).not.toContain(serverId);
@@ -169,6 +171,7 @@ describe("One-switch Downtify native import activation", () => {
             lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
             storageReady: true, target: "kima", lidarrStageReady: false,
             lidarrDownloads: null, lidarrMusic: null,
+            allowArtistCreation: false,
         });
         expect(queue).toHaveBeenCalledTimes(1);
         expect(baseline).toHaveBeenCalledWith({

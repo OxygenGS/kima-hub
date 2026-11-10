@@ -25,6 +25,7 @@ const row={
  nativeImportEnabled:false,nativeImportTarget:"kima",
  nativeLidarrLocalDownloads:null,nativeLidarrRemoteDownloads:null,
  nativeLidarrRemoteMusic:null,nativeLidarrStageMountProof:null,
+ nativeLidarrAllowArtistCreation:false,
 };
 beforeEach(()=>{
  jest.clearAllMocks();
@@ -41,7 +42,8 @@ describe("one-switch destination selection (Lidarr optional)",()=>{
  it("preserves existing RC6 Kima target and exposes no Lidarr secret",async()=>{
   const status=await getNativeLidarrTargetStatus("admin");
   expect(status).toEqual({target:"kima",stageReady:false,
-   lidarrConnected:false,kimaDownloads:null,lidarrDownloads:null,lidarrMusic:null});
+   lidarrConnected:false,kimaDownloads:null,lidarrDownloads:null,lidarrMusic:null,
+   allowArtistCreation:false});
   expect(JSON.stringify(status)).not.toContain("secret");
   expect(lidarr).not.toHaveBeenCalled();
  });

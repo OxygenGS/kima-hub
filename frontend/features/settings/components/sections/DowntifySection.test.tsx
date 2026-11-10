@@ -643,7 +643,7 @@ describe("Simple Downtify Settings section", () => {
         expect(api.post).toHaveBeenCalledWith(
             "/downtify-integration/native-import/target",
             {target:"lidarr",lidarrDownloads:"/downloads",
-                lidarrMusic:"/music",acknowledge:true},
+                lidarrMusic:"/music",allowArtistCreation:false,acknowledge:true},
         );
         expect(host.textContent).toContain(
             "Import destination saved. Automatic importing remains off."
