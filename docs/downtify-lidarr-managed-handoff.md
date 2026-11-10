@@ -49,10 +49,10 @@ a missing host directory.
 
 ~~~sh
 # Configuration check only. No container starts and no files are imported.
-MUSIC_PATH=/existing/test/music \\
-DOWNTIFY_LIDARR_STAGING_PATH=/existing/test/shared-downloads \\
-VERSION=v1.19.0 \\
-docker compose -f docker-compose.prod.yml \\
+MUSIC_PATH=/existing/test/music \
+DOWNTIFY_LIDARR_STAGING_PATH=/existing/test/shared-downloads \
+VERSION=v1.19.0 \
+docker compose -f docker-compose.prod.yml \
   -f docker-compose.lidarr-handoff.yml config
 ~~~
 
