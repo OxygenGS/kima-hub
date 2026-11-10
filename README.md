@@ -67,7 +67,7 @@ The **Downloads** screen shows permission-filtered jobs and saved Spotify track 
 
 **Not included in published v1.19.0:** automatic library importing, album/playlist dispatch, scanner/index receipts, source deletion or replacement of any external importer. Every new switch starts **OFF**.
 
-**In development:** optional native Downtify auto-import is being tested as a product feature for supported Docker installations, without a fixed host, NAS or Proxmox dependency. It requires explicit opt-in, verified music storage, an exact paired account, audio integrity checks and safe single-writer operation. It is **not released** and must not be enabled as a production migration without an independently verified mounted-volume canary. [Development architecture and generic setup](docs/downtify-native-auto-import.md).
+**Pre-release only:** the RC6 native Downtify importer verifies source audio and can index tracks in **Kima's own** music library. It does **not** register artists or albums in Lidarr. An optional Lidarr-managed handoff using Lidarr's own Artist/Album/Track import pipeline is being developed separately in [draft PR #231](https://github.com/OxygenGS/kima-hub/pull/231). Neither is part of stable v1.19.0; do not deploy it as a production migration without an independently verified backup/restore and full end-to-end acceptance. [Kima native importer](docs/downtify-native-auto-import.md) · [Lidarr-managed handoff](docs/downtify-lidarr-managed-handoff.md).
 
 [Downtify setup and limitations](docs/downtify-settings.md) · [Download Manager design](docs/unified-download-manager.md) · [User permissions](docs/user-permissions.md)
 

@@ -658,7 +658,7 @@ export function DowntifySection() {
                                     </div>
                                     <div className="rounded-xl border border-white/10 p-4 space-y-3">
                                         <SettingsRow label={t("Automatically add downloaded music")}
-                                            description={t("Kima imports newly completed Downtify tracks, checks their audio and adds them to your music library. Old downloads are not imported.")}>
+                                            description={t("Kima verifies new Downtify downloads and indexes them locally or hands them to Lidarr when configured. Existing downloads are skipped.")}>
                                             <SettingsToggle id="downtify-native-auto-import"
                                                 checked={nativeStatus?.enabled === true}
                                                 disabled={!ownerMatches || !status?.enabled ||

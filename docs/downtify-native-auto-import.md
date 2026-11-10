@@ -1,7 +1,8 @@
 # Native Downtify auto-import — portable application integration
 
-**RC6 provides verified Kima-library importing only; Lidarr-managed import is
-NOT implemented.** This optional integration is designed for ordinary Kima Docker installations,
+**Published RC6 provides verified Kima-library importing only.
+The optional Lidarr-managed pipeline is implemented on a separate DRAFT
+development branch, and has NOT yet shipped or passed real end-to-end acceptance.** This optional integration is designed for ordinary Kima Docker installations,
 not one particular server or a Proxmox script. Fresh installations need no
 legacy importer or cutover. Existing installations with another media importer
 must complete a safe single-writer cutover before enabling native import.
@@ -24,8 +25,10 @@ Kima's indexing and safety receipts.
 
 The required opt-in, portable integration and one-record recovery plan are
 documented in [Downtify → Lidarr managed handoff](downtify-lidarr-managed-handoff.md).
-No automatic Lidarr import, path migration or root-folder write is enabled
-until that design passes implementation and end-to-end acceptance.
+RC6 contains no automatic Lidarr import. Draft PR #231 adds a separate,
+opt-in Lidarr handoff using verified shared staging, Lidarr's own import API,
+and final Lidarr+Kima receipts. No test image or stable release should be
+published until all live and CI gates pass.
 
 ## Intended user experience
 

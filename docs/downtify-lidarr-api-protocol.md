@@ -1,8 +1,9 @@
 # Downtify + Lidarr v2: safe handoff protocol
 
-The native Kima-only importer is **unchanged** in RC6. This development
-module is the first concrete Lidarr API integration, not a deployable
-automatic importer yet.
+The native Kima-only importer is **unchanged** in RC6. This development module is part of an optional, not-yet-released Lidarr
+handoff pipeline. The staging/owner-bound command ledger, independent
+Lidarr file receipts and Kima re-indexing are implemented in draft PR
+#231. No live dual-library acceptance has been demonstrated.
 
 Lidarr's `GET /api/v1/manualimport` supplies media ownership candidates.
 Kima requires exactly one candidate and independently corroborates the

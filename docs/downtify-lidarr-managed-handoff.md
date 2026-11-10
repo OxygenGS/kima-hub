@@ -1,6 +1,7 @@
 # Downtify → Lidarr: managed import design and acceptance gates
 
-**Status: design only, not implemented.** Native Downtify RC6 already
+**Status: implemented in draft PR #231, not released; full Lidarr/Kima
+end-to-end acceptance still required.** Native Downtify RC6 already
 imports directly into Kima and verifies its local scanner/physical SHA-256
 receipt. It **does not** register any artist, album or track in Lidarr.
 Current RC6 final paths are `Singles/Downtify/<Artist>/<Track>-<SpotifyId>.<ext>`
