@@ -96,6 +96,40 @@ describe("Complete private-recording audio verification (dormant)", () => {
         expect(await fs.readFile(temp)).toEqual(bytes);
     });
 
+    it("requires the physical album tag to match the owner-bound album in Lidarr mode", async () => {
+        const expected = {...recording, album:"Private Dancer"};
+        const correct = deps();
+        correct.parse.mockResolvedValueOnce({
+            isrc:["USABC1234567"], durationSeconds:207,
+            title:"Sample Song",artist:"Example Artist",album:" private dancer ",
+        });
+        expect((await verifyNativeTemporaryRecording(temp,expected,source,correct)).state)
+            .toBe("verified");
+        for(const album of [null,"","Unknown Album","Private Dancer Deluxe"]) {
+            const wrong=deps();
+            wrong.parse.mockResolvedValueOnce({
+                isrc:["USABC1234567"], durationSeconds:207,
+                title:"Sample Song",artist:"Example Artist",album,
+            });
+            expect((await verifyNativeTemporaryRecording(temp,expected,source,wrong)).state)
+                .toBe("recording_needs_review");
+            expect(wrong.decode).not.toHaveBeenCalled();
+        }
+    });
+
+    it("still verifies albums in Lidarr mode when stock audio lacks ISRC", async () => {
+        const expected={...recording,album:"Private Dancer"};
+        const mock=deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc:null,durationSeconds:207.5,
+            title:"Sample Song",artist:"Example Artist",
+            album:"Private Dancer",
+        });
+        expect((await verifyNativeTemporaryRecording(temp,expected,source,mock)).state)
+            .toBe("verified");
+        expect(mock.decode).toHaveBeenCalledTimes(1);
+    });
+
     it("does not bypass full-byte SHA verification when stock audio lacks ISRC", async () => {
         const mock = deps();
         mock.parse.mockResolvedValueOnce({

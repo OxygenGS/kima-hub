@@ -361,6 +361,8 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                                 expectedSpotifyId: expected.spotifyId,
                                 isrc: expected.isrc, durationMs: expected.durationMs,
                                 title: expected.title, artist: expected.artist,
+                                ...(target === "lidarr"
+                                    ? {album: original.album.trim()} : {}),
                                 extension,
                             },
                             source,

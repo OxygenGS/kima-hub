@@ -40,6 +40,7 @@ export interface NativeAudioVerification {
 type AudioMetadata = {
     isrc: unknown; durationSeconds: unknown;
     title?: unknown; artist?: unknown; artists?: unknown;
+    album?: unknown;
 };
 export interface ExpectedNativeRecording {
     /** Immutable Spotify ID from an owner-verified remote queue job. */
@@ -50,6 +51,12 @@ export interface ExpectedNativeRecording {
     /** Independent Spotify identity; used only when the audio has NO ISRC. */
     title: string;
     artist: string;
+    /**
+     * Lidarr-mode only: the owner-bound Downtify album must also exist in
+     * the actual audio metadata. Kima-only imports do not require an album.
+     * This proves tag agreement, NOT a MusicBrainz release or edition.
+     */
+    album?: string;
     /** From the known remote filename; do not trust media extension alone. */
     extension: string;
 }
@@ -69,6 +76,7 @@ const defaults: Dependencies = {
             title: meta.common.title ?? null,
             artist: meta.common.artist ?? null,
             artists: meta.common.artists ?? null,
+            album: meta.common.album ?? null,
         };
     },
     decode: decodeWithFfmpeg,
@@ -202,6 +210,14 @@ export async function verifyNativeTemporaryRecording(
         let parsed: AudioMetadata;
         try { parsed = await deps.parse(tempFile); }
         catch { return result("metadata_unavailable"); }
+        // In Lidarr mode the album used for MusicBrainz matching must be
+        // corroborated by the decoded file's own album tag. Never invent
+        // an album or rely solely on the remote library's metadata.
+        if (expected.album !== undefined &&
+            (!comparableText(expected.album) ||
+             comparableText(parsed.album) !== comparableText(expected.album))) {
+            return result("recording_needs_review");
+        }
         const metadata = compareRecordingTags(
             {
                 spotifyId: expected.spotifyId,
