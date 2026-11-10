@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import {
     validateLidarrMountMapping, lidarrStageFilePaths,
     lidarrFileToKimaMusic, verifyPinnedLidarrBytes,
+    verifySeparateLidarrLocalRoots,
 } from "../downtifyLidarrMounts";
 const roots={
     kimaDownloads:"/downloads",lidarrDownloads:"/data/complete",
@@ -45,6 +46,36 @@ describe("portable Kima-Lidarr path mapping",()=>{
         ])expect(lidarrFileToKimaMusic(roots,f)).toBeNull();
     });
 });
+describe("actual Kima staging/music root identity",()=>{
+    let root:string;
+    beforeEach(async()=>{
+        root=await fs.mkdtemp(path.join(tmpdir(),"kima-lidarr-roots-"));
+        await fs.mkdir(path.join(root,"music"));
+        await fs.mkdir(path.join(root,"downloads"));
+    });
+    afterEach(async()=>await fs.rm(root,{recursive:true,force:true}));
+    const mapping=(music:string,downloads:string)=>({
+        kimaDownloads:downloads,lidarrDownloads:"/lidarr-downloads",
+        kimaMusic:music,lidarrMusic:"/lidarr-music",
+    });
+    it("permits separate folders on the same real filesystem",async()=>{
+        expect(await verifySeparateLidarrLocalRoots(mapping(
+            path.join(root,"music"),path.join(root,"downloads"),
+        ))).toBe(true);
+    });
+    it("rejects two Docker paths that resolve to the same directory",async()=>{
+        const downloads=path.join(root,"downloads");
+        const alias=path.join(root,"aliased-music");
+        await fs.symlink(downloads,alias,"dir");
+        // Lexical paths look disjoint, but the alias is unsafe.
+        expect(validateLidarrMountMapping(mapping(alias,downloads))).toBe(true);
+        expect(await verifySeparateLidarrLocalRoots(mapping(alias,downloads))).toBe(false);
+        expect(await verifySeparateLidarrLocalRoots(mapping(
+            path.join(root,"missing"),downloads,
+        ))).toBe(false);
+    });
+});
+
 describe("immutable read-only staged/final bytes",()=>{
     let root:string,inner:string,file:string;
     beforeEach(async()=>{

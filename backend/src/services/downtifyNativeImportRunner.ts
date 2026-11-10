@@ -37,6 +37,7 @@ import { requestScan } from "../workers/scanRequest";
 import { verifyNativeMusicVolume } from "./downtifyNativeMountProof";
 import {
     type LidarrMountMapping, validateLidarrMountMapping,
+    verifySeparateLidarrLocalRoots,
 } from "./downtifyLidarrMounts";
 import { recordLidarrStaged } from "./downtifyNativeLidarrLedger";
 import { reconcileLidarrManagedImports } from "./downtifyNativeLidarrCoordinator";
@@ -75,7 +76,7 @@ function outcome(
 async function livePair(
     owner: PinnedImportOwner,
     expectedTarget: "kima" | "lidarr",
-    stage: {root: string; proof: string | null} | null,
+    stage: {root: string; proof: string | null; roots: LidarrMountMapping} | null,
 ): Promise<boolean> {
     const current = await prisma.downtifyIntegration.findUnique({
         where: { id: "default" },
@@ -85,6 +86,7 @@ async function livePair(
             nativeImportEnabled: true, nativeImportBaselineAt: true,
             nativeImportMountProof: true, nativeImportTarget: true,
             nativeLidarrLocalDownloads: true,
+            nativeLidarrRemoteDownloads: true, nativeLidarrRemoteMusic: true,
             nativeLidarrStageMountProof: true,
         },
     });
@@ -99,7 +101,10 @@ async function livePair(
     )) return false;
     if (expectedTarget === "kima") return true;
     return !!stage && current.nativeLidarrLocalDownloads === stage.root &&
+        current.nativeLidarrRemoteDownloads === stage.roots.lidarrDownloads &&
+        current.nativeLidarrRemoteMusic === stage.roots.lidarrMusic &&
         current.nativeLidarrStageMountProof === stage.proof &&
+        await verifySeparateLidarrLocalRoots(stage.roots) &&
         await verifyNativeMusicVolume(stage.root, stage.proof);
 }
 
@@ -151,6 +156,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 kimaMusic: config.music.musicPath, lidarrMusic,
             };
             if (!validateLidarrMountMapping(lidarrRoots) ||
+                !await verifySeparateLidarrLocalRoots(lidarrRoots) ||
                 !await verifyNativeMusicVolume(
                     kimaDownloads, settings.nativeLidarrStageMountProof,
                 )) return outcome("unavailable");
@@ -267,7 +273,8 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
         const scanBatchIds: string[] = [];
         const stagingGate = target === "lidarr"
             ? { root: lidarrRoots!.kimaDownloads,
-                proof: settings.nativeLidarrStageMountProof }
+                proof: settings.nativeLidarrStageMountProof,
+                roots: lidarrRoots! }
             : null;
         for (const candidate of ready) {
             // This CAS is the only entry to potentially writable work.

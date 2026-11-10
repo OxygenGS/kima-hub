@@ -17,6 +17,7 @@ import { verifyNativeTemporaryRecording } from "../downtifyNativeAudioVerificati
 import { requestScan } from "../../workers/scanRequest";
 import { verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { runNativeImportCycle } from "../downtifyNativeImportRunner";
+import { verifySeparateLidarrLocalRoots } from "../downtifyLidarrMounts";
 import { recordLidarrStaged } from "../downtifyNativeLidarrLedger";
 import { reconcileLidarrManagedImports } from "../downtifyNativeLidarrCoordinator";
 
@@ -72,6 +73,10 @@ jest.mock("../../workers/scanRequest", () => ({
 jest.mock("../downtifyNativeMountProof", () => ({
     verifyNativeMusicVolume: jest.fn(),
 }));
+jest.mock("../downtifyLidarrMounts", () => ({
+    ...jest.requireActual("../downtifyLidarrMounts"),
+    verifySeparateLidarrLocalRoots: jest.fn(),
+}));
 
 const SPOTIFY = "0123456789ABCDEFGHIJKL";
 const volumeProof = "11111111-1111-4111-8111-111111111111";
@@ -126,6 +131,7 @@ const verify = mock(verifyNativeTemporaryRecording);
 const markPublished = mock(recordNativePublished);
 const scan = mock(requestScan);
 const verifyVolume = mock(verifyNativeMusicVolume);
+const rootsSeparate = mock(verifySeparateLidarrLocalRoots);
 const markStaged = mock(recordLidarrStaged);
 const reconcileLidarr = mock(reconcileLidarrManagedImports);
 
@@ -135,6 +141,7 @@ beforeEach(() => {
     jest.resetAllMocks();
     pairing.mockResolvedValue(row);
     verifyVolume.mockResolvedValue(true);
+    rootsSeparate.mockResolvedValue(true);
     imports.mockResolvedValue([]);
     updateImports.mockResolvedValue({ count: 1 });
     getRuntime.mockResolvedValue({ KIMA_DOWNTIFY_ENABLED: "true" });
@@ -244,6 +251,23 @@ describe("Native Downtify auto-import coordinator", () => {
             downtifyNativeImportId: "batch-" + claim.id,
         });
         expect(hold).not.toHaveBeenCalled();
+    });
+
+    it("stops before any media I/O when Docker maps stage and music to one root", async () => {
+        pairing.mockResolvedValue({
+            ...row,nativeImportTarget:"lidarr",
+            nativeLidarrLocalDownloads:"/downloads",
+            nativeLidarrRemoteDownloads:"/downloads",
+            nativeLidarrRemoteMusic:"/music",
+            nativeLidarrStageMountProof:"22222222-2222-4222-8222-222222222222",
+        });
+        rootsSeparate.mockResolvedValue(false);
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"unavailable",published:0});
+        expect(getRuntime).not.toHaveBeenCalled();
+        expect(getSource).not.toHaveBeenCalled();
+        expect(publish).not.toHaveBeenCalled();
+        expect(reconcileLidarr).not.toHaveBeenCalled();
     });
 
     it("rejects Lidarr staging when its pinned mount disappears during the audio stream", async () => {

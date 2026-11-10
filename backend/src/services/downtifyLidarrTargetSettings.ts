@@ -11,7 +11,7 @@ import { config } from "../config";
 import { getSystemSettings } from "../utils/systemSettings";
 import { createLidarrClient } from "./lidarrClient";
 import { initializeNativeMusicVolume, verifyNativeMusicVolume } from "./downtifyNativeMountProof";
-import { validateLidarrMountMapping } from "./downtifyLidarrMounts";
+import { validateLidarrMountMapping, verifySeparateLidarrLocalRoots } from "./downtifyLidarrMounts";
 import { verifySharedLidarrStaging } from "./downtifyLidarrStageVisibility";
 
 export type Target = "kima"|"lidarr";
@@ -113,7 +113,8 @@ export async function setNativeLidarrTarget(
     const localDownloads=settings.downloadPath;
     const roots={kimaDownloads:localDownloads,lidarrDownloads:remoteDownloads||"",
         kimaMusic:config.music.musicPath,lidarrMusic:remoteMusic||""};
-    if(!validateLidarrMountMapping(roots)){
+    if(!validateLidarrMountMapping(roots) ||
+        !await verifySeparateLidarrLocalRoots(roots)){
         throw new TargetSetupError("invalid_staging");
     }
     const lidarr=createLidarrClient(settings.lidarrUrl,settings.lidarrApiKey,12000);

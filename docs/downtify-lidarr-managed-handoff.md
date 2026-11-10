@@ -62,7 +62,11 @@ with read access (its container path may differ). Configure Kima's Lidarr
 handoff with that Lidarr-side downloads path and Lidarr's already
 configured music root. The staging root must be outside all music roots.
 A successful `docker compose config` confirms only Compose syntax and
-bindings. When Lidarr mode is selected, Kima now creates one random,
+bindings. Kima additionally compares the *actual directory identities*
+(device/inode) of its music and staging roots, rejecting cases where
+two different Docker paths alias the same host directory. This does not
+detect every possible nested bind-mount alias; independent host mount
+verification is still required. When Lidarr mode is selected, Kima now creates one random,
 non-audio probe in the already-verified staging folder and asks Lidarr's
 read-only `GET /api/v1/filesystem/type` whether that exact probe exists at
 Lidarr's configured path. The file is removed, and any failed check or

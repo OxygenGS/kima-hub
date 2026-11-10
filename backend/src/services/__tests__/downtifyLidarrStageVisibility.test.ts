@@ -15,13 +15,15 @@ describe("Lidarr's actual visibility of Kima's pinned shared staging mount",()=>
     beforeEach(async()=>{
         root=await fs.mkdtemp(path.join(tmpdir(),"kima-lidarr-visibility-"));
         const downloadRoot=path.join(root,"downloads");
+        const musicRoot=path.join(root,"music");
         await fs.mkdir(downloadRoot,{mode:0o755});
+        await fs.mkdir(musicRoot,{mode:0o755});
         stageDir=path.join(downloadRoot,"Singles","Downtify");
         proof=await initializeNativeMusicVolume(downloadRoot);
         expect(proof).not.toBeNull();
         mapping={
             kimaDownloads:downloadRoot,lidarrDownloads:"/lidarr-downloads",
-            kimaMusic:"/kima-music",lidarrMusic:"/lidarr-music",
+            kimaMusic:musicRoot,lidarrMusic:"/lidarr-music",
         };
     });
     afterEach(async()=>{await fs.rm(root,{recursive:true,force:true});});
@@ -52,6 +54,17 @@ describe("Lidarr's actual visibility of Kima's pinned shared staging mount",()=>
         const get=jest.fn().mockRejectedValue(Error("not mounted"));
         expect(await verifySharedLidarrStaging({get} as never,mapping,proof))
             .toBe(false);
+        expect((await fs.readdir(stageDir)).filter(x=>x.includes("visibility")))
+            .toEqual([]);
+    });
+    it("never opens a probe if music and downloads are the same local mount",async()=>{
+        const get=jest.fn();
+        const alias=path.join(root,"music-alias");
+        await fs.symlink(mapping.kimaDownloads,alias,"dir");
+        expect(await verifySharedLidarrStaging({get} as never,{
+            ...mapping,kimaMusic:alias,
+        },proof)).toBe(false);
+        expect(get).not.toHaveBeenCalled();
         expect((await fs.readdir(stageDir)).filter(x=>x.includes("visibility")))
             .toEqual([]);
     });

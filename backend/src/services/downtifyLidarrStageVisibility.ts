@@ -15,6 +15,7 @@ import type { AxiosInstance } from "axios";
 import { verifyNativeMusicVolume } from "./downtifyNativeMountProof";
 import {
     type LidarrMountMapping, validateLidarrMountMapping,
+    verifySeparateLidarrLocalRoots,
 } from "./downtifyLidarrMounts";
 
 const markerDirectory = ["Singles", "Downtify"] as const;
@@ -33,6 +34,7 @@ export async function verifySharedLidarrStaging(
     stageProof: string | null,
 ): Promise<boolean> {
     if (!validateLidarrMountMapping(roots) ||
+        !await verifySeparateLidarrLocalRoots(roots) ||
         !await verifyNativeMusicVolume(roots.kimaDownloads, stageProof)) {
         return false;
     }

@@ -2,6 +2,7 @@ import { prisma } from "../../utils/db";
 import { getSystemSettings } from "../../utils/systemSettings";
 import { initializeNativeMusicVolume,verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { createLidarrClient } from "../lidarrClient";
+import { verifySeparateLidarrLocalRoots } from "../downtifyLidarrMounts";
 import { verifySharedLidarrStaging } from "../downtifyLidarrStageVisibility";
 import { getNativeLidarrTargetStatus,setNativeLidarrTarget } from "../downtifyLidarrTargetSettings";
 jest.mock("../../config",()=>({config:{music:{musicPath:"/music"}}}));
@@ -14,6 +15,10 @@ jest.mock("../downtifyNativeMountProof",()=>({
  initializeNativeMusicVolume:jest.fn(),verifyNativeMusicVolume:jest.fn(),
 }));
 jest.mock("../lidarrClient",()=>({createLidarrClient:jest.fn()}));
+jest.mock("../downtifyLidarrMounts",()=>({
+ ...jest.requireActual("../downtifyLidarrMounts"),
+ verifySeparateLidarrLocalRoots:jest.fn(),
+}));
 jest.mock("../downtifyLidarrStageVisibility",()=>({
  verifySharedLidarrStaging:jest.fn(),
 }));
@@ -25,6 +30,7 @@ const init=initializeNativeMusicVolume as jest.Mock;
 const verify=verifyNativeMusicVolume as jest.Mock;
 const lidarr=createLidarrClient as jest.Mock;
 const stageVisible=verifySharedLidarrStaging as jest.Mock;
+const rootsSeparate=verifySeparateLidarrLocalRoots as jest.Mock;
 const row={
  ownerKimaUserId:"admin",expectedServerId:"server",expectedUserId:9,
  nativeImportEnabled:false,nativeImportTarget:"kima",
@@ -41,6 +47,7 @@ beforeEach(()=>{
   lidarrApiKey:"secret",downloadPath:"/downloads"});
  init.mockResolvedValue("11111111-1111-4111-8111-111111111111");
  stageVisible.mockResolvedValue(true);
+ rootsSeparate.mockResolvedValue(true);
  verify.mockResolvedValue(true);
  lidarr.mockReturnValue({get:jest.fn().mockResolvedValue({data:[{path:"/music"}]})});
 });
@@ -80,6 +87,14 @@ describe("one-switch destination selection (Lidarr optional)",()=>{
   await expect(setNativeLidarrTarget("admin","lidarr",
    "/downloads","/music",true)).rejects.toMatchObject({state:"stage_not_shared"});
   expect(stageVisible).toHaveBeenCalledTimes(1);
+  expect(update).not.toHaveBeenCalled();
+ });
+ it("rejects aliased Kima music and staging roots before making Lidarr calls",async()=>{
+  rootsSeparate.mockResolvedValueOnce(false);
+  await expect(setNativeLidarrTarget("admin","lidarr","/downloads","/music",true))
+   .rejects.toMatchObject({state:"invalid_staging"});
+  expect(lidarr).not.toHaveBeenCalled();
+  expect(init).not.toHaveBeenCalled();
   expect(update).not.toHaveBeenCalled();
  });
  it("stores a pinned stage marker and non-overlapping roots after explicit approval",async()=>{

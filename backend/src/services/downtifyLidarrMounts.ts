@@ -55,6 +55,29 @@ export function validateLidarrMountMapping(input: LidarrMountMapping): boolean {
         !nested(input.lidarrDownloads,input.lidarrMusic);
 }
 
+/**
+ * Lexical disjoint paths are not sufficient for Docker: /music and
+ * /downloads can be two bind mounts of the SAME host directory.
+ * On the Kima side, compare actual root inodes as well, without refusing
+ * separate folders on the same disk. Recheck during every Lidarr cycle.
+ *
+ * This detects exact-root bind aliases, not arbitrary nested bind aliases:
+ * operators must still verify the configured host mounts independently.
+ */
+export async function verifySeparateLidarrLocalRoots(
+    roots: LidarrMountMapping,
+): Promise<boolean> {
+    if (!validateLidarrMountMapping(roots)) return false;
+    try {
+        const [downloads, music] = await Promise.all([
+            fs.lstat(roots.kimaDownloads), fs.lstat(roots.kimaMusic),
+        ]);
+        if (!downloads.isDirectory() || downloads.isSymbolicLink() ||
+            !music.isDirectory() || music.isSymbolicLink()) return false;
+        return downloads.dev !== music.dev || downloads.ino !== music.ino;
+    } catch { return false; }
+}
+
 function safeRemoteRelative(relative: string): boolean {
     return !!safeNativeImportTarget(relative) &&
         relative.split("/").length === 4 &&
