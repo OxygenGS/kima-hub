@@ -614,6 +614,62 @@ describe("Simple Downtify Settings section", () => {
             "/downtify-integration/native-import/source-diagnostic"
         );
     });
+    it("selects Lidarr ownership only with explicit paused, owner-bound consent", async () => {
+        const off={...nativeOff,target:"kima",lidarrPending:0,lidarrImported:0};
+        const on={...off,target:"lidarr",lidarrStageReady:true,
+            lidarrDownloads:"/downloads",lidarrMusic:"/music"};
+        let backend=off;
+        vi.mocked(api.get).mockImplementation(async (url:string) =>
+            url==="/downtify-integration" ? {...paired,enabled:true} : backend);
+        vi.mocked(api.post).mockImplementation(async (url:string)=>{
+            if(url==="/downtify-integration/native-import/target"){
+                backend=on;
+                return {target:"lidarr",stageReady:true};
+            }
+            return {};
+        });
+        await mount();
+        const lidarr=host.querySelector<HTMLInputElement>(
+            'input[name="downtify-final-owner"][value="lidarr"]');
+        expect(lidarr).not.toBeNull();
+        expect(button("Save import destination")?.disabled).toBe(true);
+        await act(async()=>{lidarr?.click();});
+        expect(button("Save import destination")?.disabled).toBe(true);
+        const ack=host.querySelector<HTMLInputElement>("#downtify-lidarr-target-ack");
+        await act(async()=>{ack?.click();});
+        expect(button("Save import destination")?.disabled).toBe(false);
+        expect(api.post).not.toHaveBeenCalled();
+        await click("Save import destination");
+        expect(api.post).toHaveBeenCalledWith(
+            "/downtify-integration/native-import/target",
+            {target:"lidarr",lidarrDownloads:"/downloads",
+                lidarrMusic:"/music",acknowledge:true},
+        );
+        expect(host.textContent).toContain(
+            "Import destination saved. Automatic importing remains off."
+        );
+        expect(host.textContent).not.toContain("dtfy_PRIVATE_SECRET");
+    });
+
+    it("shows Lidarr handoff and final receipt counts separately from Kima indexing",async()=>{
+        vi.mocked(api.get).mockImplementation(async (url:string)=>
+            url==="/downtify-integration" ? {...paired,enabled:true} : {
+                ...nativeOff,state:"enabled",enabled:true,baselineReady:true,
+                target:"lidarr",lidarrStageReady:true,storageReady:true,
+                imported:1,lidarrPending:2,lidarrNeedsMatch:1,lidarrImported:1,
+            });
+        await mount();
+        const counters=host.querySelector("dl[aria-label='Downtify import activity']");
+        expect(counters?.textContent).toContain("Waiting for Lidarr2");
+        expect(counters?.textContent).toContain("Lidarr import confirmed1");
+        expect(counters?.textContent).toContain("Added to Kima library1");
+        expect(host.textContent).toContain(
+            "Some staged tracks need a unique MusicBrainz artist/album match");
+        expect(host.textContent).not.toContain(
+            "Native Downtify imports are not automatically registered in Lidarr");
+        expect(api.post).not.toHaveBeenCalled();
+    });
+
     it("keeps native import strictly unavailable to a different Kima administrator", async () => {
         vi.mocked(api.get).mockResolvedValueOnce({
             ...paired, ownerMatches: false,
