@@ -720,6 +720,8 @@ model DowntifyIntegration {
   nativeLidarrRemoteDownloads String?
   nativeLidarrRemoteMusic String?
   nativeLidarrStageMountProof String?
+  // Never add remote Lidarr artists without administrator opt-in.
+  nativeLidarrAllowArtistCreation Boolean @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
