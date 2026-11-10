@@ -35,6 +35,11 @@ import { publishNativeAudio } from "./downtifyAtomicPublisher";
 import { verifyNativeTemporaryRecording } from "./downtifyNativeAudioVerification";
 import { requestScan } from "../workers/scanRequest";
 import { verifyNativeMusicVolume } from "./downtifyNativeMountProof";
+import {
+    type LidarrMountMapping, validateLidarrMountMapping,
+} from "./downtifyLidarrMounts";
+import { recordLidarrStaged } from "./downtifyNativeLidarrLedger";
+import { reconcileLidarrManagedImports } from "./downtifyNativeLidarrCoordinator";
 
 const MAX_IMPORTS_PER_CYCLE = 2;
 // Only retry the SCAN of already-published files. This never reopens a
@@ -97,7 +102,9 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             select: {
                 enabled: true, nativeImportEnabled: true,
                 nativeImportBaselineAt: true, nativeImportLibraryCursor: true,
-                nativeImportMountProof: true,
+                nativeImportMountProof: true, nativeImportTarget: true,
+                nativeLidarrLocalDownloads: true, nativeLidarrRemoteDownloads: true,
+                nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
                 ownerKimaUserId: true, expectedServerId: true,
                 expectedUserId: true,
             },
@@ -115,6 +122,24 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             remoteServerId: settings.expectedServerId,
             remoteUserId: settings.expectedUserId,
         };
+        const target = settings.nativeImportTarget === "lidarr" ? "lidarr" : "kima";
+        let lidarrRoots: LidarrMountMapping | null = null;
+        if (target === "lidarr") {
+            const kimaDownloads = settings.nativeLidarrLocalDownloads;
+            const lidarrDownloads = settings.nativeLidarrRemoteDownloads;
+            const lidarrMusic = settings.nativeLidarrRemoteMusic;
+            if (!kimaDownloads || !lidarrDownloads || !lidarrMusic) {
+                return outcome("unavailable");
+            }
+            lidarrRoots = {
+                kimaDownloads, lidarrDownloads,
+                kimaMusic: config.music.musicPath, lidarrMusic,
+            };
+            if (!validateLidarrMountMapping(lidarrRoots) ||
+                !await verifyNativeMusicVolume(
+                    kimaDownloads, settings.nativeLidarrStageMountProof,
+                )) return outcome("unavailable");
+        }
         // Local scanner receipts must be reconciled even when Downtify or its
         // credentials are temporarily unavailable. This work NEVER re-copies
         // media or calls the remote server.
@@ -171,6 +196,13 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             } catch {
                 // No media or import-claim state changes when scanning fails.
             }
+        }
+
+        if (lidarrRoots) {
+            // Reconcile staged media and previously acknowledged Lidarr
+            // commands BEFORE asking Downtify for new jobs. A Downtify outage
+            // cannot prevent finishing a Lidarr/Kima scanner receipt.
+            await reconcileLidarrManagedImports(owner,lidarrRoots);
         }
 
         const env = await getDowntifyRuntimeEnv();
@@ -276,6 +308,14 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     await hold("spotify_identity_mismatch");
                     continue;
                 }
+                if (target === "lidarr" &&
+                    (!original.album?.trim() ||
+                     /^(unknown|n\/a|none|singles?)$/i.test(original.album.trim()))) {
+                    // Lidarr needs a real MusicBrainz release. Do not invent an
+                    // album merely to get a green import status.
+                    await hold("lidarr_album_missing");
+                    continue;
+                }
                 const extension = path.posix.extname(original.remoteFilename).toLowerCase();
                 const relativeTarget = nativeImportDestination(
                     expected.artist || original.artist,
@@ -286,8 +326,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     await hold("unsafe_destination");
                     continue;
                 }
+                const publishRoot = target === "lidarr"
+                    ? lidarrRoots!.kimaDownloads : config.music.musicPath;
                 const prepared = await ensureNativeImportDestination(
-                    config.music.musicPath, relativeTarget,
+                    publishRoot, relativeTarget,
                 );
                 if (prepared.state !== "ready") {
                     if (prepared.state === "storage_unavailable") {
@@ -302,7 +344,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     continue;
                 }
                 const installed = await publishNativeAudio({
-                    musicRoot: config.music.musicPath,
+                    musicRoot: publishRoot,
                     relativeTarget, expectedBytes: original.expectedBytes,
                     chunks: original.chunks,
                     verifyTempFile: async (file, source) => {
@@ -328,6 +370,22 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     installed.state !== "already_present_same_bytes") {
                     await hold(installed.state === "validation_failed"
                         ? "recording_needs_review" : "publish_uncertain");
+                    continue;
+                }
+                if (target === "lidarr") {
+                    // This is a *staged* file outside the music library.
+                    // Never request a Kima scan or call it imported here.
+                    if (!installed.sha256 || !await recordLidarrStaged(
+                        owner,claim.id,claim.claimToken,{
+                            relative:relativeTarget,bytes:installed.bytes,
+                            sha256:installed.sha256,
+                            artist:expected.artist,album:original.album.trim(),
+                            title:expected.title,durationMs:expected.durationMs,
+                            remoteTrackId:original.remoteTrackId,
+                        },
+                    )) {
+                        await hold("lidarr_staging_receipt_missing");
+                    }
                     continue;
                 }
                 if (!installed.sha256 || !await recordNativePublished(
