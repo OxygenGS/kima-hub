@@ -22,6 +22,7 @@ export type LidarrTargetStatus = {
     kimaDownloads:string|null;
     lidarrDownloads:string|null;
     lidarrMusic:string|null;
+    allowArtistCreation:boolean;
 };
 export class TargetSetupError extends Error {
     constructor(public readonly state:
@@ -39,7 +40,7 @@ const owner=async(id:string)=>{
             expectedUserId:true,nativeImportEnabled:true,
             nativeImportTarget:true,nativeLidarrLocalDownloads:true,
             nativeLidarrRemoteDownloads:true,nativeLidarrRemoteMusic:true,
-            nativeLidarrStageMountProof:true,
+            nativeLidarrStageMountProof:true,nativeLidarrAllowArtistCreation:true,
         },
     });
     if(!row)throw new TargetSetupError("not_paired");
@@ -60,12 +61,14 @@ export async function getNativeLidarrTargetStatus(adminId:string):Promise<Lidarr
         kimaDownloads:row.nativeLidarrLocalDownloads,
         lidarrDownloads:row.nativeLidarrRemoteDownloads,
         lidarrMusic:row.nativeLidarrRemoteMusic,
+        allowArtistCreation:row.nativeLidarrAllowArtistCreation === true,
     };
 }
 
 export async function setNativeLidarrTarget(
     adminId:string,target:Target,
     remoteDownloads:string|null,remoteMusic:string|null,ack:boolean,
+    allowArtistCreation=false,
 ):Promise<LidarrTargetStatus>{
     if(!ack)throw new TargetSetupError("acknowledgment_required");
     const row=await owner(adminId);
@@ -77,6 +80,7 @@ export async function setNativeLidarrTarget(
         remoteUserId:row.expectedUserId,status:{in:[
             "ready","claimed","published_pending_scan",
             "staged_pending_lidarr","lidarr_submitting","lidarr_waiting",
+            "lidarr_artist_creating",
         ]},
     }});
     if(outstanding>0)throw new TargetSetupError("outstanding_work");
@@ -92,6 +96,7 @@ export async function setNativeLidarrTarget(
                 nativeLidarrRemoteDownloads:null,
                 nativeLidarrRemoteMusic:null,
                 nativeLidarrStageMountProof:null,
+                nativeLidarrAllowArtistCreation:false,
             },
         });
         if(changed.count!==1)throw new TargetSetupError("changed_during_setup");
@@ -138,6 +143,7 @@ export async function setNativeLidarrTarget(
             nativeLidarrRemoteDownloads:remoteDownloads,
             nativeLidarrRemoteMusic:remoteMusic,
             nativeLidarrStageMountProof:stageProof,
+            nativeLidarrAllowArtistCreation:allowArtistCreation === true,
         },
     });
     if(changed.count!==1)throw new TargetSetupError("changed_during_setup");

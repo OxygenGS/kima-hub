@@ -41,6 +41,7 @@ export type NativeAutoImportStatus = {
     lidarrStageReady: boolean;
     lidarrDownloads: string | null;
     lidarrMusic: string | null;
+    allowArtistCreation: boolean;
 };
 
 export class NativeImportSetupError extends Error {
@@ -65,6 +66,7 @@ export async function getNativeAutoImportStatus(
             nativeImportTarget: true, nativeLidarrLocalDownloads: true,
             nativeLidarrRemoteDownloads: true,
             nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
+            nativeLidarrAllowArtistCreation: true,
         },
     });
     if (!row) return {
@@ -74,6 +76,7 @@ export async function getNativeAutoImportStatus(
         lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         storageReady: false, target: "kima", lidarrStageReady: false,
         lidarrDownloads: null, lidarrMusic: null,
+        allowArtistCreation: false,
     };
     if (row.ownerKimaUserId !== adminId) return {
         state: "other_owner", enabled: false, baselineReady: false,
@@ -82,6 +85,7 @@ export async function getNativeAutoImportStatus(
         lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         storageReady: false, target: "kima", lidarrStageReady: false,
         lidarrDownloads: null, lidarrMusic: null,
+        allowArtistCreation: false,
     };
     const summary = await getNativeImportSummary({
         kimaUserId: adminId,
@@ -121,6 +125,7 @@ export async function getNativeAutoImportStatus(
         target, lidarrStageReady: !!lidarrStageReady,
         lidarrDownloads: row.nativeLidarrRemoteDownloads,
         lidarrMusic: row.nativeLidarrRemoteMusic,
+        allowArtistCreation: row.nativeLidarrAllowArtistCreation === true,
     };
 }
 
@@ -235,6 +240,7 @@ export async function setNativeAutoImport(
             nativeImportTarget: true, nativeLidarrLocalDownloads: true,
             nativeLidarrRemoteDownloads: true,
             nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
+            nativeLidarrAllowArtistCreation: true,
         },
     });
     if (!row) throw new NativeImportSetupError("not_paired");

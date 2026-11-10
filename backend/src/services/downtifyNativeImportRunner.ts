@@ -105,6 +105,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                 nativeImportMountProof: true, nativeImportTarget: true,
                 nativeLidarrLocalDownloads: true, nativeLidarrRemoteDownloads: true,
                 nativeLidarrRemoteMusic: true, nativeLidarrStageMountProof: true,
+                nativeLidarrAllowArtistCreation: true,
                 ownerKimaUserId: true, expectedServerId: true,
                 expectedUserId: true,
             },
@@ -202,7 +203,9 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
             // Reconcile staged media and previously acknowledged Lidarr
             // commands BEFORE asking Downtify for new jobs. A Downtify outage
             // cannot prevent finishing a Lidarr/Kima scanner receipt.
-            await reconcileLidarrManagedImports(owner,lidarrRoots);
+            await reconcileLidarrManagedImports(
+                owner,lidarrRoots,settings.nativeLidarrAllowArtistCreation === true,
+            );
         }
 
         const env = await getDowntifyRuntimeEnv();

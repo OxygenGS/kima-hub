@@ -20,9 +20,12 @@ import {
     previewVerifiedLidarrImport,submitVerifiedLidarrImport,
 } from "./downtifyLidarrHandoff";
 import { inspectLidarrFinalReceipt } from "./downtifyLidarrFinalReceipt";
+import { preflightMissingLidarrArtist,submitMissingLidarrArtist } from "./downtifyLidarrArtistProvision";
 import {
     beginLidarrSubmission,acknowledgeLidarrCommand,
     holdUncertainLidarrSubmission,noteLidarrMatchNeeded,
+    beginLidarrArtistCreation,acknowledgeLidarrArtistCreation,
+    holdUncertainLidarrArtistCreation,
     recordLidarrFinalFile,
 } from "./downtifyNativeLidarrLedger";
 
@@ -36,6 +39,7 @@ const ownerFilter=(o:PinnedImportOwner)=>({
 
 export async function reconcileLidarrManagedImports(
     owner:PinnedImportOwner,roots:LidarrMountMapping,
+    allowArtistCreation=false,
 ):Promise<HandoffSummary>{
     const summary=empty();
     if(!validateLidarrMountMapping(roots))return summary;
@@ -77,6 +81,32 @@ export async function reconcileLidarrManagedImports(
         });
         if(preview.state==="unavailable")continue;
         if(preview.state!=="matched"){
+            // An explicit owner opt-in may add ONE exact, unique MusicBrainz
+            // artist as unmonitored; it never guesses an album or searches.
+            if(allowArtistCreation && preview.state==="needs_review"){
+                const candidate=await preflightMissingLidarrArtist(
+                    lidarr,row.stagedArtist,roots.lidarrMusic,{
+                        qualityProfileId:settings.lidarrQualityProfileId,
+                        metadataProfileId:settings.lidarrMetadataProfileId,
+                    });
+                if(candidate.state==="missing_unique" &&
+                    await beginLidarrArtistCreation(owner,row.id,row.claimToken)){
+                    const submitted=await submitMissingLidarrArtist(
+                        lidarr,candidate.payload,
+                    );
+                    if(submitted.state==="accepted"){
+                        if(!await acknowledgeLidarrArtistCreation(
+                            owner,row.id,row.claimToken,submitted.artistId,
+                        ))summary.held++;
+                    }else{
+                        await holdUncertainLidarrArtistCreation(
+                            owner,row.id,row.claimToken,
+                        );
+                        summary.held++;
+                    }
+                    continue;
+                }
+            }
             await noteLidarrMatchNeeded(owner,row.id,row.claimToken);
             summary.held++;continue;
         }

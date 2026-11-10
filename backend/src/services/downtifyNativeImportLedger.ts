@@ -21,7 +21,8 @@ import { prisma } from "../utils/db";
 export type NativeImportStatus =
     | "baseline" | "ready" | "claimed" | "published_pending_scan"
     | "imported" | "review" | "uncertain"
-    | "staged_pending_lidarr" | "lidarr_submitting" | "lidarr_waiting";
+    | "staged_pending_lidarr" | "lidarr_submitting" | "lidarr_waiting"
+    | "lidarr_artist_creating";
 export type LedgerState =
     | "recorded" | "already_seen" | "blocked" | "invalid_snapshot" | "not_found"
     | "claimed" | "claimed_elsewhere" | "published_pending_scan" | "deferred"
@@ -574,7 +575,7 @@ export async function getNativeImportSummary(
         awaitingScan: count("published_pending_scan"),
         imported: count("imported"),
         inReview: count("review") + count("uncertain") +
-            count("lidarr_submitting"),
+            count("lidarr_submitting") + count("lidarr_artist_creating"),
         lidarrPending: count("staged_pending_lidarr") + count("lidarr_waiting"),
         lidarrNeedsMatch: count("staged_pending_lidarr",
             {reviewReason:"lidarr_match_required"}),

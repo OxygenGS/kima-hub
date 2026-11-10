@@ -123,12 +123,14 @@ router.post("/native-import/target", async (req,res) => {
         target:z.enum(["kima","lidarr"]),
         lidarrDownloads:z.string().max(1024).nullable(),
         lidarrMusic:z.string().max(1024).nullable(),
+        allowArtistCreation:z.boolean().default(false),
         acknowledge:z.literal(true),
     }).strict();
     try {
         const body=schema.parse(req.body);
         return res.json(await setNativeLidarrTarget(req.user.id,body.target,
-            body.lidarrDownloads,body.lidarrMusic,body.acknowledge));
+            body.lidarrDownloads,body.lidarrMusic,body.acknowledge,
+            body.allowArtistCreation));
     }catch(err){
         if(err instanceof z.ZodError)return res.status(400).json({state:"invalid_input"});
         if(err instanceof TargetSetupError){
