@@ -31,7 +31,7 @@ export async function inspectLidarrFinalReceipt(
         !/^[a-f0-9]{64}$/.test(expected.sha256) ||
         !Number.isSafeInteger(expected.durationMs) ||
         expected.durationMs<1000)return {state:"needs_review"};
-    const opts={timeout:15000,maxRedirects:0,proxy:false,
+    const opts={timeout:15000,maxRedirects:0,proxy:false as const,
         maxContentLength:1024*1024};
     try{
         const command=(await client.get(

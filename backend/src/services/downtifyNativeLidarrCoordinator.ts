@@ -7,7 +7,6 @@
  * ID is ambiguous. We DO NOT retry that POST. Existing RC6/Kima files are
  * never moved or modified here.
  */
-import * as path from "path";
 import { prisma } from "../utils/db";
 import { getSystemSettings } from "../utils/systemSettings";
 import { createLidarrClient } from "./lidarrClient";
