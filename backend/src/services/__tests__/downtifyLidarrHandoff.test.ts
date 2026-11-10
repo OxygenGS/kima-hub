@@ -80,9 +80,20 @@ describe("Downtify native Lidarr-managed handoff", () => {
             files:[{
                 path:expected.path,artistId:8,albumId:10,
                 albumReleaseId:12,trackIds:[33],quality:candidate.quality,
-                disableReleaseSwitching:true,
+                disableReleaseSwitching:false,
             }],
         },expect.objectContaining({maxRedirects:0,proxy:false}));
+    });
+    it("never changes existing Lidarr album release selection via a preview suggestion", async () => {
+        const post=jest.fn().mockResolvedValue({data:{id:200}});
+        const preview=validateLidarrPreview([{
+            ...candidate,disableReleaseSwitching:true,
+        }],expected);
+        expect(preview.state).toBe("matched");
+        if(preview.state!=="matched")throw Error("Invalid fixture");
+        expect(await submitVerifiedLidarrImport({post} as never,preview.match))
+            .toEqual({state:"accepted",commandId:200});
+        expect(post.mock.calls[0][1].files[0].disableReleaseSwitching).toBe(false);
     });
     it("treats an API failure or missing command id as an unknown commit, not retryable", async () => {
         for(const response of [Promise.reject(Error("timeout")),Promise.resolve({data:{}})]) {

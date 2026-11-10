@@ -151,7 +151,9 @@ export async function submitVerifiedLidarrImport(
                 albumReleaseId: match.albumReleaseId,
                 trackIds: [match.trackId],
                 quality: match.quality,
-                disableReleaseSwitching: true,
+                // Lidarr mutates Album.AnyReleaseOk when this is true.
+                // A third-party import must respect existing album settings.
+                disableReleaseSwitching: false,
             }],
         }, {
             timeout: 30000, maxRedirects: 0, proxy: false,

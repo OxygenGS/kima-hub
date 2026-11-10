@@ -14,7 +14,11 @@ guess a MusicBrainz release or create an artist implicitly.
 
 After the caller has recorded a durable, single-use command intent, Kima
 may submit `POST /api/v1/command` with `ManualImport`, `Copy` mode,
-`replaceExistingFiles=false` and the verified IDs. If the POST fails or
+`replaceExistingFiles=false`, `disableReleaseSwitching=false` and the verified IDs.
+Lidarr's actual `ManualImportService.Execute` sets `Album.AnyReleaseOk=false`
+when `disableReleaseSwitching` is true, so forcing that flag would silently
+change existing album release-selection settings. A one-song import must
+preserve that user configuration. If the POST fails or
 returns no command ID, the result is **unknown**, not retryable. The
 separate reconciliation stage must first inspect Lidarr's track-file
 receipt; it must never submit a duplicate POST.

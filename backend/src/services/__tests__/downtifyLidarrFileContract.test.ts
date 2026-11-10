@@ -99,7 +99,7 @@ describe("Downtify staged file -> Lidarr ManualImport -> immutable Kima file rec
                 replaceExistingFiles: false,
                 files: [{ path: stage.lidarr, artistId: 8, albumId: 10,
                     albumReleaseId: 12, trackIds: [33],
-                    disableReleaseSwitching: true }],
+                    disableReleaseSwitching: false }],
             });
             // Emulate Lidarr choosing the final path; Kima never writes it.
             await fs.mkdir(path.dirname(localFinal), { recursive: true });
