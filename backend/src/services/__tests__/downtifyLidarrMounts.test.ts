@@ -1,0 +1,68 @@
+import { createHash } from "crypto";
+import { promises as fs } from "fs";
+import * as path from "path";
+import { tmpdir } from "os";
+import {
+    validateLidarrMountMapping, lidarrStageFilePaths,
+    lidarrFileToKimaMusic, verifyPinnedLidarrBytes,
+} from "../downtifyLidarrMounts";
+const roots={
+    kimaDownloads:"/downloads",lidarrDownloads:"/data/complete",
+    kimaMusic:"/music",lidarrMusic:"/library/music",
+};
+const rel="Singles/Downtify/Tina Turner/Song - 0123456789ABCDEFGHIJKL.flac";
+describe("portable Kima-Lidarr path mapping",()=>{
+    it("pins two disjoint filesystem roots, no hardcoded host layout",()=>{
+        expect(validateLidarrMountMapping(roots)).toBe(true);
+        expect(lidarrStageFilePaths(roots,rel)).toEqual({
+            local:"/downloads/"+rel,lidarr:"/data/complete/"+rel,
+        });
+        expect(lidarrFileToKimaMusic(roots,
+            "/library/music/Tina Turner/Private Dancer/02 - Song.flac"))
+            .toBe("Tina Turner/Private Dancer/02 - Song.flac");
+    });
+    it("forbids overlap, traversal, hidden paths or direct Singles publication",()=>{
+        for (const modified of [
+            {...roots,kimaDownloads:"/music/downloads"},
+            {...roots,lidarrDownloads:"/library/music/inbox"},
+            {...roots,kimaMusic:"/"},
+            {...roots,lidarrMusic:"/library/music/../other"},
+            {...roots,kimaDownloads:"/downloads/"},
+        ])expect(validateLidarrMountMapping(modified)).toBe(false);
+        for(const r of ["../../etc/passwd","Singles/Other/Artist/Track.flac",
+            "Singles/Downtify/../Track.flac","/absolute/file.flac"])
+            expect(lidarrStageFilePaths(roots,r)).toBeNull();
+        for(const f of [
+            "/library/music/../../etc/passwd",
+            "/library/music/Singles/Downtify/Tina/Track.flac",
+            "/library/music/Tina Turner/.hidden/file.flac",
+            "/library/music/Tina Turner/Private Dancer/../../file.flac",
+            "/downloads/Tina Turner/Private Dancer/Track.flac",
+        ])expect(lidarrFileToKimaMusic(roots,f)).toBeNull();
+    });
+});
+describe("immutable read-only staged/final bytes",()=>{
+    let root:string,inner:string,file:string;
+    beforeEach(async()=>{
+        root=await fs.mkdtemp(path.join(tmpdir(),"kima-lidarr-hash-"));
+        inner=path.join(root,"Tina Turner","Private Dancer");
+        await fs.mkdir(inner,{recursive:true});
+        file=path.join(inner,"02 - Song.flac");
+        await fs.writeFile(file,Buffer.alloc(1024,42));
+    });
+    afterEach(async()=>await fs.rm(root,{recursive:true,force:true}));
+    it("reads every byte under a stable non-symlink inode and matches SHA-256",async()=>{
+        const digest=createHash("sha256").update(Buffer.alloc(1024,42)).digest("hex");
+        expect(await verifyPinnedLidarrBytes(file,root,1024,digest)).toBe(true);
+        expect(await verifyPinnedLidarrBytes(file,root,1025,digest)).toBe(false);
+        expect(await verifyPinnedLidarrBytes(file,root,1024,"a".repeat(64))).toBe(false);
+    });
+    it("refuses a substituted symlink, mismatched root or invalid hash",async()=>{
+        const digest=createHash("sha256").update(Buffer.alloc(1024,42)).digest("hex");
+        const symlink=path.join(inner,"linked.flac");
+        await fs.symlink(file,symlink);
+        expect(await verifyPinnedLidarrBytes(symlink,root,1024,digest)).toBe(false);
+        expect(await verifyPinnedLidarrBytes(file,"/elsewhere",1024,digest)).toBe(false);
+        expect(await verifyPinnedLidarrBytes(file,root,1024,"wrong")).toBe(false);
+    });
+});
