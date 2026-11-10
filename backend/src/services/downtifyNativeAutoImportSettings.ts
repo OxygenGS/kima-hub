@@ -123,8 +123,8 @@ export async function getNativeAutoImportStatus(
         lidarrImported: summary.lidarrImported ?? 0,
         storageReady: musicReady && (target === "kima" || !!lidarrStageReady),
         target, lidarrStageReady: !!lidarrStageReady,
-        lidarrDownloads: row.nativeLidarrRemoteDownloads,
-        lidarrMusic: row.nativeLidarrRemoteMusic,
+        lidarrDownloads: row.nativeLidarrRemoteDownloads ?? null,
+        lidarrMusic: row.nativeLidarrRemoteMusic ?? null,
         allowArtistCreation: row.nativeLidarrAllowArtistCreation === true,
     };
 }

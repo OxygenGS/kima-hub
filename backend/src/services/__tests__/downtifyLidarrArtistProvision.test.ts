@@ -44,7 +44,7 @@ describe("consented exact MusicBrainz artist creation",()=>{
   expect((await preflightMissingLidarrArtist(client([],[
    {...artist,artistName:"Tina Turner Tribute"},
   ]) as never,"Tina Turner","/music",params)).state).toBe("needs_review");
-  expect((await preflightMissingLidarrArtist(client(), "Tina Turner",
+  expect(await preflightMissingLidarrArtist(client() as never, "Tina Turner",
    "/music",{qualityProfileId:0,metadataProfileId:0})).toMatchObject({
     state:"missing_unique",
   });
