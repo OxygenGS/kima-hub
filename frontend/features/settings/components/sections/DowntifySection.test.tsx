@@ -389,7 +389,7 @@ describe("Simple Downtify Settings section", () => {
         expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
             .toContain("Waiting2");
         expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
-            .toContain("Added to library1");
+            .toContain("Added to Kima library1");
         expect(api.post).not.toHaveBeenCalled();
         expect(api.get).not.toHaveBeenCalledWith("/downtify-integration/import-readiness");
     });
@@ -410,7 +410,7 @@ describe("Simple Downtify Settings section", () => {
         expect(host.querySelector('[role="alert"]')?.textContent)
             .toContain("Could not refresh import status.");
         expect(host.querySelector('dl[aria-label="Downtify import activity"]')?.textContent)
-            .toContain("Added to library9");
+            .toContain("Added to Kima library9");
         expect(host.textContent).not.toContain("dtfy_private_secret");
         expect(host.textContent).not.toContain("/private/music");
         expect(api.post).not.toHaveBeenCalled();
