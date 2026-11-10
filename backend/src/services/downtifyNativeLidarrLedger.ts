@@ -173,3 +173,48 @@ export async function recordLidarrFinalFile(
         return changed.count===1;
     }catch{return false;}
 }
+
+/**
+ * Explicit admin-approved artist creation is ALSO a single-use remote POST.
+ * Its durable intent prevents repeated artist creation after a timeout.
+ */
+export async function beginLidarrArtistCreation(
+    owner:PinnedImportOwner,id:string,token:string,
+):Promise<boolean>{
+    if(!valid(owner,id,token))return false;
+    try{
+        const changed=await prisma.downtifyNativeImport.updateMany({
+            where:{...scoped(owner,id,token),status:"staged_pending_lidarr",
+                lidarrArtistId:null},
+            data:{status:"lidarr_artist_creating",reviewReason:null},
+        });
+        return changed.count===1;
+    }catch{return false;}
+}
+export async function acknowledgeLidarrArtistCreation(
+    owner:PinnedImportOwner,id:string,token:string,artistId:number,
+):Promise<boolean>{
+    if(!valid(owner,id,token) || !Number.isSafeInteger(artistId) ||
+        artistId<1)return false;
+    try{
+        const changed=await prisma.downtifyNativeImport.updateMany({
+            where:{...scoped(owner,id,token),status:"lidarr_artist_creating",
+                lidarrArtistId:null},
+            data:{status:"staged_pending_lidarr",lidarrArtistId:artistId,
+                reviewReason:null},
+        });
+        return changed.count===1;
+    }catch{return false;}
+}
+export async function holdUncertainLidarrArtistCreation(
+    owner:PinnedImportOwner,id:string,token:string,
+):Promise<boolean>{
+    if(!valid(owner,id,token))return false;
+    try{
+        const changed=await prisma.downtifyNativeImport.updateMany({
+            where:{...scoped(owner,id,token),status:"lidarr_artist_creating"},
+            data:{status:"uncertain",reviewReason:"lidarr_artist_creation_uncertain"},
+        });
+        return changed.count===1;
+    }catch{return false;}
+}
