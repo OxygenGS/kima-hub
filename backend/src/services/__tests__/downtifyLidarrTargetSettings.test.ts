@@ -2,6 +2,7 @@ import { prisma } from "../../utils/db";
 import { getSystemSettings } from "../../utils/systemSettings";
 import { initializeNativeMusicVolume,verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { createLidarrClient } from "../lidarrClient";
+import { verifySharedLidarrStaging } from "../downtifyLidarrStageVisibility";
 import { getNativeLidarrTargetStatus,setNativeLidarrTarget } from "../downtifyLidarrTargetSettings";
 jest.mock("../../config",()=>({config:{music:{musicPath:"/music"}}}));
 jest.mock("../../utils/db",()=>({
@@ -13,6 +14,9 @@ jest.mock("../downtifyNativeMountProof",()=>({
  initializeNativeMusicVolume:jest.fn(),verifyNativeMusicVolume:jest.fn(),
 }));
 jest.mock("../lidarrClient",()=>({createLidarrClient:jest.fn()}));
+jest.mock("../downtifyLidarrStageVisibility",()=>({
+ verifySharedLidarrStaging:jest.fn(),
+}));
 const find=prisma.downtifyIntegration.findUnique as jest.Mock;
 const update=prisma.downtifyIntegration.updateMany as jest.Mock;
 const count=prisma.downtifyNativeImport.count as jest.Mock;
@@ -20,6 +24,7 @@ const getSettings=getSystemSettings as jest.Mock;
 const init=initializeNativeMusicVolume as jest.Mock;
 const verify=verifyNativeMusicVolume as jest.Mock;
 const lidarr=createLidarrClient as jest.Mock;
+const stageVisible=verifySharedLidarrStaging as jest.Mock;
 const row={
  ownerKimaUserId:"admin",expectedServerId:"server",expectedUserId:9,
  nativeImportEnabled:false,nativeImportTarget:"kima",
@@ -35,6 +40,7 @@ beforeEach(()=>{
  getSettings.mockResolvedValue({lidarrEnabled:true,lidarrUrl:"http://lidarr:8686",
   lidarrApiKey:"secret",downloadPath:"/downloads"});
  init.mockResolvedValue("11111111-1111-4111-8111-111111111111");
+ stageVisible.mockResolvedValue(true);
  verify.mockResolvedValue(true);
  lidarr.mockReturnValue({get:jest.fn().mockResolvedValue({data:[{path:"/music"}]})});
 });
@@ -69,9 +75,22 @@ describe("one-switch destination selection (Lidarr optional)",()=>{
    .rejects.toMatchObject({state:"invalid_staging"});
   expect(init).not.toHaveBeenCalled();
  });
+ it("refuses a Lidarr downloads path that cannot see Kima's new stage probe",async()=>{
+  stageVisible.mockResolvedValueOnce(false);
+  await expect(setNativeLidarrTarget("admin","lidarr",
+   "/downloads","/music",true)).rejects.toMatchObject({state:"invalid_staging"});
+  expect(stageVisible).toHaveBeenCalledTimes(1);
+  expect(update).not.toHaveBeenCalled();
+ });
  it("stores a pinned stage marker and non-overlapping roots after explicit approval",async()=>{
   await setNativeLidarrTarget("admin","lidarr","/downloads","/music",true);
   expect(init).toHaveBeenCalledWith("/downloads");
+  expect(stageVisible).toHaveBeenCalledWith(expect.objectContaining({
+   get:expect.any(Function),
+  }),{
+   kimaDownloads:"/downloads",lidarrDownloads:"/downloads",
+   kimaMusic:"/music",lidarrMusic:"/music",
+  },"11111111-1111-4111-8111-111111111111");
   expect(update.mock.calls[0][0]).toMatchObject({
    where:{nativeImportEnabled:false,ownerKimaUserId:"admin"},
    data:{nativeImportTarget:"lidarr",nativeLidarrLocalDownloads:"/downloads",

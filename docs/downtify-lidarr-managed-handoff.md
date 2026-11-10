@@ -62,8 +62,13 @@ with read access (its container path may differ). Configure Kima's Lidarr
 handoff with that Lidarr-side downloads path and Lidarr's already
 configured music root. The staging root must be outside all music roots.
 A successful `docker compose config` confirms only Compose syntax and
-bindings; it is **not** evidence that both containers see the same bytes,
-that storage survives detach/remount, or that a Lidarr import succeeded.
+bindings. When Lidarr mode is selected, Kima now creates one random,
+non-audio probe in the already-verified staging folder and asks Lidarr's
+read-only `GET /api/v1/filesystem/type` whether that exact probe exists at
+Lidarr's configured path. The file is removed, and any failed check or
+cleanup blocks configuration. This detects missing/wrong shared mounts but
+does **not** prove that storage survives detach/remount, that Lidarr can
+read full music bytes, or that an actual Lidarr import succeeded.
 Verify those properties in an isolated integration test before enabling
 the feature. Leave RC6/live libraries and their mounts untouched.
 

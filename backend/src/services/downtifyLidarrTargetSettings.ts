@@ -12,6 +12,7 @@ import { getSystemSettings } from "../utils/systemSettings";
 import { createLidarrClient } from "./lidarrClient";
 import { initializeNativeMusicVolume, verifyNativeMusicVolume } from "./downtifyNativeMountProof";
 import { validateLidarrMountMapping } from "./downtifyLidarrMounts";
+import { verifySharedLidarrStaging } from "./downtifyLidarrStageVisibility";
 
 export type Target = "kima"|"lidarr";
 export type LidarrTargetStatus = {
@@ -130,7 +131,9 @@ export async function setNativeLidarrTarget(
     // An empty/missing host download mount must never become a writable
     // Docker fallback or be silently treated as a proven shared mount.
     const stageProof=await initializeNativeMusicVolume(localDownloads);
-    if(!stageProof)throw new TargetSetupError("invalid_staging");
+    if(!stageProof || !await verifySharedLidarrStaging(lidarr,roots,stageProof)){
+        throw new TargetSetupError("invalid_staging");
+    }
     const changed=await prisma.downtifyIntegration.updateMany({
         where:{
             id:"default",ownerKimaUserId:adminId,
