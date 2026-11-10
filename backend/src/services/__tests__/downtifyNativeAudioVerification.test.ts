@@ -117,6 +117,36 @@ describe("Complete private-recording audio verification (dormant)", () => {
         }
     });
 
+    it("requires credited artist and track title when handing ISRC-matched audio to Lidarr", async () => {
+        const lidarr={...recording,album:"Private Dancer"};
+        const wrongTags=[
+            {title:null,artist:"Example Artist"},
+            {title:"Other Recording",artist:"Example Artist"},
+            {title:"Sample Song",artist:null},
+            {title:"Sample Song",artist:"Another Artist"},
+            {title:"Sample Song",artist:"Example Artist Tribute"},
+        ];
+        for(const tags of wrongTags){
+            const mock=deps();
+            mock.parse.mockResolvedValueOnce({
+                isrc:["USABC1234567"],durationSeconds:207.5,
+                album:"Private Dancer",...tags,
+            });
+            const result=await verifyNativeTemporaryRecording(temp,lidarr,source,mock);
+            expect(result.state).toBe("recording_needs_review");
+            expect(mock.decode).not.toHaveBeenCalled();
+        }
+        // A Kima-only import retains the prior ISRC verification policy.
+        const legacy=deps();
+        legacy.parse.mockResolvedValueOnce({
+            isrc:["USABC1234567"],durationSeconds:207.5,
+            title:"Other Recording",artist:"Another Artist",
+        });
+        expect((await verifyNativeTemporaryRecording(
+            temp,recording,source,legacy,
+        )).state).toBe("verified");
+    });
+
     it("still verifies albums in Lidarr mode when stock audio lacks ISRC", async () => {
         const expected={...recording,album:"Private Dancer"};
         const mock=deps();

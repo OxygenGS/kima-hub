@@ -81,9 +81,12 @@ the feature. Leave RC6/live libraries and their mounts untouched.
 1. Keep the existing owner-pinned Downtify server/account/job, unique
    Spotify track identity, audio container, full-byte SHA-256, decode and
    local tag verification before any handoff. In Lidarr mode require the
-   actual audio file's album tag to match Downtify's pinned album title;
-   a missing or contradictory album tag blocks automatic handoff.
-   Kima-only mode does not require album metadata. Downtify mobile library
+   actual audio file's album tag to match Downtify's pinned album title.
+   Also require the actual track title and a complete credited artist
+   to match Spotify even when the embedded ISRC is correct. This prevents
+   Lidarr registering the track while Kima files it under unrelated
+   metadata. Missing or contradictory tags block automatic handoff.
+   Kima-only mode retains the prior verification policy. Downtify mobile library
    supplies track `title`, `artist`, `album`, optional album artist and
    other tagged fields; the separate Spotify embed confirms title,
    credits and duration but is NOT proof of an album or MusicBrainz release.

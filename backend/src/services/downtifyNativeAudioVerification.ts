@@ -215,7 +215,11 @@ export async function verifyNativeTemporaryRecording(
         // an album or rely solely on the remote library's metadata.
         if (expected.album !== undefined &&
             (!comparableText(expected.album) ||
-             comparableText(parsed.album) !== comparableText(expected.album))) {
+             comparableText(parsed.album) !== comparableText(expected.album) ||
+             // A matching ISRC alone does not guarantee that Kima's scanner
+             // can file the song under the correct artist and title. In
+             // Lidarr mode, require complete tagged identity as well.
+             !standardDowntifyTagsMatch(expected, parsed))) {
             return result("recording_needs_review");
         }
         const metadata = compareRecordingTags(
