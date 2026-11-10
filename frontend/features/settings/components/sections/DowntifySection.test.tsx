@@ -359,10 +359,13 @@ describe("Simple Downtify Settings section", () => {
             ["Waiting", "3"],
             ["Claimed / unresolved", "1"],
             ["Waiting for library scan", "4"],
-            ["Added to library", "8"],
+            ["Added to Kima library", "8"],
             ["Needs review", "2"],
         ]);
         expect(host.textContent).toContain("Claimed downloads may still be processing");
+        expect(host.textContent).toContain("This confirms indexing in Kima only.");
+        expect(host.textContent).toContain("Native Downtify imports are not automatically registered in Lidarr.");
+        expect(api.post).not.toHaveBeenCalled();
         expect(api.get).toHaveBeenCalledTimes(2);
         expect(api.post).not.toHaveBeenCalled();
     });

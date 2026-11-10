@@ -634,7 +634,7 @@ export function DowntifySection() {
                                                         ["Waiting", nativeStatus.awaitingImport],
                                                         ["Claimed / unresolved", nativeStatus.processing],
                                                         ["Waiting for library scan", nativeStatus.awaitingScan],
-                                                        ["Added to library", nativeStatus.imported],
+                                                        ["Added to Kima library", nativeStatus.imported],
                                                         ["Needs review", nativeStatus.needsReview],
                                                     ] as const).map(([label, value]) => (
                                                         <div key={label} className="space-y-1">
@@ -643,6 +643,12 @@ export function DowntifySection() {
                                                         </div>
                                                     ))}
                                                 </dl>
+                                                {nativeStatus.imported > 0 && (
+                                                    <p className="text-xs text-[var(--text-muted)]"
+                                                        role="note">
+                                                        {t("This confirms indexing in Kima only. Native Downtify imports are not automatically registered in Lidarr. Do not manually move indexed files: their paths and hashes are verified by Kima.")}
+                                                    </p>
+                                                )}
                                                 <button type="button" onClick={refreshNativeStatus}
                                                     disabled={!ownerMatches || nativeRefreshing || nativeBusy || pending}
                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">

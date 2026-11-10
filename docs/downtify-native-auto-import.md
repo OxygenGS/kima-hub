@@ -1,11 +1,31 @@
 # Native Downtify auto-import — portable application integration
 
-**Development branch only. Not published or installed on any running Kima
-instance.** This optional integration is designed for ordinary Kima Docker installations,
+**RC6 provides verified Kima-library importing only; Lidarr-managed import is
+NOT implemented.** This optional integration is designed for ordinary Kima Docker installations,
 not one particular server or a Proxmox script. Fresh installations need no
 legacy importer or cutover. Existing installations with another media importer
 must complete a safe single-writer cutover before enabling native import.
 The normal Settings experience needs no host-script edits.
+
+## Current limitation: Lidarr is a different library owner
+
+RC6 places a successfully verified file into Kima's
+`Singles/Downtify/<Artist>/<Track> - <Spotify ID>.<ext>` tree. It then
+confirms a Kima scanner and full-file SHA-256 receipt. It does NOT add
+artists/albums/tracks to Lidarr or invoke Lidarr's import API. The
+`Added to Kima library` status must never be represented as a Lidarr receipt.
+
+Simply changing the path to `<Artist>/<Album>/<Track>` inside a
+Lidarr-managed root is NOT a safe repair: Lidarr owns that root and requires
+its own MusicBrainz match and import pipeline for external downloads.
+Do not manually move published RC6 files: the native import ledger stores
+their exact relative path and SHA-256, and manual path changes invalidate
+Kima's indexing and safety receipts.
+
+The required opt-in, portable integration and one-record recovery plan are
+documented in [Downtify → Lidarr managed handoff](downtify-lidarr-managed-handoff.md).
+No automatic Lidarr import, path migration or root-folder write is enabled
+until that design passes implementation and end-to-end acceptance.
 
 ## Intended user experience
 
