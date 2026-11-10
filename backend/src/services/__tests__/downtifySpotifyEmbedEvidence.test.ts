@@ -24,6 +24,49 @@ describe("Token-free, exact-ID Spotify embed evidence", () => {
         });
     });
 
+    it("parses the modern Spotify track embed with a full artists array and no subtitle", () => {
+        const modern = {
+            type: "track", id: ID, uri: "spotify:track:" + ID,
+            name: "Test Song", artists: [
+                { name: "Solo Artist", uri: "spotify:artist:0123456789ABCDEFGHIJKL" },
+            ],
+            duration: 195000, isPlayable: true,
+        };
+        expect(parseSpotifyTrackEmbed(page(modern),ID)).toEqual({
+            state:"ready",
+            track:{
+                spotifyId:ID,title:"Test Song",artist:"Solo Artist",
+                durationMs:195000,isrc:null,
+            },
+        });
+    });
+
+    it("retains every artist in a multi-credit embed rather than choosing only the first", () => {
+        const modern = {
+            type:"track",uri:"spotify:track:"+ID,id:ID,
+            title:"Duet",artists:[
+                {name:"Artist One",uri:"spotify:artist:0123456789ABCDEFGHIJKL"},
+                {name:"Artist Two",uri:"spotify:artist:1111111111111111111111"},
+            ],duration:210000,
+        };
+        expect(parseSpotifyTrackEmbed(page(modern),ID)).toMatchObject({
+            state:"ready", track:{ artist:"Artist One; Artist Two",durationMs:210000 },
+        });
+    });
+
+    it("fails closed on malformed, duplicate, conflicting or partial artist arrays", () => {
+        for(const artists of [
+            [], [{name:""}], [{name:"Artist One"},{}],
+            [{name:"Artist One"},{name:"Artist One"}],
+            [{name:"Artist One",uri:"spotify:artist:WRONG"}],
+            [{name:"Artist One",uri:"spotify:track:"+ID}],
+            "Artist One", Array.from({length:21},(_,i)=>({name:"Artist "+i})),
+        ]) {
+            expect(parseSpotifyTrackEmbed(page({...track,artists}),ID).state)
+                .toBe("unavailable");
+        }
+    });
+
     it("accepts the name property when title is absent", () => {
         const { title: _title, ...entity } = track;
         expect(parseSpotifyTrackEmbed(page({...entity,name:"Name Track"}), ID))
@@ -64,7 +107,7 @@ describe("Token-free, exact-ID Spotify embed evidence", () => {
         expect(get).toHaveBeenCalledTimes(1);
         expect(get.mock.calls[0][0]).toBe("https://open.spotify.com/embed/track/"+ID);
         expect(get.mock.calls[0][1]).toMatchObject({
-            timeout:8000,maxRedirects:0,responseType:"text",
+            timeout:8000,maxRedirects:0,proxy:false,responseType:"text",
         });
     });
 

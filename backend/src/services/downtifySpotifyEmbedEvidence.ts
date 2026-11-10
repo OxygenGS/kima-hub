@@ -60,8 +60,37 @@ export function parseSpotifyTrackEmbed(
         }
         const title = typeof entity.title === "string" ? entity.title.trim()
             : typeof entity.name === "string" ? entity.name.trim() : "";
-        const artist = typeof entity.subtitle === "string" ?
-            entity.subtitle.trim() : "";
+        // Spotify uses TWO documented-in-the-wild embed structures.
+        // Older embedded track objects have "subtitle" for a credit;
+        // modern ones have "artists: [{ name, uri }]" and no subtitle.
+        // Do NOT silently fall back to a partial or malformed artists list:
+        // recording publication still needs complete artist-tag proof.
+        let artist = typeof entity.subtitle === "string"
+            ? entity.subtitle.trim() : "";
+        if (entity.artists !== undefined) {
+            if (!Array.isArray(entity.artists) || entity.artists.length < 1 ||
+                entity.artists.length > 20) return { state: "unavailable" };
+            const names: string[] = [];
+            for (const credit of entity.artists) {
+                if (!object(credit) || typeof credit.name !== "string") {
+                    return { state: "unavailable" };
+                }
+                const name = credit.name.trim();
+                if (!name || name.length > 300 ||
+                    /[\u0000-\u001f\u007f]/.test(name) || names.includes(name)) {
+                    return { state: "unavailable" };
+                }
+                if (credit.uri !== undefined &&
+                    (typeof credit.uri !== "string" ||
+                    !/^spotify:artist:[A-Za-z0-9]{22}$/.test(credit.uri))) {
+                    return { state: "unavailable" };
+                }
+                names.push(name);
+            }
+            // Preserve every credited artist. Never silently take only the
+            // first name; later embedded-audio tags must match the full credit.
+            artist = names.join("; ");
+        }
         const durationMs = typeof entity.duration === "number" ? entity.duration : NaN;
         if (title.length < 1 || title.length > 300 ||
             artist.length < 1 || artist.length > 300 ||
@@ -95,6 +124,7 @@ export async function getSpotifyTrackEmbed(
                 responseType: "text",
                 timeout: 8000,
                 maxRedirects: 0,
+                proxy: false,
                 maxContentLength: MAX_HTML_BYTES,
                 headers: {
                     Accept: "text/html",

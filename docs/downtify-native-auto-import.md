@@ -102,6 +102,13 @@ receipt and full physical-file hash.
   source of automatically importable old music. Unique and CAS claims
   prevent two workers from claiming the same song. An uncertain claim
   stays held for review.
+- **Spotify embed format:** modern Spotify track embed pages may supply
+  `artists: [{name, uri}]` instead of the older display-only
+  `subtitle` field. The strict, exact-ID parser accepts both, preserving
+  every credited artist, validating optional artist URIs, title and
+  integer-millisecond duration, and refusing incomplete/conflicting
+  arrays. The subsequent local audio decode/hash and full metadata-tag
+  comparison remain mandatory before no-overwrite publication.
 - **Spotify identity:** the anonymous web-player token endpoint may return
   HTTP 403. The importer first reads Spotify's public server-rendered
   track embed with a fixed validated 22-character ID, and requires an
