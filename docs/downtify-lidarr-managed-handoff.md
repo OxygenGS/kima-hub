@@ -90,7 +90,10 @@ the feature. Leave RC6/live libraries and their mounts untouched.
    `searchForMissingAlbums=false`. Do not alter existing profiles,
    monitored flags, download clients or default root folders.
 5. Validate the chosen Lidarr root folder, shared-staging visibility and
-   path translation in both Kima and Lidarr containers. Never assume
+   path translation in both Kima and Lidarr containers. Kima also rechecks
+   its staging mount identity and pinned import target immediately before
+   publication and after source verification; a changed/detached staging
+   mount blocks publication. Never assume
    `/music`, `/downloads`, common UID/GID, write access, filesystem
    identity or a server-specific location. No endpoints accept an
    arbitrary user-supplied destination file path.

@@ -68,25 +68,39 @@ function outcome(
     };
 }
 
-/** Recheck the exact paired owner and switch before each publication. */
-async function livePair(owner: PinnedImportOwner): Promise<boolean> {
+/** Recheck BOTH immutable mount identities and the import owner/target before
+ * every publication. A removable staging mount can vanish mid-stream.
+ * Never publish bytes into its writable but wrong local fallback directory.
+ */
+async function livePair(
+    owner: PinnedImportOwner,
+    expectedTarget: "kima" | "lidarr",
+    stage: {root: string; proof: string | null} | null,
+): Promise<boolean> {
     const current = await prisma.downtifyIntegration.findUnique({
         where: { id: "default" },
         select: {
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
-            nativeImportMountProof: true,
+            nativeImportMountProof: true, nativeImportTarget: true,
+            nativeLidarrLocalDownloads: true,
+            nativeLidarrStageMountProof: true,
         },
     });
     const stillPaired = current?.ownerKimaUserId === owner.kimaUserId &&
         current.expectedServerId === owner.remoteServerId &&
         current.expectedUserId === owner.remoteUserId &&
         current.enabled === true && current.nativeImportEnabled === true &&
-        !!current.nativeImportBaselineAt;
-    return stillPaired && await verifyNativeMusicVolume(
+        !!current.nativeImportBaselineAt &&
+        (current.nativeImportTarget === "lidarr" ? "lidarr" : "kima") === expectedTarget;
+    if(!stillPaired || !await verifyNativeMusicVolume(
         config.music.musicPath, current.nativeImportMountProof,
-    );
+    )) return false;
+    if (expectedTarget === "kima") return true;
+    return !!stage && current.nativeLidarrLocalDownloads === stage.root &&
+        current.nativeLidarrStageMountProof === stage.proof &&
+        await verifyNativeMusicVolume(stage.root, stage.proof);
 }
 
 export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
@@ -251,6 +265,10 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
         // cycle, then request exactly one scan AFTER all links are visible.
         // Every batch has its own dedupe key, distinct from a live scan-full.
         const scanBatchIds: string[] = [];
+        const stagingGate = target === "lidarr"
+            ? { root: lidarrRoots!.kimaDownloads,
+                proof: settings.nativeLidarrStageMountProof }
+            : null;
         for (const candidate of ready) {
             // This CAS is the only entry to potentially writable work.
             const claim = await claimNativeImport(owner, candidate.id);
@@ -342,7 +360,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     }
                     continue;
                 }
-                if (!await livePair(owner)) {
+                if (!await livePair(owner, target, stagingGate)) {
                     await hold("pairing_disabled");
                     continue;
                 }
@@ -353,7 +371,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     verifyTempFile: async (file, source) => {
                         // A pairing disabled while streaming must prevent
                         // untrusted bytes being linked into the library.
-                        if (!await livePair(owner)) return false;
+                        if (!await livePair(owner, target, stagingGate)) return false;
                         const checked = await verifyNativeTemporaryRecording(
                             file,
                             {
@@ -368,7 +386,7 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                             source,
                         );
                         return checked.verifiedForPublication &&
-                            await livePair(owner);
+                            await livePair(owner, target, stagingGate);
                     },
                 });
                 if (installed.state !== "published" &&

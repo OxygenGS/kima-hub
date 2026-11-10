@@ -17,6 +17,8 @@ import { verifyNativeTemporaryRecording } from "../downtifyNativeAudioVerificati
 import { requestScan } from "../../workers/scanRequest";
 import { verifyNativeMusicVolume } from "../downtifyNativeMountProof";
 import { runNativeImportCycle } from "../downtifyNativeImportRunner";
+import { recordLidarrStaged } from "../downtifyNativeLidarrLedger";
+import { reconcileLidarrManagedImports } from "../downtifyNativeLidarrCoordinator";
 
 jest.mock("../../config", () => ({ config: { music: { musicPath: "/music" } } }));
 jest.mock("../../utils/db", () => ({
@@ -57,6 +59,12 @@ jest.mock("../downtifyAtomicPublisher", () => ({
 }));
 jest.mock("../downtifyNativeAudioVerification", () => ({
     verifyNativeTemporaryRecording: jest.fn(),
+}));
+jest.mock("../downtifyNativeLidarrLedger", () => ({
+    recordLidarrStaged: jest.fn(),
+}));
+jest.mock("../downtifyNativeLidarrCoordinator", () => ({
+    reconcileLidarrManagedImports: jest.fn(),
 }));
 jest.mock("../../workers/scanRequest", () => ({
     requestScan: jest.fn(),
@@ -118,6 +126,8 @@ const verify = mock(verifyNativeTemporaryRecording);
 const markPublished = mock(recordNativePublished);
 const scan = mock(requestScan);
 const verifyVolume = mock(verifyNativeMusicVolume);
+const markStaged = mock(recordLidarrStaged);
+const reconcileLidarr = mock(reconcileLidarrManagedImports);
 
 beforeEach(() => {
     // Clear one-shot mock outcomes, not only invocation history. An offline
@@ -164,6 +174,8 @@ beforeEach(() => {
         };
     });
     markPublished.mockResolvedValue(true);
+    markStaged.mockResolvedValue(true);
+    reconcileLidarr.mockResolvedValue({staged:0,submitted:0,finalized:0,held:0});
     scan.mockResolvedValue({ queued: true, jobId: "scan-full" });
 });
 
@@ -234,6 +246,53 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(hold).not.toHaveBeenCalled();
     });
 
+    it("rejects Lidarr staging when its pinned mount disappears during the audio stream", async () => {
+        const stageProof="22222222-2222-4222-8222-222222222222";
+        pairing.mockResolvedValue({
+            ...row,nativeImportTarget:"lidarr",
+            nativeLidarrLocalDownloads:"/downloads",
+            nativeLidarrRemoteDownloads:"/downloads",
+            nativeLidarrRemoteMusic:"/music",
+            nativeLidarrStageMountProof:stageProof,
+        });
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        let stageChecks=0;
+        verifyVolume.mockImplementation(async (root:string,proof:string) => {
+            if(root==="/music")return proof===volumeProof;
+            if(root==="/downloads"){
+                expect(proof).toBe(stageProof);
+                stageChecks++;
+                return stageChecks<3;
+            }
+            return false;
+        });
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"checked",published:0,heldForReview:1});
+        expect(stageChecks).toBe(3);
+        expect(publish).toHaveBeenCalledTimes(1);
+        expect(verify).not.toHaveBeenCalled();
+        expect(markStaged).not.toHaveBeenCalled();
+        expect(markPublished).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
+    });
+    it("never publishes if the paired owner switched destination mid-cycle",async()=>{
+        const stageProof="22222222-2222-4222-8222-222222222222";
+        const stageRow={
+            ...row,nativeImportTarget:"lidarr",
+            nativeLidarrLocalDownloads:"/downloads",
+            nativeLidarrRemoteDownloads:"/downloads",
+            nativeLidarrRemoteMusic:"/music",
+            nativeLidarrStageMountProof:stageProof,
+        };
+        pairing.mockResolvedValueOnce(stageRow)
+            .mockResolvedValue({...stageRow,nativeImportTarget:"kima"});
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        const result=await runNativeImportCycle();
+        expect(result).toMatchObject({state:"checked",published:0,heldForReview:1});
+        expect(publish).not.toHaveBeenCalled();
+        expect(markStaged).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
+    });
     it("reconciles local receipts even when the remote Downtify server is down", async () => {
         imports.mockResolvedValueOnce([{
             id: "clvprevious", claimToken: claim.claimToken,
