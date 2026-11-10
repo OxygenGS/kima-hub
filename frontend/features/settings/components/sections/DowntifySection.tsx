@@ -58,6 +58,7 @@ type NativeAutoImportStatus = {
     lidarrPending?: number;
     lidarrNeedsMatch?: number;
     lidarrImported?: number;
+    allowArtistCreation?: boolean;
 };
 type NativeSourceDiagnosis = {
     state: keyof typeof nativeSourceDiagnosisMessages;
@@ -227,6 +228,7 @@ export function DowntifySection() {
     const [targetChoice, setTargetChoice] = useState<"kima" | "lidarr">("kima");
     const [lidarrDownloads, setLidarrDownloads] = useState("/downloads");
     const [lidarrMusic, setLidarrMusic] = useState("/music");
+    const [allowArtistCreation, setAllowArtistCreation] = useState(false);
     const [targetAck, setTargetAck] = useState(false);
     const [targetFeedback, setTargetFeedback] = useState<TranslationKey | null>(null);
 
@@ -256,6 +258,7 @@ export function DowntifySection() {
                 setTargetChoice(result.target === "lidarr" ? "lidarr" : "kima");
                 setLidarrDownloads(result.lidarrDownloads || "/downloads");
                 setLidarrMusic(result.lidarrMusic || "/music");
+                setAllowArtistCreation(result.allowArtistCreation === true);
             })
             .catch(() => {
                 if (active) setNativeFeedback("Could not load automatic import settings.");
@@ -416,6 +419,7 @@ export function DowntifySection() {
                 target: targetChoice,
                 lidarrDownloads: targetChoice === "lidarr" ? lidarrDownloads.trim() : null,
                 lidarrMusic: targetChoice === "lidarr" ? lidarrMusic.trim() : null,
+                allowArtistCreation: targetChoice === "lidarr" && allowArtistCreation,
                 acknowledge: true,
             });
             const fresh = await api.get<NativeAutoImportStatus>(
@@ -425,6 +429,7 @@ export function DowntifySection() {
             setTargetChoice(fresh.target === "lidarr" ? "lidarr" : "kima");
             setLidarrDownloads(fresh.lidarrDownloads || "/downloads");
             setLidarrMusic(fresh.lidarrMusic || "/music");
+            setAllowArtistCreation(fresh.allowArtistCreation === true);
             setTargetAck(false);
             setTargetFeedback("Import destination saved. Automatic importing remains off.");
         } catch (err) {
@@ -704,6 +709,13 @@ export function DowntifySection() {
                                                                 value={lidarrMusic} onChange={setLidarrMusic}
                                                                 disabled={nativeBusy || pending} />
                                                         </SettingsRow>
+                                                                                                            <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                                            <input type="checkbox" id="downtify-lidarr-autoartist"
+                                                                checked={allowArtistCreation}
+                                                                onChange={e=>{setAllowArtistCreation(e.target.checked);setTargetAck(false);}}
+                                                                disabled={nativeBusy || pending}/>
+                                                            {t("Allow Kima to add one uniquely matched unmonitored MusicBrainz artist in Lidarr when needed. Never search for missing albums.")}
+                                                        </label>
                                                     </div>
                                                 )}
                                                 <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
@@ -717,7 +729,8 @@ export function DowntifySection() {
                                                         !ownerMatches || targetChoice === (nativeStatus.target || "kima") &&
                                                         (targetChoice === "kima" ||
                                                             (lidarrDownloads === nativeStatus.lidarrDownloads &&
-                                                             lidarrMusic === nativeStatus.lidarrMusic))}
+                                                             lidarrMusic === nativeStatus.lidarrMusic &&
+                                                             allowArtistCreation === (nativeStatus.allowArtistCreation === true)))}
                                                     className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
                                                     {t("Save import destination")}
                                                 </button>

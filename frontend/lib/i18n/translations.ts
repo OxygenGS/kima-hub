@@ -3,6 +3,7 @@
  * Machine-readable identifiers, API payloads and user content are never translated.
  */
 export const english = {
+    "Allow Kima to add one uniquely matched unmonitored MusicBrainz artist in Lidarr when needed. Never search for missing albums.": "Allow Kima to add one uniquely matched unmonitored MusicBrainz artist in Lidarr when needed. Never search for missing albums.",
     "Choose who manages downloaded music": "Choose who manages downloaded music",
     "Kima can index music independently, or send verified downloads to Lidarr to organise artists and albums. Switching never migrates existing songs.": "Kima can index music independently, or send verified downloads to Lidarr to organise artists and albums. Switching never migrates existing songs.",
     "Kima manages music (no Lidarr required)": "Kima manages music (no Lidarr required)",
@@ -2276,6 +2277,7 @@ export type TranslationKey = keyof typeof english;
 export type Locale = "en" | "nl";
 
 export const dutch: Record<TranslationKey, string> = {
+    "Allow Kima to add one uniquely matched unmonitored MusicBrainz artist in Lidarr when needed. Never search for missing albums.": "Sta toe dat Kima indien nodig uitsluitend een uniek herkende MusicBrainz-artiest ongemarkeerd toevoegt aan Lidarr. Nooit automatisch ontbrekende albums zoeken.",
     "Choose who manages downloaded music": "Kies welke applicatie je gedownloade muziek beheert",
     "Kima can index music independently, or send verified downloads to Lidarr to organise artists and albums. Switching never migrates existing songs.": "Kima kan zelfstandig muziek indexeren of gecontroleerde downloads aan Lidarr overdragen voor artiesten en albums. Omschakelen verplaatst bestaande nummers nooit.",
     "Kima manages music (no Lidarr required)": "Kima beheert muziek (Lidarr niet vereist)",
