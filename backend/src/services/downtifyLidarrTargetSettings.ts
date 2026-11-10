@@ -29,7 +29,8 @@ export class TargetSetupError extends Error {
     constructor(public readonly state:
         "not_paired"|"unauthorized"|"pause_first"|
         "outstanding_work"|"acknowledgment_required"|
-        "invalid_staging"|"lidarr_unavailable"|"changed_during_setup"){
+        "invalid_staging"|"stage_not_shared"|
+        "lidarr_unavailable"|"changed_during_setup"){
         super(state);
     }
 }
@@ -131,8 +132,9 @@ export async function setNativeLidarrTarget(
     // An empty/missing host download mount must never become a writable
     // Docker fallback or be silently treated as a proven shared mount.
     const stageProof=await initializeNativeMusicVolume(localDownloads);
-    if(!stageProof || !await verifySharedLidarrStaging(lidarr,roots,stageProof)){
-        throw new TargetSetupError("invalid_staging");
+    if(!stageProof)throw new TargetSetupError("invalid_staging");
+    if(!await verifySharedLidarrStaging(lidarr,roots,stageProof)){
+        throw new TargetSetupError("stage_not_shared");
     }
     const changed=await prisma.downtifyIntegration.updateMany({
         where:{

@@ -125,6 +125,7 @@ const targetSafeMessage: Record<string, TranslationKey> = {
     pause_first: "Pause automatic importing before changing the final library.",
     outstanding_work: "Resolve waiting or claimed jobs before changing import ownership.",
     invalid_staging: "The shared downloads or Lidarr music path is invalid or unavailable.",
+    stage_not_shared: "Lidarr cannot see Kima's shared download folder. Check both Docker mounts and the Lidarr-side path.",
     lidarr_unavailable: "Lidarr must be connected and its music root verified first.",
     acknowledgment_required: "Confirm the shared downloads volume and backup before switching.",
     changed_during_setup: "Downtify pairing changed during setup. Reload settings and try again.",

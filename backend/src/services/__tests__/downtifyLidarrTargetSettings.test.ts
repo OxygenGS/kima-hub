@@ -78,7 +78,7 @@ describe("one-switch destination selection (Lidarr optional)",()=>{
  it("refuses a Lidarr downloads path that cannot see Kima's new stage probe",async()=>{
   stageVisible.mockResolvedValueOnce(false);
   await expect(setNativeLidarrTarget("admin","lidarr",
-   "/downloads","/music",true)).rejects.toMatchObject({state:"invalid_staging"});
+   "/downloads","/music",true)).rejects.toMatchObject({state:"stage_not_shared"});
   expect(stageVisible).toHaveBeenCalledTimes(1);
   expect(update).not.toHaveBeenCalled();
  });
