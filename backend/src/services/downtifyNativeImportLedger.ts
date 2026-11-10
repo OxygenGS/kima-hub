@@ -367,6 +367,7 @@ export async function claimNativeImport(
                     nativeImportEnabled: true, nativeImportBaselineAt: true,
                     nativeImportLibraryCursor: true,
                     nativeImportMountProof: true,
+                    nativeImportTarget: true,
                 },
             });
             if (pairing?.ownerKimaUserId !== owner.kimaUserId ||
@@ -402,6 +403,8 @@ export async function claimNativeImport(
                 },
                 data: {
                     status: "claimed", claimToken: token, claimedAt: new Date(),
+                    importTarget: pairing.nativeImportTarget === "lidarr"
+                        ? "lidarr" : "kima",
                     reviewReason: null,
                 },
             });
@@ -580,15 +583,21 @@ export interface NativePublishedFile {
 const SHA256 = /^[0-9a-f]{64}$/;
 const TRACK_ID = /^t[0-9a-f]{16}$/;
 const ALLOWED_AUDIO = new Set([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"]);
-function safeLocalTarget(p: string): boolean {
+function safeLocalTarget(p: string, mode: "kima" | "lidarr" = "kima"): boolean {
     if (typeof p !== "string" || p.length > 1024 || path.isAbsolute(p) ||
         p.includes("\\") || p.includes("\0")) return false;
     const parts = p.split("/");
-    return parts.length >= 3 && parts.length <= 8 &&
-        parts[0] === "Singles" &&
-        parts.every(x => x.length > 0 && x.length <= 180 &&
-            x !== "." && x !== ".." && !/[<>:"\\|?*\u0000-\u001f\u007f]/.test(x)) &&
-        ALLOWED_AUDIO.has(path.posix.extname(p).toLowerCase());
+    if(parts.length < 3 || parts.length > 8 ||
+        !parts.every(x => x.length > 0 && x.length <= 180 &&
+            x !== "." && x !== ".." &&
+            !x.startsWith(".") &&
+            !/[<>:"\\|?*\u0000-\u001f\u007f]/.test(x))) return false;
+    // Legacy Kima-owned receipts remain in the private Singles tree.
+    // Lidarr-managed receipts are for its final album/artist tree only;
+    // a remote service cannot use a private staging path as a final file.
+    if(mode === "kima" ? parts[0] !== "Singles" : parts[0] === "Singles")
+        return false;
+    return ALLOWED_AUDIO.has(path.posix.extname(p).toLowerCase());
 }
 
 export async function recordNativePublished(
@@ -654,9 +663,12 @@ export async function confirmNativeIndexed(
             outputRelativePath: true,
             expectedBytes: true,
             fullSha256: true,
+            importTarget: true,
         },
     });
-    if (!entry?.outputRelativePath || !safeLocalTarget(entry.outputRelativePath) ||
+    if (!entry?.outputRelativePath ||
+        !safeLocalTarget(entry.outputRelativePath,
+            entry.importTarget === "lidarr" ? "lidarr" : "kima") ||
         !entry.fullSha256 || !SHA256.test(entry.fullSha256) ||
         !entry.expectedBytes || !Number.isSafeInteger(entry.expectedBytes)) {
         return { state: "not_verified" };
