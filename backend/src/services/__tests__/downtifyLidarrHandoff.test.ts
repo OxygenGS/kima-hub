@@ -76,7 +76,7 @@ describe("Downtify native Lidarr-managed handoff", () => {
         expect(await submitVerifiedLidarrImport({post} as never,preview.match))
             .toEqual({state:"accepted",commandId:199});
         expect(post).toHaveBeenCalledWith("/api/v1/command",{
-            name:"ManualImport",importMode:2,replaceExistingFiles:false,
+            name:"ManualImport",importMode:"copy",replaceExistingFiles:false,
             files:[{
                 path:expected.path,artistId:8,albumId:10,
                 albumReleaseId:12,trackIds:[33],quality:candidate.quality,

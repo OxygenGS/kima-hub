@@ -36,6 +36,37 @@ https://github.com/Servarr/Wiki/blob/master/lidarr/faq.md
 The documented final layout is artist/release/track:
 https://wiki.servarr.com/lidarr/quick-start-guide
 
+## Optional portable Docker staging mount (draft-only)
+
+The default published AIO `docker-compose.prod.yml` mounts only the
+existing music root (`/music`) and persistent data (`/data`). It does
+**not** mount Lidarr downloads or enable native Lidarr import. For a
+**disposable pre-release test only**, combine the base example with
+`docker-compose.lidarr-handoff.yml`. The opt-in override adds exactly one
+bind mount to `/downloads` in Kima; it changes neither `/music` nor
+`/data`. It requires an explicit existing host path and refuses to create
+a missing host directory.
+
+~~~sh
+# Configuration check only. No container starts and no files are imported.
+MUSIC_PATH=/existing/test/music \\
+DOWNTIFY_LIDARR_STAGING_PATH=/existing/test/shared-downloads \\
+VERSION=v1.19.0 \\
+docker compose -f docker-compose.prod.yml \\
+  -f docker-compose.lidarr-handoff.yml config
+~~~
+
+In Kima Settings, the Storage download path must be `/downloads`.
+Lidarr must separately mount **the same physical downloads directory**
+with read access (its container path may differ). Configure Kima's Lidarr
+handoff with that Lidarr-side downloads path and Lidarr's already
+configured music root. The staging root must be outside all music roots.
+A successful `docker compose config` confirms only Compose syntax and
+bindings; it is **not** evidence that both containers see the same bytes,
+that storage survives detach/remount, or that a Lidarr import succeeded.
+Verify those properties in an isolated integration test before enabling
+the feature. Leave RC6/live libraries and their mounts untouched.
+
 ## Metadata and path safety
 
 1. Keep the existing owner-pinned Downtify server/account/job, unique

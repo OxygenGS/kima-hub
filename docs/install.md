@@ -61,6 +61,17 @@ volumes:
   kima_data:
 ```
 
+**Downtify → Lidarr v2 remains pre-release.** The stable AIO Compose file does
+not mount a shared Lidarr downloads directory. Draft PR #231 includes an
+[opt-in shared-staging Compose override](../docker-compose.lidarr-handoff.yml)
+for **disposable testing only**; it requires an existing separate staging
+mount and never changes the default Kima-only deployment. The
+[managed Lidarr handoff guide](downtify-lidarr-managed-handoff.md#optional-portable-docker-staging-mount-draft-only)
+documents the exact staging/mount contract and explains why a Compose
+config check cannot prove a working Lidarr import. Do not enable this mode
+in an existing RC6 deployment or assume that mounting files registers
+them in Lidarr.
+
 For source development use [development.md](development.md); the general `docker-compose.yml` runs source services instead of the published all-in-one image.
 
 ## Updating an existing installation

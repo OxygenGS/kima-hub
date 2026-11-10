@@ -1,0 +1,17 @@
+# Optional, pre-release Downtify -> Lidarr shared staging mount.
+# Use ONLY with docker-compose.prod.yml and an explicitly chosen candidate
+# in a disposable test installation. This file never enables the importer.
+#
+# MUSIC_PATH remains the existing separate library filesystem in the base
+# Compose file. The staging directory must be an independently verified,
+# existing, absolute host path OUTSIDE the Lidarr music root. Mount the same
+# real host directory read-only or read-write in Lidarr (its container path
+# may differ); configure Kima Storage > Download Path as /downloads.
+services:
+  kima:
+    volumes:
+      - type: bind
+        source: ${DOWNTIFY_LIDARR_STAGING_PATH:?Set an existing absolute shared staging directory outside MUSIC_PATH}
+        target: /downloads
+        bind:
+          create_host_path: false

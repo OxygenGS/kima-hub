@@ -141,7 +141,8 @@ export async function submitVerifiedLidarrImport(
     try {
         const response = await client.post("/api/v1/command", {
             name: "ManualImport",
-            importMode: 2,
+            // Lidarr's documented wire value. Never rely on enum ordinals.
+            importMode: "copy",
             replaceExistingFiles: false,
             files: [{
                 path: match.path,
