@@ -32,6 +32,9 @@ export type NativeAutoImportStatus = {
     awaitingScan: number;
     imported: number;
     needsReview: number;
+    lidarrPending: number;
+    lidarrNeedsMatch: number;
+    lidarrImported: number;
     /** Read-only proof that the current music root matches its first-activation disk. */
     storageReady: boolean;
     target: "kima" | "lidarr";
@@ -68,6 +71,7 @@ export async function getNativeAutoImportStatus(
         state: "unpaired", enabled: false, baselineReady: false,
         awaitingImport: 0, processing: 0, awaitingScan: 0,
         imported: 0, needsReview: 0,
+        lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         storageReady: false, target: "kima", lidarrStageReady: false,
         lidarrDownloads: null, lidarrMusic: null,
     };
@@ -75,6 +79,7 @@ export async function getNativeAutoImportStatus(
         state: "other_owner", enabled: false, baselineReady: false,
         awaitingImport: 0, processing: 0, awaitingScan: 0,
         imported: 0, needsReview: 0,
+        lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         storageReady: false, target: "kima", lidarrStageReady: false,
         lidarrDownloads: null, lidarrMusic: null,
     };
@@ -109,6 +114,9 @@ export async function getNativeAutoImportStatus(
         awaitingScan: summary.awaitingScan,
         imported: summary.imported,
         needsReview: summary.inReview,
+        lidarrPending: summary.lidarrPending ?? 0,
+        lidarrNeedsMatch: summary.lidarrNeedsMatch ?? 0,
+        lidarrImported: summary.lidarrImported ?? 0,
         storageReady: musicReady && (target === "kima" || !!lidarrStageReady),
         target, lidarrStageReady: !!lidarrStageReady,
         lidarrDownloads: row.nativeLidarrRemoteDownloads,

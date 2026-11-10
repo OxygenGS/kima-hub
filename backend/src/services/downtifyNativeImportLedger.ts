@@ -533,6 +533,9 @@ export interface NativeImportSummary {
     awaitingScan: number;
     imported: number;
     inReview: number;
+    lidarrPending: number;
+    lidarrNeedsMatch: number;
+    lidarrImported: number;
 }
 
 export async function getNativeImportSummary(
@@ -542,9 +545,10 @@ export async function getNativeImportSummary(
     if (!identity.paired) return {
         enabled: false, baselineReady: false, waiting: 0, processing: 0,
         awaitingScan: 0, imported: 0, inReview: 0,
+        lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
     };
     const rows = await prisma.downtifyNativeImport.groupBy({
-        by: ["status"],
+        by: ["status","importTarget","reviewReason"],
         where: {
             ownerKimaUserId: owner.kimaUserId,
             remoteServerId: owner.remoteServerId,
@@ -552,8 +556,12 @@ export async function getNativeImportSummary(
         },
         _count: { _all: true },
     });
-    const count = (status: NativeImportStatus) =>
-        rows.find(row => row.status === status)?._count._all ?? 0;
+    const count = (status: NativeImportStatus,
+        filter?: {importTarget?:string;reviewReason?:string}) =>
+        rows.filter(row => row.status === status &&
+            (!filter?.importTarget || row.importTarget===filter.importTarget) &&
+            (!filter?.reviewReason || row.reviewReason===filter.reviewReason))
+            .reduce((n,row)=>n+row._count._all,0);
     return {
         enabled: identity.enabled,
         baselineReady: !!identity.baselineAt && identity.libraryCursor !== null &&
@@ -564,7 +572,12 @@ export async function getNativeImportSummary(
         // Published files are not considered imported before the local scanner receipt.
         awaitingScan: count("published_pending_scan"),
         imported: count("imported"),
-        inReview: count("review") + count("uncertain"),
+        inReview: count("review") + count("uncertain") +
+            count("lidarr_submitting"),
+        lidarrPending: count("staged_pending_lidarr") + count("lidarr_waiting"),
+        lidarrNeedsMatch: count("staged_pending_lidarr",
+            {reviewReason:"lidarr_match_required"}),
+        lidarrImported: count("imported",{importTarget:"lidarr"}),
     };
 }
 

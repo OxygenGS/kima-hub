@@ -106,7 +106,9 @@ describe("One-switch Downtify native import activation", () => {
             state: "paused", enabled: false, baselineReady: false,
             awaitingImport: 0, processing: 0, awaitingScan: 0,
             imported: 0, needsReview: 0,
-            storageReady: true,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
+            storageReady: true, target: "kima", lidarrStageReady: false,
+            lidarrDownloads: null, lidarrMusic: null,
         });
         expect(JSON.stringify(response)).not.toContain(serverId);
         expect(runtime).not.toHaveBeenCalled();
@@ -123,6 +125,9 @@ describe("One-switch Downtify native import activation", () => {
             state: "enabled", enabled: true, baselineReady: true,
             awaitingImport: 3, processing: 2, awaitingScan: 4,
             imported: 5, needsReview: 1, storageReady: true,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
+            target: "kima", lidarrStageReady: false,
+            lidarrDownloads: null, lidarrMusic: null,
         });
         const payload = JSON.stringify(result);
         expect(payload).not.toContain(serverId);
@@ -161,7 +166,9 @@ describe("One-switch Downtify native import activation", () => {
             state: "enabled", enabled: true, baselineReady: true,
             awaitingImport: 0, processing: 0, awaitingScan: 0,
             imported: 0, needsReview: 0,
-            storageReady: true,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
+            storageReady: true, target: "kima", lidarrStageReady: false,
+            lidarrDownloads: null, lidarrMusic: null,
         });
         expect(queue).toHaveBeenCalledTimes(1);
         expect(baseline).toHaveBeenCalledWith({

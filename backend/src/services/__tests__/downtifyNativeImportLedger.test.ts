@@ -431,6 +431,7 @@ describe("Native import discovery and durable claims", () => {
         expect(result).toEqual({
             enabled: true, baselineReady: true, waiting: 2,
             processing: 1, awaitingScan: 4, imported: 7, inReview: 5,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         });
         expect(JSON.stringify(result)).not.toContain(owner.remoteServerId);
         expect(JSON.stringify(result)).not.toContain(SPOTIFY_ID);
@@ -451,6 +452,7 @@ describe("Native import discovery and durable claims", () => {
         expect(result).toEqual({
             enabled: false, baselineReady: false, waiting: 0, processing: 0,
             awaitingScan: 0, imported: 0, inReview: 0,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         });
         expect(importsGroups).not.toHaveBeenCalled();
     });
