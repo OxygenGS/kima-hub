@@ -20,9 +20,10 @@ treated as the final Lidarr-managed layout.
   library owner. Kima stages ONE fully verified original file in a
   configured shared completed-downloads directory **outside every Lidarr
   music/root folder**. Kima does not write audio directly into Lidarr's
-  `<Root>/<Artist>/<Album>/<Track>` tree. Lidarr itself determines the
-  final filename, directory and MusicBrainz registration via its import
-  pipeline and configured media-management naming.
+  managed music-root tree. Depending on configured media-management naming,
+  final tracks may appear at `<Artist>/<Track>` or
+  `<Artist>/<Album>/<Track>`. Lidarr itself determines the final path
+  and MusicBrainz registration through its import pipeline.
 - **Two independent receipts.** Kima's existing `imported` status
   certifies a Kima Track, expected size and exact SHA-256. A separate
   Lidarr-managed status must certify a Lidarr TrackFile and matching
@@ -99,8 +100,9 @@ unless its pre-write safeguards are independently proven.
 
 - Clean Kima install without Lidarr works with no Lidarr secrets.
 - In a disposable Kima+Lidarr setup with independent Docker mounts,
-  a new owner-bound test single arrives in Lidarr's configured
-  Artist/Album/Track structure **via Lidarr**, not by direct root writes.
+  a new owner-bound test single arrives through Lidarr in either the
+  configured `Artist/Track` or `Artist/Album/Track` layout, never by
+  direct writes to the final root.
 - The final Lidarr TrackFile, local SHA-256 and Kima scanner receipt
   agree, and the song is visible on the correct album/artist page and
   plays in both interfaces.

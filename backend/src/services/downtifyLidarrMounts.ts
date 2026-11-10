@@ -85,7 +85,8 @@ export function lidarrFileToKimaMusic(
         !lidarrFinal.startsWith(roots.lidarrMusic + "/")) return null;
     const relative = lidarrFinal.slice(roots.lidarrMusic.length+1);
     const parts = relative.split("/");
-    if (parts.length < 3 || parts.length > 8 ||
+    // Lidarr naming rules may omit album directories (Artist/Track).
+    if (parts.length < 2 || parts.length > 8 ||
         parts[0] === "Singles" || parts.some(p=>!p ||
             p==="." || p===".." || p.startsWith(".") || p.length>180 ||
             /[<>:"\\|?*\u0000-\u001f\u007f]/.test(p)) ||

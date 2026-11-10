@@ -63,11 +63,19 @@ describe("Durable owner-bound Lidarr handoff",()=>{
     expectedBytes:1024,fullSha256:hash},
   });
  });
+ it("accepts Lidarr's configured Artist/Track layout without an album directory",async()=>{
+  expect(await recordLidarrFinalFile(owner,id,token,
+   "Tina Turner/02 - Song.flac",15,hash,1024)).toBe(true);
+  expect(update.mock.calls[0][0].data.outputRelativePath)
+   .toBe("Tina Turner/02 - Song.flac");
+ });
  it("rejects unsafe paths, different owner/id, invalid ids and hash",async()=>{
   expect(await recordLidarrFinalFile(owner,id,token,
    "Singles/Downtify/Tina Turner/Song.flac",15,hash,1024)).toBe(false);
   expect(await recordLidarrFinalFile(owner,id,token,
    "Tina Turner/../Song.flac",15,hash,1024)).toBe(false);
+  expect(await recordLidarrFinalFile(owner,id,token,
+   "Unowned.flac",15,hash,1024)).toBe(false);
   expect(await recordLidarrFinalFile(owner,id,token,
    "Tina Turner/Album/Track.flac",-1,hash,1024)).toBe(false);
   expect(await beginLidarrSubmission(owner,id,token,match,stage,"bad")).toBe(false);

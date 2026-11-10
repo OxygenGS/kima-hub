@@ -150,7 +150,7 @@ export async function recordLidarrFinalFile(
     if(!valid(owner,id,token) || !SHA.test(hash) ||
         !Number.isSafeInteger(fileId) || fileId<1 ||
         !Number.isSafeInteger(bytes) || bytes<64 ||
-        bytes>256*1024*1024 || parts.length<3 || parts.length>8 ||
+        bytes>256*1024*1024 || parts.length<2 || parts.length>8 ||
         parts[0]==="Singles" ||
         parts.some(p=>!p || p.length>180 || p==="." || p===".." ||
             p.startsWith(".") || /[<>:"\\|?*\u0000-\u001f\u007f]/.test(p)) ||

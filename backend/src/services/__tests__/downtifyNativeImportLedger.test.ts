@@ -541,6 +541,21 @@ describe("Native import publication ledger and physical Kima index receipt", () 
         });
     });
 
+    it("confirms a Lidarr-managed Artist/Track receipt in Kima's index", async () => {
+        const flat = "Tina Turner/02 - Song.flac";
+        await fs.mkdir(path.join(musicRoot, "Tina Turner"), { recursive: true });
+        await fs.writeFile(path.join(musicRoot, flat), audio);
+        importsFind.mockResolvedValueOnce({
+            outputRelativePath: flat, expectedBytes: audio.length,
+            fullSha256: sha, importTarget: "lidarr",
+        });
+        expect(await confirmNativeIndexed(owner, id, token, musicRoot))
+            .toEqual({state: "imported", indexedTrackId: "local-scanned-track-1"});
+        expect(trackFind).toHaveBeenCalledWith(expect.objectContaining({
+            where: {filePath: flat},
+        }));
+    });
+
     it("holds a missing or unindexed local track rather than claiming imported", async () => {
         trackFind.mockResolvedValueOnce(null);
         expect((await confirmNativeIndexed(owner, id, token, musicRoot)).state)

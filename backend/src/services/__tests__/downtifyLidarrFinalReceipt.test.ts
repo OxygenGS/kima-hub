@@ -39,6 +39,14 @@ describe("Lidarr's actual TrackFile and immutable Kima index evidence",()=>{
     expect(get).toHaveBeenCalledWith("/api/v1/track",
         expect.objectContaining({params:{albumId:7},proxy:false,maxRedirects:0}));
  });
+ it("verifies Lidarr's flat Artist/Track layout and exact physical SHA-256",async()=>{
+    const flat=path.join(root,"Tina Turner","02 - Song.flac");
+    await fs.writeFile(flat,Buffer.alloc(1024,42));
+    const get=valid("/music/Tina Turner/02 - Song.flac");
+    expect(await inspectLidarrFinalReceipt({get} as never,mapping(),expected))
+        .toEqual({state:"verified",lidarrTrackFileId:30,
+            relativePath:"Tina Turner/02 - Song.flac"});
+ });
  it("never trusts the import command alone without the final local hash",async()=>{
     await fs.writeFile(file,Buffer.alloc(1024,43));
     const get=valid("/music/Tina Turner/Private Dancer/02 - Song.flac");

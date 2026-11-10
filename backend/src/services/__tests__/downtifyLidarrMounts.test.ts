@@ -20,6 +20,9 @@ describe("portable Kima-Lidarr path mapping",()=>{
         expect(lidarrFileToKimaMusic(roots,
             "/library/music/Tina Turner/Private Dancer/02 - Song.flac"))
             .toBe("Tina Turner/Private Dancer/02 - Song.flac");
+        expect(lidarrFileToKimaMusic(roots,
+            "/library/music/Tina Turner/02 - Song.flac"))
+            .toBe("Tina Turner/02 - Song.flac");
     });
     it("forbids overlap, traversal, hidden paths or direct Singles publication",()=>{
         for (const modified of [
@@ -34,6 +37,7 @@ describe("portable Kima-Lidarr path mapping",()=>{
             expect(lidarrStageFilePaths(roots,r)).toBeNull();
         for(const f of [
             "/library/music/../../etc/passwd",
+            "/library/music/Orphan.flac",
             "/library/music/Singles/Downtify/Tina/Track.flac",
             "/library/music/Tina Turner/.hidden/file.flac",
             "/library/music/Tina Turner/Private Dancer/../../file.flac",

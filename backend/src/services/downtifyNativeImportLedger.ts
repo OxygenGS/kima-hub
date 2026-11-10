@@ -602,7 +602,8 @@ function safeLocalTarget(p: string, mode: "kima" | "lidarr" = "kima"): boolean {
     if (typeof p !== "string" || p.length > 1024 || path.isAbsolute(p) ||
         p.includes("\\") || p.includes("\0")) return false;
     const parts = p.split("/");
-    if(parts.length < 3 || parts.length > 8 ||
+    // Lidarr may use Artist/Track; keep legacy Kima-only path rules unchanged.
+    if(parts.length < (mode === "lidarr" ? 2 : 3) || parts.length > 8 ||
         !parts.every(x => x.length > 0 && x.length <= 180 &&
             x !== "." && x !== ".." &&
             !x.startsWith(".") &&
