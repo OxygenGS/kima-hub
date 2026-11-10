@@ -49,6 +49,9 @@ describe("immutable read-only staged/final bytes",()=>{
         await fs.mkdir(inner,{recursive:true});
         file=path.join(inner,"02 - Song.flac");
         await fs.writeFile(file,Buffer.alloc(1024,42));
+        // Lidarr's own group can write its album directory, but Kima only
+        // opens already-registered tracks read-only.
+        await fs.chmod(inner,0o775);
     });
     afterEach(async()=>await fs.rm(root,{recursive:true,force:true}));
     it("reads every byte under a stable non-symlink inode and matches SHA-256",async()=>{

@@ -10,7 +10,19 @@ import * as path from "path";
 import { createHash } from "crypto";
 import { constants, promises as fs } from "fs";
 import { safeNativeImportTarget } from "./downtifyAtomicPublisher";
-import { trustedNativeMusicDirectory } from "./downtifyNativeDirectorySafety";
+/**
+ * Lidarr owns its final tree and may have a writable owner/group there.
+ * Kima never writes to this tree: refuse symlinks and world-writable
+ * ancestors while allowing an owner-managed, group-writable album folder.
+ */
+export function trustedLidarrReadDirectory(st: {
+    isDirectory(): boolean;
+    isSymbolicLink(): boolean;
+    mode: number;
+}): boolean {
+    return st.isDirectory() && !st.isSymbolicLink() &&
+        (st.mode & 0o002) === 0;
+}
 
 const SHA = /^[a-f0-9]{64}$/;
 const MAX_AUDIO = 256 * 1024 * 1024;
@@ -100,15 +112,19 @@ export async function verifyPinnedLidarrBytes(
     let file:Awaited<ReturnType<typeof fs.open>>|undefined;
     try {
         const rootStat=await fs.lstat(root);
-        if (!trustedNativeMusicDirectory(rootStat) ||
+        if (!trustedLidarrReadDirectory(rootStat) ||
             await fs.realpath(root)!==root) return false;
         let cursor=root;
+        const ancestry: {dir:string; dev:number; ino:number}[] = [
+            {dir:root, dev:rootStat.dev, ino:rootStat.ino},
+        ];
         for(const dir of parts.slice(0,-1)){
             cursor=path.join(cursor,dir);
             const st=await fs.lstat(cursor);
-            if(!trustedNativeMusicDirectory(st) ||
+            if(!trustedLidarrReadDirectory(st) ||
                 st.dev!==rootStat.dev ||
                 await fs.realpath(cursor)!==cursor) return false;
+            ancestry.push({dir:cursor,dev:st.dev,ino:st.ino});
         }
         file=await fs.open(absolute,constants.O_RDONLY|constants.O_NOFOLLOW);
         const before=await file.stat();
@@ -124,9 +140,19 @@ export async function verifyPinnedLidarrBytes(
             offset+=read.bytesRead;
         }
         const after=await file.stat();
-        return before.dev===after.dev && before.ino===after.ino &&
-            before.size===after.size && before.mtimeMs===after.mtimeMs &&
-            before.ctimeMs===after.ctimeMs && digest.digest("hex")===sha256;
+        if (before.dev!==after.dev || before.ino!==after.ino ||
+            before.size!==after.size || before.mtimeMs!==after.mtimeMs ||
+            before.ctimeMs!==after.ctimeMs || digest.digest("hex")!==sha256) {
+            return false;
+        }
+        // Check for substituted parent directories after the hash.
+        for(const ancestor of ancestry){
+            const st=await fs.lstat(ancestor.dir);
+            if(!trustedLidarrReadDirectory(st) ||
+                st.dev!==ancestor.dev || st.ino!==ancestor.ino ||
+                await fs.realpath(ancestor.dir)!==ancestor.dir) return false;
+        }
+        return true;
     } catch {return false;}
     finally{if(file) await file.close().catch(()=>undefined);}
 }
