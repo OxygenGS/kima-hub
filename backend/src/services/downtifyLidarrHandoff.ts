@@ -48,6 +48,20 @@ export function safeLidarrStageFile(path: unknown): path is string {
  * albums or editions. Every ambiguity is held for review. No guessed
  * artist, album, track or release identifier is ever sent to Lidarr.
  */
+/**
+ * ManualImport previews may reject a complete SINGLE recording because the
+ * rest of its ALBUM is absent. Lidarr manual import can still copy that exact
+ * track without asserting the complete release was downloaded. No other
+ * rejection is advisory and no unverified recording gets this exception.
+ */
+function permittedSingleTrackRejections(value: unknown): boolean {
+    if (!Array.isArray(value)) return false;
+    if (value.length === 0) return true;
+    return value.length === 1 && record(value[0]) &&
+        value[0].reason === "Has missing tracks" &&
+        value[0].type === "permanent";
+}
+
 export function validateLidarrPreview(
     raw: unknown, expected: VerifiedLidarrSource,
 ): LidarrPreview {
@@ -73,7 +87,7 @@ export function validateLidarrPreview(
         item.tracks[0].albumId !== item.album.id ||
         (item.tracks[0].artistId !== undefined &&
             item.tracks[0].artistId !== item.artist.id) ||
-        !Array.isArray(item.rejections) || item.rejections.length !== 0 ||
+        !permittedSingleTrackRejections(item.rejections) ||
         item.additionalFile === true || item.replaceExistingFiles === true ||
         !record(item.quality) || !record(item.quality.quality) ||
         !label(item.artist.artistName) ||
