@@ -1,12 +1,9 @@
 # Downtify + Lidarr v2: safe handoff protocol
 
-The native Kima-only importer is **unchanged** in RC6. This development module is part of an optional, not-yet-released Lidarr
-handoff pipeline. The staging/owner-bound command ledger, independent
-Lidarr file receipts and Kima re-indexing are implemented in draft PR
-#231. No live dual-library acceptance has been demonstrated.
+The native Kima-only importer remains supported. The opt-in Lidarr-managed pipeline is part of the v1.20.0 release candidate in PR #231, not the published v1.19.0 stable image. A live preview canary on 11 November 2026 confirmed the managed TrackFile receipt, matching complete SHA-256, Kima scanner/album association and playback in both apps. The implementation does not require the test installation's host paths, Docker project name or credentials.
 
 Lidarr's `GET /api/v1/manualimport` supplies media ownership candidates.
-Kima requires exactly one candidate and independently corroborates the
+Kima requires exactly one candidate (permitting solely Lidarr's advisory `Has missing tracks` rejection for a single verified track) and independently corroborates the
 verified original title, complete artist credit, album, recording duration,
 size, quality, track/artist/album IDs and album release ID. Any missing,
 contradictory or ambiguous value goes to manual review. Kima does not
@@ -19,9 +16,7 @@ Lidarr's actual `ManualImportService.Execute` sets `Album.AnyReleaseOk=false`
 when `disableReleaseSwitching` is true, so forcing that flag would silently
 change existing album release-selection settings. A one-song import must
 preserve that user configuration. If the POST fails or
-returns no command ID, the result is **unknown**, not retryable. The
-separate reconciliation stage must first inspect Lidarr's track-file
-receipt; it must never submit a duplicate POST.
+returns no command ID, the submission is **uncertain**, not retryable. For an acknowledged completed command, even if Lidarr later returns result `unknown`, reconciliation requires the exact registered artist/album/track, TrackFile, size and physical SHA-256 before confirming import. It must never submit a duplicate POST.
 
 No direct file writes into Lidarr's managed Artist/Album/Track root
 are permitted. The file must be fully verified in a shared staging folder
