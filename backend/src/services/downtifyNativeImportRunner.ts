@@ -375,6 +375,9 @@ export async function runNativeImportCycle(): Promise<NativeImportCycleResult> {
                     musicRoot: publishRoot,
                     relativeTarget, expectedBytes: original.expectedBytes,
                     chunks: original.chunks,
+                    // Lidarr can copy the staged file as another UID. Its
+                    // final track must remain readable by Kima's nonroot scanner.
+                    sharedReadableAfterVerification: target === "lidarr",
                     verifyTempFile: async (file, source) => {
                         // A pairing disabled while streaming must prevent
                         // untrusted bytes being linked into the library.
