@@ -4,6 +4,11 @@ name: Pre-release Image
 # The two platform-specific staging tags are pushed only after scanning the
 # EXACT image. The combined prerelease tag is built after both jobs succeed.
 on:
+  # One-shot opt-in candidate from a dedicated branch, never from main.
+  # Only editing THIS workflow triggers image publication.
+  push:
+    branches: ['preview/downtify-lidarr-v2']
+    paths: ['.github/workflows/prerelease.yml']
   workflow_dispatch:
     inputs:
       tag_suffix:
@@ -17,10 +22,12 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   validate:
     name: Validate candidate release metadata and suffix
+    if: github.repository == 'OxygenGS/kima-hub'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -29,6 +36,42 @@ jobs:
       suffix: ${{ steps.meta.outputs.suffix }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Require verified PR source for isolated Lidarr preview
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SOURCE: "af5720b75e46cf34d60f9cc0becc070365ab3a72"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/preview/downtify-lidarr-v2'
+          parent="$(git rev-parse HEAD^)"
+          if [ "$parent" != "$EXPECTED_SOURCE" ]; then
+            echo "Preview must be exactly one workflow-only commit after verified PR #231 head." >&2
+            exit 1
+          fi
+          test "$(git diff --name-only "$parent" HEAD)" = '.github/workflows/prerelease.yml'
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$parent&per_page=100" > "$RUNNER_TEMP/verified-pr-checks.json"
+          python3 - "$RUNNER_TEMP/verified-pr-checks.json" "$parent" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1],encoding='utf-8'))
+          parent=sys.argv[2]
+          required={
+              "PR Checks",
+              "Security Checks",
+              "Public Language UI",
+              "Nonroot AIO production wiring and unit guards",
+              "Fork Compatibility and Native AIO Checks",
+          }
+          ok={run["name"] for run in data.get("workflow_runs",[])
+              if run.get("head_sha")==parent and run.get("conclusion")=="success"}
+          missing=required-ok
+          if missing:
+              raise SystemExit("Refusing unverified test image; incomplete or failed gates: "+", ".join(sorted(missing)))
+          print("All five PR #231 source workflows passed on immutable parent SHA")
+          PY
       - name: Validate fork version and changelog
         shell: bash
         run: |
@@ -177,9 +220,11 @@ jobs:
           '
           digest="$(docker buildx imagetools inspect "$candidate" | sed -n 's/^Digest: *\(sha256:[a-f0-9]\{64\}\).*/\1/p' | head -n 1)"
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
-          # The moving :prerelease alias is changed only once the combined
-          # platform index has passed inspection.
-          docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          # Preview push keeps all moving aliases and stable tags untouched.
+          # Only an explicitly dispatched prerelease may advance :prerelease.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            docker buildx imagetools create -t "${IMAGE}:prerelease" "${IMAGE}@${digest}"
+          fi
           {
             echo "### Verified multiarchitecture pre-release candidate"
             echo "Source commit: $SOURCE_SHA"
@@ -189,5 +234,6 @@ jobs:
               echo "Named candidate: ${IMAGE}:prerelease-${SUFFIX}"
             fi
             echo "Each native platform's exact loaded image passed vulnerability and secret scanning before GHCR staging."
+            echo "Preview push changes no moving alias; pinned candidate is prerelease-${SHORT}."
             echo "NO stable tag, :latest update, merge, or production installation change."
           } >> "$GITHUB_STEP_SUMMARY"
