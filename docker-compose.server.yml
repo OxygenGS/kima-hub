@@ -11,13 +11,18 @@ services:
 
     kima:
         # Match the normal fork Compose example; override VERSION for a reviewed update.
-        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.10.0}
+        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.20.0}
         container_name: kima
         ports:
             - "${FRONTEND_PORT:-3030}:3030"
         volumes:
-            # IMPORTANT: CHANGE THIS to your music library path
-            - ${MUSIC_PATH:-/path/to/your/music}:/music
+            # REQUIRED: the real existing music directory; never create
+            # a silent empty fallback if the configured disk is absent.
+            - type: bind
+              source: ${MUSIC_PATH:?Set MUSIC_PATH to the absolute path of your existing music directory}
+              target: /music
+              bind:
+                create_host_path: false
             # Persistent data (database, cache, covers, etc.)
             - kima_data:/data
         environment:
