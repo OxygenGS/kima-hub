@@ -1,13 +1,8 @@
-# Downtify → Lidarr: managed import design and acceptance gates
+# Downtify → Lidarr: managed import and safety
 
-**Status: implemented in draft PR #231, not released; full Lidarr/Kima
-end-to-end acceptance still required.** Native Downtify RC6 already
-imports directly into Kima and verifies its local scanner/physical SHA-256
-receipt. It **does not** register any artist, album or track in Lidarr.
-Current RC6 final paths are `Singles/Downtify/<Artist>/<Track>-<SpotifyId>.<ext>`
-and its disk-proof marker lives in `Singles/Downtify`. The choice
-isolated the first native importer from existing music, but cannot be
-treated as the final Lidarr-managed layout.
+**Release status:** v1.20.0 candidate in PR #231; not included in published stable v1.19.0. A real pre-release single-track canary on 11 November 2026 confirmed the completed Lidarr command, registered TrackFile, exact source/final SHA-256, correct artist/album in both libraries and playback in both applications. CI validates the separate Kima-only mode, fresh-install/upgrade paths and native images. Every new installation must still verify its own shared mounts, permissions and database backup before enabling automated importing.
+
+The earlier RC6 Kima-only importer publishes under `Singles/Downtify/<Artist>/<Track>-<SpotifyId>.<ext>` and does not register recordings in Lidarr. v1.20.0 retains that non-Lidarr option without moving old files; the new Lidarr-managed option delegates the final path and library registration to Lidarr.
 
 ## Correct ownership and path model
 
@@ -36,13 +31,13 @@ https://github.com/Servarr/Wiki/blob/master/lidarr/faq.md
 The documented final layout is artist/release/track:
 https://wiki.servarr.com/lidarr/quick-start-guide
 
-## Optional portable Docker staging mount (draft-only)
+## Optional portable Docker staging mount
 
 The default published AIO `docker-compose.prod.yml` mounts only the
 existing music root (`/music`) and persistent data (`/data`). It does
-**not** mount Lidarr downloads or enable native Lidarr import. For a
-**disposable pre-release test only**, combine the base example with
-`docker-compose.lidarr-handoff.yml`. The opt-in override adds exactly one
+**not** mount Lidarr downloads or enable native Lidarr import. To use the
+opt-in Lidarr-managed mode on a compatible v1.20.0 release, combine it with
+`docker-compose.lidarr-handoff.yml`. The override adds exactly one
 bind mount to `/downloads` in Kima; it changes neither `/music` nor
 `/data`. It requires an explicit existing host path and refuses to create
 a missing host directory.
@@ -51,7 +46,7 @@ a missing host directory.
 # Configuration check only. No container starts and no files are imported.
 MUSIC_PATH=/existing/test/music \
 DOWNTIFY_LIDARR_STAGING_PATH=/existing/test/shared-downloads \
-VERSION=v1.19.0 \
+VERSION=v1.20.0 \
 docker compose -f docker-compose.prod.yml \
   -f docker-compose.lidarr-handoff.yml config
 ~~~
@@ -73,8 +68,7 @@ Lidarr's configured path. The file is removed, and any failed check or
 cleanup blocks configuration. This detects missing/wrong shared mounts but
 does **not** prove that storage survives detach/remount, that Lidarr can
 read full music bytes, or that an actual Lidarr import succeeded.
-Verify those properties in an isolated integration test before enabling
-the feature. Leave RC6/live libraries and their mounts untouched.
+Check those properties on the intended host before enabling automated importing. Do not repoint or move existing RC6 library files, and never change a production `/music` or `/data` mount as part of this opt-in setup.
 
 ## Metadata and path safety
 
@@ -118,19 +112,23 @@ the feature. Leave RC6/live libraries and their mounts untouched.
    No source music is deleted, no destination file is overwritten and
    no root-owned directory permissions are broadened.
 3. Kima requests Lidarr's read-only `GET /api/v1/manualimport` candidates
-   from the explicitly verified shared staging location. Lidarr's upstream
-   API controller supports a folder, optional artist ID and exclusion of
-   existing files. Reject rejections, incomplete or ambiguous matches.
+   from the explicitly verified shared staging location. It requires a
+   unique exact artist, album release and track. The single advisory rejection
+   `Has missing tracks` is allowed only for a verified individual recording;
+   all other rejections and ambiguous matches are held for review.
 4. Only after a unique, exact artist/release/track match may Kima submit
    the matching Lidarr-managed import command. Capture its durable ID.
    Never treat an HTTP 202 as proof of successful final import.
-5. Poll Lidarr for its track-file receipt. Independently prove the
-   resulting final path, size and SHA-256. Trigger normal Kima scanner
+5. Poll Lidarr for its track-file receipt. A completed `ManualImport` command
+   whose result later becomes `unknown` is not assumed successful: require
+   the exact registered artist, album, track ID, TrackFile, size and physical
+   SHA-256 before proceeding. Independently prove the final path, size and
+   SHA-256. Trigger normal Kima scanner
    indexing of that final path and require its independent receipt before
    marking both sides imported.
-6. Any unknown commit outcome, restart, queue outage, rejected import,
-   wrong mount or failed scan stops writes and leaves a durable state for
-   read-only reconciliation. Never silently replay a potentially
+6. An unacknowledged or failed submission, restart, queue outage, rejected
+   import, wrong mount or failed scan stops writes and retains a durable
+   receipt for safe reconciliation. Never silently replay a potentially
    published recording or run an unsafe SQL reset.
 
 ## Existing RC6 imports
