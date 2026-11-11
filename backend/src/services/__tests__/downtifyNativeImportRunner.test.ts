@@ -267,7 +267,9 @@ describe("Native Downtify auto-import coordinator", () => {
         });
         imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
         const result = await runNativeImportCycle();
-        expect(result).toMatchObject({state:"checked",published:1});
+        // "published" counts Kima-library publication; a Lidarr staging
+        // receipt remains separate until Lidarr and the scanner confirm it.
+        expect(result).toMatchObject({state:"checked",published:0});
         expect(publish).toHaveBeenCalledWith(expect.objectContaining({
             musicRoot:"/downloads",sharedReadableAfterVerification:true,
         }));
