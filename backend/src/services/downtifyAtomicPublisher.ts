@@ -47,6 +47,10 @@ export interface NativePublishInput {
     chunks: AsyncIterable<Buffer>;
     /** Exact expected byte count from authenticated source evidence. */
     expectedBytes: number;
+    /** Only for Lidarr-managed staging. The private temporary file stays 0600
+     * until fully verified; its published inode must be readable by Kima
+     * after Lidarr copies it under a different user/group. */
+    sharedReadableAfterVerification?: boolean;
     /** REQUIRED: independently check complete decode and recording identity
      * on the private temp file before it can enter the Kima library.
      * This is internal-only and must never expose the temp path to HTTP.
@@ -250,6 +254,41 @@ export async function publishNativeAudio(input: NativePublishInput): Promise<Nat
         if (await verifyExistingDirectories(input.musicRoot, parts.slice(0, -1)) !== parent) {
             result = outcome("unsafe_destination", bytes, hash);
             return result;
+        }
+        if (input.sharedReadableAfterVerification === true) {
+            // Lidarr may run as a different user (including root) and copy the
+            // source file mode into /music. A 0600 source becomes an unreadable
+            // root-owned 0600 destination for the non-root Kima scanner.
+            // Change ONLY the verified, unpublished audio inode; keep untrusted
+            // temporary data private and preserve default Kima-only 0600 mode.
+            const readable = await fs.open(
+                pending, constants.O_RDONLY | constants.O_NOFOLLOW,
+            );
+            try {
+                const beforeMode = await readable.stat();
+                if (!beforeMode.isFile() ||
+                    beforeMode.dev !== finalTempStat.dev ||
+                    beforeMode.ino !== finalTempStat.ino ||
+                    beforeMode.size !== finalTempStat.size ||
+                    beforeMode.mtimeMs !== finalTempStat.mtimeMs ||
+                    beforeMode.ctimeMs !== finalTempStat.ctimeMs ||
+                    (beforeMode.mode & 0o777) !== 0o600) {
+                    result = outcome("validation_failed", bytes, hash);
+                    return result;
+                }
+                await readable.chmod(0o644);
+                await readable.sync();
+                const afterMode = await readable.stat();
+                if (afterMode.dev !== beforeMode.dev ||
+                    afterMode.ino !== beforeMode.ino ||
+                    afterMode.size !== beforeMode.size ||
+                    (afterMode.mode & 0o777) !== 0o644) {
+                    result = outcome("unavailable", bytes, hash);
+                    return result;
+                }
+            } finally {
+                await readable.close();
+            }
         }
         try {
             await fs.link(pending, target);
