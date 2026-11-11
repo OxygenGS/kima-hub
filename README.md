@@ -8,9 +8,9 @@
 
 The **OxygenGS fork**: a self-hosted music server with fast browsing, modern music-player support, artwork recovery and controlled download integrations.
 
-[![Stable v1.19.0](https://img.shields.io/badge/stable-v1.19.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0)
+[![Stable v1.20.0](https://img.shields.io/badge/stable-v1.20.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0)
 [![Docker](https://img.shields.io/badge/OCI-GHCR-2779bd?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
-[![AMD64 + ARM64](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-4c6473?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696)
+[![AMD64 + ARM64](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-4c6473?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![English + Dutch](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![GPLv3](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
@@ -22,16 +22,18 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 
 ## Latest release
 
-### v1.19.0 — Downtify settings and secure pairing
+### v1.20.0 — Native Downtify imports, with optional Lidarr ownership
 
-**Published 7 November 2026.** Kima administrators can now open **Settings → Integrations → Downtify** to test a Downtify connection, pair a device token and enable specific functions without editing the container environment.
+**Release candidate validated 11 November 2026.** Kima can automatically discover newly completed single-track Downtify downloads, verify the original audio, and import it into Kima or let Lidarr manage the final library file.
 
-- **Admin-managed pairing:** verify the actual Downtify server and device account before storing the token encrypted at rest.
-- **Four opt-in switches:** owner-scoped remote queue, saved Spotify track requests, manually confirmed single-track submission and manual remote-status checks.
-- **Safe migration:** existing Docker-managed Downtify settings remain separate until explicitly migrated. Re-pairing turns all functions OFF.
-- **No import takeover:** existing music libraries, external import services and storage mounts are unchanged.
+- **Automatic, opt-in imports:** only newly observed, owner-bound individual tracks after activation. Previous downloads are not re-imported.
+- **Optional Lidarr handoff:** Kima verifies and stages the recording; Lidarr assigns its own artist, album, track and final filename. Kima then indexes the same final file.
+- **Two independent receipts:** exact registered Lidarr TrackFile and complete SHA-256 first, then a Kima scanner/index receipt. Completed commands alone are never counted as imported.
+- **Safe defaults:** native imports start OFF, Lidarr is not required, and no existing Kima recordings, persistent volumes or storage mounts are automatically moved.
 
-[Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0) · [Downtify setup](docs/downtify-settings.md) · [Changelog](CHANGELOG.md)
+A pre-release end-to-end canary confirmed correct album association and playback in both apps. This does not replace host-specific mount and backup checks.
+
+[Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0) · [Native importer](docs/downtify-native-auto-import.md) · [Lidarr handoff](docs/downtify-lidarr-managed-handoff.md) · [Changelog](CHANGELOG.md)
 
 ## Features
 
@@ -63,17 +65,17 @@ The **Downloads** screen shows permission-filtered jobs and saved Spotify track 
 | Spotify track requests | Save individual track links for permitted users without automatically starting a download. |
 | Manual track submission | Submit **one prepared track** only after an explicit acknowledgement and duplicate/identity checks. Uncertain submissions are not automatically retried. |
 | Manual remote checks | Read owner-bound remote job state. A completed Downtify job is **not** proof that Kima imported the recording. |
-| Advanced audio evidence | Read-only source/header/decode/tag checks exist for operator-managed environments, but are **not unlocked by the browser pairing**. They require a separately reviewed read-only staging mount. |
+| Verified single-track auto-import | Explicit admin opt-in after a new-download baseline, music-volume proof and full original audio/metadata/hash validation. No automatic backfill. |
+| Optional Lidarr-managed import | Separate shared staging mount, unique MusicBrainz artist/album/track match and Lidarr-managed final path. The Kima-only default works without Lidarr. |
+| Independent library receipts | Lidarr TrackFile and physical SHA-256 are confirmed separately from Kima indexing; settings display distinct progress counters. |
 
-**Not included in published v1.19.0:** automatic library importing, album/playlist dispatch, scanner/index receipts, source deletion or replacement of any external importer. Every new switch starts **OFF**.
-
-**v1.20.0 release candidate:** Native single-track importing offers an opt-in **Kima-only** path or **Lidarr-managed** handoff; Lidarr selects the final file location, then Kima independently verifies its SHA-256 and indexes the same recording. A live pre-release canary confirmed the complete Downtify → Lidarr → Kima flow, correct artist/album association and playback in both applications. This remains unreleased in stable v1.19.0 while the final release is prepared. Existing installations keep importing OFF until an administrator verifies their mounts, backup and exclusive importer ownership. [Kima native importer](docs/downtify-native-auto-import.md) · [Lidarr-managed setup](docs/downtify-lidarr-managed-handoff.md) · [PR #231](https://github.com/OxygenGS/kima-hub/pull/231).
+**Importing remains OFF until enabled.** Single-track importing does not dispatch entire albums or playlists, erase source files, overwrite Lidarr-managed recordings, migrate existing RC6 paths, or automatically replace another importer. Administrators must establish a working storage mount, restorable backup and exclusive media writer before enabling it. [Kima native importer](docs/downtify-native-auto-import.md) · [Lidarr-managed setup](docs/downtify-lidarr-managed-handoff.md).
 
 [Downtify setup and limitations](docs/downtify-settings.md) · [Download Manager design](docs/unified-download-manager.md) · [User permissions](docs/user-permissions.md)
 
 ## Installation
 
-**Published image:** `ghcr.io/oxygengs/kima-hub:v1.19.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.20.0`
 
 **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 
@@ -88,17 +90,17 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.19.0
+  ghcr.io/oxygengs/kima-hub:v1.20.0
 ```
 
 Open `http://localhost:3030` to complete the first-run setup. Replace the example music path with your own.
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The new-installation image default is fixed at published `v1.19.0`, not `:latest`:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The new-installation image default is pinned to `v1.20.0`, not `:latest`:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.20.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
 **New installs:** `MUSIC_PATH` is mandatory; Docker Compose will not create an absent host music directory. An existing directory is not proof that a removable or network disk is mounted—verify the actual backing storage. **Existing installs:** keep the original Compose project, `/music` and `/data` mounts, and the running version pinned until a verified backup/restore and controlled upgrade. The fixed example tag never follows `:latest`.
@@ -108,12 +110,12 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-comp
 ## Security and upgrades
 
 - Before upgrading an existing image, make a **complete cold backup of the original persistent `/data` volume**, plus configuration and secrets, and verify an **independent restore**.
-- v1.19.0 adds the `DowntifyIntegration` PostgreSQL table. A **container downgrade alone does not reverse migrations**. Rolling back across them requires the pre-upgrade data backup.
+- v1.20.0 adds native-import and Lidarr-managed receipt tables/fields through additive PostgreSQL migrations on top of v1.19.0 pairing. A **container downgrade alone does not reverse migrations**; rollback requires a pre-upgrade `/data` backup.
 - Preserve user permissions, original media mounts, third-party import services and any reverse-proxy restrictions. Use HTTPS for remote access.
 - The native AMD64/ARM64 builds and configured security gates passed. **Residual HIGH/CRITICAL dependency advisories without published fixes remain**, and a passing scan does not prove the container is vulnerability-free.
 - No release action in this repository changes a user's running host, Docker installation or storage mounts.
 
-[Published image security assessment](docs/image-security.md) · [v1.19.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879) · [Stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) · [Safe updates and rollback](docs/safe-aio-updates.md) · [Security policy](SECURITY.md)
+[Image security and known residual advisories](docs/image-security.md) · [Native release preflights](https://github.com/OxygenGS/kima-hub/actions/workflows/v112-native-preflight.yml) · [Stable publisher](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) · [Safe updates and rollback](docs/safe-aio-updates.md) · [Security policy](SECURITY.md)
 
 ## Documentation
 
