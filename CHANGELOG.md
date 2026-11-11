@@ -1,5 +1,30 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.20.0 — release preparation (unpublished)
+
+Kima Hub v1.20.0 introduces an optional first-party native Downtify single-track importer with separate Kima-only and Lidarr-managed library ownership. A real pre-release canary confirmed correct artist and album association, final physical file SHA-256, successful Kima indexing and playback in both Lidarr and Kima. This proves one end-to-end flow, not that every host mount or external service is configured correctly.
+
+### Native Downtify automatic import
+- Automatically discover only new, owner-bound completed single tracks after a safe activation baseline; keep historical downloads out of scope.
+- Verify remote server/account, exact Spotify ID, original metadata/tags, full audio decode, size and SHA-256 before any publication. Never silently replay uncertain work.
+- Provide an explicit administrator switch and meaningful English and Dutch import-status counters. Existing Kima-only behavior remains available without Lidarr.
+
+### Optional Lidarr-managed handoff
+- Stage approved originals in a separate shared downloads directory. Prove the real shared staging mapping and keep /music ownership under Lidarr.
+- Preview one unique MusicBrainz artist, album, edition and track. Permit the advisory Has missing tracks rejection solely for a valid single-track import. Do not guess an artist, overwrite tracks or initiate a music search.
+- Submit exactly one durable, non-replayed ManualImport copy command. Lidarr alone determines final filename and folders, whether Artist/Track or Artist/Album/Track.
+- Confirm the registered Lidarr TrackFile, exact identity, duration, size and complete final SHA-256 before requesting Kima's independent scanner receipt. A completed command with result unknown is accepted only after these full file checks.
+
+### Storage safety and compatibility
+- Only fully verified Lidarr staging files become readable across container users; verification-stage temporary audio stays private.
+- Keep strict no-overwrite, non-symlink, disjoint mount and on-volume identity checks. An outage, ambiguous match or uncertain remote POST does not cause a blind retry.
+- Preserve previously imported Kima recordings and ledger state. No existing files are bulk moved, retagged or deleted. Artist creation requires explicit opt-in and remains unmonitored without automatic search.
+
+### Upgrades and release validation
+- Add forward-only PostgreSQL migrations for native-import discovery and optional Lidarr handoff, without altering existing /music or /data mounts.
+- Upgrade only after a full independent /data backup and verified restore. A Docker-image downgrade cannot reverse schema migrations.
+- Validate source CI, old-database upgrade/restore, EN/NL UI, native AMD64 and ARM64 image builds, vulnerability/secret scans and an exact-main native preflight before stable publication. The tested pre-release canary does not replace host-specific installation checks; no :latest alias or running host is modified by the source release.
+
 ## OxygenGS fork v1.19.0 — released 2026-11-07
 
 Published [v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0) adds administrator-managed Downtify integration settings to the OxygenGS fork. Existing music imports, DAS mounts and external Importer v5 remain unchanged. Publishing a new image does not automatically upgrade any installation.
