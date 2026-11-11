@@ -8,6 +8,7 @@ change any real host music mount or running Docker deployment here.
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -22,7 +23,7 @@ def checked_release_image():
     # A floating tag, mismatched packages or stale release pin fails closed.
     backend = json.loads((ROOT / "backend/package.json").read_text(encoding="utf-8"))["version"]
     frontend = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))["version"]
-    if backend != frontend or not __import__("re").fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+", backend):
+    if backend != frontend or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", backend):
         raise AssertionError("Inconsistent or invalid native release versions")
     return f"ghcr.io/oxygengs/kima-hub:v{backend}"
 
