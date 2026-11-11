@@ -10,9 +10,9 @@ const mapping=()=>({kimaDownloads:"/downloads",lidarrDownloads:"/downloads",
 const expected={commandId:10,artistId:5,albumId:7,
     trackId:12,bytes:1024,sha256:hash,durationMs:242480};
 const response=(data:unknown)=>({data});
-const valid=(path:string)=>jest.fn(async (url:string)=>{
+const valid=(path:string,result:"successful"|"unknown"="successful")=>jest.fn(async (url:string)=>{
     if(url==="/api/v1/command/10")return response({
-        name:"ManualImport",id:10,status:"completed",result:"successful",
+        name:"ManualImport",id:10,status:"completed",result,
     });
     if(url==="/api/v1/track")return response([{
         id:12,artistId:5,albumId:7,trackFileId:30,duration:242480,hasFile:true,
@@ -46,6 +46,31 @@ describe("Lidarr's actual TrackFile and immutable Kima index evidence",()=>{
     expect(await inspectLidarrFinalReceipt({get} as never,mapping(),expected))
         .toEqual({state:"verified",lidarrTrackFileId:30,
             relativePath:"Tina Turner/02 - Song.flac"});
+ });
+ it("reconciles a completed Lidarr command whose result became unknown only with exact final evidence",async()=>{
+    const get=valid("/music/Tina Turner/Private Dancer/02 - Song.flac","unknown");
+    expect(await inspectLidarrFinalReceipt({get} as never,mapping(),expected))
+        .toEqual({state:"verified",lidarrTrackFileId:30,
+            relativePath:"Tina Turner/Private Dancer/02 - Song.flac"});
+    expect(get).toHaveBeenCalledWith("/api/v1/trackfile",
+        expect.objectContaining({params:{albumId:7}}));
+ });
+ it("does not trust unknown command results without the physical hash and pinned track identity",async()=>{
+    await fs.writeFile(file,Buffer.alloc(1024,43));
+    const get=valid("/music/Tina Turner/Private Dancer/02 - Song.flac","unknown");
+    expect((await inspectLidarrFinalReceipt({get} as never,mapping(),expected)).state)
+        .toBe("waiting");
+    const wrong=valid("/music/Tina Turner/Private Dancer/02 - Song.flac","unknown");
+    expect((await inspectLidarrFinalReceipt({get:wrong} as never,mapping(),
+        {...expected,trackId:99})).state).toBe("waiting");
+ });
+ it("does not accept a completed unsuccessful Lidarr command even if the file exists",async()=>{
+    const get=jest.fn().mockResolvedValue(response({
+        name:"ManualImport",id:10,status:"completed",result:"unsuccessful",
+    }));
+    expect((await inspectLidarrFinalReceipt({get} as never,mapping(),expected)).state)
+        .toBe("needs_review");
+    expect(get).toHaveBeenCalledTimes(1);
  });
  it("never trusts the import command alone without the final local hash",async()=>{
     await fs.writeFile(file,Buffer.alloc(1024,43));
