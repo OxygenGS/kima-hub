@@ -25,7 +25,7 @@ Most of Kima is configured in the web app, under **Settings**. Environment varia
 
 Streaming quality is Original (lossless), 320 kbps, 192 kbps or 128 kbps. Anything below Original is transcoded on the fly, and the transcoded files are cached.
 
-Downtify (v1.19.0) can be configured through **Settings → Integrations**. A pairing is stored encrypted in PostgreSQL, with per-request feature controls and no container restart. Existing Docker-managed `KIMA_DOWNTIFY_ENABLED` or `KIMA_DOWNTIFY_DEVICE_TOKEN` configurations are intentionally not overwritten; migrate deliberately. Advanced staging-source and audio verification remain operator-managed and OFF in database mode. See [Downtify settings](downtify-settings.md).
+Downtify (v1.20.0) is configured through **Settings → Integrations** with encrypted account-bound pairing. Queue controls and native single-track importing start OFF; the administrator explicitly activates importing after verifying music storage and an owner-bound baseline. Choose Kima-only (no Lidarr dependency) or optional Lidarr-managed import with a separate existing shared `/downloads` mount, verified access and full two-library receipt. Existing Docker-managed `KIMA_DOWNTIFY_ENABLED` or `KIMA_DOWNTIFY_DEVICE_TOKEN` configurations are not overwritten; migrate deliberately. See [Native import guide](downtify-native-auto-import.md) and [Lidarr handoff setup](downtify-lidarr-managed-handoff.md).
 
 ## Environment variables
 
@@ -67,7 +67,7 @@ With the split stack (`docker-compose.yml`), set both in a `.env` file next to t
 | --- | --- | --- |
 | `MUSIC_PATH` | **Required; no default** | Absolute path to an existing, mounted music directory. Missing values fail Compose configuration; the example does not auto-create missing host paths. An existing directory still does not prove the correct NAS/DAS is mounted. |
 | `PORT` | `3030` | The port on the host. |
-| `VERSION` | `v1.19.0` (fixed published stable) | Production Compose uses this fixed version by default for new installs, **never** `:latest`. Existing installations must preserve their own pinned version until safely backed up and upgraded. |
+| `VERSION` | `v1.20.0` (fixed versioned release) | Production Compose uses this fixed tag by default for new installs, **never** `:latest`. Existing installations must preserve their own pinned version until safely backed up and upgraded. |
 
 ### Audio analysis (split stack)
 
