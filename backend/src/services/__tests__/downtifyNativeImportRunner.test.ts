@@ -240,6 +240,9 @@ describe("Native Downtify auto-import coordinator", () => {
         expect(workspace).toHaveBeenCalledWith("/music",
             "Singles/Downtify/Example/Test song.flac");
         expect(verify).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+            musicRoot: "/music", sharedReadableAfterVerification: false,
+        }));
         expect(markPublished).toHaveBeenCalledWith(owner, claim.id, claim.claimToken, {
             expectedBytes: 1024,
             relativeTarget: "Singles/Downtify/Example/Test song.flac",
@@ -251,6 +254,26 @@ describe("Native Downtify auto-import coordinator", () => {
             downtifyNativeImportId: "batch-" + claim.id,
         });
         expect(hold).not.toHaveBeenCalled();
+    });
+
+    it("uses shared-readable publication only when Lidarr owns the final library", async () => {
+        const stageProof = "22222222-2222-4222-8222-222222222222";
+        pairing.mockResolvedValue({
+            ...row, nativeImportTarget: "lidarr",
+            nativeLidarrLocalDownloads: "/downloads",
+            nativeLidarrRemoteDownloads: "/downloads",
+            nativeLidarrRemoteMusic: "/music",
+            nativeLidarrStageMountProof: stageProof,
+        });
+        imports.mockResolvedValueOnce([]).mockResolvedValueOnce([job]);
+        const result = await runNativeImportCycle();
+        expect(result).toMatchObject({state:"checked",published:1});
+        expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+            musicRoot:"/downloads",sharedReadableAfterVerification:true,
+        }));
+        expect(markStaged).toHaveBeenCalledTimes(1);
+        expect(markPublished).not.toHaveBeenCalled();
+        expect(scan).not.toHaveBeenCalled();
     });
 
     it("stops before any media I/O when Docker maps stage and music to one root", async () => {
