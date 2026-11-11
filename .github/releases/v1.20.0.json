@@ -1,0 +1,114 @@
+{
+  "release": {
+    "version": "1.20.0",
+    "title": "Kima Hub 1.20.0 — Native Downtify Imports",
+    "summary": "Import new verified Downtify tracks into Kima or optionally let Lidarr manage the final file, with independent receipts in both libraries.",
+    "date": "2026-11-11",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.120.native-import",
+        "title": "Automatic native Downtify single-track imports",
+        "summary": "New completed Spotify tracks can be validated and indexed without a host-side importer script.",
+        "body": "Administrators pair a verified Downtify device in Settings, establish a post-activation library baseline and explicitly enable native automatic importing. Only newly observed, owner-bound, completed single tracks are eligible. Before publication Kima checks the original file's identity, metadata, complete audio decode, byte count and SHA-256. Historic downloads and uncertain claims are not silently reprocessed.",
+        "links": [
+          {
+            "label": "Open Settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.120.lidarr-handoff",
+        "title": "Optional Lidarr-managed library ownership",
+        "summary": "Use Lidarr's own manual-import pipeline for verified singles; Kima never chooses its final music path.",
+        "body": "Choose Kima-only or Lidarr-managed importing; the default remains Kima-only and Lidarr is not required to install Kima. In Lidarr mode Kima stages the verified original in a separate shared downloads folder. Only a unique artist, album, edition and track match can be sent to Lidarr's ManualImport in copy mode without replacing files. Lidarr decides the managed path, whether Artist/Track or Artist/Album/Track. New artist creation is OFF unless explicitly approved.",
+        "links": [
+          {
+            "label": "Open Settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.120.dual-receipts",
+        "title": "Independent Lidarr and Kima import receipts",
+        "summary": "A completed download or Lidarr command never counts as imported until real files and library records agree.",
+        "body": "Kima verifies the exact Lidarr TrackFile against pinned artist, album and track IDs, expected duration and size, and a full read-only SHA-256 check of the final file. This also supports completed commands whose Lidarr result has become unknown, but never trusts that result without the complete physical receipt. Only then does Kima request and confirm its own library scan; Settings shows distinct waiting and completed states.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.120.file-safety",
+        "title": "Safer staging permissions and non-replaying recovery",
+        "summary": "Verified shared staging audio stays readable after Lidarr copies it, without weakening private temporary validation.",
+        "body": "Audio remains private until validation succeeds. Lidarr staging files become readable to Kima even when the two services use different operating-system users; the Kima-only file publisher preserves its original mode. Safe path and storage-mount checks, no-overwrite publishing, single-use command intent and durable database receipts prevent accidental duplicates after crashes or uncertain network results. Existing media is never bulk moved or deleted.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.120.portable-setup",
+        "title": "Portable setup and bilingual import status",
+        "summary": "Configure supported Docker installations through Kima Settings with explicit mounts and clear EN/NL statuses.",
+        "body": "The optional Compose override mounts only an existing, independently selected shared staging folder; the normal Kima-only installation does not need it. Kima verifies the mounted music volume, distinct downloads folder and Lidarr-side staging visibility before enabling the handoff. English and Dutch screens distinguish waiting for Lidarr, waiting for a Kima scan, confirmed Lidarr receipts and imported Kima tracks.",
+        "links": [
+          {
+            "label": "Import status",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.120.safe-upgrade",
+        "title": "Additive migrations and explicit release safeguards",
+        "summary": "Prior RC6 imports and existing Docker mounts remain unchanged; backup and verified restore are required for safe upgrades.",
+        "body": "The new database fields and import ledger are additive and disabled by default. The application does not change existing music mounts, external import scripts, old imported files or user sessions when upgrading. Before any production upgrade, independently back up and test restoration of the complete persistent /data volume and existing deployment configuration. Downgrading the container alone does not roll back PostgreSQL migrations. Exact-source multiarch preflight and native image security review remain required for stable publication.",
+        "links": []
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.20.0 — Native Downtify Imports": "Kima Hub 1.20.0 — Downtify automatisch importeren"
+    },
+    "summaries": {
+      "Import new verified Downtify tracks into Kima or optionally let Lidarr manage the final file, with independent receipts in both libraries.": "Importeer nieuwe, gecontroleerde Downtify-nummers in Kima of laat optioneel Lidarr de uiteindelijke bestanden beheren, met afzonderlijke bevestiging in beide bibliotheken."
+    },
+    "items": {
+      "fork.120.native-import": {
+        "title": "Downtify-nummers automatisch importeren",
+        "summary": "Nieuwe voltooide Spotify-nummers worden gecontroleerd en geïndexeerd zonder apart importscript op de host.",
+        "body": "Beheerders koppelen Downtify in Instellingen, leggen een startpunt vast en schakelen de automatische import expliciet in. Alleen nieuwe, aan het gekoppelde account toebehorende voltooide nummers worden verwerkt. Kima controleert de originele bestandsidentiteit, metadata, volledige audiodecodering, grootte en SHA-256. Bestaande downloads en onduidelijke taken worden niet stilzwijgend opnieuw verwerkt."
+      },
+      "fork.120.lidarr-handoff": {
+        "title": "Optioneel importeren via Lidarr",
+        "summary": "Laat Lidarr zelf het definitieve muziekbestand beheren; Kima bepaalt de opslaglocatie niet.",
+        "body": "Kies Kima of Lidarr als beheerder van de import. Kima blijft de standaard; Lidarr is niet nodig voor een normale installatie. Bij Lidarr slaat Kima een volledig gecontroleerd bestand op in een afzonderlijke gedeelde downloadsmap. Alleen één exacte artiest-, album-, release- en trackmatch wordt zonder overschrijven via de Lidarr-import-API overgedragen. Lidarr kiest zelf de uiteindelijke bestandsnaam en map. Automatisch artiesten toevoegen staat standaard UIT."
+      },
+      "fork.120.dual-receipts": {
+        "title": "Afzonderlijke bevestiging door Lidarr en Kima",
+        "summary": "Een download of voltooide Lidarr-opdracht is pas geïmporteerd na controle van de echte bestanden en bibliotheekrecords.",
+        "body": "Kima controleert de exacte Lidarr-trackfile met de vastgelegde artiest-, album- en track-ID, speelduur, bestandsgrootte en volledige SHA-256 van het definitieve bestand. Een voltooide opdracht met resultaat onbekend wordt alleen aanvaard wanneer alle fysieke controles slagen. Daarna controleert Kima zijn eigen bibliotheekscan. Instellingen toont afzonderlijke wacht- en successtatussen."
+      },
+      "fork.120.file-safety": {
+        "title": "Veilige stagingrechten en herstel zonder dubbele imports",
+        "summary": "Gecontroleerde stagingbestanden blijven leesbaar na het kopiëren door Lidarr, zonder ongecontroleerde tijdelijke bestanden vrij te geven.",
+        "body": "Een tijdelijk audiobestand blijft privé totdat de volledige validatie slaagt. Daarna krijgen uitsluitend de gecontroleerde stagingbestanden passende leesrechten, ook als Lidarr en Kima als verschillende systeemgebruikers werken. De Kima-only-modus behoudt zijn bestaande bestandsrechten. Pad- en mountcontroles, publiceren zonder overschrijven, eenmalige importopdrachten en duurzame databasebevestigingen voorkomen dubbele imports. Bestaande muziek wordt niet massaal verplaatst of verwijderd."
+      },
+      "fork.120.portable-setup": {
+        "title": "Draagbare Docker-configuratie en Nederlandse statusweergave",
+        "summary": "Gebruik ondersteunde Docker-installaties met expliciete opslagkoppelingen en heldere Nederlands/Engelse importstatussen.",
+        "body": "De optionele Compose-uitbreiding koppelt alleen een bestaande gedeelde stagingmap. Een normale installatie zonder Lidarr heeft die niet nodig. Kima verifieert de muziekschijf, de aparte downloadsmap en of Lidarr de stagingmap kan zien voordat de koppeling actief wordt. De interface maakt onderscheid tussen wachten op Lidarr, wachten op de Kima-scan, door Lidarr bevestigd en door Kima geïmporteerd."
+      },
+      "fork.120.safe-upgrade": {
+        "title": "Aanvullende migraties en gecontroleerd bijwerken",
+        "summary": "Oudere RC6-imports en bestaande Docker-koppelingen blijven behouden; een gecontroleerde back-up is vereist voor een veilige upgrade.",
+        "body": "De extra databasevelden en het importregister zijn aanvullend en standaard uitgeschakeld. Kima verandert bij het bijwerken geen bestaande muziekmappen, externe scripts, oude imports of gebruikerssessies. Maak vóór een productie-upgrade een volledige back-up van /data en de configuratie en controleer een onafhankelijk herstel. Een oudere container terugzetten draait PostgreSQL-migraties niet terug. Voor de officiële versie blijven onafhankelijke AMD64/ARM64-controles en beoordeling van beveiligingsbevindingen verplicht."
+      }
+    }
+  },
+  "changelog": "Kima Hub v1.20.0 introduces an optional first-party native Downtify single-track importer with separate Kima-only and Lidarr-managed library ownership. A real pre-release canary confirmed correct artist and album association, final physical file SHA-256, successful Kima indexing and playback in both Lidarr and Kima. This proves one end-to-end flow, not that every host mount or external service is configured correctly.\n\n### Native Downtify automatic import\n- Automatically discover only new, owner-bound completed single tracks after a safe activation baseline; keep historical downloads out of scope.\n- Verify remote server/account, exact Spotify ID, original metadata/tags, full audio decode, size and SHA-256 before any publication. Never silently replay uncertain work.\n- Provide an explicit administrator switch and meaningful English and Dutch import-status counters. Existing Kima-only behavior remains available without Lidarr.\n\n### Optional Lidarr-managed handoff\n- Stage approved originals in a separate shared downloads directory. Prove the real shared staging mapping and keep /music ownership under Lidarr.\n- Preview one unique MusicBrainz artist, album, edition and track. Permit the advisory Has missing tracks rejection solely for a valid single-track import. Do not guess an artist, overwrite tracks or initiate a music search.\n- Submit exactly one durable, non-replayed ManualImport copy command. Lidarr alone determines final filename and folders, whether Artist/Track or Artist/Album/Track.\n- Confirm the registered Lidarr TrackFile, exact identity, duration, size and complete final SHA-256 before requesting Kima's independent scanner receipt. A completed command with result unknown is accepted only after these full file checks.\n\n### Storage safety and compatibility\n- Only fully verified Lidarr staging files become readable across container users; verification-stage temporary audio stays private.\n- Keep strict no-overwrite, non-symlink, disjoint mount and on-volume identity checks. An outage, ambiguous match or uncertain remote POST does not cause a blind retry.\n- Preserve previously imported Kima recordings and ledger state. No existing files are bulk moved, retagged or deleted. Artist creation requires explicit opt-in and remains unmonitored without automatic search.\n\n### Upgrades and release validation\n- Add forward-only PostgreSQL migrations for native-import discovery and optional Lidarr handoff, without altering existing /music or /data mounts.\n- Upgrade only after a full independent /data backup and verified restore. A Docker-image downgrade cannot reverse schema migrations.\n- Validate source CI, old-database upgrade/restore, EN/NL UI, native AMD64 and ARM64 image builds, vulnerability/secret scans and an exact-main native preflight before stable publication. The tested pre-release canary does not replace host-specific installation checks; no :latest alias or running host is modified by the source release."
+}
