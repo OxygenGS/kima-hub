@@ -1,6 +1,6 @@
-# Downtify settings — stable in v1.19.0
+# Downtify settings and native importing — Kima Hub
 
-**Available from [Kima Hub v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0).** The feature is included in the published, native AMD64/ARM64 Docker image. Existing deployments must still be upgraded explicitly and backed up first. Publication does not change any Proxmox, DAS or Importer v5 installation.
+**Encrypted Downtify pairing was introduced in [v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0). Native single-track importing and the optional Lidarr-managed handoff are available from [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0).** Upgrading does not enable automatic importing, alter existing mounts or replace any external importer. Verify the complete persistent `/data` backup and an independent restore before upgrading.
 
 ## Admin UI
 
@@ -19,10 +19,7 @@ Open **Settings → Integrations → Downtify** as an administrator. The origina
    existing settings encryption key, and pins that specific Downtify
    server, numeric account, username and **current Kima admin**. The UI
    receives only a sanitized status; it never reads the token back.
-5. All features start disabled. Use separate switches to enable the
-   owner-bound queue, to save Spotify track requests and (with explicit
-   acknowledgement) to allow **manual single-track Downtify submission**.
-   A fourth switch enables the manual remote-job status check.
+5. All features start disabled. Use separate switches for the owner-bound queue, saved Spotify track requests, manually confirmed single-track submission and remote-job checks. **Automatic importing** has its own opt-in after a verified source/mount preflight, post-activation baseline and single-writer confirmation. Choose Kima-only or optional Lidarr-managed ownership while import is paused.
 
 The settings are saved in a new, additive `DowntifyIntegration` PostgreSQL
 table. They never overwrite the running container's `.env` or Docker mounts.
@@ -39,20 +36,14 @@ projection and needs no container restart. If `KIMA_DOWNTIFY_ENABLED=true` **or 
   Spotify track owned by the current user, a fresh library duplicate check,
   exact pinned server and account verification, and explicit confirmation.
   Ambiguous dispatch results are never automatically retried.
-- **No audio/source verification toggle is exposed from database pairing.**
-  The advanced D4–D9 staging-file features remain OFF in the DB-managed
-  configuration. They require a separately approved read-only Docker mount
-  and a later safety review; a browser setting cannot create that mount.
-- **There is no automatic SSD-to-DAS file transfer, cleanup, scanner/indexing
-  receipt or Importer v5 takeover.** Existing import services remain active,
-  and no source/destination music files are modified by pairing.
+- Pairing a Downtify device **does not** enable native importing or any media writes. Once the administrator explicitly enables native single-track importing, Kima performs its own original audio/metadata/complete-hash validation. The advanced separate read-only diagnostics remain independently gated; a browser setting cannot mount a host directory.
+- There is **no automatic SSD-to-DAS move, source deletion, album/playlist batch dispatch or Importer v5 takeover**. Enabling native importing requires the operator to stop any conflicting external writer; pairing alone changes no music files. For Lidarr-managed mode use an existing separate shared downloads directory, never the final Lidarr library root.
 - Never paste tokens into GitHub issues, Compose commits or public logs.
   The existing `SETTINGS_ENCRYPTION_KEY` must remain stable; changing it
   invalidates encrypted credentials. The generic `/system-settings` API
   does not include Downtify device secrets.
-- v1.19.0 includes a new additive database migration; make a complete cold `/data`
-  backup and independently verify restoration **before upgrading an existing deployment**.
+- v1.20.0 adds forward-only native-import/Lidarr ledger migrations on top of v1.19.0 encrypted pairing. Make a complete cold `/data` backup and independently verify restoration **before upgrading an existing deployment**.
   An older image may not undo this schema change; do not rely on image
   downgrade as a database rollback.
 
-**Released image:** `ghcr.io/oxygengs/kima-hub:v1.19.0`. The [native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879) and [stable publisher](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) passed their configured gates; residual image vulnerabilities remain documented in [image security](image-security.md). Follow the [backup and rollback guide](safe-aio-updates.md) before a deployment update.
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.20.0` (after the guarded stable publication). [Native importer instructions](downtify-native-auto-import.md) · [Optional Lidarr-managed setup](downtify-lidarr-managed-handoff.md) · [Image security](image-security.md) · [Backup and rollback](safe-aio-updates.md).
