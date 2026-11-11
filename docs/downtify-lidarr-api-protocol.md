@@ -1,6 +1,6 @@
 # Downtify + Lidarr v2: safe handoff protocol
 
-The native Kima-only importer remains supported. The opt-in Lidarr-managed pipeline is part of the v1.20.0 release candidate in PR #231, not the published v1.19.0 stable image. A live preview canary on 11 November 2026 confirmed the managed TrackFile receipt, matching complete SHA-256, Kima scanner/album association and playback in both apps. The implementation does not require the test installation's host paths, Docker project name or credentials.
+The native Kima-only importer remains supported. The optional Lidarr-managed pipeline is available from v1.20.0 and remains disabled until explicitly configured. A live preview canary on 11 November 2026 confirmed the managed TrackFile receipt, matching complete SHA-256, Kima scanner/album association and playback in both apps. The implementation does not require the test installation's host paths, Docker project name or credentials.
 
 Lidarr's `GET /api/v1/manualimport` supplies media ownership candidates.
 Kima requires exactly one candidate (permitting solely Lidarr's advisory `Has missing tracks` rejection for a single verified track) and independently corroborates the
