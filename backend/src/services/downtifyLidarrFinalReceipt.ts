@@ -41,8 +41,13 @@ export async function inspectLidarrFinalReceipt(
         if(command.status==="failed"||command.status==="cancelled"||
             command.status==="aborted"||command.status==="orphaned"||
             command.result==="unsuccessful")return {state:"needs_review"};
-        if(command.status!=="completed" ||
-            command.result!=="successful")return {state:"waiting"};
+        if(command.status!=="completed")return {state:"waiting"};
+        // Lidarr can report result="unknown" for an already completed
+        // ManualImport command (observed after a prior "successful" result).
+        // Never treat that value alone as success: verify the pinned track
+        // identity, TrackFile and physical SHA-256 below before recording it.
+        if(command.result!=="successful" &&
+            command.result!=="unknown")return {state:"needs_review"};
         const [t,f]=await Promise.all([
             client.get("/api/v1/track",{...opts,params:{albumId:expected.albumId}}),
             client.get("/api/v1/trackfile",{...opts,params:{albumId:expected.albumId}}),
