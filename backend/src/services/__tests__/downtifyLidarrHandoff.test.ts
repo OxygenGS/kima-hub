@@ -27,6 +27,35 @@ describe("Downtify native Lidarr-managed handoff", () => {
             },
         });
     });
+    it("allows only a missing-album-tracks advisory for one fully verified recording", () => {
+        const advisory = {reason:"Has missing tracks",type:"permanent"};
+        const exact = {...candidate,rejections:[advisory]};
+        expect(validateLidarrPreview([exact],expected)).toEqual({
+            state:"matched",match:{
+                path:expected.path,artistId:8,albumId:10,albumReleaseId:12,
+                trackId:33,quality:candidate.quality,
+            },
+        });
+        for(const rejections of [
+            [{reason:"Has unmatched tracks",type:"permanent"}],
+            [{reason:"Has missing tracks",type:"temporary"}],
+            [{reason:"Has missing tracks"}],
+            [advisory,advisory],
+            [advisory,{reason:"Not an upgrade for existing",type:"permanent"}],
+        ]) {
+            expect(validateLidarrPreview([{...candidate,rejections}],expected).state)
+                .toBe("needs_review");
+        }
+        expect(validateLidarrPreview([{...exact,tracks:[
+            {...candidate.tracks[0],duration:230000},
+        ]}],expected).state).toBe("needs_review");
+        expect(validateLidarrPreview([{...exact,album:{
+            ...candidate.album,title:"Wrong Christmas Album",
+        }}],expected).state).toBe("needs_review");
+        expect(validateLidarrPreview([{...exact,tracks:[
+            ...candidate.tracks,{...candidate.tracks[0],id:34},
+        ]}],expected).state).toBe("needs_review");
+    });
     it("holds ambiguous or unsafe candidates rather than guessing a MusicBrainz match", () => {
         const bad = [
             [], [candidate,candidate], [{...candidate,path:"/tmp/attacker.flac"}],
