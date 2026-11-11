@@ -4,17 +4,18 @@ Kima works on its own. Each service below is optional and set up in **Settings**
 
 ## Downtify (from v1.19.0)
 
-Downtify is an **optional** integration for manually preparing and submitting individual Spotify tracks. It does not replace the existing Kima library importer or copy music to storage.
+Downtify is an **optional** integration for manually submitting Spotify tracks or, from v1.20.0, automatically importing new, owner-verified completed single tracks. Native importing begins OFF; Kima can manage its own imported files or delegate final library ownership to an independently configured Lidarr instance.
 
 1. Sign in as a Kima administrator and open **Settings → Integrations → Downtify**.
 2. Enter the Downtify server address reachable from the Kima backend and a **paired-device token** (not the account password).
 3. Test the connection, then pair the device. The token is encrypted at rest and never displayed back to the browser.
-4. Enable the required controls individually. Saving Spotify track requests does not start downloads; manual track submission requires an explicit acknowledgement.
-5. Use the **Downloads** screen to inspect your permitted saved requests and owner-verified remote queue.
+4. Enable the required controls individually. Saving Spotify track requests does not start downloads; manual track submission requires explicit acknowledgement.
+5. To enable native automatic importing, verify the mounted music volume, restorable backup, exclusive media writer and post-activation baseline. Choose Kima-only or the optional shared-staging Lidarr handoff before activation.
+6. Use **Downloads** to inspect permitted requests and the owner-verified remote queue; **Settings → Integrations → Downtify** shows independent Kima and Lidarr import receipts.
 
-If Docker already manages a Downtify integration or device token, the browser refuses to replace it until the operator explicitly migrates configuration. Audio/source inspection stays disabled in database-pairing mode without a separately reviewed read-only staging mount. No unattended album/playlist import, file deletion, DAS transfer or Importer v5 cutover is provided.
+If Docker already manages a Downtify integration or device token, the browser refuses to replace it until the operator explicitly migrates configuration. Native import uses exact source/identity/hash verification after activation; the optional Lidarr handoff additionally requires verified shared downloads and unique MusicBrainz matches. No unattended album/playlist batch import, file deletion, DAS transfer or replacement of an existing external importer is provided.
 
-[Detailed Downtify setup](downtify-settings.md) · [Unified Download Manager](unified-download-manager.md) · [User permissions](user-permissions.md)
+[Detailed Downtify setup](downtify-settings.md) · [Native importer](downtify-native-auto-import.md) · [Lidarr-managed handoff](downtify-lidarr-managed-handoff.md) · [User permissions](user-permissions.md)
 
 ## Lidarr
 
