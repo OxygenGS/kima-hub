@@ -1,12 +1,6 @@
 # Native Downtify import ledger — persistent identity and crash safety
 
-**Status: native integration candidate in draft PR #217, not released.**
-The standalone ledger was previously merged to main as a dormant
-component; PR #217 adds the opt-in import worker, scanner receipt and
-Settings switch. Published v1.19.0, existing music and the operator's
-external Importer v5 are **not changed or deployed** by this PR.
-Even after upgrading, automatic media writes remain OFF until an owner
-explicitly confirms the backup and single-writer cutover.
+**Release status:** v1.20.0 release candidate, incorporating the native importer and optional Lidarr-managed extension (PR #231). Stable v1.19.0 does not contain native automated importing. The ledger is additive and does not automatically migrate, delete, rename or re-import previously indexed recordings. Automatic media writes remain OFF until the owner explicitly verifies mounts, backup and exclusive importer ownership.
 
 ## Why the ledger is necessary
 
@@ -64,8 +58,11 @@ physical marker. The root was still operator-verified at first activation.
 | `baseline` | Existing completed job at activation; never auto-import |
 | `ready` | Newly observed, owner-bound completed track awaiting identity checks |
 | `claimed` | One worker acquired an atomic one-time claim |
-| `published_pending_scan` | File may be present; scanner receipt still missing |
-| `imported` | Reserved for proven scanner/index/playback receipt |
+| `staged_pending_lidarr` | Verified source staged outside the music library; Lidarr match not yet submitted |
+| `lidarr_submitting` | One durable Lidarr submission intent; an uncertain response is never replayed |
+| `lidarr_waiting` | Acknowledged Lidarr command awaiting exact TrackFile and physical hash receipt |
+| `published_pending_scan` | Verified final file is present; Kima scanner receipt still missing |
+| `imported` | Exact Kima index and physical file receipt confirmed; a Lidarr-managed import also has its own TrackFile receipt |
 | `review` / `uncertain` | Stop automatic processing, require human reconciliation |
 
 Only the first two states may be created by the discovery service.
