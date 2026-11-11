@@ -5,9 +5,7 @@ The application is installable on any compatible Docker host; it must
 not rely on a specific NAS, DAS, Proxmox container, network or legacy
 import script. Users pair Downtify inside **Settings → Integrations**.
 
-**Do not merge PR #217 or release a stable image based on CI alone.**
-The real Downtify-to-Kima transfer, local library scan, playback and
-independently tested data backup still require isolated acceptance.
+**Release gate:** source CI alone is insufficient. A live pre-release canary confirmed Downtify → Lidarr → Kima single-track import and playback in both applications on 11 November 2026. Each different installation must still verify its own source identity, mount mapping, storage permissions, exclusive import writer and backup/restore strategy before enabling imports. This guide also covers isolated negative-case and failure-recovery acceptance for maintainers.
 
 ## 1. Disposable staging
 
@@ -21,11 +19,10 @@ real mount and atomic no-replace hardlink support. An existing writable
 directory alone does not prove that a removable/network volume is
 mounted. Keep and verify an independent cold backup for rollback.
 
-Checkout the exact PR #217 head SHA, then build an unpublished local
-candidate image. For example, ONLY on the disposable staging host:
+Checkout the exact release-candidate head SHA, then build an isolated local candidate image. For example, ONLY on the disposable staging host:
 
 ~~~bash
-git checkout feat/downtify-native-auto-import
+git checkout feat/downtify-lidarr-v2
 CANDIDATE="$(git rev-parse HEAD)"
 docker build -t "ghcr.io/oxygengs/kima-hub:staging-$CANDIDATE" .
 
