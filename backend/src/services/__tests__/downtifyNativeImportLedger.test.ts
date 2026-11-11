@@ -5,13 +5,15 @@ import * as path from "path";
 import { prisma } from "../../utils/db";
 import {
     claimNativeImport,
+    retryOneProvenUnwrittenSpotifyClaim,
     confirmNativeIndexed,
     discoverNativeCompleted,
     getNativeImportSummary,
     holdNativeImportForReview,
+    releaseNativeUnwrittenClaim,
     recordNativePublished,
     recordNativeBaseline,
-    selectOwnedCompletedSpotifyJobs,
+    selectOwnedCompletedSpotifyJobs, selectFreshNativeSongs,
 } from "../downtifyNativeImportLedger";
 
 jest.mock("../../utils/db", () => ({
@@ -40,6 +42,7 @@ const owner = {
     remoteUserId: 7,
 };
 const SPOTIFY_ID = "0123456789ABCDEFGHIJKL";
+const VOLUME_PROOF = "11111111-1111-4111-8111-111111111111";
 const OTHER_SPOTIFY_ID = "123456789ABCDEFGHIJKLM";
 const queue = (ids: number[] = [7], songId = SPOTIFY_ID) => [{
     status: "done",
@@ -48,6 +51,8 @@ const queue = (ids: number[] = [7], songId = SPOTIFY_ID) => [{
     song: { source: "spotify", song_id: songId },
 }];
 const pairing = (enabled = false, baselineAt: Date | null = null) => ({
+    nativeImportLibraryCursor: baselineAt ? 8 : null,
+    nativeImportMountProof: baselineAt ? VOLUME_PROOF : null,
     ownerKimaUserId: owner.kimaUserId,
     expectedServerId: owner.remoteServerId,
     expectedUserId: owner.remoteUserId,
@@ -96,9 +101,71 @@ describe("Native Downtify import queue selection", () => {
     });
 });
 
+describe("New-only mobile library cursors", () => {
+    it("excludes completed jobs that did not arrive as a new library entry", () => {
+        const now = new Date();
+        expect(selectFreshNativeSongs(queue(), [], 7, now).songs).toEqual([]);
+        expect(selectFreshNativeSongs(queue(), [{
+            id: "t0123456789abcdef", file: "untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)-86400,
+        }], 7, now).songs).toEqual([]);
+    });
+    it("admits only a newly added track with an exact owner-bound job and timestamp", () => {
+        const now = new Date();
+        expect(selectFreshNativeSongs(queue(), [{
+            id: "t0123456789abcdef", file: "untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }], 7, now).songs).toEqual([
+            {spotifyTrackId:SPOTIFY_ID,source:"spotify"},
+        ]);
+    });
+    it("defers a new library event while the owner's Spotify job still downloads", () => {
+        const now = new Date();
+        const changed = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }];
+        const active = [{
+            ...queue()[0], status:"downloading", filename:null,
+        }];
+        const selection = selectFreshNativeSongs(active, changed, 7, now);
+        expect(selection.songs).toEqual([]);
+        expect(selection.deferred).toBe(1);
+        expect(selectFreshNativeSongs(queue(), changed, 7, now).songs)
+            .toEqual([{spotifyTrackId:SPOTIFY_ID,source:"spotify"}]);
+    });
+    it("does not defer for a foreign account's active download", () => {
+        const now = new Date();
+        const changed = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)+60,
+        }];
+        const active = [{
+            ...queue()[0], status:"downloading", filename:null, user_ids:[8],
+        }];
+        const selection = selectFreshNativeSongs(active,changed,7,now);
+        expect(selection.deferred).toBe(0);
+    });
+    it("never treats a pre-activation recording as new even within thirty seconds", () => {
+        const now = new Date();
+        const justBefore = [{
+            id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added: Math.floor(now.getTime()/1000)-1,
+        }];
+        expect(selectFreshNativeSongs(queue(),justBefore,7,now).songs).toEqual([]);
+    });
+    it("rejects duplicate library filenames and jobs from a different remote user", () => {
+        const now = new Date();
+        const row = {id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added:Math.floor(now.getTime()/1000)+60};
+        expect(selectFreshNativeSongs(queue([8]), [row], 7, now).songs).toEqual([]);
+        expect(selectFreshNativeSongs(queue(), [row,row], 7, now).songs).toEqual([]);
+    });
+});
+
 describe("Durable native import baseline", () => {
     it("stores all pre-existing completed jobs as baseline in one transaction", async () => {
-        const result = await recordNativeBaseline(owner, queue());
+        const result = await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF);
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(transaction).toHaveBeenCalledTimes(1);
         expect(integrationUpdate).toHaveBeenCalledWith(expect.objectContaining({
@@ -122,50 +189,127 @@ describe("Durable native import baseline", () => {
 
     it("does not reset a baseline or seed history when already initialized or enabled", async () => {
         paired.mockResolvedValueOnce(pairing(false, new Date()));
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         paired.mockResolvedValueOnce(pairing(true, new Date()));
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("fails closed if the pairing changed or no longer belongs to this user", async () => {
         paired.mockResolvedValueOnce({ ...pairing(), expectedUserId: 200 });
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("does not seed a partial baseline with an ambiguous old job", async () => {
-        expect((await recordNativeBaseline(owner, [...queue(), ...queue()])).state)
+        expect((await recordNativeBaseline(owner, [...queue(), ...queue()], 8, VOLUME_PROOF)).state)
             .toBe("invalid_snapshot");
         expect(transaction).not.toHaveBeenCalled();
     });
 
     it("rolls back on compare-and-swap conflict", async () => {
         integrationUpdate.mockResolvedValueOnce({ count: 0 });
-        expect((await recordNativeBaseline(owner, queue())).state).toBe("blocked");
+        expect((await recordNativeBaseline(owner, queue(), 8, VOLUME_PROOF)).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
     it("accepts an empty baseline without any file or remote changes", async () => {
-        expect(await recordNativeBaseline(owner, [])).toMatchObject({
+        expect(await recordNativeBaseline(owner, [], 8, VOLUME_PROOF)).toMatchObject({
             state: "recorded", count: 0,
         });
         expect(importsCreate).not.toHaveBeenCalled();
     });
 });
 
+    it("requeues one old RC3 Spotify 403 only when every media receipt is empty", async () => {
+        paired.mockResolvedValueOnce(pairing(true, new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce({
+            id: "clvabc1234cuid", claimToken: "12345678-1234-1234-1234-123456789abc",
+        });
+        const result=await retryOneProvenUnwrittenSpotifyClaim(owner);
+        expect(result).toBe("requeued");
+        const where=importsFind.mock.calls[0][0].where;
+        expect(where).toMatchObject({
+            status: "uncertain",reviewReason:"spotify_identity_unavailable",
+            expectedBytes:null,outputRelativePath:null,fullSha256:null,
+            indexedTrackId:null,remoteLibraryTrackId:null,
+        });
+        expect(where.claimedAt.lt).toBeInstanceOf(Date);
+        expect(where.claimedAt.lt.getTime()).toBeLessThan(Date.now());
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                ...where, id:"clvabc1234cuid",
+                claimToken:"12345678-1234-1234-1234-123456789abc",
+            }),
+            data: {
+                status:"ready",claimToken:null,claimedAt:null,
+                reviewReason:"spotify_metadata_retry",
+            },
+        });
+    });
+
+    it("does not requeue pre-write Spotify claims from a different account", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date("2026-11-07")));
+        expect(await retryOneProvenUnwrittenSpotifyClaim({
+            ...owner,remoteUserId:999,
+        })).toBe("blocked");
+        expect(importsFind).not.toHaveBeenCalled();
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
+    it("does not retry an unknown claimToken or failed CAS acknowledgement", async () => {
+        paired.mockResolvedValue(pairing(true,new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce({id:"clvabc1234cuid",claimToken:null});
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("blocked");
+        expect(importsUpdate).not.toHaveBeenCalled();
+        importsFind.mockResolvedValueOnce({
+            id:"clvabc1234cuid",
+            claimToken:"12345678-1234-1234-1234-123456789abc",
+        });
+        importsUpdate.mockResolvedValueOnce({count:0});
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("blocked");
+    });
+
+    it("does not guess if no matching old unwritten identity claim exists", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date("2026-11-07")));
+        importsFind.mockResolvedValueOnce(null);
+        expect(await retryOneProvenUnwrittenSpotifyClaim(owner)).toBe("none");
+        expect(importsUpdate).not.toHaveBeenCalled();
+    });
+
 describe("Native import discovery and durable claims", () => {
     it("cannot discover new songs while disabled or before baseline", async () => {
-        expect((await discoverNativeCompleted(owner, queue())).state).toBe("blocked");
+        expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000)+60,
+}]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
         paired.mockResolvedValueOnce(pairing(true, null));
-        expect((await discoverNativeCompleted(owner, queue())).state).toBe("blocked");
+        expect((await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000)+60,
+}]})).state).toBe("blocked");
         expect(importsCreate).not.toHaveBeenCalled();
     });
 
+    it("keeps the stored cursor unchanged while a recent owner download is active", async () => {
+        paired.mockResolvedValueOnce(pairing(true,new Date()));
+        const newTrack={id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+            added:Math.floor(Date.now()/1000)+60};
+        const downloading=[{...queue()[0],status:"downloading",filename:null}];
+        const result=await discoverNativeCompleted(owner,downloading,
+            {cursor:9,full:false,tracks:[newTrack]});
+        expect(result).toEqual({state:"deferred",count:0,ambiguous:0});
+        expect(transaction).not.toHaveBeenCalled();
+        expect(integrationUpdate).not.toHaveBeenCalled();
+        expect(importsCreate).not.toHaveBeenCalled();
+    });
     it("uses a unique createMany skipDuplicates instead of resetting existing jobs", async () => {
         paired.mockResolvedValueOnce(pairing(true, new Date()));
-        const result = await discoverNativeCompleted(owner, queue());
+        const result = await discoverNativeCompleted(owner, queue(), {cursor:9,full:false,tracks:[{
+    id:"t0123456789abcdef",file:"untrusted/folder/private.flac",
+    added:Math.floor(Date.now()/1000)+60,
+}]});
         expect(result).toEqual({ state: "recorded", count: 1, ambiguous: 0 });
         expect(importsCreate).toHaveBeenCalledWith({
             data: [{
@@ -215,6 +359,46 @@ describe("Native import discovery and durable claims", () => {
         expect(importsUpdate).not.toHaveBeenCalled();
     });
 
+    it("releases only explicitly unwritten claims, preserving durable backoff history", async () => {
+        const token="12345678-1234-1234-1234-123456789abc";
+        const changed=await releaseNativeUnwrittenClaim(
+            owner,"clvabc1234cuid",token,"remote_temporarily_unavailable",
+        );
+        expect(changed).toBe(true);
+        expect(importsUpdate).toHaveBeenCalledWith({
+            where:expect.objectContaining({
+                id:"clvabc1234cuid",status:"claimed",
+                claimToken:token,ownerKimaUserId:owner.kimaUserId,
+                remoteServerId:owner.remoteServerId,
+            }),
+            data:{
+                status:"ready",claimToken:null,
+                reviewReason:"remote_temporarily_unavailable",
+            },
+        });
+        expect(importsUpdate.mock.calls[0][0].data.claimedAt).toBeUndefined();
+    });
+    it("does not automatically release a claim after an unknown DB outcome", async () => {
+        importsUpdate.mockRejectedValueOnce(new Error("temporary database outage"));
+        expect(await releaseNativeUnwrittenClaim(
+            owner,"clvabc1234cuid",
+            "12345678-1234-1234-1234-123456789abc",
+            "storage_temporarily_unavailable",
+        )).toBe(false);
+    });
+    it("applies the same 15-minute cooldown to findFirst and claim CAS", async () => {
+        paired.mockResolvedValue(pairing(true,new Date()));
+        const result=await claimNativeImport(owner,"clvabc1234cuid");
+        expect(result.state).toBe("claimed");
+        const findQuery=importsFind.mock.calls[0][0].where;
+        const updateQuery=importsUpdate.mock.calls[0][0].where;
+        expect(findQuery.OR).toBeDefined();
+        expect(updateQuery.OR).toBeDefined();
+        expect(findQuery.OR[0]).toEqual({claimedAt:null});
+        expect(findQuery.OR[1].claimedAt.lt).toBeInstanceOf(Date);
+        expect(findQuery.OR[1].claimedAt.lt.getTime()).toBeLessThan(Date.now());
+    });
+
     it("can hold a claimed row for human review but never reset it to ready", async () => {
         expect(await holdNativeImportForReview(
             owner, "clvabc1234cuid",
@@ -232,18 +416,45 @@ describe("Native import discovery and durable claims", () => {
         }));
     });
 
-    it("summarizes the current owner without exposing remote IDs or filenames", async () => {
+    it("separates queued, claimed, pending-index, imported and review counts", async () => {
         paired.mockResolvedValueOnce(pairing(true, new Date()));
         importsGroups.mockResolvedValueOnce([
             { status: "ready", _count: { _all: 2 } },
             { status: "claimed", _count: { _all: 1 } },
+            { status: "published_pending_scan", _count: { _all: 4 } },
+            { status: "imported", _count: { _all: 7 } },
+            { status: "review", _count: { _all: 2 } },
             { status: "uncertain", _count: { _all: 3 } },
+            { status: "baseline", _count: { _all: 12 } },
         ]);
         const result = await getNativeImportSummary(owner);
         expect(result).toEqual({
-            enabled: true, baselineReady: true, waiting: 2, inReview: 4,
+            enabled: true, baselineReady: true, waiting: 2,
+            processing: 1, awaitingScan: 4, imported: 7, inReview: 5,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
         });
         expect(JSON.stringify(result)).not.toContain(owner.remoteServerId);
+        expect(JSON.stringify(result)).not.toContain(SPOTIFY_ID);
+        expect(importsGroups).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({
+                ownerKimaUserId: owner.kimaUserId,
+                remoteServerId: owner.remoteServerId,
+                remoteUserId: owner.remoteUserId,
+            }),
+        }));
+    });
+
+    it("returns zero status counts for an unrelated or disabled pairing without reading ledger", async () => {
+        paired.mockResolvedValueOnce({
+            ...pairing(true, new Date()), expectedUserId: owner.remoteUserId + 1,
+        });
+        const result = await getNativeImportSummary(owner);
+        expect(result).toEqual({
+            enabled: false, baselineReady: false, waiting: 0, processing: 0,
+            awaitingScan: 0, imported: 0, inReview: 0,
+            lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
+        });
+        expect(importsGroups).not.toHaveBeenCalled();
     });
 });
 
@@ -328,6 +539,21 @@ describe("Native import publication ledger and physical Kima index receipt", () 
                 reviewReason: null,
             },
         });
+    });
+
+    it("confirms a Lidarr-managed Artist/Track receipt in Kima's index", async () => {
+        const flat = "Tina Turner/02 - Song.flac";
+        await fs.mkdir(path.join(musicRoot, "Tina Turner"), { recursive: true });
+        await fs.writeFile(path.join(musicRoot, flat), audio);
+        importsFind.mockResolvedValueOnce({
+            outputRelativePath: flat, expectedBytes: audio.length,
+            fullSha256: sha, importTarget: "lidarr",
+        });
+        expect(await confirmNativeIndexed(owner, id, token, musicRoot))
+            .toEqual({state: "imported", indexedTrackId: "local-scanned-track-1"});
+        expect(trackFind).toHaveBeenCalledWith(expect.objectContaining({
+            where: {filePath: flat},
+        }));
     });
 
     it("holds a missing or unindexed local track rather than claiming imported", async () => {

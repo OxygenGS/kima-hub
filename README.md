@@ -29,7 +29,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 - **Admin-managed pairing:** verify the actual Downtify server and device account before storing the token encrypted at rest.
 - **Four opt-in switches:** owner-scoped remote queue, saved Spotify track requests, manually confirmed single-track submission and manual remote-status checks.
 - **Safe migration:** existing Docker-managed Downtify settings remain separate until explicitly migrated. Re-pairing turns all functions OFF.
-- **No import takeover:** the existing music library, external Importer v5 and storage mounts are unchanged.
+- **No import takeover:** existing music libraries, external import services and storage mounts are unchanged.
 
 [Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0) · [Downtify setup](docs/downtify-settings.md) · [Changelog](CHANGELOG.md)
 
@@ -65,7 +65,9 @@ The **Downloads** screen shows permission-filtered jobs and saved Spotify track 
 | Manual remote checks | Read owner-bound remote job state. A completed Downtify job is **not** proof that Kima imported the recording. |
 | Advanced audio evidence | Read-only source/header/decode/tag checks exist for operator-managed environments, but are **not unlocked by the browser pairing**. They require a separately reviewed read-only staging mount. |
 
-**Not included:** automatic album/playlist dispatch through Downtify, automatic SSD-to-DAS copying, scanner/index receipts, file deletion or replacement of external Importer v5. Every new switch starts **OFF**.
+**Not included in published v1.19.0:** automatic library importing, album/playlist dispatch, scanner/index receipts, source deletion or replacement of any external importer. Every new switch starts **OFF**.
+
+**v1.20.0 release candidate:** Native single-track importing offers an opt-in **Kima-only** path or **Lidarr-managed** handoff; Lidarr selects the final file location, then Kima independently verifies its SHA-256 and indexes the same recording. A live pre-release canary confirmed the complete Downtify → Lidarr → Kima flow, correct artist/album association and playback in both applications. This remains unreleased in stable v1.19.0 while the final release is prepared. Existing installations keep importing OFF until an administrator verifies their mounts, backup and exclusive importer ownership. [Kima native importer](docs/downtify-native-auto-import.md) · [Lidarr-managed setup](docs/downtify-lidarr-managed-handoff.md) · [PR #231](https://github.com/OxygenGS/kima-hub/pull/231).
 
 [Downtify setup and limitations](docs/downtify-settings.md) · [Download Manager design](docs/unified-download-manager.md) · [User permissions](docs/user-permissions.md)
 
@@ -93,13 +95,13 @@ Open `http://localhost:3030` to complete the first-run setup. Replace the exampl
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml) and set the version explicitly:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The new-installation image default is fixed at published `v1.19.0`, not `:latest`:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Do not replace the Compose project, `/music` or `/data` mounts when upgrading an existing installation.** The example Compose file has a conservative fallback version; `:latest` is not automatically promoted.
+**New installs:** `MUSIC_PATH` is mandatory; Docker Compose will not create an absent host music directory. An existing directory is not proof that a removable or network disk is mounted—verify the actual backing storage. **Existing installs:** keep the original Compose project, `/music` and `/data` mounts, and the running version pinned until a verified backup/restore and controlled upgrade. The fixed example tag never follows `:latest`.
 
 [Full installation guide](docs/install.md) · [Configuration](docs/configuration.md)
 
@@ -109,7 +111,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-comp
 - v1.19.0 adds the `DowntifyIntegration` PostgreSQL table. A **container downgrade alone does not reverse migrations**. Rolling back across them requires the pre-upgrade data backup.
 - Preserve user permissions, original media mounts, third-party import services and any reverse-proxy restrictions. Use HTTPS for remote access.
 - The native AMD64/ARM64 builds and configured security gates passed. **Residual HIGH/CRITICAL dependency advisories without published fixes remain**, and a passing scan does not prove the container is vulnerability-free.
-- No release action in this repository changes a running Proxmox, Docker or NAS installation.
+- No release action in this repository changes a user's running host, Docker installation or storage mounts.
 
 [Published image security assessment](docs/image-security.md) · [v1.19.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879) · [Stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) · [Safe updates and rollback](docs/safe-aio-updates.md) · [Security policy](SECURITY.md)
 

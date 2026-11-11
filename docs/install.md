@@ -34,9 +34,11 @@ Open `http://localhost:3030` on the Docker host, finish setup and create the adm
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services before deploying.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services and additional music/download mounts before deploying. **That optional full-stack example retains an older default image tag:** set `VERSION=v1.19.0` explicitly for a new full-stack installation. The fail-closed `MUSIC_PATH` guard described below is specific to the recommended production AIO Compose example.
 
-Set the version **explicitly**. The checked-in Compose files deliberately retain an older conservative fallback, so leaving `VERSION` unset does **not** select the current release:
+For a **new** production Compose installation, the example defaults to the currently published and fixed `v1.19.0` image (never `:latest`). Set `MUSIC_PATH` to an existing **absolute path** to the intended music filesystem; Compose rejects a missing setting and does **not** create a missing host folder. For a NAS/DAS, independently confirm the correct disk or share is mounted: an existing but empty directory is not proof of storage identity.
+
+For an **existing** installation, continue pinning its exact image tag in `VERSION`, and preserve its Compose project name, `/data` and `/music` mounts. Do not let a changed example version trigger an upgrade before backup and restore validation:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.19.0 docker compose -f docker-compose.prod.yml up -d
@@ -58,6 +60,8 @@ services:
 volumes:
   kima_data:
 ```
+
+**Downtify → Lidarr v1.20.0 candidate:** the published v1.19.0 stable image does not yet include native automatic imports. The new opt-in Lidarr-managed mode is validated in a live preview canary and remains OFF by default. It requires the [optional existing shared-staging mount](../docker-compose.lidarr-handoff.yml), a separately configured Lidarr instance, owner-bound Downtify pairing and verified storage identity. The [managed handoff guide](downtify-lidarr-managed-handoff.md#optional-portable-docker-staging-mount) explains the setup for any compatible Docker host. A Compose config check is only syntax validation: it cannot prove a correct shared disk, track association or working music playback. Existing Kima-only RC6 recordings are never moved automatically.
 
 For source development use [development.md](development.md); the general `docker-compose.yml` runs source services instead of the published all-in-one image.
 

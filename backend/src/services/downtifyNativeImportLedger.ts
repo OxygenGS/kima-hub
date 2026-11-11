@@ -1,5 +1,5 @@
 /**
- * Durable, fail-closed claim ledger for a future native Downtify importer.
+ * Durable, fail-closed claim ledger for the optional native Downtify importer.
  *
  * This module does not contact Downtify, open files, schedule work, or
  * enable automatic imports. A worker must first independently verify the
@@ -8,8 +8,9 @@
  *
  * Every remote song ID is unique for one verified server and numeric
  * Downtify owner; separate Kima accounts cannot silently take ownership.
- * Once claimed, no automatic retry after worker crash, timeout, file write,
- * scan outage or uncertain outcome. Manual reconciliation is mandatory.
+ * A crashed or uncertain post-write claim is never automatically retried.
+ * Only provably unwritten pre-publication remote/storage outages may release
+ * the exact claim after a persistent 15-minute cooldown.
  */
 import { createHash, randomUUID } from "crypto";
 import { constants as fsFlags, promises as fs } from "fs";
@@ -19,13 +20,16 @@ import { prisma } from "../utils/db";
 
 export type NativeImportStatus =
     | "baseline" | "ready" | "claimed" | "published_pending_scan"
-    | "imported" | "review" | "uncertain";
+    | "imported" | "review" | "uncertain"
+    | "staged_pending_lidarr" | "lidarr_submitting" | "lidarr_waiting"
+    | "lidarr_artist_creating";
 export type LedgerState =
     | "recorded" | "already_seen" | "blocked" | "invalid_snapshot" | "not_found"
-    | "claimed" | "claimed_elsewhere" | "published_pending_scan"
+    | "claimed" | "claimed_elsewhere" | "published_pending_scan" | "deferred"
     | "uncertain";
 
 const SPOTIFY_ID = /^[A-Za-z0-9]{22}$/;
+const VOLUME_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SERVER_ID = /^[A-Za-z0-9_-]{8,128}$/;
 const MAX_QUEUE_ROWS = 5000;
 const MAX_QUEUE_BATCH = 5000;
@@ -46,6 +50,8 @@ export type Selection = {
     songs: NativeSongObservation[];
     /** Ambiguous rows are rejected, never assumed to be distinct downloads. */
     ambiguous: number;
+    /** Changed files not yet attributable to a finished owner job. */
+    deferred?: number;
 };
 
 function record(v: unknown): v is Record<string, unknown> {
@@ -87,14 +93,19 @@ export function selectOwnedCompletedSpotifyJobs(
 
 async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
     paired: boolean; enabled: boolean; baselineAt: Date | null;
+    libraryCursor: number | null; mountProof: string | null;
 }> {
-    if (!validOwner(owner)) return { paired: false, enabled: false, baselineAt: null };
+    if (!validOwner(owner)) return {
+        paired: false, enabled: false, baselineAt: null,
+        libraryCursor: null, mountProof: null,
+    };
     const row = await prisma.downtifyIntegration.findUnique({
         where: { id: "default" },
         select: {
             ownerKimaUserId: true, expectedServerId: true,
             expectedUserId: true, enabled: true,
             nativeImportEnabled: true, nativeImportBaselineAt: true,
+            nativeImportLibraryCursor: true, nativeImportMountProof: true,
         },
     });
     const paired = row?.ownerKimaUserId === owner.kimaUserId &&
@@ -104,6 +115,10 @@ async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
     return {
         paired, enabled: paired && row?.nativeImportEnabled === true,
         baselineAt: paired ? row?.nativeImportBaselineAt || null : null,
+        libraryCursor: paired ? row?.nativeImportLibraryCursor ?? null : null,
+        mountProof: paired && row?.nativeImportMountProof &&
+            VOLUME_UUID.test(row.nativeImportMountProof)
+            ? row.nativeImportMountProof : null,
     };
 }
 
@@ -119,16 +134,21 @@ async function pinnedIdentity(owner: PinnedImportOwner): Promise<{
 export async function recordNativeBaseline(
     owner: PinnedImportOwner,
     queueSnapshot: unknown,
+    libraryCursor: number,
+    mountProof: string,
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
     const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
     if (selection.state !== "ok" || !validOwner(owner) ||
+        !Number.isSafeInteger(libraryCursor) || libraryCursor < 0 ||
+        libraryCursor > 2_147_483_647 || !VOLUME_UUID.test(mountProof) ||
         selection.ambiguous > 0) {
         // Never silently omit an ambiguous pre-existing song from the
         // initial baseline: it might later appear unique and be reimported.
         return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.paired || identity.enabled || identity.baselineAt) {
+    if (!identity.paired || identity.enabled || identity.baselineAt ||
+        identity.libraryCursor !== null || identity.mountProof !== null) {
         return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
     }
     try {
@@ -140,8 +160,14 @@ export async function recordNativeBaseline(
                     expectedUserId: owner.remoteUserId,
                     enabled: true, nativeImportEnabled: false,
                     nativeImportBaselineAt: null,
+                    nativeImportLibraryCursor: null,
+                    nativeImportMountProof: null,
                 },
-                data: { nativeImportBaselineAt: new Date() },
+                data: {
+                    nativeImportBaselineAt: new Date(),
+                    nativeImportLibraryCursor: libraryCursor,
+                    nativeImportMountProof: mountProof,
+                },
             });
             if (changed.count !== 1) throw new Error("baseline race");
             if (selection.songs.length === 0) return 0;
@@ -163,39 +189,154 @@ export async function recordNativeBaseline(
     }
 }
 
-/** Persist *newly* completed songs only while native auto-import was enabled. */
+/**
+ * Select only newly published, owner-attributed Spotify files from an
+ * INCREMENTAL authenticated mobile library changefeed.
+ *
+ * Queue visibility alone does NOT prove newness: old "done" rows can
+ * disappear or reappear. Require exact matching filename, one queue job,
+ * one mobile track row and a defensible remote library "added" timestamp
+ * after Kima's first-activation baseline. Missing timestamps fail closed.
+ */
+export function selectFreshNativeSongs(
+    queueSnapshot: unknown, changedTracks: unknown, remoteUserId: number,
+    baselineAt: Date,
+): Selection {
+    if (!Array.isArray(queueSnapshot) || queueSnapshot.length > MAX_QUEUE_ROWS ||
+        !Array.isArray(changedTracks) || changedTracks.length > 100000 ||
+        !(baselineAt instanceof Date) || !Number.isFinite(baselineAt.getTime())) {
+        return { state: "invalid_snapshot", songs: [], ambiguous: 0 };
+    }
+    const queueByFile = new Map<string, NativeSongObservation[]>();
+    let activeOwnerSpotifyJobs = 0;
+    for(const entry of queueSnapshot) {
+        if (!record(entry) || !Array.isArray(entry.user_ids) ||
+            !entry.user_ids.includes(remoteUserId) || !record(entry.song) ||
+            (entry.song.source !== undefined && entry.song.source !== "spotify") ||
+            typeof entry.song.song_id !== "string" ||
+            !SPOTIFY_ID.test(entry.song.song_id)) continue;
+        if (entry.status === "downloading" || entry.status === "queued") {
+            // The library may expose the just-written file before the job
+            // exposes its final filename/status. Never consume that cursor.
+            activeOwnerSpotifyJobs++;
+            continue;
+        }
+        if (entry.status !== "done" || typeof entry.filename !== "string" ||
+            entry.filename.length > 1024) continue;
+        const old = queueByFile.get(entry.filename) || [];
+        old.push({ spotifyTrackId: entry.song.song_id, source: "spotify" });
+        queueByFile.set(entry.filename, old);
+    }
+    const tracks = new Map<string, number>();
+    for (const entry of changedTracks) {
+        if (!record(entry) || typeof entry.file !== "string" ||
+            typeof entry.id !== "string" || !/^t[0-9a-f]{16}$/.test(entry.id) ||
+            typeof entry.added !== "number" || !Number.isSafeInteger(entry.added)) {
+            continue;
+        }
+        // Require the first addition to be strictly AFTER activation:
+        // an old song retagged during a scan must never be imported.
+        // Do not allow a clock-skew grace period that admits older files.
+        if (entry.added <= Math.ceil(baselineAt.getTime()/1000)) continue;
+        tracks.set(entry.file, (tracks.get(entry.file)||0)+1);
+    }
+    const ids=new Map<string,number>();
+    let deferred = 0;
+    for (const [filename, count] of tracks) {
+        const jobs=queueByFile.get(filename)||[];
+        if (count !== 1 || jobs.length !== 1) {
+            // A competing in-flight download may be the new file we see
+            // in the changefeed. Hold the ENTIRE cursor for another poll.
+            // Otherwise this one-time event is permanently lost.
+            if (activeOwnerSpotifyJobs > 0 && jobs.length === 0) deferred++;
+            continue;
+        }
+        const id=jobs[0].spotifyTrackId;
+        ids.set(id, (ids.get(id)||0)+1);
+    }
+    const songs:NativeSongObservation[]=[];
+    let ambiguous=0;
+    for(const [id,count] of ids) {
+        if(count===1)songs.push({spotifyTrackId:id,source:"spotify"});
+        else ambiguous++;
+    }
+    return {state:"ok",songs,ambiguous,deferred};
+}
+
+/** Advance a Downtify library cursor atomically with new eligible claims.
+ * A full-reset snapshot is treated as baseline ONLY, not new songs.
+ */
 export async function discoverNativeCompleted(
     owner: PinnedImportOwner, queueSnapshot: unknown,
+    changes: { cursor: number; full: boolean; tracks: unknown[] },
 ): Promise<{ state: LedgerState; count: number; ambiguous: number }> {
-    const selection = selectOwnedCompletedSpotifyJobs(queueSnapshot, owner.remoteUserId);
-    if (selection.state !== "ok" || !validOwner(owner)) {
+    if (!validOwner(owner) || !Number.isSafeInteger(changes.cursor) ||
+        changes.cursor < 0 || changes.cursor > 2_147_483_647 ||
+        typeof changes.full !== "boolean" || !Array.isArray(changes.tracks)) {
         return { state: "invalid_snapshot", count: 0, ambiguous: 0 };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.enabled || !identity.baselineAt) {
-        return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
+    if (!identity.enabled || !identity.baselineAt ||
+        identity.libraryCursor === null || !identity.mountProof ||
+        changes.cursor < identity.libraryCursor) {
+        return { state: "blocked", count: 0, ambiguous: 0 };
     }
-    if (selection.songs.length === 0) {
+    const selection = changes.full
+        ? { state: "ok" as const, songs: [], ambiguous: 0 }
+        : selectFreshNativeSongs(queueSnapshot, changes.tracks,
+            owner.remoteUserId, identity.baselineAt);
+    if (selection.state !== "ok") {
+        return { state: "invalid_snapshot", count: 0, ambiguous: selection.ambiguous };
+    }
+    if (selection.deferred) {
+        // No cursor update and no partial insertion. On the next poll the
+        // completed queue row can be matched to this same library event.
+        return { state: "deferred", count: 0, ambiguous: selection.ambiguous };
+    }
+    if (changes.cursor === identity.libraryCursor) {
         return { state: "recorded", count: 0, ambiguous: selection.ambiguous };
     }
-    // Unique constraint is the durable idempotency boundary across workers,
-    // restarts and previous baseline snapshots. No upsert resets an old state.
     try {
-        const created = await prisma.downtifyNativeImport.createMany({
-            data: selection.songs.map(song => ({
-                ownerKimaUserId: owner.kimaUserId,
-                remoteServerId: owner.remoteServerId,
-                remoteUserId: owner.remoteUserId,
-                spotifyTrackId: song.spotifyTrackId,
-                status: "ready",
-            })),
-            skipDuplicates: true,
+        const count = await prisma.$transaction(async tx => {
+            const changed = await tx.downtifyIntegration.updateMany({
+                where: {
+                    id: "default", ownerKimaUserId: owner.kimaUserId,
+                    expectedServerId: owner.remoteServerId,
+                    expectedUserId: owner.remoteUserId,
+                    nativeImportEnabled: true,
+                    nativeImportLibraryCursor: identity.libraryCursor,
+                },
+                data: { nativeImportLibraryCursor: changes.cursor },
+            });
+            if(changed.count!==1)throw new Error("cursor race");
+            if(selection.songs.length===0)return 0;
+            const created = await tx.downtifyNativeImport.createMany({
+                data: selection.songs.map(song => ({
+                    ownerKimaUserId: owner.kimaUserId,
+                    remoteServerId: owner.remoteServerId,
+                    remoteUserId: owner.remoteUserId,
+                    spotifyTrackId: song.spotifyTrackId,
+                    status: "ready",
+                })),
+                skipDuplicates: true,
+            });
+            return created.count;
         });
-        return { state: "recorded", count: created.count, ambiguous: selection.ambiguous };
+        return {state:"recorded",count,ambiguous:selection.ambiguous};
     } catch {
-        return { state: "blocked", count: 0, ambiguous: selection.ambiguous };
+        return {state:"blocked",count:0,ambiguous:selection.ambiguous};
     }
 }
+
+// Retriable failures BEFORE media publication have a persistent cooldown.
+// No after-publication/uncertain claim is eligible for automatic reset.
+const SAFE_UNWRITTEN_RETRY_DELAY_MS = 15 * 60 * 1000;
+const dueForSafePrewriteRetry = () => ({
+    OR: [
+        { claimedAt: null },
+        { claimedAt: { lt: new Date(Date.now() - SAFE_UNWRITTEN_RETRY_DELAY_MS) } },
+    ],
+});
 
 export type ClaimResult =
     | { state: "claimed"; id: string; claimToken: string; spotifyTrackId: string }
@@ -213,7 +354,8 @@ export async function claimNativeImport(
         return { state: "blocked" };
     }
     const identity = await pinnedIdentity(owner);
-    if (!identity.enabled || !identity.baselineAt) return { state: "blocked" };
+    if (!identity.enabled || !identity.baselineAt ||
+        identity.libraryCursor === null || !identity.mountProof) return { state: "blocked" };
     const token = randomUUID();
     try {
         return await prisma.$transaction(async tx => {
@@ -225,13 +367,20 @@ export async function claimNativeImport(
                     ownerKimaUserId: true, expectedServerId: true,
                     expectedUserId: true, enabled: true,
                     nativeImportEnabled: true, nativeImportBaselineAt: true,
+                    nativeImportLibraryCursor: true,
+                    nativeImportMountProof: true,
+                    nativeImportTarget: true,
                 },
             });
             if (pairing?.ownerKimaUserId !== owner.kimaUserId ||
                 pairing.expectedServerId !== owner.remoteServerId ||
                 pairing.expectedUserId !== owner.remoteUserId ||
                 !pairing.enabled || !pairing.nativeImportEnabled ||
-                !pairing.nativeImportBaselineAt) return { state: "blocked" } as const;
+                !pairing.nativeImportBaselineAt ||
+                pairing.nativeImportLibraryCursor === null ||
+                !pairing.nativeImportMountProof ||
+                !VOLUME_UUID.test(pairing.nativeImportMountProof))
+                return { state: "blocked" } as const;
             const row = await tx.downtifyNativeImport.findFirst({
                 where: {
                     id, ownerKimaUserId: owner.kimaUserId,
@@ -240,6 +389,7 @@ export async function claimNativeImport(
                     // A previous pairing's unfinished claim must not be
                     // revived after re-pairing and a fresh baseline.
                     discoveredAt: { gt: pairing.nativeImportBaselineAt },
+                    ...dueForSafePrewriteRetry(),
                 },
                 select: { id: true, status: true, spotifyTrackId: true },
             });
@@ -251,9 +401,13 @@ export async function claimNativeImport(
                     remoteServerId: owner.remoteServerId,
                     remoteUserId: owner.remoteUserId,
                     discoveredAt: { gt: pairing.nativeImportBaselineAt },
+                    ...dueForSafePrewriteRetry(),
                 },
                 data: {
                     status: "claimed", claimToken: token, claimedAt: new Date(),
+                    importTarget: pairing.nativeImportTarget === "lidarr"
+                        ? "lidarr" : "kima",
+                    reviewReason: null,
                 },
             });
             if (changed.count !== 1) return { state: "claimed_elsewhere" } as const;
@@ -264,6 +418,44 @@ export async function claimNativeImport(
         });
     } catch {
         return { state: "blocked" };
+    }
+}
+
+/**
+ * Explicitly release a claim ONLY while no media file was even opened for
+ * writing. A temporary remote outage or unavailable music mount must not
+ * require command-line intervention. The last claim timestamp remains in
+ * the database and prevents re-claiming for 15 minutes.
+ *
+ * CALLER CONTRACT: do not call this after publishNativeAudio is invoked.
+ * A worker crash or any ambiguous post-write outcome must stay claimed or
+ * uncertain for human reconciliation, never automatically retry.
+ */
+export async function releaseNativeUnwrittenClaim(
+    owner: PinnedImportOwner, id: string, token: string,
+    reason: "remote_temporarily_unavailable" | "storage_temporarily_unavailable",
+): Promise<boolean> {
+    if (!validOwner(owner) || !/^[a-z0-9]{10,40}$/.test(id) ||
+        !/^[0-9a-f-]{36}$/.test(token)) return false;
+    try {
+        const changed = await prisma.downtifyNativeImport.updateMany({
+            where: {
+                id, ownerKimaUserId: owner.kimaUserId,
+                remoteServerId: owner.remoteServerId,
+                remoteUserId: owner.remoteUserId,
+                status: "claimed", claimToken: token,
+            },
+            data: {
+                status: "ready",
+                claimToken: null,
+                // Preserve claimedAt as the durable retry backoff checkpoint.
+                reviewReason: reason,
+            },
+        });
+        return changed.count === 1;
+    } catch {
+        // Unknown commit outcome: the caller must not issue any new claim.
+        return false;
     }
 }
 
@@ -285,13 +477,80 @@ export async function holdNativeImportForReview(
     return saved.count === 1;
 }
 
+/**
+ * Operator-requested recovery of exactly ONE legacy RC3 Spotify-lookup 403.
+ * In RC3, spotify_identity_unavailable was written strictly before the
+ * importer called ensureNativeImportDestination or publishNativeAudio.
+ *
+ * This is NOT a general-purpose uncertain claim reset. Every evidence
+ * field must still be NULL, the source must be newer than the baseline,
+ * the claim must be older than 15 minutes, and the linked owner must match.
+ * Unexpected DB acknowledgements never schedule a second rewrite.
+ */
+export async function retryOneProvenUnwrittenSpotifyClaim(
+    owner: PinnedImportOwner,
+): Promise<"requeued" | "none" | "blocked"> {
+    const identity = await pinnedIdentity(owner);
+    if (!identity.paired || !identity.enabled || !identity.baselineAt ||
+        !identity.mountProof || identity.libraryCursor === null) return "blocked";
+    const where = {
+        ownerKimaUserId: owner.kimaUserId,
+        remoteServerId: owner.remoteServerId,
+        remoteUserId: owner.remoteUserId,
+        status: "uncertain",
+        reviewReason: "spotify_identity_unavailable",
+        discoveredAt: { gt: identity.baselineAt },
+        claimedAt: { lt: new Date(Date.now() - 15 * 60 * 1000) },
+        expectedBytes: null, outputRelativePath: null, fullSha256: null,
+        remoteLibraryTrackId: null, indexedTrackId: null,
+    } as const;
+    try {
+        const row = await prisma.downtifyNativeImport.findFirst({
+            where, select: { id: true, claimToken: true },
+            orderBy: { updatedAt: "asc" },
+        });
+        if (!row) return "none";
+        if (!row.claimToken || !/^[0-9a-f-]{36}$/.test(row.claimToken)) {
+            return "blocked";
+        }
+        const changed = await prisma.downtifyNativeImport.updateMany({
+            where: { ...where, id: row.id, claimToken: row.claimToken },
+            data: {
+                status: "ready", claimToken: null, claimedAt: null,
+                reviewReason: "spotify_metadata_retry",
+            },
+        });
+        return changed.count === 1 ? "requeued" : "blocked";
+    } catch {
+        return "blocked";
+    }
+}
+
+/** Non-sensitive, owner-scoped ledger aggregates for Settings. */
+export interface NativeImportSummary {
+    enabled: boolean;
+    baselineReady: boolean;
+    waiting: number;
+    processing: number;
+    awaitingScan: number;
+    imported: number;
+    inReview: number;
+    lidarrPending: number;
+    lidarrNeedsMatch: number;
+    lidarrImported: number;
+}
+
 export async function getNativeImportSummary(
     owner: PinnedImportOwner,
-): Promise<{ enabled: boolean; baselineReady: boolean; waiting: number; inReview: number }> {
+): Promise<NativeImportSummary> {
     const identity = await pinnedIdentity(owner);
-    if (!identity.paired) return { enabled: false, baselineReady: false, waiting: 0, inReview: 0 };
+    if (!identity.paired) return {
+        enabled: false, baselineReady: false, waiting: 0, processing: 0,
+        awaitingScan: 0, imported: 0, inReview: 0,
+        lidarrPending: 0, lidarrNeedsMatch: 0, lidarrImported: 0,
+    };
     const rows = await prisma.downtifyNativeImport.groupBy({
-        by: ["status"],
+        by: ["status","importTarget","reviewReason"],
         where: {
             ownerKimaUserId: owner.kimaUserId,
             remoteServerId: owner.remoteServerId,
@@ -299,13 +558,28 @@ export async function getNativeImportSummary(
         },
         _count: { _all: true },
     });
-    const count = (status: string) => rows.find(row => row.status === status)?._count._all ?? 0;
+    const count = (status: NativeImportStatus,
+        filter?: {importTarget?:string;reviewReason?:string}) =>
+        rows.filter(row => row.status === status &&
+            (!filter?.importTarget || row.importTarget===filter.importTarget) &&
+            (!filter?.reviewReason || row.reviewReason===filter.reviewReason))
+            .reduce((n,row)=>n+row._count._all,0);
     return {
         enabled: identity.enabled,
-        baselineReady: !!identity.baselineAt,
+        baselineReady: !!identity.baselineAt && identity.libraryCursor !== null &&
+            !!identity.mountProof,
         waiting: count("ready"),
-        inReview: count("claimed") + count("review") + count("uncertain") +
-            count("published_pending_scan"),
+        // A claim may survive an unexpected restart: never imply guaranteed progress.
+        processing: count("claimed"),
+        // Published files are not considered imported before the local scanner receipt.
+        awaitingScan: count("published_pending_scan"),
+        imported: count("imported"),
+        inReview: count("review") + count("uncertain") +
+            count("lidarr_submitting") + count("lidarr_artist_creating"),
+        lidarrPending: count("staged_pending_lidarr") + count("lidarr_waiting"),
+        lidarrNeedsMatch: count("staged_pending_lidarr",
+            {reviewReason:"lidarr_match_required"}),
+        lidarrImported: count("imported",{importTarget:"lidarr"}),
     };
 }
 
@@ -324,15 +598,22 @@ export interface NativePublishedFile {
 const SHA256 = /^[0-9a-f]{64}$/;
 const TRACK_ID = /^t[0-9a-f]{16}$/;
 const ALLOWED_AUDIO = new Set([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav"]);
-function safeLocalTarget(p: string): boolean {
+function safeLocalTarget(p: string, mode: "kima" | "lidarr" = "kima"): boolean {
     if (typeof p !== "string" || p.length > 1024 || path.isAbsolute(p) ||
         p.includes("\\") || p.includes("\0")) return false;
     const parts = p.split("/");
-    return parts.length >= 3 && parts.length <= 8 &&
-        parts[0] === "Singles" &&
-        parts.every(x => x.length > 0 && x.length <= 180 &&
-            x !== "." && x !== ".." && !/[<>:"\\|?*\u0000-\u001f\u007f]/.test(x)) &&
-        ALLOWED_AUDIO.has(path.posix.extname(p).toLowerCase());
+    // Lidarr may use Artist/Track; keep legacy Kima-only path rules unchanged.
+    if(parts.length < (mode === "lidarr" ? 2 : 3) || parts.length > 8 ||
+        !parts.every(x => x.length > 0 && x.length <= 180 &&
+            x !== "." && x !== ".." &&
+            !x.startsWith(".") &&
+            !/[<>:"\\|?*\u0000-\u001f\u007f]/.test(x))) return false;
+    // Legacy Kima-owned receipts remain in the private Singles tree.
+    // Lidarr-managed receipts are for its final album/artist tree only;
+    // a remote service cannot use a private staging path as a final file.
+    if(mode === "kima" ? parts[0] !== "Singles" : parts[0] === "Singles")
+        return false;
+    return ALLOWED_AUDIO.has(path.posix.extname(p).toLowerCase());
 }
 
 export async function recordNativePublished(
@@ -398,9 +679,12 @@ export async function confirmNativeIndexed(
             outputRelativePath: true,
             expectedBytes: true,
             fullSha256: true,
+            importTarget: true,
         },
     });
-    if (!entry?.outputRelativePath || !safeLocalTarget(entry.outputRelativePath) ||
+    if (!entry?.outputRelativePath ||
+        !safeLocalTarget(entry.outputRelativePath,
+            entry.importTarget === "lidarr" ? "lidarr" : "kima") ||
         !entry.fullSha256 || !SHA256.test(entry.fullSha256) ||
         !entry.expectedBytes || !Number.isSafeInteger(entry.expectedBytes)) {
         return { state: "not_verified" };

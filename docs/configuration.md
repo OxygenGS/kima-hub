@@ -65,9 +65,9 @@ With the split stack (`docker-compose.yml`), set both in a `.env` file next to t
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `MUSIC_PATH` | `/path/to/your/music` | The folder on the host to mount at `/music`. |
+| `MUSIC_PATH` | **Required; no default** | Absolute path to an existing, mounted music directory. Missing values fail Compose configuration; the example does not auto-create missing host paths. An existing directory still does not prove the correct NAS/DAS is mounted. |
 | `PORT` | `3030` | The port on the host. |
-| `VERSION` | `v1.10.0` (conservative file fallback) | Explicit image tag; set `VERSION=v1.19.0` for the currently published stable version. Existing deployments must retain their actual pinned version until backed up and upgraded. |
+| `VERSION` | `v1.19.0` (fixed published stable) | Production Compose uses this fixed version by default for new installs, **never** `:latest`. Existing installations must preserve their own pinned version until safely backed up and upgraded. |
 
 ### Audio analysis (split stack)
 

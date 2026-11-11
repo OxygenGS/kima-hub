@@ -1,9 +1,6 @@
 # Native Downtify import ledger — persistent identity and crash safety
 
-**Status: additive schema and dormant service.** The released v1.19.0
-container, Downtify settings and Proxmox Importer v5 are unchanged.
-Nothing in this PR schedules downloads, writes media files, mutates
-existing music, enables a settings switch or authorizes a cutover.
+**Release status:** v1.20.0 release candidate, incorporating the native importer and optional Lidarr-managed extension (PR #231). Stable v1.19.0 does not contain native automated importing. The ledger is additive and does not automatically migrate, delete, rename or re-import previously indexed recordings. Automatic media writes remain OFF until the owner explicitly verifies mounts, backup and exclusive importer ownership.
 
 ## Why the ledger is necessary
 
@@ -20,10 +17,13 @@ across restarts and concurrent workers.
 ## Additive migration
 
 `DowntifyIntegration` gains:
-- `nativeImportEnabled` — boolean, **false by default**, with no UI or
-  active worker that can set it in this phase.
-- `nativeImportBaselineAt` — initially null, set once after authenticating
-  the full queue snapshot for first-time activation.
+- `nativeImportEnabled` — boolean, **false by default**, controlled by
+  the admin-only single import toggle after explicit first-use confirmation.
+- `nativeImportBaselineAt` — initially null, the first activation epoch.
+- `nativeImportLibraryCursor` — first-activation Downtify library cursor
+  to exclude old downloads after queue resets or server restarts.
+- `nativeImportMountProof` — UUID marker on the operator-verified music
+  volume, checked before every automated file operation.
 
 A new `DowntifyNativeImport` table stores only:
 - Kima owner, remote server/account identity and immutable Spotify ID;
@@ -36,6 +36,21 @@ The table has a unique constraint on
 `(remoteServerId, remoteUserId, spotifyTrackId)` and a foreign key to
 the Kima user with cascading deletion.
 
+## External music-volume identity
+
+The integration also stores `nativeImportMountProof` (nullable, OFF
+by default). On an administrator-confirmed first activation, a private
+UUID marker is written to the configured music root and its UUID is saved
+with the initial queue/library baseline. All later discovery and claim
+operations require this persistent proof; the media worker also checks
+the physical marker before polling, linking or scanning any file.
+
+A dropped DAS/USB disk may leave a writable local fallback path with the
+same directory name. Without this independent on-disk marker Kima could
+write files to the wrong storage. If the marker disappears, all automatic
+work pauses. Re-pairing clears the DB proof but does not delete the
+physical marker. The root was still operator-verified at first activation.
+
 ## Processing states
 
 | State | Meaning |
@@ -43,33 +58,43 @@ the Kima user with cascading deletion.
 | `baseline` | Existing completed job at activation; never auto-import |
 | `ready` | Newly observed, owner-bound completed track awaiting identity checks |
 | `claimed` | One worker acquired an atomic one-time claim |
-| `published_pending_scan` | File may be present; scanner receipt still missing |
-| `imported` | Reserved for proven scanner/index/playback receipt |
+| `staged_pending_lidarr` | Verified source staged outside the music library; Lidarr match not yet submitted |
+| `lidarr_submitting` | One durable Lidarr submission intent; an uncertain response is never replayed |
+| `lidarr_waiting` | Acknowledged Lidarr command awaiting exact TrackFile and physical hash receipt |
+| `published_pending_scan` | Verified final file is present; Kima scanner receipt still missing |
+| `imported` | Exact Kima index and physical file receipt confirmed; a Lidarr-managed import also has its own TrackFile receipt |
 | `review` / `uncertain` | Stop automatic processing, require human reconciliation |
 
 Only the first two states may be created by the discovery service.
-The `claimed` state is acquired with a transactional compare-and-swap;
-an ambiguous or expired claim is **never automatically reset to ready**.
-A crash between file publication and database acknowledgement must not
-cause an automatic second file write.
+The `claimed` state is acquired with a transactional compare-and-swap.
+A process crash, ambiguous claim or any after-publication outcome is
+**never** automatically reset to ready. A crash between file publication
+and database acknowledgement must not cause an automatic second file write.
+
+Only two explicitly proven **pre-write** errors can release a currently
+owned claim back to ready: a temporarily unavailable remote source or
+unavailable music mount, *before* calling the atomic publisher. The
+released claim retains its last `claimedAt`, and both the claim query
+and atomic UPDATE enforce a **15-minute cooldown**. A missing DB receipt
+holds the claim; no retry path uses unchecked exceptions as evidence
+that no file was written.
 
 ## First-time activation
 
-A future UI activation must use the full, owner-filtered, authenticated
-Downtify queue as a **one-time baseline**. It stores past completed Spotify
-IDs as `baseline` and writes the baseline epoch in the same PostgreSQL
-transaction. A conflicting or ambiguous snapshot is rejected completely.
-Only future newly completed jobs can enter `ready`, and unique insert
-semantics prevent re-processing an existing song after restart.
+The **Settings → Integrations → Downtify** toggle first authenticates an
+owner-bound queue and full library snapshot and checks the confirmed
+music volume. It stores all historical completed Spotify IDs as
+`baseline`, plus the library cursor, volume UUID and activation epoch
+in a transaction. Ambiguous snapshots are refused completely.
 
-This service does **not** implement the initial UI activation yet:
-the owner authentication, safe source stream and index-confirmed file
-publication must be wired together first. Do not flip
-`nativeImportEnabled` by editing the database directly.
+Only files confirmed in later incremental mobile-library changes, with
+post-activation timestamps and one matching completed owner job, may
+enter `ready`. In-flight downloads postpone cursor advancement rather
+than losing events. Never flip `nativeImportEnabled` directly in SQL.
 
-## Kima's final scanner receipt (new, dormant)
+## Kima's final scanner receipt (opt-in import worker)
 
-A future worker may call `recordNativePublished` only after a complete
+The opt-in worker calls `recordNativePublished` only after a complete
 audio verification and successful atomic no-overwrite publication.
 That transition stores the target's relative Singles/ path, exact byte
 count, SHA-256 and remote library ID, then advances the durable claim to
@@ -87,7 +112,8 @@ Any missing file, offline DAS, changed hash, index failure or stale
 claim stays unconfirmed; no automatic re-copy or deletion is triggered.
 A database scanner receipt still does not, by itself, prove that
 every external music player has successfully streamed the file.
-All of these operations remain **unwired to a user-facing switch**.
+These operations are wired to the admin-only opt-in switch in the
+unreleased integration candidate. They do not run in v1.19.0.
 
 ## Direct source transfer (new, read-only)
 
@@ -107,19 +133,21 @@ library record, an expected media type and no content encoding. Redirects
 and proxy forwarding are disabled, and the async stream rejects
 oversized, truncated or malformed byte chunks.
 
-**The stream is not written to disk yet.** A complete response is not
-proof that embedded metadata matches the requested Spotify recording.
-Future code must compare identity, decode audio, issue an approved
-atomic file publish, and verify a Kima scanner receipt before returning
-an imported state. A refused or interrupted stream must stop at review,
-not silently retry after an uncertain file write.
+**The transport component alone never writes music.** The optional
+worker independently compares Spotify identity, parses recording tags,
+decodes the entire recording from a private 0600 file, then uses the
+atomic no-overwrite publisher and requires a Kima scanner receipt.
+Only provably unwritten remote/storage outages may retry after the
+durable cooldown. Uncertain post-write outcomes stay held for review.
 
 ## Existing Importer v5
 
-The operator-managed legacy host import timer is still enabled,
-and the existing script is backed up on the Proxmox host.
-No source-code PR can disable that private timer. The old and new
-importers must not write to the same music library concurrently.
+The existing operator-managed host import timer/script remain outside
+this GitHub repository and have **not been touched** in this development
+session. No source-code PR can disable that external timer. Before
+enabling the native importer on a real system, its operator must verify
+that the external importer is stopped; two importers must never write
+to the same music library concurrently.
 
 Before v5 is removed, we need a complete original-audio stream with
 hash/decode checks, an atomic no-overwrite publication, exact scanner

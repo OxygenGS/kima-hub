@@ -52,6 +52,12 @@ jobs:
                   VERSION="v$(python3 -c 'import json; print(json.load(open("backend/package.json"))["version"])')"
                   python3 .github/ci/build-release-notes.py --tag "$VERSION" --output /tmp/ci-release-notes.md
                   test -s /tmp/ci-release-notes.md
+            - name: Verify production Compose music path and fixed stable fallback
+              run: python3 .github/ci/check-portable-compose.py
+            - name: Validate read-only Downtify staging source protocol
+              run: python3 -m unittest discover -s scripts/tests -p 'test_downtify_staging_probe.py' -v
+            - name: Validate pinned multiarch vulnerability-scanner installer syntax
+              run: bash -n .github/ci/install-trivy-verified.sh
 
     public-privacy-audit:
         name: Block local installation details in public source
@@ -185,6 +191,16 @@ jobs:
             - name: Install dependencies
               working-directory: backend
               run: npm ci
+
+            - name: Ensure FFmpeg is available for real-audio canary
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  if ! test -x /usr/bin/ffmpeg; then
+                    sudo apt-get update -qq
+                    sudo apt-get install -y --no-install-recommends ffmpeg
+                  fi
+                  /usr/bin/ffmpeg -hide_banner -version | head -n 1
 
             - name: Apply database migrations
               working-directory: backend

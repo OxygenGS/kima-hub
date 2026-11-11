@@ -11,6 +11,7 @@ const spotifyId = "0123456789ABCDEFGHIJKL";
 const recording: ExpectedNativeRecording = {
     spotifyId, expectedSpotifyId: spotifyId,
     isrc: "USABC1234567", durationMs: 207000,
+    title: "Sample Song", artist: "Example Artist",
     extension: ".flac",
 };
 const bytes = Buffer.concat([Buffer.from("fLaC"), Buffer.alloc(2048, 0x55)]);
@@ -23,6 +24,8 @@ let temp: string;
 const deps = () => ({
     parse: jest.fn().mockResolvedValue({
         isrc: ["USABC1234567"], durationSeconds: 207.5,
+        title: "Sample Song", artist: "Example Artist",
+        artists: ["Example Artist"],
     }),
     decode: jest.fn().mockImplementation(async (chunks: AsyncIterable<Buffer>) => {
         let consumed = 0;
@@ -80,17 +83,191 @@ describe("Complete private-recording audio verification (dormant)", () => {
         expect(mock.parse).not.toHaveBeenCalled();
     });
 
-    it("holds missing/contradictory embedded ISRC for review", async () => {
-        const missing = deps();
-        missing.parse.mockResolvedValueOnce({ isrc: null, durationSeconds: 207 });
-        expect((await verifyNativeTemporaryRecording(temp, recording, source, missing)).state)
+    it("accepts stock Downtify audio without ISRC when Spotify title, credited artist and duration match", async () => {
+        const noIsrc = deps();
+        noIsrc.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207.5,
+            title: "Sample Song", artist: "Example Artist",
+        });
+        const outcome = await verifyNativeTemporaryRecording(temp, recording, source, noIsrc);
+        expect(outcome.state).toBe("verified");
+        expect(outcome.verifiedForPublication).toBe(true);
+        expect(noIsrc.decode).toHaveBeenCalledTimes(1);
+        expect(await fs.readFile(temp)).toEqual(bytes);
+    });
+
+    it("requires the physical album tag to match the owner-bound album in Lidarr mode", async () => {
+        const expected = {...recording, album:"Private Dancer"};
+        const correct = deps();
+        correct.parse.mockResolvedValueOnce({
+            isrc:["USABC1234567"], durationSeconds:207,
+            title:"Sample Song",artist:"Example Artist",album:" private dancer ",
+        });
+        expect((await verifyNativeTemporaryRecording(temp,expected,source,correct)).state)
+            .toBe("verified");
+        for(const album of [null,"","Unknown Album","Private Dancer Deluxe"]) {
+            const wrong=deps();
+            wrong.parse.mockResolvedValueOnce({
+                isrc:["USABC1234567"], durationSeconds:207,
+                title:"Sample Song",artist:"Example Artist",album,
+            });
+            expect((await verifyNativeTemporaryRecording(temp,expected,source,wrong)).state)
+                .toBe("recording_needs_review");
+            expect(wrong.decode).not.toHaveBeenCalled();
+        }
+    });
+
+    it("requires credited artist and track title when handing ISRC-matched audio to Lidarr", async () => {
+        const lidarr={...recording,album:"Private Dancer"};
+        const wrongTags=[
+            {title:null,artist:"Example Artist"},
+            {title:"Other Recording",artist:"Example Artist"},
+            {title:"Sample Song",artist:null},
+            {title:"Sample Song",artist:"Another Artist"},
+            {title:"Sample Song",artist:"Example Artist Tribute"},
+        ];
+        for(const tags of wrongTags){
+            const mock=deps();
+            mock.parse.mockResolvedValueOnce({
+                isrc:["USABC1234567"],durationSeconds:207.5,
+                album:"Private Dancer",...tags,
+            });
+            const result=await verifyNativeTemporaryRecording(temp,lidarr,source,mock);
+            expect(result.state).toBe("recording_needs_review");
+            expect(mock.decode).not.toHaveBeenCalled();
+        }
+        // A Kima-only import retains the prior ISRC verification policy.
+        const legacy=deps();
+        legacy.parse.mockResolvedValueOnce({
+            isrc:["USABC1234567"],durationSeconds:207.5,
+            title:"Other Recording",artist:"Another Artist",
+        });
+        expect((await verifyNativeTemporaryRecording(
+            temp,recording,source,legacy,
+        )).state).toBe("verified");
+    });
+
+    it("still verifies albums in Lidarr mode when stock audio lacks ISRC", async () => {
+        const expected={...recording,album:"Private Dancer"};
+        const mock=deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc:null,durationSeconds:207.5,
+            title:"Sample Song",artist:"Example Artist",
+            album:"Private Dancer",
+        });
+        expect((await verifyNativeTemporaryRecording(temp,expected,source,mock)).state)
+            .toBe("verified");
+        expect(mock.decode).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not bypass full-byte SHA verification when stock audio lacks ISRC", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist",
+        });
+        const outcome = await verifyNativeTemporaryRecording(temp, recording, {
+            ...source, sha256: "b".repeat(64),
+        }, mock);
+        expect(outcome.state).toBe("hash_mismatch");
+        expect(outcome.verifiedForPublication).toBe(false);
+        expect(mock.parse).not.toHaveBeenCalled();
+        expect(mock.decode).not.toHaveBeenCalled();
+    });
+
+    it("does not treat a longer artist name as a credited artist match", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist Quartet",
+            artists: ["Example Artist Quartet"],
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, mock)).state)
             .toBe("recording_needs_review");
+        expect(mock.decode).not.toHaveBeenCalled();
+    });
+
+    it("still rejects a conflicting embedded ISRC even when title and artist agree", async () => {
         const wrong = deps();
         wrong.parse.mockResolvedValueOnce({
             isrc: ["USABC7654321"], durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist",
         });
         expect((await verifyNativeTemporaryRecording(temp, recording, source, wrong)).state)
             .toBe("recording_needs_review");
+        expect(wrong.decode).not.toHaveBeenCalled();
+    });
+
+    it("never falls back for bad or contradictory ISRC values", async () => {
+        for (const tag of [["bad"], ["USABC1234567", "USABC7654321"], [123]]) {
+            const mock = deps();
+            mock.parse.mockResolvedValueOnce({
+                isrc: tag, durationSeconds: 207,
+                title: "Sample Song", artist: "Example Artist",
+            });
+            expect((await verifyNativeTemporaryRecording(temp, recording, source, mock)).state)
+                .toBe("recording_needs_review");
+            expect(mock.decode).not.toHaveBeenCalled();
+        }
+    });
+
+    it("holds tagless or mismatched stock recordings for review", async () => {
+        for (const tags of [
+            { title: null, artist: "Example Artist", durationSeconds: 207 },
+            { title: "Sample Song", artist: null, durationSeconds: 207 },
+            { title: "Other Song", artist: "Example Artist", durationSeconds: 207 },
+            { title: "Sample Song", artist: "Different Artist", durationSeconds: 207 },
+            { title: "Sample Song", artist: "Example Artist", durationSeconds: 220 },
+            { title: "Sample Song", artist: "Example Artist", durationSeconds: null },
+        ]) {
+            const mock = deps();
+            mock.parse.mockResolvedValueOnce({ isrc: null, ...tags });
+            expect((await verifyNativeTemporaryRecording(temp, recording, source, mock)).state)
+                .toBe("recording_needs_review");
+            expect(mock.decode).not.toHaveBeenCalled();
+        }
+    });
+
+    it("accepts a matching credited artist without ISRC even when a different main artist is listed", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: " sample   SONG ",
+            artist: "Another Artist", artists: ["Example Artist", "Another Artist"],
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, mock)).state)
+            .toBe("verified");
+    });
+
+    it("supports Downtify MP3 semicolon-separated credited artists, never prefixes", async () => {
+        const correct = deps();
+        correct.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Another Artist; Example Artist",
+            artists: null,
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, correct)).state)
+            .toBe("verified");
+
+        const wrong = deps();
+        wrong.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Another Artist; Example Artist Quartet",
+            artists: null,
+        });
+        expect((await verifyNativeTemporaryRecording(temp, recording, source, wrong)).state)
+            .toBe("recording_needs_review");
+    });
+
+    it("supports missing provider ISRC only if remaining metadata matches exactly", async () => {
+        const mock = deps();
+        mock.parse.mockResolvedValueOnce({
+            isrc: null, durationSeconds: 207,
+            title: "Sample Song", artist: "Example Artist",
+        });
+        expect((await verifyNativeTemporaryRecording(temp, {
+            ...recording, isrc: null,
+        }, source, mock)).state).toBe("verified");
     });
 
     it("holds a duration mismatch for review, even with matching ISRC", async () => {

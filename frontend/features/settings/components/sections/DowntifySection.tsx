@@ -33,11 +33,55 @@ type NativeImportState = "disabled" | "unbound" | "misconfigured" | "music_unava
     "stream_unavailable" | "header_unverified" | "original_stream_verified";
 type NativeImportReadiness = {
     state: NativeImportState;
+    serverVerified: boolean;
+    accountVerified: boolean;
+    musicRootAccessible: boolean;
     originalStreamChecked: boolean;
     autoImportAvailable: false;
     importerCutoverAuthorized: false;
     filesChanged: false;
 };
+type NativeAutoImportStatus = {
+    state: "unpaired" | "other_owner" | "paused" | "enabled";
+    enabled: boolean;
+    baselineReady: boolean;
+    awaitingImport: number;
+    processing: number;
+    awaitingScan: number;
+    imported: number;
+    needsReview: number;
+    storageReady: boolean;
+    target?: "kima" | "lidarr";
+    lidarrStageReady?: boolean;
+    lidarrDownloads?: string | null;
+    lidarrMusic?: string | null;
+    lidarrPending?: number;
+    lidarrNeedsMatch?: number;
+    lidarrImported?: number;
+    allowArtistCreation?: boolean;
+};
+type NativeSourceDiagnosis = {
+    state: keyof typeof nativeSourceDiagnosisMessages;
+};
+const nativeSourceDiagnosisMessages = {
+    "ready": "Downtify's original audio response is reachable for this waiting track; file content still needs verification.",
+    "not_completed": "This track is no longer in Downtify's completed download queue. Kima cannot prove ownership from a library filename alone.",
+    "stream_unavailable": "Downtify could not supply the original audio headers or exact file length for this track.",
+    "not_in_library": "The completed Downtify download is missing from the mobile music library.",
+    "ambiguous_library": "More than one Downtify library file matches this download; automatic import is blocked.",
+    "ambiguous_job": "Multiple completed Downtify jobs match this track; automatic import is blocked.",
+    "invalid_metadata": "Downtify returned incomplete or invalid metadata for this audio file.",
+    "unavailable": "Downtify's read-only source inspection could not finish. The connection or remote library may be unavailable.",
+    "unauthorized": "Downtify rejected the saved account or device identity.",
+    "incompatible": "Downtify returned an incompatible server or library response.",
+    "disabled": "The Downtify connection is disabled.",
+    "unbound": "This Kima account is not bound to the Downtify owner.",
+    "misconfigured": "The Downtify pairing is incomplete or invalid.",
+    "none": "There is no waiting track to inspect.",
+    "paused": "Automatic Downtify importing is paused.",
+    "storage_unavailable": "Kima cannot verify the music storage mounted at activation."
+} satisfies Record<string, TranslationKey>;
+
 const importMessages: Record<NativeImportState, TranslationKey> = {
     disabled: "Enable the Downtify queue first.",
     unbound: "Only the linked Kima administrator can check import readiness.",
@@ -52,10 +96,42 @@ const importMessages: Record<NativeImportState, TranslationKey> = {
     no_library_match: "No exact library file matched an owned completed download.",
     stream_unavailable: "Downtify did not provide the required original audio range.",
     header_unverified: "The remote audio format could not be verified.",
-    original_stream_verified: "Original audio transfer is reachable. Automatic importing is not enabled yet.",
+    original_stream_verified: "Original audio transfer is reachable. This check does not import music.",
 };
 
+/** Read-only evidence from the API; none of these checks authorizes disk writes. */
+const setupChecks: { key: "musicRootAccessible" | "serverVerified" |
+    "accountVerified" | "originalStreamChecked"; label: TranslationKey }[] = [
+    { key: "musicRootAccessible", label: "Music directory access" },
+    { key: "serverVerified", label: "Downtify server identity" },
+    { key: "accountVerified", label: "Paired Downtify account" },
+    { key: "originalStreamChecked", label: "Original audio sample" },
+];
 
+
+/** Only known, sanitized server states may be shown; never display raw errors. */
+const nativeSafeMessage: Record<string, TranslationKey> = {
+    not_paired: "Connect Downtify before enabling automatic import.",
+    unauthorized: "Only the linked administrator can manage automatic import.",
+    pairing_disabled: "Enable the Downtify connection before automatic import.",
+    confirmation_required: "Confirm the music storage, backup and other-importer checks first.",
+    source_unavailable: "Downtify cannot provide a complete initial snapshot. Check the connection and retry.",
+    invalid_baseline: "Downtify returned inconsistent historical downloads. Automatic import remains off.",
+    changed_during_setup: "Downtify pairing changed during setup. Reload settings and try again.",
+    storage_unavailable: "Kima cannot verify the music storage. Check its mount and write permissions.",
+};
+
+const targetSafeMessage: Record<string, TranslationKey> = {
+    pause_first: "Pause automatic importing before changing the final library.",
+    outstanding_work: "Resolve waiting or claimed jobs before changing import ownership.",
+    invalid_staging: "The shared downloads or Lidarr music path is invalid or unavailable.",
+    stage_not_shared: "Lidarr cannot see Kima's shared download folder. Check both Docker mounts and the Lidarr-side path.",
+    lidarr_unavailable: "Lidarr must be connected and its music root verified first.",
+    acknowledgment_required: "Confirm the shared downloads volume and backup before switching.",
+    changed_during_setup: "Downtify pairing changed during setup. Reload settings and try again.",
+    unauthorized: "Only the linked administrator can manage automatic import.",
+    unavailable: "Could not update the import destination.",
+};
 const disabled: DowntifyControls = {
     enabled: false, spotifyIntentsEnabled: false,
     trackSubmissionEnabled: false, reconciliationEnabled: false,
@@ -141,6 +217,21 @@ export function DowntifySection() {
     const [error, setError] = useState(false);
     const [importChecking, setImportChecking] = useState(false);
     const [importFeedback, setImportFeedback] = useState<TranslationKey | null>(null);
+    const [importReadiness, setImportReadiness] = useState<NativeImportReadiness | null>(null);
+    const [nativeStatus, setNativeStatus] = useState<NativeAutoImportStatus | null>(null);
+    const [nativeAck, setNativeAck] = useState(false);
+    const [nativeBusy, setNativeBusy] = useState(false);
+    const [nativeRefreshing, setNativeRefreshing] = useState(false);
+    const [nativeFeedback, setNativeFeedback] = useState<TranslationKey | null>(null);
+    const [nativeError, setNativeError] = useState(false);
+    const [sourceDiagnosticBusy, setSourceDiagnosticBusy] = useState(false);
+    const [sourceDiagnosticFeedback, setSourceDiagnosticFeedback] = useState<TranslationKey | null>(null);
+    const [targetChoice, setTargetChoice] = useState<"kima" | "lidarr">("kima");
+    const [lidarrDownloads, setLidarrDownloads] = useState("/downloads");
+    const [lidarrMusic, setLidarrMusic] = useState("/music");
+    const [allowArtistCreation, setAllowArtistCreation] = useState(false);
+    const [targetAck, setTargetAck] = useState(false);
+    const [targetFeedback, setTargetFeedback] = useState<TranslationKey | null>(null);
 
     useEffect(() => {
         let active = true;
@@ -154,6 +245,27 @@ export function DowntifySection() {
         }).finally(() => { if (active) setLoaded(true); });
         return () => { active = false; };
     }, [t]);
+
+    useEffect(() => {
+        if (status?.source !== "database" || !status.ownerMatches) {
+            setNativeStatus(null);
+            return;
+        }
+        let active = true;
+        void api.get<NativeAutoImportStatus>("/downtify-integration/native-import")
+            .then(result => {
+                if (!active) return;
+                setNativeStatus(result);
+                setTargetChoice(result.target === "lidarr" ? "lidarr" : "kima");
+                setLidarrDownloads(result.lidarrDownloads || "/downloads");
+                setLidarrMusic(result.lidarrMusic || "/music");
+                setAllowArtistCreation(result.allowArtistCreation === true);
+            })
+            .catch(() => {
+                if (active) setNativeFeedback("Could not load automatic import settings.");
+            });
+        return () => { active = false; };
+    }, [status?.source, status?.ownerMatches, status?.enabled]);
 
     const reportError = (err: unknown) => {
         setError(true);
@@ -194,6 +306,8 @@ export function DowntifySection() {
         setControls(controlsFromStatus(result));
         setToken("");
         setShowPairing(false);
+        setImportReadiness(null);
+        setImportFeedback(null);
         setAck(false);
         setFeedback(t("Downtify account paired. All features remain disabled."));
     });
@@ -204,17 +318,21 @@ export function DowntifySection() {
         });
         setStatus(result);
         setControls(controlsFromStatus(result));
+        setImportReadiness(null);
+        setImportFeedback(null);
         setAck(false);
         setFeedback(t("Downtify settings saved."));
     });
     const checkNativeImport = async () => {
         if (importChecking || pending || !ownerMatches) return;
         setImportChecking(true);
+        setImportReadiness(null);
         setImportFeedback(null);
         try {
             const result = await api.get<NativeImportReadiness>("/downtify-integration/import-readiness");
             // Even a successful 64-byte audio probe is NOT a file import or
             // approval to shut down a different writer on the music volume.
+            setImportReadiness(result);
             setImportFeedback(importMessages[result.state] || importMessages.unavailable);
         } catch {
             setImportFeedback(importMessages.unavailable);
@@ -222,6 +340,138 @@ export function DowntifySection() {
             setImportChecking(false);
         }
     };
+    const refreshNativeStatus = async () => {
+        if (nativeRefreshing || nativeBusy || pending || !ownerMatches) return;
+        setNativeRefreshing(true);
+        setNativeError(false);
+        setNativeFeedback(null);
+        try {
+            // Database aggregates and local volume check only; no Downtify polling,
+            // new claim, scanner request or media write.
+            const current = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(current);
+        } catch {
+            setNativeError(true);
+            setNativeFeedback("Could not refresh import status.");
+        } finally {
+            setNativeRefreshing(false);
+        }
+    };
+
+    const toggleNativeAutoImport = async (enabled: boolean) => {
+        if (nativeBusy || nativeRefreshing || !ownerMatches || !nativeStatus || pending) return;
+        if (enabled && !nativeAck) {
+            setNativeError(true);
+            setNativeFeedback("Confirm the music storage, backup and other-importer checks first.");
+            return;
+        }
+        setNativeBusy(true);
+        setNativeError(false);
+        setNativeFeedback(null);
+        try {
+            const updated = await api.post<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+                { enabled, acknowledgeSingleWriter: enabled && nativeAck },
+            );
+            setNativeStatus(updated);
+            setNativeAck(false);
+            setNativeFeedback(
+                enabled ? "Automatic importing enabled." : "Automatic importing paused.",
+            );
+        } catch (err) {
+            setNativeError(true);
+            setNativeFeedback(nativeSafeMessage[errorState(err)] ||
+                "Could not change automatic import settings.");
+        } finally {
+            setNativeBusy(false);
+        }
+    };
+
+    const diagnoseWaitingSource = async () => {
+        if (sourceDiagnosticBusy || nativeBusy || nativeRefreshing || pending ||
+            !ownerMatches || !nativeStatus?.enabled || !nativeStatus.storageReady ||
+            nativeStatus.awaitingImport < 1) return;
+        setSourceDiagnosticBusy(true);
+        setSourceDiagnosticFeedback(null);
+        try {
+            const result = await api.get<NativeSourceDiagnosis>(
+                "/downtify-integration/native-import/source-diagnostic",
+            );
+            setSourceDiagnosticFeedback(
+                nativeSourceDiagnosisMessages[result.state] ||
+                nativeSourceDiagnosisMessages.unavailable,
+            );
+        } catch {
+            setSourceDiagnosticFeedback(nativeSourceDiagnosisMessages.unavailable);
+        } finally {
+            setSourceDiagnosticBusy(false);
+        }
+    };
+
+    const saveNativeTarget = async () => {
+        if (nativeBusy || nativeRefreshing || pending || !ownerMatches ||
+            !nativeStatus || nativeStatus.enabled || !targetAck) return;
+        setNativeBusy(true);
+        setTargetFeedback(null);
+        try {
+            await api.post("/downtify-integration/native-import/target", {
+                target: targetChoice,
+                lidarrDownloads: targetChoice === "lidarr" ? lidarrDownloads.trim() : null,
+                lidarrMusic: targetChoice === "lidarr" ? lidarrMusic.trim() : null,
+                allowArtistCreation: targetChoice === "lidarr" && allowArtistCreation,
+                acknowledge: true,
+            });
+            const fresh = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(fresh);
+            setTargetChoice(fresh.target === "lidarr" ? "lidarr" : "kima");
+            setLidarrDownloads(fresh.lidarrDownloads || "/downloads");
+            setLidarrMusic(fresh.lidarrMusic || "/music");
+            setAllowArtistCreation(fresh.allowArtistCreation === true);
+            setTargetAck(false);
+            setTargetFeedback("Import destination saved. Automatic importing remains off.");
+        } catch (err) {
+            setTargetFeedback(targetSafeMessage[errorState(err)] ||
+                targetSafeMessage.unavailable);
+        } finally {
+            setNativeBusy(false);
+        }
+    };
+
+    const retrySafeMetadata = async () => {
+        if (nativeBusy || nativeRefreshing || pending || !ownerMatches ||
+            !nativeStatus?.enabled || !nativeStatus.storageReady ||
+            nativeStatus.needsReview < 1) return;
+        setNativeBusy(true);
+        setNativeFeedback(null);
+        setNativeError(false);
+        try {
+            const result = await api.post<{state: "requeued" | "none" | "blocked"}>(
+                "/downtify-integration/native-import/retry-identity",
+                { acknowledgeSafeRetry: true },
+            );
+            const fresh = await api.get<NativeAutoImportStatus>(
+                "/downtify-integration/native-import",
+            );
+            setNativeStatus(fresh);
+            setNativeFeedback(result.state === "requeued"
+                ? "One verified unwritten Spotify lookup was released for safe retry."
+                : result.state === "none"
+                    ? "No safely retryable Spotify lookup was found."
+                    : "The claimed download cannot be safely retried.");
+            setNativeError(result.state === "blocked");
+        } catch (err) {
+            setNativeError(true);
+            setNativeFeedback(nativeSafeMessage[errorState(err)] ||
+                "The claimed download cannot be safely retried.");
+        } finally {
+            setNativeBusy(false);
+        }
+    };
+
     const chooseUsage = (value: Usage) => {
         setFeedback("");
         setAck(false);
@@ -269,6 +519,8 @@ export function DowntifySection() {
                                                 <button type="button" onClick={() => {
                                                     setShowPairing(value => !value);
                                                     setToken("");
+                                                    setImportReadiness(null);
+                                                    setImportFeedback(null);
                                                 }} disabled={pending}
                                                     aria-expanded={showPairing}
                                                     aria-controls="downtify-pairing-form"
@@ -405,27 +657,224 @@ export function DowntifySection() {
                                             </a>
                                         )}
                                     </div>
-                                    <div className="rounded-xl border border-white/10 p-4 space-y-2">
-                                        <h4 className="text-sm font-semibold text-white">
-                                            {t("Automatic library import")}
-                                        </h4>
-                                        <p className="text-xs text-[var(--text-muted)]">
-                                            {t("Kima is testing direct audio transfer from Downtify. The automatic importer is not available yet. Keep the existing importer running.")}
-                                        </p>
+                                    <div className="rounded-xl border border-white/10 p-4 space-y-3">
+                                        <SettingsRow label={t("Automatically add downloaded music")}
+                                            description={t("Kima verifies new Downtify downloads and indexes them locally or hands them to Lidarr when configured. Existing downloads are skipped.")}>
+                                            <SettingsToggle id="downtify-native-auto-import"
+                                                checked={nativeStatus?.enabled === true}
+                                                disabled={!ownerMatches || !status?.enabled ||
+                                                    !nativeStatus || nativeBusy || nativeRefreshing || pending ||
+                                                    (!nativeStatus.enabled && !nativeAck)}
+                                                onChange={toggleNativeAutoImport} />
+                                        </SettingsRow>
+                                        {nativeStatus && !nativeStatus.enabled && (
+                                            <p className="text-xs text-[var(--text-muted)]">
+                                                {t("New installation: no previous importer to stop. Existing installation: stop other importers writing to this library before enabling.")}
+                                            </p>
+                                        )}
+                                        {nativeStatus && !nativeStatus.enabled && (
+                                            <div className="space-y-3 rounded-lg border border-white/10 p-3">
+                                                <p className="text-xs font-semibold text-white">
+                                                    {t("Choose who manages downloaded music")}
+                                                </p>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {t("Kima can index music independently, or send verified downloads to Lidarr to organise artists and albums. Switching never migrates existing songs.")}
+                                                </p>
+                                                <div className="flex flex-col gap-2 text-xs text-[var(--text-secondary)]">
+                                                    <label className="flex items-center gap-2">
+                                                        <input type="radio" name="downtify-final-owner" value="kima"
+                                                            checked={targetChoice === "kima"}
+                                                            onChange={() => { setTargetChoice("kima"); setTargetAck(false); }}
+                                                            disabled={nativeBusy || pending} />
+                                                        {t("Kima manages music (no Lidarr required)")}
+                                                    </label>
+                                                    <label className="flex items-center gap-2">
+                                                        <input type="radio" name="downtify-final-owner" value="lidarr"
+                                                            checked={targetChoice === "lidarr"}
+                                                            onChange={() => { setTargetChoice("lidarr"); setTargetAck(false); }}
+                                                            disabled={nativeBusy || pending} />
+                                                        {t("Lidarr manages artists, albums and files")}
+                                                    </label>
+                                                </div>
+                                                {targetChoice === "lidarr" && (
+                                                    <div className="space-y-2">
+                                                        <SettingsRow label={t("Shared downloads path inside Lidarr")}
+                                                            description={t("This must point to the same shared downloads filesystem Kima uses, but from Lidarr's container.")}>
+                                                            <SettingsInput id="downtify-lidarr-downloads"
+                                                                value={lidarrDownloads} onChange={setLidarrDownloads}
+                                                                disabled={nativeBusy || pending} />
+                                                        </SettingsRow>
+                                                        <SettingsRow label={t("Lidarr-managed music root")}
+                                                            description={t("Select Lidarr's existing music root, not a staging folder. Kima verifies its own music mount separately.")}>
+                                                            <SettingsInput id="downtify-lidarr-music"
+                                                                value={lidarrMusic} onChange={setLidarrMusic}
+                                                                disabled={nativeBusy || pending} />
+                                                        </SettingsRow>
+                                                                                                            <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                                            <input type="checkbox" id="downtify-lidarr-autoartist"
+                                                                checked={allowArtistCreation}
+                                                                onChange={e=>{setAllowArtistCreation(e.target.checked);setTargetAck(false);}}
+                                                                disabled={nativeBusy || pending}/>
+                                                            {t("Allow Kima to add one uniquely matched unmonitored MusicBrainz artist in Lidarr when needed. Never search for missing albums.")}
+                                                        </label>
+                                                    </div>
+                                                )}
+                                                <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                                                    <input type="checkbox" id="downtify-lidarr-target-ack"
+                                                        checked={targetAck} onChange={e=>setTargetAck(e.target.checked)}
+                                                        disabled={nativeBusy || pending} />
+                                                    {t("I have verified both mounts, existing music backups, and that only Lidarr will manage the final library.")}
+                                                </label>
+                                                <button type="button" onClick={saveNativeTarget}
+                                                    disabled={!targetAck || nativeBusy || nativeRefreshing || pending ||
+                                                        !ownerMatches || targetChoice === (nativeStatus.target || "kima") &&
+                                                        (targetChoice === "kima" ||
+                                                            (lidarrDownloads === nativeStatus.lidarrDownloads &&
+                                                             lidarrMusic === nativeStatus.lidarrMusic &&
+                                                             allowArtistCreation === (nativeStatus.allowArtistCreation === true)))}
+                                                    className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                    {t("Save import destination")}
+                                                </button>
+                                                {targetFeedback && <p role="status" className="text-xs text-[var(--text-muted)]">
+                                                    {t(targetFeedback)}
+                                                </p>}
+                                            </div>
+                                        )}
+
+                                        {nativeStatus && !nativeStatus.enabled && (
+                                            <label className="flex items-start gap-3 rounded-lg border border-white/10 p-3 text-xs text-[var(--text-secondary)]">
+                                                <input type="checkbox" id="downtify-native-cutover-ack"
+                                                    checked={nativeAck}
+                                                    onChange={e => setNativeAck(e.target.checked)}
+                                                    disabled={nativeBusy || pending || !status?.enabled}
+                                                    className="mt-0.5" />
+                                                {t("I verified the music storage is mounted and writable, a backup is available for existing libraries, and no other importer writes to this library.")}
+                                            </label>
+                                        )}
+                                        {nativeStatus && (
+                                            <>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {nativeStatus.enabled
+                                                        ? nativeStatus.storageReady
+                                                            ? t("Automatic import is active.")
+                                                            : t("Automatic import is paused because the verified music storage is unavailable.")
+                                                        : t("Automatic import is currently off.")}
+                                                </p>
+                                                <dl aria-label={t("Downtify import activity")}
+                                                    className="grid grid-cols-2 gap-3 rounded-lg border border-white/10 p-3 text-xs sm:grid-cols-3">
+                                                    {([
+                                                        ["Waiting", nativeStatus.awaitingImport],
+                                                        ["Claimed / unresolved", nativeStatus.processing],
+                                                        ["Waiting for library scan", nativeStatus.awaitingScan],
+                                                        ["Added to Kima library", nativeStatus.imported],
+                                                        ...(nativeStatus.target === "lidarr"
+                                                            ? [
+                                                                ["Waiting for Lidarr", nativeStatus.lidarrPending ?? 0],
+                                                                ["Lidarr import confirmed", nativeStatus.lidarrImported ?? 0],
+                                                            ] as const : []),
+                                                        ["Needs review", nativeStatus.needsReview],
+                                                    ] as const).map(([label, value]) => (
+                                                        <div key={label} className="space-y-1">
+                                                            <dt className="text-[var(--text-muted)]">{t(label)}</dt>
+                                                            <dd className="font-semibold text-white">{value}</dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                                {nativeStatus.imported > 0 && nativeStatus.target !== "lidarr" && (
+                                                    <p className="text-xs text-[var(--text-muted)]"
+                                                        role="note">
+                                                        {t("This confirms indexing in Kima only. Native Downtify imports are not automatically registered in Lidarr. Do not manually move indexed files: their paths and hashes are verified by Kima.")}
+                                                    </p>
+                                                )}
+                                                {nativeStatus.target === "lidarr" &&
+                                                    (nativeStatus.lidarrNeedsMatch ?? 0) > 0 && (
+                                                    <p role="status" className="text-xs text-[var(--text-muted)]">
+                                                        {t("Some staged tracks need a unique MusicBrainz artist/album match in Lidarr. No duplicate import will be started.")}
+                                                    </p>
+                                                )}
+                                                <button type="button" onClick={refreshNativeStatus}
+                                                    disabled={!ownerMatches || nativeRefreshing || nativeBusy || pending}
+                                                    className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                    {nativeRefreshing ? t("Refreshing import status...") : t("Refresh import status")}
+                                                </button>
+                                                {nativeStatus.enabled && nativeStatus.storageReady &&
+                                                    nativeStatus.awaitingImport > 0 && (
+                                                    <div className="space-y-2">
+                                                        <button type="button" onClick={diagnoseWaitingSource}
+                                                            disabled={sourceDiagnosticBusy || nativeBusy || nativeRefreshing || pending || !ownerMatches}
+                                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                            {sourceDiagnosticBusy
+                                                                ? t("Checking the waiting Downtify source...")
+                                                                : t("Diagnose waiting Downtify source")}
+                                                        </button>
+                                                        {sourceDiagnosticFeedback && (
+                                                            <p role="status" className="text-xs text-[var(--text-secondary)]">
+                                                                {t(sourceDiagnosticFeedback)}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {nativeStatus.enabled && nativeStatus.storageReady &&
+                                                    nativeStatus.needsReview > 0 && (
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs text-[var(--text-muted)]">
+                                                            {t("Only legacy Spotify lookup failures with proof that no audio was written can be retried. Other review items stay blocked.")}
+                                                        </p>
+                                                        <button type="button" onClick={retrySafeMetadata}
+                                                            disabled={nativeBusy || nativeRefreshing || pending || !ownerMatches}
+                                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-40">
+                                                            {t("Retry one safely unwritten Spotify lookup")}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {nativeStatus.processing > 0 && (
+                                                    <p className="text-xs text-[var(--text-muted)]">
+                                                        {t("Claimed downloads may still be processing or need reconciliation after an interruption; Kima never blindly retries uncertain writes.")}
+                                                    </p>
+                                                )}
+                                            </>
+                                        )}
+                                        {nativeStatus?.baselineReady && nativeStatus.storageReady === false && (
+                                            <p role="alert" className="text-xs text-amber-300">
+                                                {t("Music storage is unavailable. Automatic importing is paused until the correct disk returns.")}
+                                            </p>
+                                        )}
+                                        {nativeFeedback && (
+                                            <p role={nativeError ? "alert" : "status"}
+                                                className={"text-xs " + (nativeError ? "text-red-300" : "text-[var(--text-secondary)]")}>
+                                                {t(nativeFeedback)}
+                                            </p>
+                                        )}
                                         <button type="button" onClick={checkNativeImport}
                                             disabled={!ownerMatches || importChecking || pending || !status?.enabled}
                                             className="rounded-lg border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-40">
-                                            {importChecking ? t("Checking audio transfer...") : t("Test direct audio transfer")}
+                                            {importChecking ? t("Checking Downtify setup...") : t("Check Downtify setup")}
                                         </button>
                                         {importFeedback && (
                                             <p role="status" className="text-xs text-[var(--text-secondary)]">
                                                 {t(importFeedback)}
                                             </p>
                                         )}
+                                        {importReadiness && (
+                                            <div className="space-y-2" aria-label={t("Read-only setup checks")}>
+                                                <p className="text-xs text-[var(--text-muted)]">
+                                                    {t("These checks do not import music or confirm that another importer is stopped.")}
+                                                    {" "}{t("Music folder access does not prove that the correct disk is mounted.")}
+                                                </p>
+                                                <ul className="space-y-1 text-xs">
+                                                    {setupChecks.map(check => (
+                                                        <li key={check.key} className="flex flex-wrap items-center justify-between gap-2">
+                                                            <span className="text-[var(--text-secondary)]">{t(check.label)}</span>
+                                                            <span className={importReadiness[check.key] === true
+                                                                ? "text-green-300" : "text-[var(--text-muted)]"}>
+                                                                {t(importReadiness[check.key] === true ? "Verified" : "Not verified")}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
-                                    <p className="text-xs leading-relaxed text-[var(--text-muted)]">
-                                        {t("Files are not automatically imported into your music library. Your existing importer stays unchanged.")}
-                                    </p>
                                 </div>
                             )}
                         </>

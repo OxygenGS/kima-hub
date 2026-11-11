@@ -7,20 +7,28 @@
 #   - High-quality audio streaming
 #
 # Usage:
-#   1. Set MUSIC_PATH to your actual music directory (and VERSION when upgrading)
-#   2. Run: docker compose -f docker-compose.prod.yml up -d
+#   1. Set MUSIC_PATH to the absolute path of an existing music directory.
+#      On a NAS/DAS check that the intended external filesystem is mounted.
+#   2. Optionally set VERSION (default: current published stable v1.19.0).
+#   3. Run: docker compose -f docker-compose.prod.yml up -d
 #   3. Open http://localhost:3030
 
 services:
   kima:
-    # Pin to an existing fork release by default. Set VERSION explicitly for upgrades.
-    image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.10.0}
+    # Fixed, published stable. Never automatically follow :latest.
+    # Pin VERSION to the existing deployment's tag for any controlled upgrade.
+    image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.19.0}
     container_name: kima
     ports:
       - "${PORT:-3030}:3030"
     volumes:
-      # REQUIRED: Path to your music library
-      - ${MUSIC_PATH:-/path/to/your/music}:/music
+      # REQUIRED: host's real music directory, not an automatically created
+      # empty fallback. Fail Compose interpolation when MUSIC_PATH is unset.
+      - type: bind
+        source: ${MUSIC_PATH:?Set MUSIC_PATH to the absolute path of your existing music directory}
+        target: /music
+        bind:
+          create_host_path: false
       # Persistent data (database, cache, etc.)
       - kima_data:/data
     environment:

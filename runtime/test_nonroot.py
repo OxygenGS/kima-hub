@@ -97,6 +97,65 @@ class GuardTests(unittest.TestCase):
         with patch.object(n.Path, 'mkdir', side_effect=PermissionError('readonly host mount')):
             self.assertIsNone(n.prepare_soulseek_import(self.root, 1201, 1202))
 
+    def test_downtify_prepares_only_private_leaf_without_chowning_media(self):
+        music = self.root / 'music'
+        singles = music / 'Singles'
+        singles.mkdir(parents=True)
+        with patch.object(n.os, 'chown') as change_owner:
+            result = n.prepare_downtify_import(music, 1201, 1202)
+        leaf = singles / 'Downtify'
+        self.assertEqual(result, leaf)
+        self.assertTrue(leaf.is_dir())
+        self.assertEqual(leaf.stat().st_mode & 0o777, 0o750)
+        change_owner.assert_called_once_with(leaf, 1201, 1202, follow_symlinks=False)
+        self.assertNotIn(music, [call.args[0] for call in change_owner.call_args_list])
+        self.assertNotIn(singles, [call.args[0] for call in change_owner.call_args_list])
+
+    def test_existing_downtify_leaf_is_not_reowned(self):
+        music = self.root / 'music'
+        leaf = music / 'Singles' / 'Downtify'
+        leaf.mkdir(parents=True, mode=0o750)
+        leaf.chmod(0o750)
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertEqual(n.prepare_downtify_import(music, leaf.stat().st_uid, 1202), leaf)
+        change_owner.assert_not_called()
+
+    def test_foreign_downtify_leaf_is_not_adopted_or_chmodded(self):
+        music = self.root / 'music'
+        leaf = music / 'Singles' / 'Downtify'
+        leaf.mkdir(parents=True, mode=0o750)
+        original = leaf.stat().st_mode
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertIsNone(n.prepare_downtify_import(music, leaf.stat().st_uid + 1, 1202))
+        change_owner.assert_not_called()
+        self.assertEqual(leaf.stat().st_mode, original)
+
+    def test_downtify_does_not_create_on_missing_or_world_writable_music(self):
+        music = self.root / 'music'
+        self.assertIsNone(n.prepare_downtify_import(music, 1201, 1202))
+        singles = music / 'Singles'
+        singles.mkdir(parents=True)
+        music.chmod(0o777)
+        self.assertIsNone(n.prepare_downtify_import(music, 1201, 1202))
+        self.assertFalse((singles / 'Downtify').exists())
+
+    def test_downtify_refuses_symlinked_singles_parent(self):
+        music = self.root / 'music'
+        outside = self.root / 'outside'
+        music.mkdir()
+        outside.mkdir()
+        (music / 'Singles').symlink_to(outside, target_is_directory=True)
+        with patch.object(n.os, 'chown') as change_owner:
+            self.assertIsNone(n.prepare_downtify_import(music, 1201, 1202))
+        change_owner.assert_not_called()
+        self.assertFalse((outside / 'Downtify').exists())
+
+    def test_downtify_read_only_mount_does_not_block_boot(self):
+        music = self.root / 'music'
+        (music / 'Singles').mkdir(parents=True)
+        with patch.object(n.Path, 'mkdir', side_effect=PermissionError('readonly host mount')):
+            self.assertIsNone(n.prepare_downtify_import(music, 1201, 1202))
+
     def test_requires_root(self):
         with patch.object(n.os, 'geteuid', return_value=1000):
             with self.assertRaises(RuntimeError): n.main()

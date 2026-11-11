@@ -228,6 +228,8 @@ export async function pairDowntify(
         // Re-pairing must revoke future native import permission and force
         // a fresh, explicitly reviewed baseline before any new cutover.
         nativeImportEnabled: false, nativeImportBaselineAt: null,
+        nativeImportLibraryCursor: null,
+        nativeImportMountProof: null,
     };
     if (previous) {
         // A second administrator cannot win an ownership race after the

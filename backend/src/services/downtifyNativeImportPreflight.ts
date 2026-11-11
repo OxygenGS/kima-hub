@@ -79,7 +79,9 @@ async function checkMusicRoot(root: string, reader: MusicAccess): Promise<boolea
         const stat = await reader.lstat(root);
         if (!stat.isDirectory() || stat.isSymbolicLink()) return false;
         if (await reader.realpath(root) !== path.resolve(root)) return false;
-        await reader.access(root, fsConstants.R_OK | fsConstants.W_OK);
+        // This is a read-only transport check. The destination-specific write
+        // and mount-marker checks run only on explicit import enablement.
+        await reader.access(root, fsConstants.R_OK | fsConstants.X_OK);
         return true;
     } catch {
         return false;
@@ -167,21 +169,41 @@ export async function inspectNativeDowntifyImport(
             library.full !== true || library.tracks.length > MAX_LIBRARY_ROWS) {
             return outcome("library_unavailable", true, true, true);
         }
-        const matching = library.tracks.filter(track =>
-            record(track) && TRACK_ID.test(String(track.id)) &&
-            validFilename(track.file) && Number.isSafeInteger(track.size) &&
-            (track.size as number) >= AUDIO_SAMPLE_BYTES &&
-            (track.size as number) <= MAX_TRACK_BYTES &&
-            candidates.some(job => job.filename === track.file)
-        );
-        if (matching.length === 0) return outcome("no_library_match", true, true, true);
-        // Multiple matches for the same path or several remote jobs are not
-        // enough to establish an unambiguous, owner-pinned transfer.
-        if (matching.length !== 1 ||
-            candidates.filter(job => job.filename === matching[0].file).length !== 1) {
-            return outcome("ambiguous", true, true, true);
+        // Multiple completed tracks are normal. Select ONE unambiguous
+        // owner-attributed queue/file pair, instead of rejecting the entire
+        // library whenever two different completed songs exist.
+        // Count file paths before matching. A repeated queue path or repeated
+        // library path NEVER qualifies as safe original-audio evidence.
+        const queueCount = new Map<string, number>();
+        for (const candidate of candidates) {
+            const filename = candidate.filename as string;
+            queueCount.set(filename, (queueCount.get(filename) || 0) + 1);
         }
-        const track = matching[0] as Record<string, unknown>;
+        const matches = new Map<string, Record<string, unknown>[]>();
+        for (const row of library.tracks) {
+            if (!record(row) || !TRACK_ID.test(String(row.id)) ||
+                !validFilename(row.file) || !Number.isSafeInteger(row.size) ||
+                (row.size as number) < AUDIO_SAMPLE_BYTES ||
+                (row.size as number) > MAX_TRACK_BYTES ||
+                !queueCount.has(row.file)) continue;
+            const name = row.file as string;
+            const sameFile = matches.get(name) || [];
+            sameFile.push(row);
+            matches.set(name, sameFile);
+        }
+        if (!matches.size) return outcome("no_library_match", true, true, true);
+        const safeTracks: Record<string, unknown>[] = [];
+        for (const [name, rows] of matches) {
+            if (queueCount.get(name) === 1 && rows.length === 1) {
+                safeTracks.push(rows[0]);
+            }
+        }
+        if (!safeTracks.length) return outcome("ambiguous", true, true, true);
+        // Stable selection across changes in API enumeration order.
+        safeTracks.sort((a, b) =>
+            String(a.file).localeCompare(String(b.file), "en") ||
+            String(a.id).localeCompare(String(b.id), "en"));
+        const track = safeTracks[0];
         const ext = path.posix.extname(track.file as string).toLowerCase();
         const stream = await request(
             "/api/v1/tracks/" + track.id + "/stream?format=original",

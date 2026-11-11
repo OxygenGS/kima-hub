@@ -709,6 +709,19 @@ model DowntifyIntegration {
   // Future native importer: schema exists but NO route/worker can enable it.
   nativeImportEnabled     Boolean  @default(false)
   nativeImportBaselineAt  DateTime?
+  // Downtify mobile library sync cursor at first activation and after safe discovery.
+  nativeImportLibraryCursor Int?
+  // Persistent marker of the operator-verified music volume; no secrets in API.
+  nativeImportMountProof String?
+  // Import backend is explicitly selected while paused. Existing RC6
+  // installations remain Kima-only until the administrator switches.
+  nativeImportTarget String @default("kima")
+  nativeLidarrLocalDownloads String?
+  nativeLidarrRemoteDownloads String?
+  nativeLidarrRemoteMusic String?
+  nativeLidarrStageMountProof String?
+  // Never add remote Lidarr artists without administrator opt-in.
+  nativeLidarrAllowArtistCreation Boolean @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 }
@@ -732,6 +745,23 @@ model DowntifyNativeImport {
   outputRelativePath  String?
   fullSha256          String?
   indexedTrackId      String?
+  // Persistent, single-use handoff checkpoints. A remote POST with an
+  // unknown response is never implicitly resent after a restart.
+  importTarget        String   @default("kima")
+  stagedRelativePath  String?
+  stagedSha256        String?
+  stagedBytes         Int?
+  stagedArtist        String?
+  stagedAlbum         String?
+  stagedTitle         String?
+  stagedDurationMs    Int?
+  lidarrArtistId      Int?
+  lidarrAlbumId       Int?
+  lidarrReleaseId     Int?
+  lidarrTrackId       Int?
+  lidarrCommandId     Int?
+  lidarrTrackFileId   Int?
+  lidarrSubmittedAt   DateTime?
   reviewReason        String?
   discoveredAt        DateTime @default(now())
   updatedAt           DateTime @updatedAt

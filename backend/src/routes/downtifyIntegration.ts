@@ -4,8 +4,14 @@
  * outbound GET requests only, and a saved pairing starts completely OFF.
  */
 import { Router } from "express";
+import { setNativeLidarrTarget, TargetSetupError } from "../services/downtifyLidarrTargetSettings";
 import { getDowntifyRuntimeEnv } from "../services/downtifyIntegrationSettings";
 import { inspectNativeDowntifyImport } from "../services/downtifyNativeImportPreflight";
+import {
+    getNativeAutoImportStatus, setNativeAutoImport,
+    retrySafeSpotifyIdentityClaim, diagnoseWaitingNativeOriginal,
+    NativeImportSetupError,
+} from "../services/downtifyNativeAutoImportSettings";
 import { z } from "zod";
 import { requireAdmin } from "../middleware/auth";
 import {
@@ -63,6 +69,122 @@ router.get("/import-readiness", async (req, res) => {
         return res.status(503).json({ state: "unavailable",
             autoImportAvailable: false, importerCutoverAuthorized: false,
             libraryImportVerified: false, filesChanged: false });
+    }
+});
+
+/**
+ * Normal one-switch native importer controls. A new enable requires an
+ * explicit one-time single-writer acknowledgement; no browser path, token
+ * or free-form command is accepted.
+ */
+router.get("/native-import", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        return res.json(await getNativeAutoImportStatus(req.user.id));
+    } catch {
+        return res.status(503).json({ state: "unavailable", enabled: false });
+    }
+});
+
+router.post("/native-import", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    const schema = z.object({
+        enabled: z.boolean(),
+        acknowledgeSingleWriter: z.boolean(),
+    }).strict();
+    try {
+        const body = schema.parse(req.body);
+        return res.json(await setNativeAutoImport(
+            req.user.id, body.enabled, body.acknowledgeSingleWriter,
+        ));
+    } catch (err) {
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ state: "invalid_input" });
+        }
+        if (err instanceof NativeImportSetupError) {
+            const status = err.state === "unauthorized" ? 403 :
+                err.state === "not_paired" ? 404 :
+                (err.state === "source_unavailable" ||
+                    err.state === "storage_unavailable") ? 503 : 409;
+            return res.status(status).json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
+    }
+});
+
+
+/**
+ * Explicit owner-only destination selection. No user-supplied local path.
+ * Stage and Lidarr roots are validated while the importer is paused.
+ */
+router.post("/native-import/target", async (req,res) => {
+    if (!req.user) return res.status(401).json({state:"unpaired"});
+    const schema=z.object({
+        target:z.enum(["kima","lidarr"]),
+        lidarrDownloads:z.string().max(1024).nullable(),
+        lidarrMusic:z.string().max(1024).nullable(),
+        allowArtistCreation:z.boolean().default(false),
+        acknowledge:z.literal(true),
+    }).strict();
+    try {
+        const body=schema.parse(req.body);
+        return res.json(await setNativeLidarrTarget(req.user.id,body.target,
+            body.lidarrDownloads,body.lidarrMusic,body.acknowledge,
+            body.allowArtistCreation));
+    }catch(err){
+        if(err instanceof z.ZodError)return res.status(400).json({state:"invalid_input"});
+        if(err instanceof TargetSetupError){
+            const code=err.state==="unauthorized"?403:
+                err.state==="not_paired"?404:
+                err.state==="lidarr_unavailable"?503:409;
+            return res.status(code).json({state:err.state});
+        }
+        return res.status(503).json({state:"unavailable"});
+    }
+});
+
+/**
+ * Manual, one-claim recovery of a proven unwritten RC3 Spotify 403.
+ * No free-form track ID, filesystem path or arbitrary review reason is accepted.
+ */
+
+/**
+ * Read-only diagnostic for the *actual* oldest waiting job.
+ * No client-provided song ID, path or token; no media read or mutation.
+ */
+router.get("/native-import/source-diagnostic", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        return res.json(await diagnoseWaitingNativeOriginal(req.user.id));
+    } catch (err) {
+        if (err instanceof NativeImportSetupError) {
+            return res.status(err.state === "unauthorized" ? 403 : 404)
+                .json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
+    }
+});
+
+router.post("/native-import/retry-identity", async (req, res) => {
+    if (!req.user) return res.status(401).json({ state: "unpaired" });
+    try {
+        const body = z.object({
+            acknowledgeSafeRetry: z.literal(true),
+        }).strict().parse(req.body);
+        return res.json(await retrySafeSpotifyIdentityClaim(
+            req.user.id, body.acknowledgeSafeRetry,
+        ));
+    } catch (err) {
+        if (err instanceof z.ZodError) {
+            return res.status(400).json({ state: "invalid_input" });
+        }
+        if (err instanceof NativeImportSetupError) {
+            const status = err.state === "unauthorized" ? 403 :
+                err.state === "not_paired" ? 404 :
+                err.state === "storage_unavailable" ? 503 : 409;
+            return res.status(status).json({ state: err.state });
+        }
+        return res.status(503).json({ state: "unavailable" });
     }
 });
 

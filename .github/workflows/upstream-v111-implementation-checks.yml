@@ -134,6 +134,28 @@ jobs:
       - name: Typecheck v1.11 backend source (must be fixed before release)
         working-directory: backend
         run: npm run typecheck
+      - name: Ensure FFmpeg is available for native audio verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/bin/ffmpeg; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          /usr/bin/ffmpeg -hide_banner -version | head -n 1
+      - name: Verify compiled native Downtify original-audio path (no real media)
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          npm run build
+          # The module graph loads Kima's fail-closed encryption/config guard.
+          # Use fresh CI-only random values, never a real account credential.
+          export SETTINGS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          export REDIS_URL="redis://127.0.0.1:6390"
+          export MUSIC_PATH="${RUNNER_TEMP}/kima-native-canary-no-real-mount"
+          export NODE_ENV="test"
+          node scripts/downtify-native-prod-smoke.cjs
 
   language-browser:
     name: EN/NL browser switching on v1.11 implementation
@@ -245,6 +267,15 @@ jobs:
           npm ci --no-audit --no-fund
           npx prisma generate
           npx prisma migrate deploy
+      - name: Ensure FFmpeg is available for real-audio canary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/bin/ffmpeg; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          /usr/bin/ffmpeg -hide_banner -version | head -n 1
       - name: Run all backend Jest tests with upstream v1.11 code
         working-directory: backend
         run: npm test -- --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
@@ -369,6 +400,10 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android "$AGENT_TOOLSDIRECTORY"
           df -h /
+      - name: Install SHA-256-verified Trivy v0.74.0 for arm64 image inspection
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/ci/install-trivy-verified.sh
       - uses: docker/setup-buildx-action@v3
       - name: Build native ARM64 AIO locally, never publish
         uses: docker/build-push-action@v5
@@ -396,11 +431,6 @@ jobs:
           path: frontend/test-results/release-ui/
           if-no-files-found: warn
           retention-days: 7
-      - name: Install pinned Trivy for assembled arm64 AIO inspection
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.74.0
-          cache: true
       - name: Record actual arm64 image HIGH/CRITICAL vulnerability findings
         timeout-minutes: 15
         run: |

@@ -1,6 +1,6 @@
 import type { AxiosInstance } from "axios";
 import { inspectNativeDowntifyImport } from "../downtifyNativeImportPreflight";
-import { promises as fs } from "fs";
+import { promises as fs, constants as fsConstants } from "fs";
 
 const TOKEN = "dtfy_synthetic_very_long_device_token_12345";
 const USER = "admin-only";
@@ -118,6 +118,18 @@ describe("Native Downtify import transport preflight", () => {
         expect(JSON.stringify(result)).not.toContain(TRACK_ID);
     });
 
+    it("checks the Downtify API on a readable music root without requesting write access", async () => {
+        mockMusic.access.mockImplementationOnce(async (_root: string, flags: number) => {
+            if ((flags & fsConstants.W_OK) !== 0) throw new Error("readonly music root");
+        });
+        const get = remote();
+        const result = await run(get);
+        expect(result.state).toBe("original_stream_verified");
+        expect(result.musicRootAccessible).toBe(true);
+        expect(mockMusic.access).toHaveBeenCalledWith("/music", fsConstants.R_OK | fsConstants.X_OK);
+        expect(get).toHaveBeenCalledTimes(5);
+    });
+
     it("rejects old/unowned completed jobs instead of checking a different user's music", async () => {
         const get = remote();
         get.mockResolvedValueOnce({ status: 200, data: server })
@@ -138,6 +150,37 @@ describe("Native Downtify import transport preflight", () => {
                 { ...library.tracks[0], id: "t1111111111111111" },
             ] } });
         expect((await run(get)).state).toBe("ambiguous");
+        expect(get).toHaveBeenCalledTimes(4);
+    });
+
+    it("verifies one deterministic unique file with multiple distinct completed tracks", async () => {
+        const get = remote();
+        const otherFilename = "Artist/Album/03 - Different Song.flac";
+        const otherJob = { ...job, filename: otherFilename };
+        const otherTrack = {
+            ...library.tracks[0], id: "t1111111111111111", file: otherFilename,
+        };
+        get.mockResolvedValueOnce({ status: 200, data: server })
+            .mockResolvedValueOnce({ status: 200, data: auth })
+            .mockResolvedValueOnce({ status: 200, data: [otherJob, job] })
+            .mockResolvedValueOnce({
+                status: 200, data: { ...library, tracks: [otherTrack, library.tracks[0]] },
+            });
+        const result = await run(get);
+        expect(result.state).toBe("original_stream_verified");
+        const [url] = get.mock.calls[4];
+        expect(url).toContain("/api/v1/tracks/" + TRACK_ID + "/stream");
+        expect(get).toHaveBeenCalledTimes(5);
+    });
+
+    it("never samples a duplicated owner queue path even with multiple tracks", async () => {
+        const get = remote();
+        get.mockResolvedValueOnce({ status: 200, data: server })
+            .mockResolvedValueOnce({ status: 200, data: auth })
+            .mockResolvedValueOnce({ status: 200, data: [job, { ...job }] })
+            .mockResolvedValueOnce({ status: 200, data: library });
+        const result = await run(get);
+        expect(result.state).toBe("ambiguous");
         expect(get).toHaveBeenCalledTimes(4);
     });
 

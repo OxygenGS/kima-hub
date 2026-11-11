@@ -8,6 +8,15 @@ const mockTestSaved = jest.fn();
 const mockControls = jest.fn();
 const mockRuntime = jest.fn();
 const mockImportReadiness = jest.fn();
+const mockNativeStatus = jest.fn();
+const mockNativeControl = jest.fn();
+jest.mock("../../services/downtifyNativeAutoImportSettings", () => ({
+    NativeImportSetupError: class NativeImportSetupError extends Error {
+        constructor(public state: string) { super(state); }
+    },
+    getNativeAutoImportStatus: (...args: unknown[]) => mockNativeStatus(...args),
+    setNativeAutoImport: (...args: unknown[]) => mockNativeControl(...args),
+}));
 jest.mock("../../services/downtifyNativeImportPreflight", () => ({
     inspectNativeDowntifyImport: (...args: unknown[]) => mockImportReadiness(...args),
 }));
@@ -72,6 +81,16 @@ beforeEach(() => {
     });
     mockControls.mockResolvedValue(cfg);
     mockRuntime.mockResolvedValue({ KIMA_DOWNTIFY_DEVICE_TOKEN: TOKEN });
+    mockNativeStatus.mockResolvedValue({
+        state: "paused", enabled: false, baselineReady: false,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0, storageReady: false,
+    });
+    mockNativeControl.mockResolvedValue({
+        state: "enabled", enabled: true, baselineReady: true,
+        awaitingImport: 0, processing: 0, awaitingScan: 0,
+        imported: 0, needsReview: 0, storageReady: true,
+    });
     mockImportReadiness.mockResolvedValue({
         state: "original_stream_verified", serverVerified: true,
         accountVerified: true, originalStreamChecked: true,
@@ -187,6 +206,70 @@ describe("Downtify Settings admin-only API", () => {
         expect(res.body.autoImportAvailable).toBe(false);
         expect(JSON.stringify(res.body)).not.toContain(TOKEN);
         expect(JSON.stringify(res.body)).not.toContain("/music");
+    });
+
+    it("protects native importer control behind an admin-only read and strict POST", async () => {
+        expect((await request(app).get(url + "/native-import")).status).toBe(401);
+        expect((await request(app).get(url + "/native-import")
+            .set("Authorization", "Bearer regular")
+            .set("X-Test-Role", "user")).status).toBe(403);
+        expect(mockNativeStatus).not.toHaveBeenCalled();
+        const status = await request(app).get(url + "/native-import")
+            .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
+        expect(status.status).toBe(200);
+        expect(status.body).toMatchObject({ enabled: false });
+        expect(status.headers["cache-control"]).toBe("no-store");
+        const bad = await post("/native-import", {
+            enabled: true, acknowledgeSingleWriter: true,
+            musicPath: "/private/music", remoteAccountId: 123,
+        });
+        expect(bad.status).toBe(400);
+        expect(mockNativeControl).not.toHaveBeenCalled();
+    });
+
+    it("returns sanitized owner-only import progress with no remote polling", async () => {
+        mockNativeStatus.mockResolvedValueOnce({
+            state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 1, awaitingScan: 2,
+            imported: 8, needsReview: 4, storageReady: true,
+        });
+        const res = await request(app).get(url + "/native-import")
+            .set("Authorization", "Bearer admin").set("X-Test-Role", "admin");
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({
+            state: "enabled", enabled: true, baselineReady: true,
+            awaitingImport: 3, processing: 1, awaitingScan: 2,
+            imported: 8, needsReview: 4, storageReady: true,
+        });
+        expect(mockNativeStatus).toHaveBeenCalledWith("admin-1");
+        expect(mockRuntime).not.toHaveBeenCalled();
+        expect(mockImportReadiness).not.toHaveBeenCalled();
+        expect(JSON.stringify(res.body)).not.toContain(TOKEN);
+        expect(JSON.stringify(res.body)).not.toContain("/music");
+        expect(res.headers["cache-control"]).toBe("no-store");
+    });
+
+    it("forwards only a verified one-time acknowledgement to native importer settings", async () => {
+        const response = await post("/native-import", {
+            enabled: true, acknowledgeSingleWriter: true,
+        });
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({
+            enabled: true, baselineReady: true,
+        });
+        expect(mockNativeControl).toHaveBeenCalledWith("admin-1", true, true);
+        expect(JSON.stringify(response.body)).not.toContain(TOKEN);
+    });
+
+    it("hides upstream private errors and never discloses a host script or token", async () => {
+        mockNativeControl.mockRejectedValueOnce(new Error("/private/music " + TOKEN));
+        const response = await post("/native-import", {
+            enabled: true, acknowledgeSingleWriter: true,
+        });
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({ state: "unavailable" });
+        expect(JSON.stringify(response.body)).not.toContain(TOKEN);
+        expect(JSON.stringify(response.body)).not.toContain("/private");
     });
 
     it("redacts upstream exceptions and never exposes write-to-media methods", async () => {

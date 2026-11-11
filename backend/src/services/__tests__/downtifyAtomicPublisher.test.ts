@@ -50,6 +50,45 @@ describe("Native import no-overwrite publication (not wired to Kima)", () => {
         expect(await pending()).toEqual([]);
     });
 
+    it("publishes only verified Lidarr staging audio as cross-user-readable", async () => {
+        const expectedHash = createHash("sha256").update(audio).digest("hex");
+        const result = await publishNativeAudio({
+            musicRoot: root,
+            relativeTarget: DEST,
+            expectedBytes: audio.length,
+            chunks: stream(audio),
+            sharedReadableAfterVerification: true,
+            verifyTempFile: async file => {
+                // Unverified original audio must stay private even when the
+                // final staging file will be readable by Lidarr and Kima.
+                expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+                return true;
+            },
+        });
+        expect(result).toMatchObject({
+            state: "published", sha256: expectedHash, bytes: audio.length,
+        });
+        expect((await fs.stat(target())).mode & 0o777).toBe(0o644);
+        expect(createHash("sha256").update(await fs.readFile(target()))
+            .digest("hex")).toBe(expectedHash);
+        expect(await pending()).toEqual([]);
+    });
+
+    it("never relaxes mode or publishes a rejected Lidarr staging recording", async () => {
+        const result = await publishNativeAudio({
+            musicRoot: root, relativeTarget: DEST, expectedBytes: audio.length,
+            chunks: stream(audio), sharedReadableAfterVerification: true,
+            verifyTempFile: async file => {
+                expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+                return false;
+            },
+        });
+        expect(result.state).toBe("validation_failed");
+        expect(result.filesPublished).toBe(false);
+        await expect(fs.stat(target())).rejects.toMatchObject({code:"ENOENT"});
+        expect(await pending()).toEqual([]);
+    });
+
     it("does not overwrite an existing different recording with the same filename", async () => {
         const original = Buffer.alloc(audio.length, 0x41);
         await fs.writeFile(target(), original);

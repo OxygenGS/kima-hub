@@ -42,6 +42,9 @@ export interface VerifiedOriginalSource {
     durationSeconds: number;
     expectedBytes: number;
     chunks: AudioStream;
+    /** Close the authenticated response if identity checks abort before
+     * consumption. No upstream connection may be left open. */
+    cancel: () => void;
     autoImportApproved: false;
     libraryImportVerified: false;
 }
@@ -236,10 +239,154 @@ export async function openNativeDowntifyOriginal(
             album: typeof row.album === "string" ? row.album : "",
             durationSeconds: duration, expectedBytes: size,
             chunks: boundedOriginalBytes(stream.data, size),
+            cancel: abort,
             autoImportApproved: false, libraryImportVerified: false,
         };
     } catch (error: unknown) {
         const code = axios.isAxiosError(error) ? error.response?.status : undefined;
         return fail(code === 401 || code === 403 ? "unauthorized" : "unavailable");
+    }
+}
+
+
+/** Internal-only snapshot for the durable importer and first-run baseline.
+ * It is NOT an API response: queue items contain private filenames and IDs.
+ */
+export type NativeQueueSnapshot =
+    | { state: "ready"; queue: unknown[] }
+    | { state: Exclude<NativeSourceState, "ready">; queue: [] };
+export async function getVerifiedNativeImportQueue(
+    kimaUserId: string,
+    env: NodeJS.ProcessEnv = process.env,
+    deps: SourceDeps = depsDefault,
+): Promise<NativeQueueSnapshot> {
+    const empty = (state: Exclude<NativeSourceState, "ready">): NativeQueueSnapshot =>
+        ({ state, queue: [] });
+    if (env.KIMA_DOWNTIFY_ENABLED !== "true") return empty("disabled");
+    if (!kimaUserId || env.KIMA_DOWNTIFY_OWNER_KIMA_USER_ID?.trim() !== kimaUserId) {
+        return empty("unbound");
+    }
+    const cfg = readDowntifyConfig(env);
+    const serverId = env.KIMA_DOWNTIFY_EXPECTED_SERVER_ID?.trim() || "";
+    const userText = env.KIMA_DOWNTIFY_EXPECTED_USER_ID?.trim() || "";
+    const username = env.KIMA_DOWNTIFY_EXPECTED_USERNAME?.trim() || "";
+    if (cfg.state !== "configured" || !SERVER_ID.test(serverId) ||
+        !/^[1-9]\d{0,9}$/.test(userText) || !USERNAME.test(username)) {
+        return empty("misconfigured");
+    }
+    const get = async (endpoint: string, authenticated: boolean, limit: number) =>
+        (await deps.http.get<unknown>(new URL(endpoint, cfg.base).toString(), {
+            headers: {
+                Accept: "application/json",
+                ...(authenticated ? { Authorization: "Bearer " + cfg.token } : {}),
+            },
+            timeout: 8000, maxRedirects: 0, proxy: false,
+            maxContentLength: limit, responseType: "json",
+        })).data;
+    try {
+        const server = await get("/api/server/info", false, 16 * 1024);
+        if (!record(server) || server.product !== "Downtify" ||
+            server.api_version !== 1 || server.require_sign_in !== true ||
+            server.server_id !== serverId) return empty("incompatible");
+        const auth = await get("/api/auth/status", true, 16 * 1024);
+        if (!record(auth) || !record(auth.user) || auth.signed_in !== true ||
+            auth.via !== "device" || auth.auth_disabled !== false ||
+            auth.user.id !== Number(userText) ||
+            typeof auth.user.username !== "string" ||
+            auth.user.username.toLowerCase() !== username.toLowerCase()) {
+            return empty("unauthorized");
+        }
+        const queue = await get("/api/queue", true, 3 * 1024 * 1024);
+        if (!Array.isArray(queue) || queue.length > MAX_QUEUE) return empty("incompatible");
+        return { state: "ready", queue };
+    } catch(error: unknown) {
+        const code = axios.isAxiosError(error) ? error.response?.status : undefined;
+        return empty(code === 401 || code === 403 ? "unauthorized" : "unavailable");
+    }
+}
+
+
+/**
+ * Incremental Downtify library changefeed, scoped to the exact paired owner.
+ *
+ * Crucial: the /api/queue feed may lose completed rows when cleaned and
+ * later show old songs again. A first-activation queue snapshot alone cannot
+ * prove "new since enabling". Downtify's mobile library sequence is
+ * monotonic: keep its cursor and only consider files reported as NEW in a
+ * later changefeed. Full resets are never treated as new import candidates.
+ *
+ * This returns private remote filenames only to internal workers.
+ */
+export type NativeLibraryChanges =
+    | { state: "ready"; cursor: number; full: boolean; tracks: unknown[] }
+    | { state: Exclude<NativeSourceState, "ready">;
+        cursor: null; full: false; tracks: [] };
+
+export async function getVerifiedNativeLibraryChanges(
+    kimaUserId: string,
+    since: number,
+    env: NodeJS.ProcessEnv = process.env,
+    deps: SourceDeps = depsDefault,
+): Promise<NativeLibraryChanges> {
+    const empty = (state: Exclude<NativeSourceState, "ready">): NativeLibraryChanges =>
+        ({ state, cursor: null, full: false, tracks: [] });
+    if (env.KIMA_DOWNTIFY_ENABLED !== "true") return empty("disabled");
+    if (!kimaUserId || env.KIMA_DOWNTIFY_OWNER_KIMA_USER_ID?.trim() !== kimaUserId) {
+        return empty("unbound");
+    }
+    if (!Number.isSafeInteger(since) || since < 0 || since > 2_147_483_647) {
+        return empty("misconfigured");
+    }
+    const cfg = readDowntifyConfig(env);
+    const serverId = env.KIMA_DOWNTIFY_EXPECTED_SERVER_ID?.trim() || "";
+    const userText = env.KIMA_DOWNTIFY_EXPECTED_USER_ID?.trim() || "";
+    const username = env.KIMA_DOWNTIFY_EXPECTED_USERNAME?.trim() || "";
+    if (cfg.state !== "configured" || !SERVER_ID.test(serverId) ||
+        !/^[1-9]\d{0,9}$/.test(userText) || !USERNAME.test(username)) {
+        return empty("misconfigured");
+    }
+    const get = async (endpoint: string, authenticated: boolean, limit: number) =>
+        (await deps.http.get<unknown>(new URL(endpoint, cfg.base).toString(), {
+            headers: {
+                Accept: "application/json",
+                ...(authenticated ? { Authorization: "Bearer " + cfg.token } : {}),
+            },
+            timeout: 8000, maxRedirects: 0, proxy: false,
+            maxContentLength: limit, responseType: "json",
+        })).data;
+    try {
+        const server = await get("/api/server/info", false, 16 * 1024);
+        if (!record(server) || server.product !== "Downtify" ||
+            server.api_version !== 1 || server.require_sign_in !== true ||
+            server.server_id !== serverId) return empty("incompatible");
+        const auth = await get("/api/auth/status", true, 16 * 1024);
+        if (!record(auth) || !record(auth.user) || auth.signed_in !== true ||
+            auth.via !== "device" || auth.auth_disabled !== false ||
+            auth.user.id !== Number(userText) ||
+            typeof auth.user.username !== "string" ||
+            auth.user.username.toLowerCase() !== username.toLowerCase()) {
+            return empty("unauthorized");
+        }
+        const snapshot = await get(
+            "/api/v1/library?since=" + since, true, MAX_JSON,
+        );
+        if (!record(snapshot) || typeof snapshot.cursor !== "number" ||
+            !Number.isSafeInteger(snapshot.cursor) || snapshot.cursor < since ||
+            snapshot.cursor > 2_147_483_647 ||
+            typeof snapshot.full !== "boolean" ||
+            !Array.isArray(snapshot.tracks) ||
+            snapshot.tracks.length > MAX_LIBRARY ||
+            !Array.isArray(snapshot.deleted)) {
+            return empty("incompatible");
+        }
+        return {
+            state: "ready",
+            cursor: snapshot.cursor,
+            full: snapshot.full,
+            tracks: snapshot.tracks,
+        };
+    } catch (error: unknown) {
+        const code = axios.isAxiosError(error) ? error.response?.status : undefined;
+        return empty(code === 401 || code === 403 ? "unauthorized" : "unavailable");
     }
 }
