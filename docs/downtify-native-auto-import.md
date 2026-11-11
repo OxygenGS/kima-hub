@@ -1,34 +1,14 @@
 # Native Downtify auto-import — portable application integration
 
-**Published RC6 provides verified Kima-library importing only.
-The optional Lidarr-managed pipeline is implemented on a separate DRAFT
-development branch, and has NOT yet shipped or passed real end-to-end acceptance.** This optional integration is designed for ordinary Kima Docker installations,
-not one particular server or a Proxmox script. Fresh installations need no
-legacy importer or cutover. Existing installations with another media importer
-must complete a safe single-writer cutover before enabling native import.
-The normal Settings experience needs no host-script edits.
+**v1.20.0 release candidate; not included in stable v1.19.0.** Native automatic single-track import now supports two explicit modes: Kima-only and Lidarr-managed. A live pre-release canary on 11 November 2026 confirmed that a new Downtify track was matched and imported by Lidarr, then indexed on its correct album in Kima and playable in both applications. The feature remains opt-in and portable to compatible Docker installations; no particular server, Proxmox setup or host-side importer script is required. Fresh installs need no old importer to disable. Existing installations must establish a restorable backup and an exclusive media writer before enabling importing.
 
-## Current limitation: Lidarr is a different library owner
+## Choose the final library owner
 
-RC6 places a successfully verified file into Kima's
-`Singles/Downtify/<Artist>/<Track> - <Spotify ID>.<ext>` tree. It then
-confirms a Kima scanner and full-file SHA-256 receipt. It does NOT add
-artists/albums/tracks to Lidarr or invoke Lidarr's import API. The
-`Added to Kima library` status must never be represented as a Lidarr receipt.
+**Kima-only mode:** the original RC6-compatible route verifies the recording, publishes it under `Singles/Downtify/<Artist>/<Track> - <Spotify ID>.<ext>`, then waits for a Kima scanner receipt and a complete SHA-256 match. It does not automatically register tracks in Lidarr. Already imported Kima-only files remain untouched.
 
-Simply changing the path to `<Artist>/<Album>/<Track>` inside a
-Lidarr-managed root is NOT a safe repair: Lidarr owns that root and requires
-its own MusicBrainz match and import pipeline for external downloads.
-Do not manually move published RC6 files: the native import ledger stores
-their exact relative path and SHA-256, and manual path changes invalidate
-Kima's indexing and safety receipts.
+**Lidarr-managed mode:** Kima verifies the original recording and writes it to a separate shared downloads/staging directory, never directly into Lidarr's music library. Lidarr decides the artist/album/track match and final path using its Manual Import API. Kima checks the exact registered Lidarr TrackFile, size and physical SHA-256 before indexing that final file into its own library. This is a distinct two-library receipt; neither a completed remote download nor a Lidarr command alone marks Kima imported.
 
-The required opt-in, portable integration and one-record recovery plan are
-documented in [Downtify → Lidarr managed handoff](downtify-lidarr-managed-handoff.md).
-RC6 contains no automatic Lidarr import. Draft PR #231 adds a separate,
-opt-in Lidarr handoff using verified shared staging, Lidarr's own import API,
-and final Lidarr+Kima receipts. No test image or stable release should be
-published until all live and CI gates pass.
+The portable setup, safe staged permissions, single-track missing-album-remainder advisory and recovery rules are documented in [Downtify → Lidarr managed handoff](downtify-lidarr-managed-handoff.md). Lidarr's final naming format is configured in Lidarr, and may be `Artist/Track` or `Artist/Album/Track`. Moving legacy RC6 files by hand is not supported: doing so invalidates the ledger's exact paths and hashes.
 
 ## Intended user experience
 
@@ -46,8 +26,8 @@ published until all live and CI gates pass.
    then imports only newly observed individual Spotify tracks. Album
    batches and arbitrary remote files are not automatically ingested.
 5. In **Settings** the administrator sees separate counters for jobs
-   waiting, claimed, waiting for an index receipt, fully imported, and
-   requiring review. **Refresh import status** reads local, owner-scoped
+   waiting, claimed, waiting for a Kima scan or Lidarr receipt, verified
+   Lidarr imports, fully imported Kima tracks and records requiring review. **Refresh import status** reads local, owner-scoped
    database aggregates and checks the registered music volume; it does
    not poll Downtify, submit jobs, start scans or write music. Turning
    the switch OFF stops new claims; existing music, remote jobs and
