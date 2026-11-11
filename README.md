@@ -24,7 +24,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 
 ### v1.20.0 — Native Downtify imports, with optional Lidarr ownership
 
-**Release candidate validated 11 November 2026.** Kima can automatically discover newly completed single-track Downtify downloads, verify the original audio, and import it into Kima or let Lidarr manage the final library file.
+**Validated in a live pre-release canary on 11 November 2026.** Kima can automatically discover newly completed single-track Downtify downloads, verify the original audio, and import it into Kima or let Lidarr manage the final library file.
 
 - **Automatic, opt-in imports:** only newly observed, owner-bound individual tracks after activation. Previous downloads are not re-imported.
 - **Optional Lidarr handoff:** Kima verifies and stages the recording; Lidarr assigns its own artist, album, track and final filename. Kima then indexes the same final file.
