@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current stable version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — published 12 November 2026. The experimental Downtify integration is retired; Lidarr, Soulseek and existing music remain supported.
+**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — published 12 November 2026. The experimental Downtify integration is retired; Lidarr, Soulseek and existing music remain supported.
 
 The published multi-architecture image is `ghcr.io/oxygengs/kima-hub:v1.21.0` for **linux/amd64** and **linux/arm64**. Both native architectures and the final OCI index were verified by the [stable publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43306092748). Back up and test restoration of application data before upgrading a running installation.
 
