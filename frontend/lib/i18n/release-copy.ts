@@ -49,6 +49,37 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.21.0
+    "1.21.0": {
+        "titles": {
+            "Kima Hub 1.21.0 \u2014 Streamlined Music Integrations": "Kima Hub 1.21.0 \u2014 opgeschoonde muziekintegraties"
+        },
+        "summaries": {
+            "Retires the experimental Downtify connector while preserving Lidarr, Soulseek, existing music and upgrade history.": "De experimentele Downtify-koppeling verdwijnt. Lidarr, Soulseek, bestaande muziek en updategeschiedenis blijven behouden."
+        },
+        "items": {
+            "fork.121.retired-connector": {
+                "title": "Experimentele Downtify-koppeling verwijderd",
+                "summary": "De instabiele koppeling, instellingen, achtergrondimport en handmatig verzenden naar Downtify zijn verwijderd.",
+                "body": "De eerdere optionele Downtify-integratie maakt geen deel meer uit van Kima. De koppelingsinterface, statusknoppen, automatische importtaken, externe API-routes, bestandscontroles en optionele gedeelde stagingkoppeling zijn verwijderd. Kima verstuurt vanuit deze versie geen nieuwe Downtify-opdrachten. Een afzonderlijk ge\u00efnstalleerde Downtify-server wordt niet automatisch gestopt of verwijderd; de beheerder kan die apart uitzetten."
+            },
+            "fork.121.downloads": {
+                "title": "Normale downloads via Lidarr en Soulseek blijven werken",
+                "summary": "Het Downloadsoverzicht toont nog steeds de Kima-downloadgeschiedenis van de aangemelde gebruiker.",
+                "body": "De bestaande Lidarr-albumaanvragen, Soulseek-downloads en muziekbibliotheekscanner blijven beschikbaar. De Downloadspagina is vereenvoudigd tot de eigen Kima-downloadtaken, zonder afzonderlijke externe wachtrij of voorbereide Spotify-verzendknoppen. Deze broncodewijziging past geen live muziekpaden of inloggegevens van downloadclients aan."
+            },
+            "fork.121.preserve-media": {
+                "title": "Eerder ge\u00efmporteerde muziek en databasegeschiedenis blijven behouden",
+                "summary": "De update verwijdert, verplaatst of herschrijft geen bestaande muziek en wist geen importgeschiedenis.",
+                "body": "Bestaande muziek in /music, gebruikersgegevens in /data, historische PostgreSQL-migraties en oude importregistraties blijven bewust bewaard. Het historische databaseschema blijft staan om updates uit oudere versies niet-destructief te maken. Dit is een verwijdering van applicatiecode, geen opdracht om opslag op te schonen. Eerder ge\u00efmporteerde bestanden blijven beschikbaar voor normale bibliotheekscans en afspelen. Verwijder geen oude muziekmap alleen omdat een eerdere importeur deze heeft gemaakt."
+            },
+            "fork.121.upgrade": {
+                "title": "Gecontroleerd bijwerken na bouw- en veiligheidstests",
+                "summary": "Laat de bestaande image staan tot de nieuwe versie de offici\u00eble releasecontroles heeft doorlopen.",
+                "body": "De verwijdering heeft frontend- en backendtests, een database-upgrade met hersteltest, non-rootcontroles en AMD64/ARM64 Docker-builds doorstaan. Een offici\u00eble image vereist daarnaast een release-preflight op exact dezelfde main-commit en beoordeling van beveiligingsbevindingen. Maak v\u00f3\u00f3r een productie-update een volledige back-up van /data en controleer een onafhankelijk herstel. Behoud de bestaande /music-koppeling. Een los ge\u00efnstalleerde Downtify-server blijft onafhankelijk beheerd."
+            }
+        }
+    },
     // release-candidate:1.20.0
     "1.20.0": {
         "titles": {

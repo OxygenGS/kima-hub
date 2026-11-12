@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current version:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image includes an integration retired on the source-removal branch; a replacement image is not available until a separate, validated release.
+**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — release candidate, unpublished until the stable publishing gates pass. The retired experimental connector is removed from this version's source.
 
 The versioned All-in-One image is `ghcr.io/oxygengs/kima-hub:v1.20.0`, for native **linux/amd64** and **linux/arm64**. [Stable publishing workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) · [v1.20.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0).
 
@@ -102,7 +102,7 @@ Create a new API key under **Settings → Native Apps** for each client; use the
 
 | Channel | Image | Recommendation |
 | :--- | :--- | :--- |
-| Stable | `ghcr.io/oxygengs/kima-hub:v1.20.0` | Versioned production release; pin a tag or immutable digest. |
+| Stable | `ghcr.io/oxygengs/kima-hub:v1.21.0` | Versioned production release; pin a tag or immutable digest. |
 | Pre-release | Explicit published `prerelease-…` tag or digest | Testing only. |
 | `:latest` | Not automatically promoted | Avoid for controlled updates. |
 

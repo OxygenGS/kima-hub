@@ -1,6 +1,6 @@
 {
   "name": "kima-backend",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Kima backend API server",
   "license": "GPL-3.0",
   "repository": {

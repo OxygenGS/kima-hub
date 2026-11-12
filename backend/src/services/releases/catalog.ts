@@ -101,6 +101,57 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.21.0
+    {
+        "version": "1.21.0",
+        "title": "Kima Hub 1.21.0 \u2014 Streamlined Music Integrations",
+        "summary": "Retires the experimental Downtify connector while preserving Lidarr, Soulseek, existing music and upgrade history.",
+        "date": "2026-11-12",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.121.retired-connector",
+                "title": "Experimental Downtify connector retired",
+                "summary": "Remove the unstable connection, settings, background importer and manual Spotify-to-Downtify submission flow.",
+                "body": "The previous optional Downtify integration is no longer part of Kima. Its pairing interface, status controls, automatic import scheduler, remote API routes, source verification code and optional shared staging override have been removed. No new jobs are submitted to Downtify by this version. A separately deployed Downtify service is not stopped or uninstalled automatically; its operator can retire it independently.",
+                "links": [
+                    {
+                        "label": "Open Settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.121.downloads",
+                "title": "Keep standard Lidarr and Soulseek downloads",
+                "summary": "The Downloads screen continues to display the signed-in user's Kima download history.",
+                "body": "Kima's existing Lidarr album requests, Soulseek downloads and music-library scanner remain available. The Downloads page is simplified to the authenticated user's Kima download jobs without a separate remote-provider queue or prepared Spotify submission controls. No live music path or download-client credentials are rewritten by this source change.",
+                "links": [
+                    {
+                        "label": "Open Downloads",
+                        "href": "/downloads"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.121.preserve-media",
+                "title": "Preserve previously imported music and database history",
+                "summary": "Upgrading will not delete, move or re-tag old songs or erase retained import records.",
+                "body": "Existing music in /music, user data in /data, historic PostgreSQL migrations and retired import receipts are deliberately preserved. Historical schema remains so upgrades from older versions are not destructive. This is a code removal, not a storage-cleanup command. Previously imported files remain eligible for normal library scans and playback; do not delete an old music folder merely because it originated with a retired importer.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.121.upgrade",
+                "title": "Validated build and controlled production upgrade",
+                "summary": "Keep the existing image pinned until a reviewed new release passes the full stable publishing gates.",
+                "body": "The removal has passed frontend/backend tests, the database upgrade and restore rehearsal, non-root runtime checks and AMD64/ARM64 AIO image builds in the source PR. A final stable image still requires the exact-main native release preflight and security review. Back up and verify an independent restore of the persistent /data volume and preserve the existing /music mount before changing a running deployment. A separate Downtify container, if installed, remains independently managed.",
+                "links": []
+            }
+        ]
+    },
     // release-candidate:1.20.0
     {
         "version": "1.20.0",
