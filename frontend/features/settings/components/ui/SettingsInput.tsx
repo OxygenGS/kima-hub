@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { useLanguage } from "@/lib/i18n/language-context";
+import { useStoredLocale } from "@/lib/i18n/language-context";
 import { cn } from "@/lib/cn";
 
 interface SettingsInputProps {
@@ -25,7 +25,7 @@ export function SettingsInput({
     className = "",
 }: SettingsInputProps) {
     const [showPassword, setShowPassword] = useState(false);
-    const { locale } = useLanguage();
+    const locale = useStoredLocale();
     const isPassword = type === "password";
 
     return (
