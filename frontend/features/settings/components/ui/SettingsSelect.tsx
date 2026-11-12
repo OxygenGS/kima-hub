@@ -16,29 +16,21 @@ interface SettingsSelectProps {
 
 export function SettingsSelect({ id, value, onChange, options, disabled }: SettingsSelectProps) {
     return (
-        <div className="relative">
+        <div className="relative min-w-0">
             <select
                 id={id}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={event => onChange(event.target.value)}
                 disabled={disabled}
-                className={`
-                    appearance-none bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm tabular-nums
-                    pl-3 pr-8 py-1.5 rounded-lg
-                    border border-white/10 outline-none
-                    focus:ring-2 focus:ring-brand/30 focus:border-brand/40
-                    cursor-pointer transition-all
-                    hover:bg-[var(--bg-active)] hover:border-white/20
-                    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+                className="min-h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-[var(--bg-tertiary)] px-3.5 py-2.5 pr-10 text-sm text-[var(--text-primary)] outline-none transition-colors hover:border-white/20 hover:bg-[var(--bg-hover)] focus:border-brand/45 focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-                {options.map((option) => (
+                {options.map(option => (
                     <option key={option.value} value={option.value}>
-                        {option.label.toLowerCase()}
+                        {option.label}
                     </option>
                 ))}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
         </div>
     );
 }

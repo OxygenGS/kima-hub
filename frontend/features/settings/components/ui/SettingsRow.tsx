@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 interface SettingsRowProps {
     label: string;
@@ -8,23 +8,23 @@ interface SettingsRowProps {
 }
 
 export function SettingsRow({ label, description, children, htmlFor }: SettingsRowProps) {
+    const labelClass = "block text-sm font-medium leading-snug text-[var(--text-primary)]";
+
     return (
-        // Mobile: stack the label above the control so wide inputs (Server URL,
-        // paths, API keys) get the full row width instead of squeezing the
-        // description into a cramped column. sm+ restores the two-column row.
-        <div className="flex flex-col gap-1.5 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:min-h-[56px]">
-            <div className="sm:flex-1">
-                <label
-                    htmlFor={htmlFor}
-                    className="text-sm font-medium text-white cursor-pointer"
-                >
-                    {label}
-                </label>
+        <div className="flex min-w-0 flex-col gap-3 border-b border-white/[0.055] py-4 last:border-b-0 sm:min-h-[68px] sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+            <div className="min-w-0 flex-1">
+                {htmlFor ? (
+                    <label htmlFor={htmlFor} className={labelClass + " cursor-pointer"}>{label}</label>
+                ) : (
+                    <p className={labelClass}>{label}</p>
+                )}
                 {description && (
-                    <p className="text-xs tabular-nums text-[var(--text-muted)] mt-0.5">{description}</p>
+                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-[var(--text-muted)]">
+                        {description}
+                    </p>
                 )}
             </div>
-            <div className="w-full sm:w-auto sm:shrink-0">
+            <div className="min-w-0 w-full sm:w-[min(100%,22rem)] sm:shrink-0 sm:text-right xl:w-[min(100%,25rem)]">
                 {children}
             </div>
         </div>
