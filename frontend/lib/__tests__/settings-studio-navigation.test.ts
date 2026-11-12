@@ -6,7 +6,7 @@ import {
     SETTINGS_GROUP_COPY,
     resolveSettingsHash,
     visibleSettingsItems,
-} from "./SettingsNavigation";
+} from "@/features/settings/components/ui/SettingsNavigation";
 
 describe("Settings Studio navigation contract", () => {
     it("has exactly one real section for every navigation entry, without a dead Integrations link", () => {

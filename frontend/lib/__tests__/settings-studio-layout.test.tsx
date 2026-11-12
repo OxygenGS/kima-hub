@@ -11,8 +11,8 @@ vi.mock("@/components/layout/PageHeader", () => ({
         <header><h1>{title}</h1><p>{description}</p></header>,
 }));
 
-import { SettingsLayout } from "./SettingsLayout";
-import { SETTINGS_ITEMS } from "./SettingsNavigation";
+import { SettingsLayout } from "@/features/settings/components/ui/SettingsLayout";
+import { SETTINGS_ITEMS } from "@/features/settings/components/ui/SettingsNavigation";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
