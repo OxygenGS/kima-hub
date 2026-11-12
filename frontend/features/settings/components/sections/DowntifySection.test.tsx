@@ -472,8 +472,9 @@ describe("Simple Downtify Settings section", () => {
         await mount();
         const consent = host.querySelector<HTMLInputElement>("#downtify-native-cutover-ack");
         await act(async () => { consent?.click(); });
+        // The production fetch wrapper exposes error.data (not Axios response.data).
         vi.mocked(api.post).mockRejectedValueOnce({
-            response: { data: { state: "storage_unavailable", path: "/private/music" } },
+            data: { state: "storage_unavailable", path: "/private/music" },
         });
         await act(async () => {
             host.querySelector<HTMLInputElement>("#downtify-native-auto-import")?.click();
@@ -648,6 +649,29 @@ describe("Simple Downtify Settings section", () => {
         expect(host.textContent).toContain(
             "Import destination saved. Automatic importing remains off."
         );
+        expect(host.textContent).not.toContain("dtfy_PRIVATE_SECRET");
+    });
+
+    it("shows allowlisted Lidarr setup errors from the first-party fetch wrapper", async () => {
+        vi.mocked(api.get).mockImplementation(async (url: string) =>
+            url === "/downtify-integration" ? { ...paired, enabled: true } : {
+                ...nativeOff, target: "kima",
+            });
+        await mount();
+        const lidarr = host.querySelector<HTMLInputElement>(
+            'input[name="downtify-final-owner"][value="lidarr"]');
+        await act(async () => { lidarr?.click(); });
+        const consent = host.querySelector<HTMLInputElement>("#downtify-lidarr-target-ack");
+        await act(async () => { consent?.click(); });
+        vi.mocked(api.post).mockRejectedValueOnce({
+            status: 409,
+            data: { state: "invalid_staging", secret: "dtfy_PRIVATE_SECRET" },
+        });
+        await click("Save import destination");
+        expect(host.textContent).toContain(
+            "The shared downloads or Lidarr music path is invalid or unavailable."
+        );
+        expect(host.textContent).not.toContain("Could not update the import destination.");
         expect(host.textContent).not.toContain("dtfy_PRIVATE_SECRET");
     });
 
