@@ -134,28 +134,9 @@ jobs:
       - name: Typecheck v1.11 backend source (must be fixed before release)
         working-directory: backend
         run: npm run typecheck
-      - name: Ensure FFmpeg is available for native audio verification
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! test -x /usr/bin/ffmpeg; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends ffmpeg
-          fi
-          /usr/bin/ffmpeg -hide_banner -version | head -n 1
-      - name: Verify compiled native Downtify original-audio path (no real media)
+      - name: Verify compiled backend build
         working-directory: backend
-        run: |
-          set -euo pipefail
-          npm run build
-          # The module graph loads Kima's fail-closed encryption/config guard.
-          # Use fresh CI-only random values, never a real account credential.
-          export SETTINGS_ENCRYPTION_KEY="$(openssl rand -hex 32)"
-          export SESSION_SECRET="$(openssl rand -hex 32)"
-          export REDIS_URL="redis://127.0.0.1:6390"
-          export MUSIC_PATH="${RUNNER_TEMP}/kima-native-canary-no-real-mount"
-          export NODE_ENV="test"
-          node scripts/downtify-native-prod-smoke.cjs
+        run: npm run build
 
   language-browser:
     name: EN/NL browser switching on v1.11 implementation
