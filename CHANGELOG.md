@@ -1,5 +1,23 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.21.0 — release preparation (unpublished)
+
+This release retires the experimental Downtify integration after post-upgrade setup and storage verification proved unreliable across container identities. The application once again focuses on stable, independently configurable Kima, Lidarr and Soulseek workflows.
+
+### Retired connector and native importer
+- Remove the Downtify Settings panel, device pairing, remote job queue, submission controls, native importer worker, staging probe, dedicated API routes and obsolete adapter modules.
+- Remove importer-specific Compose staging overrides and runtime bootstrapping without changing existing Docker bind mounts on any host.
+- Keep the Download Manager for authenticated Kima jobs, including Soulseek and Lidarr history.
+
+### Media and data continuity
+- Do not delete, move or re-tag any previously indexed track. The normal music scanner continues to recognize existing library files.
+- Preserve retired database tables, historical migration files and receipts to avoid destructive schema changes and to support updates from previously released versions.
+- Preserve ordinary Lidarr, Soulseek, artwork and OpenSubsonic capabilities; externally deployed Downtify services must be managed independently.
+
+### Verification and upgrade discipline
+- Removal PR #234 passed source tests, frontend and backend typechecking, production non-root guards, AIO builds on AMD64 and ARM64, security checks and the disposable-database upgrade/restore rehearsal.
+- A stable image remains unpublished until a native exact-main release preflight and security review pass. Before any live upgrade, keep verified backups of the complete persistent /data volume and preserve the correct /music mount.
+
 ## OxygenGS fork v1.20.0 — release preparation (unpublished)
 
 Kima Hub v1.20.0 introduces an optional first-party native Downtify single-track importer with separate Kima-only and Lidarr-managed library ownership. A real pre-release canary confirmed correct artist and album association, final physical file SHA-256, successful Kima indexing and playback in both Lidarr and Kima. This proves one end-to-end flow, not that every host mount or external service is configured correctly.
