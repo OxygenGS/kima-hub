@@ -14,7 +14,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 [![English + Dutch](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![GPLv3](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-[Latest release](#latest-release) · [Features](#features) · [Installation](#installation) · [Security](#security-and-upgrades) · [Documentation](#documentation)
+[Published release](#published-release-and-current-source) · [Features](#features) · [Installation](#installation) · [Security](#security-and-upgrades) · [Documentation](#documentation)
 
 </div>
 
