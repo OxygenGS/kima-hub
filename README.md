@@ -8,7 +8,7 @@
 
 The **OxygenGS fork**: a self-hosted music server with fast browsing, modern music-player support, artwork recovery and controlled download integrations.
 
-[![Stable v1.20.0](https://img.shields.io/badge/stable-v1.20.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0)
+[![Stable v1.21.0](https://img.shields.io/badge/stable-v1.21.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0)
 [![Docker](https://img.shields.io/badge/OCI-GHCR-2779bd?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![AMD64 + ARM64](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-4c6473?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![English + Dutch](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
@@ -22,7 +22,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 
 ## Published release and current source
 
-The last published stable container is [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). The upcoming **v1.21.0** source release removes the retired experimental connector. The v1.21.0 image is **not available until stable publication finishes**. The removal is merged into `main`, but existing Docker installations are not upgraded automatically.
+**Latest stable release: [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0)** (12 November 2026). This release removes the experimental Downtify integration, including its UI, native import jobs, API endpoints and staging integration. Lidarr, Soulseek and previously imported music remain available. Existing Docker installations are not automatically upgraded.
 
 This fork focuses on local music playback, modern OpenSubsonic apps, Lidarr, Soulseek, artwork recovery, fast browsing and library health checks. Existing music and persistent data remain under the operator's control.
 
@@ -57,8 +57,6 @@ The **Downloads** page shows the current account's Kima jobs for Lidarr and Soul
 
 **Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`
 
-**Release candidate only.** The image does not exist until the approved stable-publishing workflow completes.
-
 **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 
 The All-in-One image includes Kima, PostgreSQL, Redis and music-analysis services. Keep the music library and application data on persistent volumes.
@@ -79,7 +77,7 @@ Open `http://localhost:3030` to complete the first-run setup. Replace the exampl
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The release-candidate source pins the future `v1.21.0` image, not `:latest`. Do not deploy this example until stable publication completes:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The example pins the published `v1.21.0` image, never `:latest`. Existing deployments must preserve their Compose identity, media mounts and verified `/data` backups when updating:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.21.0 docker compose -f docker-compose.prod.yml up -d
@@ -92,7 +90,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.21.0 docker compose -f docker-comp
 ## Security and upgrades
 
 - Before upgrading an existing image, make a **complete cold backup of the original persistent `/data` volume**, plus configuration and secrets, and verify an **independent restore**.
-- v1.20.0 adds native-import and Lidarr-managed receipt tables/fields through additive PostgreSQL migrations on top of v1.19.0 pairing. A **container downgrade alone does not reverse migrations**; rollback requires a pre-upgrade `/data` backup.
+- v1.21.0 retires the Downtify application code but preserves the historical receipt tables and migrations created by v1.18.0-v1.20.0. A **container downgrade alone does not reverse migrations**; rollback requires a pre-upgrade `/data` backup.
 - Preserve user permissions, original media mounts, third-party import services and any reverse-proxy restrictions. Use HTTPS for remote access.
 - The native AMD64/ARM64 builds and configured security gates passed. **Residual HIGH/CRITICAL dependency advisories without published fixes remain**, and a passing scan does not prove the container is vulnerability-free.
 - No release action in this repository changes a user's running host, Docker installation or storage mounts.

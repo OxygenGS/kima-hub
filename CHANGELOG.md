@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.21.0 — release preparation (unpublished)
+## OxygenGS fork v1.21.0 — released 2026-11-12
 
 This release retires the experimental Downtify integration after post-upgrade setup and storage verification proved unreliable across container identities. The application once again focuses on stable, independently configurable Kima, Lidarr and Soulseek workflows.
 
@@ -16,9 +16,9 @@ This release retires the experimental Downtify integration after post-upgrade se
 
 ### Verification and upgrade discipline
 - Removal PR #234 passed source tests, frontend and backend typechecking, production non-root guards, AIO builds on AMD64 and ARM64, security checks and the disposable-database upgrade/restore rehearsal.
-- A stable image remains unpublished until a native exact-main release preflight and security review pass. Before any live upgrade, keep verified backups of the complete persistent /data volume and preserve the correct /music mount.
+- [Native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43303576669), [security-reviewed approval](https://github.com/OxygenGS/kima-hub/actions/runs/43306060604), and [stable Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43306092748) succeeded for v1.21.0. Residual HIGH/CRITICAL advisories remain in [image security](docs/image-security.md). Before any live upgrade, verify `/data` backup restoration and preserve the correct `/music` mount.
 
-## OxygenGS fork v1.20.0 — release preparation (unpublished)
+## OxygenGS fork v1.20.0 — released 2026-11-12
 
 Kima Hub v1.20.0 introduces an optional first-party native Downtify single-track importer with separate Kima-only and Lidarr-managed library ownership. A real pre-release canary confirmed correct artist and album association, final physical file SHA-256, successful Kima indexing and playback in both Lidarr and Kima. This proves one end-to-end flow, not that every host mount or external service is configured correctly.
 

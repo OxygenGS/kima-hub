@@ -1,8 +1,8 @@
 # Install OxygenGS Kima Hub
 
-**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — release candidate, unpublished until the stable publishing gates pass. The retired experimental connector is removed from this version's source.
+**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — published 12 November 2026. The experimental Downtify integration is retired; Lidarr, Soulseek and existing music remain supported.
 
-The candidate image will be `ghcr.io/oxygengs/kima-hub:v1.21.0` on **linux/amd64** and **linux/arm64** after approved publication. Until then, [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0) remains the last published stable image. [Stable publishing workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml).
+The published multi-architecture image is `ghcr.io/oxygengs/kima-hub:v1.21.0` for **linux/amd64** and **linux/arm64**. Both native architectures and the final OCI index were verified by the [stable publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43306092748). Back up and test restoration of application data before upgrading a running installation.
 
 **Upgrading an existing installation:** v1.20.0 adds **forward-only, additive PostgreSQL migrations** for native import discovery, Lidarr handoff and durable receipts, on top of v1.19.0 Downtify pairing. Stop application writes, back up the complete persistent `/data` volume and verify an independent restore before updating. Preserve the exact `/music` and Compose/Dockge mounts. A rollback across schema migrations **requires the pre-upgrade `/data` backup**. Any external importer from an older deployment must be disabled by its operator before updating; upgrading never removes media.
 
@@ -34,9 +34,9 @@ Open `http://localhost:3030` on the Docker host, finish setup and create the adm
 
 ### Docker Compose / Dockge
 
-Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services and additional music/download mounts before deploying. **The optional full-stack example adds separate download services.** Its release-candidate configuration pins `v1.21.0` by default (only usable after publication) and also requires an explicit existing `MUSIC_PATH` for Kima. Review the extra download-service mounts separately before using it. Existing installations should preserve their own pinned tag until their backup/restore is verified.
+Use the repository's [production Compose file](../docker-compose.prod.yml) for the all-in-one stack. The [server Compose file](../docker-compose.server.yml) includes optional download-management companions; review its extra services and additional music/download mounts before deploying. **The optional full-stack example adds separate download services.** It pins the published `v1.21.0` image by default and also requires an explicit existing `MUSIC_PATH` for Kima. Review the extra download-service mounts separately before using it. Existing installations should preserve their own pinned tag until their backup/restore is verified.
 
-For a **new** production Compose installation, the example defaults to the versioned and fixed `v1.21.0` image (pending publication) (never `:latest`). Set `MUSIC_PATH` to an existing **absolute path** to the intended music filesystem; Compose rejects a missing setting and does **not** create a missing host folder. For a NAS/DAS, independently confirm the correct disk or share is mounted: an existing but empty directory is not proof of storage identity.
+For a **new** production Compose installation, the example defaults to the published, versioned and fixed `v1.21.0` image (never `:latest`). Set `MUSIC_PATH` to an existing **absolute path** to the intended music filesystem; Compose rejects a missing setting and does **not** create a missing host folder. For a NAS/DAS, independently confirm the correct disk or share is mounted: an existing but empty directory is not proof of storage identity.
 
 For an **existing** installation, continue pinning its exact image tag in `VERSION`, and preserve its Compose project name, `/data` and `/music` mounts. Do not let a changed example version trigger an upgrade before backup and restore validation:
 
@@ -72,7 +72,7 @@ For source development use [development.md](development.md); the general `docker
 1. Privately record the running image version, deployment configuration, Compose project name and volume mounts. Never post installation-specific values to this repository.
 2. Stop the current stack and make a **cold, complete backup** of its original `/data` volume, including secrets, plus the Compose/environment configuration.
 3. Verify an independent restore into a **different** volume. Keep the pre-upgrade original and backup intact for rollback.
-4. Once v1.21.0 is officially published and independently verified, select `ghcr.io/oxygengs/kima-hub:v1.21.0` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.
+4. After verifying an independent backup and reviewing the published release, select `ghcr.io/oxygengs/kima-hub:v1.21.0` in the existing deployment without changing its music mount, `/data` volume or Compose project identity. Test with a separate non-production copy where possible.
 5. After updating, verify accounts, music playback/seek, playlists, user permissions, client authentication and language settings. If rolling back after a migration, restore the independent **pre-upgrade data backup** before starting the older image.
 
 **Database migration note:** v1.20.0 adds native import cursor, ledger and optional Lidarr-hand-off fields; v1.19.0 added the `DowntifyIntegration` table, and v1.18.0 added the `SpotifyDownloadIntent` and dispatch-claim migrations. Earlier versions also introduced reversible album links and search indexes. When upgrading from before v1.14.0, the earlier PostgreSQL `pg_trgm` extension and three search indexes may still need to be created. Allow disk space and I/O time, particularly with large libraries.
@@ -106,6 +106,6 @@ Create a new API key under **Settings → Native Apps** for each client; use the
 | Pre-release | Explicit published `prerelease-…` tag or digest | Testing only. |
 | `:latest` | Not automatically promoted | Avoid for controlled updates. |
 
-Before publishing v1.21.0, the exact-main native AMD64/ARM64 release preflight and the final image builds must pass, and remaining dependency advisories must be reviewed. Scanner success does not imply that every dependency is vulnerability-free. Approval does not establish that all dependencies are free of known vulnerabilities. See the [image security report](image-security.md) and the exact release's native preflight for risk guidance.
+The [exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43303576669), [security-reviewed stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/43306060604) and [multi-architecture publication](https://github.com/OxygenGS/kima-hub/actions/runs/43306092748) succeeded for v1.21.0. Residual HIGH and CRITICAL advisories remain; scanner success and explicit approval do not mean this image is vulnerability-free. See the [image security report](image-security.md) and the exact release's native preflight for risk guidance.
 
 [Native preflights](https://github.com/OxygenGS/kima-hub/actions/workflows/v112-native-preflight.yml) · [All releases](https://github.com/OxygenGS/kima-hub/releases) · [GHCR image](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub) · [Safe updates](safe-aio-updates.md)
