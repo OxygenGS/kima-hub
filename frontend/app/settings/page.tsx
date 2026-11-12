@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useIsMobile, useIsTablet } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/cn";
 import { useAudioState } from "@/lib/audio-context";
@@ -12,10 +12,8 @@ import { useSystemSettings } from "@/features/settings/hooks/useSystemSettings";
 import { GradientSpinner } from "@/components/ui/GradientSpinner";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { InlineStatus, useInlineStatus } from "@/components/ui/InlineStatus";
-import {
-    SettingsLayout,
-    SidebarItem
-} from "@/features/settings/components/ui";
+import { SettingsLayout } from "@/features/settings/components/ui";
+import { SETTINGS_ITEMS, resolveSettingsHash } from "@/features/settings/components/ui/SettingsNavigation";
 
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
 import { LanguageSection } from "@/features/settings/components/sections/LanguageSection";
@@ -36,34 +34,10 @@ import { LibraryDoctorSection } from "@/features/settings/components/sections/Li
 import { SmartDownloadInboxSection } from "@/features/settings/components/sections/SmartDownloadInboxSection";
 import { Button } from "@/components/ui/Button";
 
-const sidebarItems: SidebarItem[] = [
-    { id: "account", label: "Account" },
-    { id: "language", label: "Language" },
-    { id: "branding", label: "Branding", adminOnly: true },
-    { id: "subsonic", label: "Native Apps" },
-    { id: "playback", label: "Playback" },
-    { id: "scrobbling", label: "Scrobbling" },
-    { id: "download-preferences", label: "Download Preferences", adminOnly: true },
-    { id: "lidarr", label: "Download Services", adminOnly: true },
-    { id: "audiobookshelf", label: "Media Servers", adminOnly: true },
-    { id: "soulseek", label: "P2P Networks", adminOnly: true },
-    { id: "integrations", label: "Integrations", adminOnly: true },
-    { id: "artwork", label: "Artwork", adminOnly: true },
-    { id: "storage", label: "Storage", adminOnly: true },
-    { id: "cache", label: "Library Enrichment", adminOnly: true },
-    { id: "library-doctor", label: "Library Doctor", adminOnly: true },
-    { id: "smart-download-inbox", label: "Smart Download Inbox", adminOnly: true },
-    { id: "corrupt-tracks", label: "Corrupt Tracks", adminOnly: true },
-    { id: "users", label: "Users", adminOnly: true },
-];
-
 export default function SettingsPage() {
     const { isAuthenticated, isLoading: authLoading, user } = useAuth();
     const { locale } = useLanguage();
-    const translatedSidebarItems = useMemo(
-        () => sidebarItems.map((item) => ({ ...item, label: translate(locale, item.label) })),
-        [locale],
-    );
+    const [activeSection, setActiveSection] = useState("overview");
     const [isSaving, setIsSaving] = useState(false);
     const [testingServices, setTestingServices] = useState<Record<string, boolean>>({});
     const saveStatus = useInlineStatus();
@@ -114,19 +88,29 @@ export default function SettingsPage() {
         if (isAdmin) loadSystemSettings();
     }, [isAdmin, reloadUserSettings, loadSystemSettings]);
 
+    // An existing deep link opens its permitted section. Keep the old library
+    // enrichment failure link working without exposing admin-only sections.
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            const hash = window.location.hash.substring(1);
-            if (hash) {
-                setTimeout(() => {
-                    const element = document.getElementById(hash);
-                    if (element) {
-                        element.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }
-                }, 100);
-            }
+        const syncHash = () => setActiveSection(resolveSettingsHash(window.location.hash, isAdmin));
+        syncHash();
+        window.addEventListener("hashchange", syncHash);
+        window.addEventListener("popstate", syncHash);
+        return () => {
+            window.removeEventListener("hashchange", syncHash);
+            window.removeEventListener("popstate", syncHash);
+        };
+    }, [isAdmin]);
+
+    const handleSectionChange = useCallback((id: string) => {
+        if (id !== "overview" && !SETTINGS_ITEMS.some(item => item.id === id && (isAdmin || !item.adminOnly))) {
+            return;
         }
-    }, []);
+        setActiveSection(id);
+        const hash = id === "overview" ? "" : "#" + id;
+        window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search + hash);
+        const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        document.getElementById("settings-main")?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+    }, [isAdmin]);
 
     const handleSaveAll = useCallback(async () => {
         setIsSaving(true);
@@ -168,27 +152,24 @@ export default function SettingsPage() {
         }
     }, [testService]);
 
-    if (authLoading) {
-        return <LoadingScreen />;
-    }
+    if (authLoading) return <LoadingScreen />;
+    if (!isAuthenticated) return null;
 
-    if (!isAuthenticated) {
-        return null;
-    }
-
+    // Error/loading UI is always visible, even when the overview is selected.
     if (loadError) {
         return (
-            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
-                <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-6">
+            <SettingsLayout
+                sidebarItems={SETTINGS_ITEMS}
+                isAdmin={isAdmin}
+                activeSection={activeSection === "overview" ? "account" : activeSection}
+                onSectionChange={handleSectionChange}
+            >
+                <div role="alert" className="rounded-[24px] border border-danger/30 bg-danger/10 p-6">
                     <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                         {translate(locale, "Settings could not be loaded")}
                     </h2>
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">{loadError}</p>
-                    <Button
-                        variant="primary"
-                        onClick={retryLoad}
-                        className="mt-4"
-                    >
+                    <p className="mt-2 text-sm text-[var(--text-secondary)]">{loadError}</p>
+                    <Button variant="primary" onClick={retryLoad} className="mt-4">
                         {translate(locale, "Try again")}
                     </Button>
                 </div>
@@ -198,8 +179,13 @@ export default function SettingsPage() {
 
     if (!isLoaded) {
         return (
-            <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
-                <div className="flex justify-center py-24" aria-busy="true">
+            <SettingsLayout
+                sidebarItems={SETTINGS_ITEMS}
+                isAdmin={isAdmin}
+                activeSection={activeSection === "overview" ? "account" : activeSection}
+                onSectionChange={handleSectionChange}
+            >
+                <div className="flex justify-center rounded-[24px] border border-white/10 bg-[var(--bg-secondary)] py-20" aria-busy="true">
                     <GradientSpinner size="md" />
                 </div>
             </SettingsLayout>
@@ -207,101 +193,16 @@ export default function SettingsPage() {
     }
 
     return (
-        <SettingsLayout sidebarItems={translatedSidebarItems} isAdmin={isAdmin}>
-            <div className="section-stack">
-                <AccountSection />
-                <LanguageSection />
-                {isAdmin && <BrandingSection />}
-
-                <SubsonicSection />
-
-                <PlaybackSection
-                    value={userSettings.playbackQuality}
-                    onChange={(quality) => updateUserSettings({ playbackQuality: quality })}
-                    // Server-wide, so the row only appears for an admin. Passing
-                    // no handler is what hides it.
-                    maxQueueLength={isAdmin ? systemSettings.maxQueueLength : undefined}
-                    onMaxQueueLength={
-                        isAdmin
-                            ? (maxQueueLength) => updateSystemSettings({ maxQueueLength })
-                            : undefined
-                    }
-                />
-
-                <ScrobblingSection
-                    configured={!!userSettings.hasListenbrainzToken}
-                    onSaved={(hasListenbrainzToken) => updateUserSettings({ hasListenbrainzToken })}
-                    liveSharing={
-                        userSettings.liveSharingAvailable
-                            ? {
-                                  checked: userSettings.shareLiveListening !== false,
-                                  onChange: (shareLiveListening) => updateUserSettings({ shareLiveListening }),
-                              }
-                            : undefined
-                    }
-                />
-
-                {isAdmin && (
-                    <>
-                        <DownloadPreferencesSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                        />
-
-                        <LidarrSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={testingServices.lidarr || false}
-                        />
-
-                        <AudiobookshelfSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={testingServices.audiobookshelf || false}
-                        />
-
-                        <SoulseekSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={testingServices.soulseek || false}
-                        />
-
-
-                        <ArtworkSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                            onTest={handleTestService}
-                            isTesting={testingServices.fanart || false}
-                        />
-
-                        <StoragePathsSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                        />
-
-                        <CacheSection
-                            settings={systemSettings}
-                            onUpdate={updateSystemSettings}
-                        />
-
-                        <LibraryDoctorSection />
-
-                        <SmartDownloadInboxSection />
-
-                        <CorruptTracksSection />
-
-                        <UserManagementSection />
-                    </>
-                )}
-            </div>
-
-            {(isDirty || saveStatus.props.status !== "idle") && (
+        <SettingsLayout
+            sidebarItems={SETTINGS_ITEMS}
+            isAdmin={isAdmin}
+            activeSection={activeSection}
+            onSectionChange={handleSectionChange}
+            footer={(isDirty || saveStatus.props.status !== "idle") && (
                 <div
+                    role="status"
                     className={cn(
-                        "sticky z-(--z-raised) mt-8 flex items-center justify-end gap-4 rounded-lg border border-white/10 bg-[#111] px-4 py-3",
+                        "sticky z-(--z-raised) mt-5 flex flex-wrap items-center justify-end gap-3 rounded-[18px] border border-brand/20 bg-[var(--bg-secondary)] px-4 py-3 shadow-[0_12px_42px_rgba(0,0,0,0.35)]",
                         (!hasPhoneChrome || !hasMiniPlayer) && "bottom-4",
                         hasPhoneChrome && hasMiniPlayer && "bottom-[94px]",
                     )}
@@ -309,7 +210,9 @@ export default function SettingsPage() {
                     <InlineStatus {...saveStatus.props} />
                     {isDirty && (
                         <>
-                            <span className="mr-auto text-sm text-[var(--text-secondary)]">{translate(locale, "Unsaved changes")}</span>
+                            <span className="mr-auto text-sm font-medium text-[var(--text-secondary)]">
+                                {translate(locale, "Unsaved changes")}
+                            </span>
                             <Button variant="primary" onClick={handleSaveAll} disabled={isSaving}>
                                 {isSaving ? translate(locale, "Saving...") : translate(locale, "Save changes")}
                             </Button>
@@ -317,6 +220,101 @@ export default function SettingsPage() {
                     )}
                 </div>
             )}
+        >
+            {/* Keep forms mounted while switching panels: unsaved values, dialogs
+                and independent connection/status workflows must not reset. */}
+            <div className="min-w-0">
+                <div hidden={activeSection !== "account"}><AccountSection /></div>
+                <div hidden={activeSection !== "language"}><LanguageSection /></div>
+                {isAdmin && <div hidden={activeSection !== "branding"}><BrandingSection /></div>}
+
+                <div hidden={activeSection !== "subsonic"}><SubsonicSection /></div>
+
+                <div hidden={activeSection !== "playback"}>
+                    <PlaybackSection
+                        value={userSettings.playbackQuality}
+                        onChange={(quality) => updateUserSettings({ playbackQuality: quality })}
+                        maxQueueLength={isAdmin ? systemSettings.maxQueueLength : undefined}
+                        onMaxQueueLength={
+                            isAdmin
+                                ? (maxQueueLength) => updateSystemSettings({ maxQueueLength })
+                                : undefined
+                        }
+                    />
+                </div>
+
+                <div hidden={activeSection !== "scrobbling"}>
+                    <ScrobblingSection
+                        configured={!!userSettings.hasListenbrainzToken}
+                        onSaved={(hasListenbrainzToken) => updateUserSettings({ hasListenbrainzToken })}
+                        liveSharing={
+                            userSettings.liveSharingAvailable
+                                ? {
+                                    checked: userSettings.shareLiveListening !== false,
+                                    onChange: (shareLiveListening) => updateUserSettings({ shareLiveListening }),
+                                }
+                                : undefined
+                        }
+                    />
+                </div>
+
+                {isAdmin && (
+                    <>
+                        <div hidden={activeSection !== "download-preferences"}>
+                            <DownloadPreferencesSection settings={systemSettings} onUpdate={updateSystemSettings} />
+                        </div>
+
+                        <div hidden={activeSection !== "lidarr"}>
+                            <LidarrSection
+                                settings={systemSettings}
+                                onUpdate={updateSystemSettings}
+                                onTest={handleTestService}
+                                isTesting={testingServices.lidarr || false}
+                            />
+                        </div>
+
+                        <div hidden={activeSection !== "audiobookshelf"}>
+                            <AudiobookshelfSection
+                                settings={systemSettings}
+                                onUpdate={updateSystemSettings}
+                                onTest={handleTestService}
+                                isTesting={testingServices.audiobookshelf || false}
+                            />
+                        </div>
+
+                        <div hidden={activeSection !== "soulseek"}>
+                            <SoulseekSection
+                                settings={systemSettings}
+                                onUpdate={updateSystemSettings}
+                                onTest={handleTestService}
+                                isTesting={testingServices.soulseek || false}
+                            />
+                        </div>
+
+                        <div hidden={activeSection !== "artwork"}>
+                            <ArtworkSection
+                                settings={systemSettings}
+                                onUpdate={updateSystemSettings}
+                                onTest={handleTestService}
+                                isTesting={testingServices.fanart || false}
+                            />
+                        </div>
+
+                        <div hidden={activeSection !== "storage"}>
+                            <StoragePathsSection settings={systemSettings} onUpdate={updateSystemSettings} />
+                        </div>
+
+                        <div hidden={activeSection !== "cache"}>
+                            <CacheSection settings={systemSettings} onUpdate={updateSystemSettings} />
+                        </div>
+
+                        <div hidden={activeSection !== "library-doctor"}><LibraryDoctorSection /></div>
+                        <div hidden={activeSection !== "smart-download-inbox"}><SmartDownloadInboxSection /></div>
+                        <div hidden={activeSection !== "corrupt-tracks"}><CorruptTracksSection /></div>
+                        <div hidden={activeSection !== "users"}><UserManagementSection /></div>
+                    </>
+                )}
+            </div>
         </SettingsLayout>
     );
 }

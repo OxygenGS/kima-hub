@@ -72,7 +72,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                             value={settings.soulseekUsername || ""}
                             onChange={(v) => onUpdate({ soulseekUsername: v })}
                             placeholder="your_username"
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
@@ -85,7 +85,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                             value={settings.soulseekPassword || ""}
                             onChange={(v) => onUpdate({ soulseekPassword: v })}
                             placeholder="your_password"
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
                 </>
@@ -101,7 +101,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                             value={settings.slskdUrl || ""}
                             onChange={(v) => onUpdate({ slskdUrl: v })}
                             placeholder="http://slskd:5030"
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
@@ -114,7 +114,7 @@ export function SoulseekSection({ settings, onUpdate, onTest, isTesting }: Souls
                             value={settings.slskdApiKey || ""}
                             onChange={(v) => onUpdate({ slskdApiKey: v })}
                             placeholder={t("optional")}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
                 </>

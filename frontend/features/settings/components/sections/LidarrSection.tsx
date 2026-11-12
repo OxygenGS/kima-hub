@@ -69,7 +69,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                             value={settings.lidarrUrl}
                             onChange={(v) => onUpdate({ lidarrUrl: v })}
                             placeholder="http://localhost:8686"
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
@@ -79,7 +79,7 @@ export function LidarrSection({ settings, onUpdate, onTest, isTesting }: LidarrS
                             value={settings.lidarrApiKey}
                             onChange={(v) => onUpdate({ lidarrApiKey: v })}
                             placeholder={t("Enter API key")}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 

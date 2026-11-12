@@ -25,7 +25,7 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
                     value={settings.publicUrl}
                     onChange={(v) => onUpdate({ publicUrl: v })}
                     placeholder="https://kima.example.com"
-                    className="w-64"
+                    className="w-full sm:w-64"
                 />
             </SettingsRow>
 
@@ -37,7 +37,7 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
                     value={settings.musicPath}
                     onChange={(v) => onUpdate({ musicPath: v })}
                     placeholder="/music"
-                    className="w-64"
+                    className="w-full sm:w-64"
                 />
             </SettingsRow>
 
@@ -49,7 +49,7 @@ export function StoragePathsSection({ settings, onUpdate }: StoragePathsSectionP
                     value={settings.downloadPath}
                     onChange={(v) => onUpdate({ downloadPath: v })}
                     placeholder="/downloads"
-                    className="w-64"
+                    className="w-full sm:w-64"
                 />
             </SettingsRow>
         </SettingsSection>

@@ -120,7 +120,7 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                             value={settings.fanartApiKey}
                             onChange={(v) => onUpdate({ fanartApiKey: v })}
                             placeholder={t("Enter Fanart.tv API key")}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
@@ -225,7 +225,7 @@ export function ArtworkSection({ settings, onUpdate, onTest, isTesting }: Artwor
                         value={settings.acoustidApiKey || ""}
                         onChange={(v) => onUpdate({ acoustidApiKey: v })}
                         placeholder={t("Optional: Your AcoustID API key")}
-                        className="w-64"
+                        className="w-full sm:w-64"
                     />
                 </SettingsRow>
             </div>
