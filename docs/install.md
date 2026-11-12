@@ -1,10 +1,10 @@
 # Install OxygenGS Kima Hub
 
-**Current version:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0) — automatic verified Downtify single-track importing and optional Lidarr-managed handoff.
+**Last published stable image:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image includes an integration retired on the source-removal branch; a replacement image is not available until a separate, validated release.
 
 The versioned All-in-One image is `ghcr.io/oxygengs/kima-hub:v1.20.0`, for native **linux/amd64** and **linux/arm64**. [Stable publishing workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) · [v1.20.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0).
 
-**Upgrading an existing installation:** v1.20.0 adds **forward-only, additive PostgreSQL migrations** for native import discovery, Lidarr handoff and durable receipts, on top of v1.19.0 Downtify pairing. Stop application writes, back up the complete persistent `/data` volume and verify an independent restore before updating. Preserve the exact `/music` and Compose/Dockge mounts. A rollback across schema migrations **requires the pre-upgrade `/data` backup**. Native automatic imports and optional artist creation are **OFF by default**; an existing external importer is never silently stopped or replaced.
+**Upgrading an existing installation:** v1.20.0 adds **forward-only, additive PostgreSQL migrations** for native import discovery, Lidarr handoff and durable receipts, on top of v1.19.0 Downtify pairing. Stop application writes, back up the complete persistent `/data` volume and verify an independent restore before updating. Preserve the exact `/music` and Compose/Dockge mounts. A rollback across schema migrations **requires the pre-upgrade `/data` backup**. Any external importer from an older deployment must be disabled by its operator before updating; upgrading never removes media.
 
 Kima runs the web app, API, PostgreSQL, Redis and bundled analysis services in one container. Your music and persistent application data remain on volumes you control.
 
@@ -61,7 +61,7 @@ volumes:
   kima_data:
 ```
 
-**Native Downtify importing in v1.20.0:** the administrator explicitly enables it in **Settings → Integrations → Downtify** after pairing the actual Downtify server/account and verifying storage and backup. Kima-only importing works without any Lidarr service or extra mount. For **Lidarr-managed** importing, the existing Lidarr instance must have an accessible, separate shared downloads folder; use the [opt-in staging Compose override](../docker-compose.lidarr-handoff.yml) and [Lidarr-managed setup guide](downtify-lidarr-managed-handoff.md#optional-portable-docker-staging-mount). Kima must see that same existing staging folder at its configured download path, and Lidarr must see it at its own configured path. Let Lidarr select the final artist/album/file layout: do not manually move verified RC6 music or write directly into Lidarr's library root. Automatic importing begins only after the explicit administrator baseline and checks.
+The standalone source-retirement branch does not provide an external-provider staging overlay. Keep normal Lidarr and Soulseek mounts configured separately; do not mount a download directory inside Kima merely to recreate a removed integration.
 
 For source development use [development.md](development.md); the general `docker-compose.yml` runs source services instead of the published all-in-one image.
 
@@ -79,11 +79,9 @@ For source development use [development.md](development.md); the general `docker
 
 Follow the complete [safe all-in-one backup and rollback guide](safe-aio-updates.md). Its named-volume commands apply only to named Docker volumes, not arbitrary host-directory bind mounts. **Never use `docker compose down -v`** when the application data must be retained.
 
-## Configure Downtify in v1.20.0
+## Download sources
 
-Administrators open **Settings → Integrations → Downtify**, enter a backend-reachable trusted server URL, test the linked device token and save encrypted pairing details. Queue viewing, manual track controls and **Gedownloade muziek automatisch toevoegen** start OFF. After the one-time baseline confirmation, Kima imports only newly observed completed single tracks. A successful download by itself is never counted as imported.
-
-Choose **Kima-only** or **Lidarr-managed** importing while paused. The latter needs the optional shared mount and exact Lidarr account/album/track mapping; neither mode requires editing Kima's application source or running an external importer script. Different Kima/Lidarr filesystem users are supported through read-safe verified staging, without making the entire music library writable. The original music path remains unchanged. If Docker already supplies a Downtify URL/device token, migrate that connection explicitly instead of silently overriding its secrets. [Full native importer guide](downtify-native-auto-import.md) · [Lidarr setup and safety](downtify-lidarr-managed-handoff.md).
+Configure supported Lidarr and Soulseek integrations through **Settings**. The **Downloads** page displays Kima's own download history. Retired external importer records are not deleted or migrated. See [integrations](integrations.md) for setup.
 
 ## Recover missing images after updating
 
