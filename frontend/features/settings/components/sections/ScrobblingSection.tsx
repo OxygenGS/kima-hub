@@ -79,7 +79,7 @@ export function ScrobblingSection({
                     value={token}
                     onChange={setToken}
                     placeholder={configured ? t("Token saved — type to replace") : t("Paste your LB user token")}
-                    className="w-64"
+                    className="w-full sm:w-64"
                 />
             </SettingsRow>
 

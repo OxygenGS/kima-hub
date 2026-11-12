@@ -41,7 +41,7 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                             value={settings.audiobookshelfUrl}
                             onChange={(v) => onUpdate({ audiobookshelfUrl: v })}
                             placeholder="http://localhost:13378"
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
@@ -51,7 +51,7 @@ export function AudiobookshelfSection({ settings, onUpdate, onTest, isTesting }:
                             value={settings.audiobookshelfApiKey}
                             onChange={(v) => onUpdate({ audiobookshelfApiKey: v })}
                             placeholder={t("Enter API key")}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                     </SettingsRow>
 
