@@ -691,8 +691,9 @@ model SpotifyImportJob {
   @@index([userId])
 }
 
-/// Single, deliberately owner-bound Downtify device pairing. Never serialize
-/// deviceTokenEncrypted from an admin API or the generic SystemSettings route.
+/// Historical Downtify pairing data retained solely for safe upgrades and backups.
+/// No application route or worker can use this retired integration. Never drop
+/// this table or its encrypted contents automatically during a source upgrade.
 /// Every write-capable feature starts disabled; Importer v5 is independent.
 model DowntifyIntegration {
   id                     String   @id @default("default")
@@ -726,7 +727,7 @@ model DowntifyIntegration {
   updatedAt              DateTime @updatedAt
 }
 
-/// Persistent idempotency ledger for a future first-party Downtify importer.
+/// Historical import ledger retained for existing recordings and audit continuity.
 /// Creating this table never fetches, copies or removes any media.
 /// A download is unique per verified remote server/account/Spotify track.
 /// States are intentionally conservative: no automatic retry after "claimed",
