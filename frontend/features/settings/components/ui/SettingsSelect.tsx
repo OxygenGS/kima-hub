@@ -22,7 +22,7 @@ export function SettingsSelect({ id, value, onChange, options, disabled }: Setti
                 value={value}
                 onChange={event => onChange(event.target.value)}
                 disabled={disabled}
-                className="min-h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-[var(--bg-tertiary)] px-3.5 py-2.5 pr-10 text-sm text-[var(--text-primary)] outline-none transition-colors hover:border-white/20 hover:bg-[var(--bg-hover)] focus:border-brand/45 focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-11 w-full text-left cursor-pointer appearance-none rounded-xl border border-white/10 bg-[var(--bg-tertiary)] px-3.5 py-2.5 pr-10 text-sm text-[var(--text-primary)] outline-none transition-colors hover:border-white/20 hover:bg-[var(--bg-hover)] focus:border-brand/45 focus:ring-2 focus:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {options.map(option => (
                     <option key={option.value} value={option.value}>

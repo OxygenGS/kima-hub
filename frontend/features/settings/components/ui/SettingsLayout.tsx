@@ -58,7 +58,7 @@ export function SettingsLayout({
                             <Settings2 className="h-6 w-6" aria-hidden="true" />
                         </span>
                         <div className="min-w-0">
-                            <p className="text-xs font-medium text-brand">{copy.overview}</p>
+                            <p className="text-xs font-medium text-brand">{copy.workspace}</p>
                             <p className="mt-1 text-sm leading-relaxed text-[var(--text-secondary)]">{copy.overviewDescription}</p>
                         </div>
                     </div>

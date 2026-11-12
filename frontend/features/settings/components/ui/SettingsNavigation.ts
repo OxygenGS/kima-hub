@@ -4,7 +4,6 @@ import {
     AudioLines,
     BookOpenText,
     Brush,
-    Database,
     Download,
     HardDrive,
     Headphones,
@@ -15,7 +14,6 @@ import {
     Network,
     Radio,
     ScanSearch,
-    Settings2,
     ShieldCheck,
     SlidersHorizontal,
     Sparkles,
@@ -86,6 +84,7 @@ interface SettingsCopy {
     overviewDescription: string;
     openCategory: string;
     administrator: string;
+    workspace: string;
     sectionCount: string;
 }
 
@@ -102,6 +101,7 @@ export const SETTINGS_COPY: Record<Locale, SettingsCopy> = {
         overviewDescription: "Choose an area to make changes. Other sections stay out of the way.",
         openCategory: "Open",
         administrator: "Administrator",
+        workspace: "Your music space",
         sectionCount: "settings",
     },
     nl: {
@@ -116,6 +116,7 @@ export const SETTINGS_COPY: Record<Locale, SettingsCopy> = {
         overviewDescription: "Kies een onderdeel om iets aan te passen. De rest blijft uit beeld.",
         openCategory: "Openen",
         administrator: "Beheerder",
+        workspace: "Jouw muziekruimte",
         sectionCount: "instellingen",
     },
 };
