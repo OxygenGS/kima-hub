@@ -55,7 +55,7 @@ The **Downloads** page shows the current account's Kima jobs for Lidarr and Soul
 
 ## Installation
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`
 
 **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 

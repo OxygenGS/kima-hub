@@ -49,6 +49,37 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.22.0
+    "1.22.0": {
+        "titles": {
+            "Kima Hub 1.22.0 \u2014 Settings Studio": "Kima Hub 1.22.0 \u2014 Settings Studio"
+        },
+        "summaries": {
+            "A redesigned Settings Studio with grouped navigation, a calmer visual hierarchy, and responsive forms that retain unfinished changes.": "Een volledig vernieuwd instellingenmenu met duidelijke categorie\u00ebn, rustige vormgeving en mobiele formulieren die onopgeslagen wijzigingen behouden."
+        },
+        "items": {
+            "fork.122.overview": {
+                "title": "Settings Studio-overzicht",
+                "summary": "Persoonlijke instellingen, weergave, verbindingen, bibliotheek en beheer in \u00e9\u00e9n overzicht.",
+                "body": "De lange instellingenpagina is vervangen door een overzicht met categoriekaarten. Kies een onderdeel en werk in \u00e9\u00e9n gericht paneel. De donkere kaarten, subtiele amberaccenten en typografie sluiten aan op de vormgeving van onze fork. Bestaande muziek, downloads en accountinstellingen veranderen niet."
+            },
+            "fork.122.navigation": {
+                "title": "Instellingen sneller vinden op ieder scherm",
+                "summary": "Doorzoekbare desktopnavigatie, mobiele categorieknoppen en een keuzemenu per onderdeel.",
+                "body": "Op desktop is er een vaste gegroepeerde sidebar met zoekfunctie en markering van het actieve onderdeel. Op mobiel gebruik je categorieknoppen en een gegroepeerd keuzemenu. Bestaande directe links naar geldige instellingen blijven werken. Ongeldige of afgeschermde beheerderslinks worden veilig naar het overzicht geleid. Nederlandse en Engelse teksten zijn inbegrepen."
+            },
+            "fork.122.controls": {
+                "title": "Consistente en toegankelijke bediening",
+                "summary": "Vernieuwde sectiekaarten, grotere aanraakvlakken, duidelijke focus en brede invoervelden op mobiel.",
+                "body": "Formulieren hebben consistente tussenruimte, kaders en focuskleuren. Knoppen voor het tonen van wachtwoorden hebben toegankelijke labels. URL-, API-sleutel- en opslagvelden gebruiken waar nodig de beschikbare breedte op telefoons. Bestaande verbindingstests, schakelaars, opslagfuncties en accountbeveiliging blijven hetzelfde werken."
+            },
+            "fork.122.data": {
+                "title": "Instellingen en muziek blijven behouden",
+                "summary": "Wissel van onderdeel zonder onopgeslagen wijzigingen te verliezen; API's en databasegeschiedenis blijven intact.",
+                "body": "Settings Studio houdt de onderliggende formulieren actief terwijl je tussen zichtbare onderdelen wisselt. Niet-opgeslagen wijzigingen en tijdelijke formulierstatus blijven daardoor bewaard. Wijzigingen opslaan blijft beschikbaar. Beheerdersopties zijn verborgen voor gewone gebruikers. Deze interface-update wijzigt geen backendroutes, Prisma-migraties, Docker-opslagkoppelingen of bestaande muziekbestanden. Maak v\u00f3\u00f3r een live-update een volledige back-up van /data en controleer dat herstel werkt."
+            }
+        }
+    },
     // release-candidate:1.21.0
     "1.21.0": {
         "titles": {
