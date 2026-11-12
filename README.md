@@ -22,7 +22,7 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 
 ## Published release and current source
 
-The latest published stable container is [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image still includes a retired third-party integration. The source branch retiring that integration is not a new stable container and does not automatically upgrade existing hosts.
+The last published stable container is [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). The upcoming **v1.21.0** source release removes the retired experimental connector. The v1.21.0 image is **not available until stable publication finishes**. The removal is merged into `main`, but existing Docker installations are not upgraded automatically.
 
 This fork focuses on local music playback, modern OpenSubsonic apps, Lidarr, Soulseek, artwork recovery, fast browsing and library health checks. Existing music and persistent data remain under the operator's control.
 
@@ -55,7 +55,7 @@ The **Downloads** page shows the current account's Kima jobs for Lidarr and Soul
 
 ## Installation
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0` (release candidate, not yet published)
 
 **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 
@@ -70,17 +70,17 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.20.0
+  ghcr.io/oxygengs/kima-hub:v1.21.0
 ```
 
 Open `http://localhost:3030` to complete the first-run setup. Replace the example music path with your own.
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The new-installation image default is pinned to `v1.20.0`, not `:latest`:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The release-candidate source pins the future `v1.21.0` image, not `:latest`. Do not deploy this example until stable publication completes:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.20.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.21.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
 **New installs:** `MUSIC_PATH` is mandatory; Docker Compose will not create an absent host music directory. An existing directory is not proof that a removable or network disk is mounted—verify the actual backing storage. **Existing installs:** keep the original Compose project, `/music` and `/data` mounts, and the running version pinned until a verified backup/restore and controlled upgrade. The fixed example tag never follows `:latest`.
