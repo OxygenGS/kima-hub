@@ -1,10 +1,6 @@
 /**
  * v1.18.0 Unified Download Manager — read-only, user-scoped Kima job feed.
  *
- * Downtify's paired-device account is NOT a Kima account. Do not show Downtify
- * queue rows to Kima users or attribute them until a verified identity mapping
- * and per-user job ownership are implemented.
- *
  * A completed transfer is not proof that the track is indexed/playable.
  * No raw metadata, source paths, peer identifiers, upstream URLs or error
  * strings are exposed by this endpoint.
@@ -38,7 +34,6 @@ export interface UnifiedDownloadOverview {
     hasMore: boolean;
     /** Counts are for this page, not a global total. */
     pageCounts: Record<DownloadPhase, number>;
-    downtifyJobsIncluded: false;
 }
 
 export const MAX_DOWNLOAD_PAGE_SIZE = 100;
@@ -129,6 +124,5 @@ export async function getUnifiedDownloadOverview(
         items, total, displayed: items.length, limit, offset,
         hasMore: offset + items.length < total,
         pageCounts,
-        downtifyJobsIncluded: false,
     };
 }

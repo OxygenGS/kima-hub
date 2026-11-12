@@ -45,7 +45,6 @@ describe("user-scoped Unified Download Manager feed", () => {
             id: "owned-job-1", engine: "soulseek", phase: "downloaded",
             libraryVerification: "not_checked", progress: null,
         });
-        expect(result.downtifyJobsIncluded).toBe(false);
     });
 
     it("never returns metadata, token-bearing paths, peer addresses or raw error strings", async () => {
@@ -104,7 +103,6 @@ describe("user-scoped Unified Download Manager feed", () => {
         const result = await getUnifiedDownloadOverview("user-A", 50, 50);
         expect(result).toMatchObject({
             total: 120, displayed: 1, limit: 50, offset: 50, hasMore: true,
-            downtifyJobsIncluded: false,
         });
     });
 

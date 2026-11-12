@@ -14,7 +14,6 @@ Most of Kima is configured in the web app, under **Settings**. Environment varia
 | Download Services | Lidarr | Admins |
 | Media Servers | Audiobookshelf | Admins |
 | P2P Networks | Soulseek | Admins |
-| Integrations | Downtify connection test, encrypted device pairing and default-OFF feature switches | Admins |
 | Artwork | Fanart.tv and AcoustID keys, plus missing image repair | Admins |
 | Library Doctor | Read-only library health diagnostics and supported corrections | Admins |
 | Smart Download Inbox | Import evidence and album association review | Admins |
@@ -24,8 +23,6 @@ Most of Kima is configured in the web app, under **Settings**. Environment varia
 | Users | Create and delete accounts, set roles | Admins |
 
 Streaming quality is Original (lossless), 320 kbps, 192 kbps or 128 kbps. Anything below Original is transcoded on the fly, and the transcoded files are cached.
-
-Downtify (v1.20.0) is configured through **Settings → Integrations** with encrypted account-bound pairing. Queue controls and native single-track importing start OFF; the administrator explicitly activates importing after verifying music storage and an owner-bound baseline. Choose Kima-only (no Lidarr dependency) or optional Lidarr-managed import with a separate existing shared `/downloads` mount, verified access and full two-library receipt. Existing Docker-managed `KIMA_DOWNTIFY_ENABLED` or `KIMA_DOWNTIFY_DEVICE_TOKEN` configurations are not overwritten; migrate deliberately. See [Native import guide](downtify-native-auto-import.md) and [Lidarr handoff setup](downtify-lidarr-managed-handoff.md).
 
 ## Environment variables
 

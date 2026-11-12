@@ -5,7 +5,7 @@
  * MusicBrainz artist/album instead of inventing an album from folders.
  *
  * Synthetic test files and Jest metadata only. No production mount,
- * Downtify connection, or live Lidarr import is used here.
+ * external download service, or live Lidarr import is used here.
  */
 jest.mock("../../utils/logger",()=>({
     logger:{warn:jest.fn(),debug:jest.fn(),error:jest.fn(),info:jest.fn()},
@@ -44,10 +44,10 @@ import {prisma} from "../../utils/db";
 import {MusicScannerService} from "../musicScanner";
 
 jest.setTimeout(60_000);
-const ARTIST="Downtify Layout Canary Artist";
-const ALBUM="Downtify Layout Canary Album";
+const ARTIST="Lidarr Layout Canary Artist";
+const ALBUM="Lidarr Layout Canary Album";
 const TITLE="Verified Test Recording";
-const REL_PREFIX="Downtify Layout Canary Artist/";
+const REL_PREFIX="Lidarr Layout Canary Artist/";
 let musicRoot="";
 
 async function cleanSyntheticRows(){

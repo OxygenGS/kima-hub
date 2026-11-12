@@ -14,33 +14,26 @@ The **OxygenGS fork**: a self-hosted music server with fast browsing, modern mus
 [![English + Dutch](https://img.shields.io/badge/UI-English%20%7C%20Dutch-6554ad?style=flat-square)](docs/internationalization.md)
 [![GPLv3](https://img.shields.io/badge/License-GPLv3-555555?style=flat-square)](LICENSE)
 
-[Latest release](#latest-release) · [Features](#features) · [Downtify](#downtify-integration) · [Installation](#installation) · [Security](#security-and-upgrades) · [Documentation](#documentation)
+[Published release](#published-release-and-current-source) · [Features](#features) · [Installation](#installation) · [Security](#security-and-upgrades) · [Documentation](#documentation)
 
 </div>
 
 ---
 
-## Latest release
+## Published release and current source
 
-### v1.20.0 — Native Downtify imports, with optional Lidarr ownership
+The latest published stable container is [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image still includes a retired third-party integration. The source branch retiring that integration is not a new stable container and does not automatically upgrade existing hosts.
 
-**Validated in a live pre-release canary on 11 November 2026.** Kima can automatically discover newly completed single-track Downtify downloads, verify the original audio, and import it into Kima or let Lidarr manage the final library file.
+This fork focuses on local music playback, modern OpenSubsonic apps, Lidarr, Soulseek, artwork recovery, fast browsing and library health checks. Existing music and persistent data remain under the operator's control.
 
-- **Automatic, opt-in imports:** only newly observed, owner-bound individual tracks after activation. Previous downloads are not re-imported.
-- **Optional Lidarr handoff:** Kima verifies and stages the recording; Lidarr assigns its own artist, album, track and final filename. Kima then indexes the same final file.
-- **Two independent receipts:** exact registered Lidarr TrackFile and complete SHA-256 first, then a Kima scanner/index receipt. Completed commands alone are never counted as imported.
-- **Safe defaults:** native imports start OFF, Lidarr is not required, and no existing Kima recordings, persistent volumes or storage mounts are automatically moved.
-
-A pre-release end-to-end canary confirmed correct album association and playback in both apps. This does not replace host-specific mount and backup checks.
-
-[Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0) · [Native importer](docs/downtify-native-auto-import.md) · [Lidarr handoff](docs/downtify-lidarr-managed-handoff.md) · [Changelog](CHANGELOG.md)
+[Release history](CHANGELOG.md) · [Update safety](docs/safe-aio-updates.md)
 
 ## Features
 
 | Listen | Discover | Manage |
 | :--- | :--- | :--- |
 | Stream your local tracks, albums, artists and playlists; queue, lyrics, shuffle, repeat and sleep timer. | Mood Mixer, Vibe Map, artist radio, personalized recommendations and listening history. | Library Doctor, Smart Download Inbox, artwork recovery, individual user permissions and download history. |
-| Web playback, installable PWA where supported, plus compatible OpenSubsonic apps. | Fast artist pages, typo-tolerant search and music-library enrichment. | Optional Lidarr, Soulseek, Audiobookshelf, podcasts and Downtify integration. |
+| Web playback, installable PWA where supported, plus compatible OpenSubsonic apps. | Fast artist pages, typo-tolerant search and music-library enrichment. | Optional Lidarr, Soulseek, Audiobookshelf and podcasts. |
 
 ### Library and artwork
 
@@ -54,24 +47,11 @@ A pre-release end-to-end canary confirmed correct album association and playback
 
 [Native-client instructions](docs/subsonic.md) · [Library Doctor](docs/library-doctor.md) · [Internationalization](docs/internationalization.md)
 
-## Downtify integration
+## Download Manager
 
-The **Downloads** screen shows permission-filtered jobs and saved Spotify track requests. The new administrator panel lives under **Settings → Integrations → Downtify**.
+The **Downloads** page shows the current account's Kima jobs for Lidarr and Soulseek. It does not offer a separate external-provider queue, Spotify request submission or automatic third-party import. Library files already imported by older releases remain untouched.
 
-| Function | Behaviour |
-| :--- | :--- |
-| Connection and pairing | Test an authenticated Downtify API v1 instance; save one encrypted device pairing linked to a Kima administrator. |
-| Owner-scoped queue | Display only jobs that pass the configured server, remote account and user-ownership checks. |
-| Spotify track requests | Save individual track links for permitted users without automatically starting a download. |
-| Manual track submission | Submit **one prepared track** only after an explicit acknowledgement and duplicate/identity checks. Uncertain submissions are not automatically retried. |
-| Manual remote checks | Read owner-bound remote job state. A completed Downtify job is **not** proof that Kima imported the recording. |
-| Verified single-track auto-import | Explicit admin opt-in after a new-download baseline, music-volume proof and full original audio/metadata/hash validation. No automatic backfill. |
-| Optional Lidarr-managed import | Separate shared staging mount, unique MusicBrainz artist/album/track match and Lidarr-managed final path. The Kima-only default works without Lidarr. |
-| Independent library receipts | Lidarr TrackFile and physical SHA-256 are confirmed separately from Kima indexing; settings display distinct progress counters. |
-
-**Importing remains OFF until enabled.** Single-track importing does not dispatch entire albums or playlists, erase source files, overwrite Lidarr-managed recordings, migrate existing RC6 paths, or automatically replace another importer. Administrators must establish a working storage mount, restorable backup and exclusive media writer before enabling it. [Kima native importer](docs/downtify-native-auto-import.md) · [Lidarr-managed setup](docs/downtify-lidarr-managed-handoff.md).
-
-[Downtify setup and limitations](docs/downtify-settings.md) · [Download Manager design](docs/unified-download-manager.md) · [User permissions](docs/user-permissions.md)
+[Download permissions](docs/user-permissions.md) · [Lidarr and Soulseek setup](docs/integrations.md)
 
 ## Installation
 
@@ -123,7 +103,7 @@ MUSIC_PATH=/absolute/path/to/music VERSION=v1.20.0 docker compose -f docker-comp
 | :--- | :--- | :--- |
 | [Installation](docs/install.md) | [Administration](docs/administration.md) | [Using Kima](docs/using-kima.md) |
 | [Safe updates](docs/safe-aio-updates.md) | [Integrations](docs/integrations.md) | [Download Manager](docs/unified-download-manager.md) |
-| [Configuration](docs/configuration.md) | [Downtify settings](docs/downtify-settings.md) | [Native clients](docs/subsonic.md) |
+| [Configuration](docs/configuration.md) | [Download preferences](docs/configuration.md) | [Native clients](docs/subsonic.md) |
 | [Releases](https://github.com/OxygenGS/kima-hub/releases) | [Image security](docs/image-security.md) | [Language settings](docs/internationalization.md) |
 
 [Contribution guidelines](CONTRIBUTING.md) · [Upstream compatibility](docs/upstream-compatibility.md) · [Security reporting](SECURITY.md)

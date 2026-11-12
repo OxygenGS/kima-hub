@@ -80,9 +80,9 @@ N, P and S work on music; the other keys also work on podcasts and audiobooks.
 
 On compatible phones and browsers Kima can be installed to the home screen as a web app. Open your running Kima URL and use the browser's **Install app** or **Add to Home Screen** option. On a television browser Kima switches to a separate television layout.
 
-## Downloads and Downtify
+## Downloads
 
-The **Downloads** screen shows the current account's permitted download jobs and any explicitly enabled saved Spotify requests. From v1.19.0 administrators can use **Settings → Integrations → Downtify** for encrypted device pairing and separate default-OFF controls. Sending a prepared Spotify track is always manual, requires acknowledgement and does not imply that the song has reached the Kima library. Read [Downtify settings](downtify-settings.md) before configuring it.
+The **Downloads** screen shows the current account's Kima download jobs from supported Lidarr and Soulseek workflows. Import status is separate from the download result. Configure services under **Settings** and see [integrations](integrations.md).
 
 ## Other apps
 
