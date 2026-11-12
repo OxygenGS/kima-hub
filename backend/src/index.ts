@@ -23,9 +23,7 @@ import playlistsRoutes from "./routes/playlists";
 import searchRoutes from "./routes/search";
 import recommendationsRoutes from "./routes/recommendations";
 import downloadsRoutes from "./routes/downloads";
-import downloadEnginesRoutes from "./routes/downloadEngines";
 import downloadManagerRoutes from "./routes/downloadManager";
-import downtifyIntegrationRoutes from "./routes/downtifyIntegration";
 import webhooksRoutes from "./routes/webhooks";
 import audiobooksRoutes from "./routes/audiobooks";
 import podcastsRoutes from "./routes/podcasts";
@@ -168,11 +166,8 @@ app.use("/api/playlists", apiLimiter, playlistsRoutes);
 app.use("/api/search", apiLimiter, searchRoutes);
 app.use("/api/recommendations", apiLimiter, recommendationsRoutes);
 app.use("/api/downloads", apiLimiter, downloadsRoutes);
-// v1.18.0: optional read-only Downtify diagnostics, separate from existing downloads.
-app.use("/api/download-engines", apiLimiter, downloadEnginesRoutes);
-// Read-only caller-scoped download history; Downtify jobs require identity mapping.
+// Read-only caller-scoped Kima download history.
 app.use("/api/download-manager", apiLimiter, downloadManagerRoutes);
-app.use("/api/downtify-integration", apiLimiter, downtifyIntegrationRoutes);
 app.use("/api/notifications", apiLimiter, notificationsRoutes);
 app.use("/api/webhooks", webhooksRoutes); // Excluded from apiLimiter; the router applies webhookLimiter
 // /api/audiobooks gets apiLimiter like every other mount. The cover route stays

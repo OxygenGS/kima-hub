@@ -27,7 +27,6 @@ import { DownloadPreferencesSection } from "@/features/settings/components/secti
 import { LidarrSection } from "@/features/settings/components/sections/LidarrSection";
 import { AudiobookshelfSection } from "@/features/settings/components/sections/AudiobookshelfSection";
 import { SoulseekSection } from "@/features/settings/components/sections/SoulseekSection";
-import { DowntifySection } from "@/features/settings/components/sections/DowntifySection";
 import { ArtworkSection } from "@/features/settings/components/sections/ArtworkSection";
 import { StoragePathsSection } from "@/features/settings/components/sections/StoragePathsSection";
 import { CacheSection } from "@/features/settings/components/sections/CacheSection";
@@ -270,7 +269,6 @@ export default function SettingsPage() {
                             isTesting={testingServices.soulseek || false}
                         />
 
-                        <DowntifySection key={user?.id} />
 
                         <ArtworkSection
                             settings={systemSettings}

@@ -54,8 +54,6 @@ jobs:
                   test -s /tmp/ci-release-notes.md
             - name: Verify production Compose music path and fixed stable fallback
               run: python3 .github/ci/check-portable-compose.py
-            - name: Validate read-only Downtify staging source protocol
-              run: python3 -m unittest discover -s scripts/tests -p 'test_downtify_staging_probe.py' -v
             - name: Validate pinned multiarch vulnerability-scanner installer syntax
               run: bash -n .github/ci/install-trivy-verified.sh
 
