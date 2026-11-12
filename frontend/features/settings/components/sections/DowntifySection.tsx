@@ -168,8 +168,13 @@ const safeMessage: Record<string, TranslationKey> = {
     confirmation_required: "Confirm that sending a track starts a remote download.",
 };
 function errorState(error: unknown): string {
-    const value = error as { response?: { data?: { state?: string } } };
-    return value?.response?.data?.state || "unavailable";
+    // The first-party fetch client sets error.data, not Axios error.response.data.
+    // Only show allowlisted state messages; never surface raw server messages.
+    const value = error as {
+        data?: { state?: string };
+        response?: { data?: { state?: string } };
+    } | null;
+    return value?.data?.state || value?.response?.data?.state || "unavailable";
 }
 function usageFromControls(value: DowntifyControls): Usage {
     if (!value.enabled) return "off";
