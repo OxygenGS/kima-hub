@@ -1,0 +1,17 @@
+[
+  {
+    "path": "README.md",
+    "before": "**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.20.0`",
+    "after": "**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Current version:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image includes an integration retired on the source-removal branch; a replacement image is not available until a separate, validated release.",
+    "after": "**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — release candidate, unpublished until the stable publishing gates pass. The retired experimental connector is removed from this version's source."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.20.0` |",
+    "after": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.21.0` |"
+  }
+]

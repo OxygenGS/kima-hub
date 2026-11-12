@@ -9,7 +9,7 @@
 # Usage:
 #   1. Set MUSIC_PATH to the absolute path of an existing music directory.
 #      On a NAS/DAS check that the intended external filesystem is mounted.
-#   2. Optionally set VERSION (default: versioned v1.20.0 release).
+#   2. Optionally set VERSION (default: versioned v1.21.0 release).
 #   3. Run: docker compose -f docker-compose.prod.yml up -d
 #   3. Open http://localhost:3030
 
@@ -17,7 +17,7 @@ services:
   kima:
     # Fixed, published stable. Never automatically follow :latest.
     # Pin VERSION to the existing deployment's tag for any controlled upgrade.
-    image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.20.0}
+    image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.21.0}
     container_name: kima
     ports:
       - "${PORT:-3030}:3030"
