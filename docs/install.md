@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Last published stable image:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image includes an integration retired on the source-removal branch; a replacement image is not available until a separate, validated release.
+**Current version:** [v1.20.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0). That historical image includes an integration retired on the source-removal branch; a replacement image is not available until a separate, validated release.
 
 The versioned All-in-One image is `ghcr.io/oxygengs/kima-hub:v1.20.0`, for native **linux/amd64** and **linux/arm64**. [Stable publishing workflow](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml) · [v1.20.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0).
 
