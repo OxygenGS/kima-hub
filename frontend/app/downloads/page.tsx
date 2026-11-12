@@ -98,7 +98,7 @@ function AccountDownloads() {
             <PageHeader
                 eyebrow={t("Downloads")}
                 title={t("Download Manager")}
-                description={t("View recent Kima downloads.")}
+                description={t("Only your own jobs are shown. Completed transfers still need library verification.")}
                 actions={
                     <button type="button" onClick={() => setReloadKey(n => n + 1)}
                         disabled={refreshing}
