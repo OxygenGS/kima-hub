@@ -1,6 +1,6 @@
 # Downtify → Lidarr: managed import and safety
 
-**Release status:** v1.20.0 candidate in PR #231; not included in published stable v1.19.0. A real pre-release single-track canary on 11 November 2026 confirmed the completed Lidarr command, registered TrackFile, exact source/final SHA-256, correct artist/album in both libraries and playback in both applications. CI validates the separate Kima-only mode, fresh-install/upgrade paths and native images. Every new installation must still verify its own shared mounts, permissions and database backup before enabling automated importing.
+**Available from Kima Hub v1.20.0.** A live pre-release single-track canary on 11 November 2026 confirmed the completed Lidarr command, registered TrackFile, exact source/final SHA-256, correct artist/album in both libraries and playback in both applications. CI separately tests the Kima-only option, fresh-install/upgrade paths and native images. Each installation must still verify its shared mounts, file permissions and database backup before enabling automatic importing.
 
 The earlier RC6 Kima-only importer publishes under `Singles/Downtify/<Artist>/<Track>-<SpotifyId>.<ext>` and does not register recordings in Lidarr. v1.20.0 retains that non-Lidarr option without moving old files; the new Lidarr-managed option delegates the final path and library registration to Lidarr.
 

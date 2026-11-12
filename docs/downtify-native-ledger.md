@@ -1,6 +1,6 @@
 # Native Downtify import ledger — persistent identity and crash safety
 
-**Release status:** v1.20.0 release candidate, incorporating the native importer and optional Lidarr-managed extension (PR #231). Stable v1.19.0 does not contain native automated importing. The ledger is additive and does not automatically migrate, delete, rename or re-import previously indexed recordings. Automatic media writes remain OFF until the owner explicitly verifies mounts, backup and exclusive importer ownership.
+**Available from v1.20.0:** native importing and optional Lidarr-managed handoff use an additive, owner-bound ledger. The ledger is additive and does not automatically migrate, delete, rename or re-import previously indexed recordings. Automatic media writes remain OFF until the owner explicitly verifies mounts, backup and exclusive importer ownership.
 
 ## Why the ledger is necessary
 
@@ -112,8 +112,7 @@ Any missing file, offline DAS, changed hash, index failure or stale
 claim stays unconfirmed; no automatic re-copy or deletion is triggered.
 A database scanner receipt still does not, by itself, prove that
 every external music player has successfully streamed the file.
-These operations are wired to the admin-only opt-in switch in the
-unreleased integration candidate. They do not run in v1.19.0.
+These operations are wired to the administrator-only native-import opt-in switch in v1.20.0. Pairing Downtify or upgrading Kima alone does not enable automatic importing.
 
 ## Direct source transfer (new, read-only)
 

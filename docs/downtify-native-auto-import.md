@@ -1,6 +1,6 @@
 # Native Downtify auto-import — portable application integration
 
-**v1.20.0 release candidate; not included in stable v1.19.0.** Native automatic single-track import now supports two explicit modes: Kima-only and Lidarr-managed. A live pre-release canary on 11 November 2026 confirmed that a new Downtify track was matched and imported by Lidarr, then indexed on its correct album in Kima and playable in both applications. The feature remains opt-in and portable to compatible Docker installations; no particular server, Proxmox setup or host-side importer script is required. Fresh installs need no old importer to disable. Existing installations must establish a restorable backup and an exclusive media writer before enabling importing.
+**Available from Kima Hub v1.20.0.** Native automatic single-track import supports two explicit modes: Kima-only and Lidarr-managed. A live pre-release canary on 11 November 2026 confirmed that a new Downtify track was matched and imported by Lidarr, then indexed on its correct album in Kima and playable in both applications. The feature remains opt-in and portable to compatible Docker installations; no particular server, Proxmox setup or host-side importer script is required. Fresh installs need no old importer to disable. Existing installations must establish a restorable backup and an exclusive media writer before enabling importing.
 
 ## Choose the final library owner
 

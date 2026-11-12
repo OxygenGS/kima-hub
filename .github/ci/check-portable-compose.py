@@ -8,6 +8,7 @@ change any real host music mount or running Docker deployment here.
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +16,16 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = ROOT / "docker-compose.prod.yml"
 LIDARR_OVERRIDE = ROOT / "docker-compose.lidarr-handoff.yml"
+
+
+def checked_release_image():
+    # Align the source-level Compose default with both versioned packages.
+    # A floating tag, mismatched packages or stale release pin fails closed.
+    backend = json.loads((ROOT / "backend/package.json").read_text(encoding="utf-8"))["version"]
+    frontend = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))["version"]
+    if backend != frontend or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", backend):
+        raise AssertionError("Inconsistent or invalid native release versions")
+    return f"ghcr.io/oxygengs/kima-hub:v{backend}"
 
 
 def config(env, lidarr=False):
@@ -64,8 +75,8 @@ def main():
             )
         data = json.loads(result.stdout)
         service = data["services"]["kima"]
-        if service["image"] != "ghcr.io/oxygengs/kima-hub:v1.19.0":
-            raise AssertionError("New install does not use fixed published stable")
+        if service["image"] != checked_release_image():
+            raise AssertionError("New install does not use fixed versioned release")
 
         music_volumes = [
             v for v in service["volumes"] if v["target"] == "/music"

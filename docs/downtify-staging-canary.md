@@ -19,10 +19,10 @@ real mount and atomic no-replace hardlink support. An existing writable
 directory alone does not prove that a removable/network volume is
 mounted. Keep and verify an independent cold backup for rollback.
 
-Checkout the exact release-candidate head SHA, then build an isolated local candidate image. For example, ONLY on the disposable staging host:
+Checkout the exact reviewed release tag or candidate commit, then build an isolated local image. For example, ONLY on a disposable staging host:
 
 ~~~bash
-git checkout feat/downtify-lidarr-v2
+git checkout v1.20.0
 CANDIDATE="$(git rev-parse HEAD)"
 docker build -t "ghcr.io/oxygengs/kima-hub:staging-$CANDIDATE" .
 
@@ -122,9 +122,6 @@ track evidence, source vs published hash verdict, scanner receipt
 and independently verified backup restore. Review residual dependency
 advisories and unsupported filesystem capabilities.
 
-Go only if the **current exact candidate** passes all four workflows
-(including browser Security E2E), plus the real staged import/scan/
-playback, no-replace/mount and backup evidence. Otherwise PR #217
-remains draft and the stable image stays unchanged.
+Go only if the **exact proposed release source** passes the required source, security, EN/NL browser, nonroot and native build workflows, followed by the exact-main AMD64/ARM64 preflight, residual vulnerability review, real staged import/scan/playback, no-replace/mount and backup evidence. A failed gate blocks the stable tag; never substitute CI for independent host and storage verification.
 
 The source protocol probe cannot by itself authorize publication.

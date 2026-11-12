@@ -6,17 +6,27 @@ set -euo pipefail
 # Fail on release-fixture column drift before either architecture builds an image.
 python3 .github/ci/check-release-ui-fixture.py --self-test
 
+# Derive the pinned image from the checked-in candidate, not from a
+# historical release constant. Both architecture build guards use this.
+release_version="$(python3 - <<'PY'
+import json
+import re
+from pathlib import Path
+versions = [
+    json.loads(Path(side, "package.json").read_text(encoding="utf-8"))["version"]
+    for side in ("backend", "frontend")
+]
+assert versions[0] == versions[1], "Backend/frontend release versions differ"
+assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", versions[0]), "Invalid SemVer"
+print(versions[0])
+PY
+)"
+expected_default="ghcr.io/oxygengs/kima-hub:v${release_version}"
+
 for file in docker-compose.prod.yml docker-compose.server.yml; do
     echo "Checking $file for safe fork image, data mounts and kernel settings..."
-    # Both config-only checks use a fake non-existent staging path.
-    # The production example requires an explicit MUSIC_PATH and forbids
-    # auto-creating that directory, while the optional server stack retains
-    # its independent conservative version fallback for now.
-    if [[ "$file" == docker-compose.prod.yml ]]; then
-        expected_default="ghcr.io/oxygengs/kima-hub:v1.19.0"
-    else
-        expected_default="ghcr.io/oxygengs/kima-hub:v1.10.0"
-    fi
+    # Both examples must use the exact candidate version by default,
+    # never a moving alias or a historic fallback.
     synthetic_music="${RUNNER_TEMP:-/tmp}/kima-compose-ci-unmounted-library"
     MUSIC_PATH="$synthetic_music" VERSION= docker compose -f "$file" config --format json | EXPECTED_PIN="$expected_default" python3 -c '
 import json, sys
@@ -49,25 +59,30 @@ done
 # This also keeps a new release's install guide and README aligned without
 # requiring a script edit for every subsequent stable tag.
 published_image="$(python3 - <<'PY'
+import json
 import re
 import sys
 from pathlib import Path
 
 readme = Path("README.md").read_text(encoding="utf-8")
 guide = Path("docs/install.md").read_text(encoding="utf-8")
-pattern = r"^\*\*Published image:\*\* `(ghcr\.io/oxygengs/kima-hub:(v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)))`[ \t]*$"
+pattern = r"^\*\*(?:Published|Versioned) image:\*\* `(ghcr\.io/oxygengs/kima-hub:(v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)))`[ \t]*$"
 match = re.search(pattern, readme, re.MULTILINE)
 if not match:
     sys.exit("FORK DOCUMENT CHECK FAILED: README has no explicit stable fork image")
 image, version = match.groups()
-expected_heading = (
-    f"**Current published fork release:** [{version}]"
-    f"(https://github.com/OxygenGS/kima-hub/releases/tag/{version})"
+headings = (
+    f"**Current published fork release:** [{version}]",
+    f"**Current version:** [{version}]",
 )
-if expected_heading not in guide:
-    sys.exit("FORK DOCUMENT CHECK FAILED: install guide stable release differs from README")
+release_url = f"(https://github.com/OxygenGS/kima-hub/releases/tag/{version})"
+if not any(heading + release_url in guide for heading in headings):
+    sys.exit("FORK DOCUMENT CHECK FAILED: install guide release differs from README")
 if f"| Stable | `{image}` |" not in guide:
     sys.exit("FORK DOCUMENT CHECK FAILED: install guide stable image differs from README")
+candidate = "v" + json.loads(Path("backend/package.json").read_text(encoding="utf-8"))["version"]
+if version != candidate:
+    sys.exit("FORK DOCUMENT CHECK FAILED: README version differs from checked-in candidate")
 print(image)
 PY
 )"

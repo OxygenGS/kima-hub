@@ -49,6 +49,47 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.20.0
+    "1.20.0": {
+        "titles": {
+            "Kima Hub 1.20.0 \u2014 Native Downtify Imports": "Kima Hub 1.20.0 \u2014 Downtify automatisch importeren"
+        },
+        "summaries": {
+            "Import new verified Downtify tracks into Kima or optionally let Lidarr manage the final file, with independent receipts in both libraries.": "Importeer nieuwe, gecontroleerde Downtify-nummers in Kima of laat optioneel Lidarr de uiteindelijke bestanden beheren, met afzonderlijke bevestiging in beide bibliotheken."
+        },
+        "items": {
+            "fork.120.native-import": {
+                "title": "Downtify-nummers automatisch importeren",
+                "summary": "Nieuwe voltooide Spotify-nummers worden gecontroleerd en ge\u00efndexeerd zonder apart importscript op de host.",
+                "body": "Beheerders koppelen Downtify in Instellingen, leggen een startpunt vast en schakelen de automatische import expliciet in. Alleen nieuwe, aan het gekoppelde account toebehorende voltooide nummers worden verwerkt. Kima controleert de originele bestandsidentiteit, metadata, volledige audiodecodering, grootte en SHA-256. Bestaande downloads en onduidelijke taken worden niet stilzwijgend opnieuw verwerkt."
+            },
+            "fork.120.lidarr-handoff": {
+                "title": "Optioneel importeren via Lidarr",
+                "summary": "Laat Lidarr zelf het definitieve muziekbestand beheren; Kima bepaalt de opslaglocatie niet.",
+                "body": "Kies Kima of Lidarr als beheerder van de import. Kima blijft de standaard; Lidarr is niet nodig voor een normale installatie. Bij Lidarr slaat Kima een volledig gecontroleerd bestand op in een afzonderlijke gedeelde downloadsmap. Alleen \u00e9\u00e9n exacte artiest-, album-, release- en trackmatch wordt zonder overschrijven via de Lidarr-import-API overgedragen. Lidarr kiest zelf de uiteindelijke bestandsnaam en map. Automatisch artiesten toevoegen staat standaard UIT."
+            },
+            "fork.120.dual-receipts": {
+                "title": "Afzonderlijke bevestiging door Lidarr en Kima",
+                "summary": "Een download of voltooide Lidarr-opdracht is pas ge\u00efmporteerd na controle van de echte bestanden en bibliotheekrecords.",
+                "body": "Kima controleert de exacte Lidarr-trackfile met de vastgelegde artiest-, album- en track-ID, speelduur, bestandsgrootte en volledige SHA-256 van het definitieve bestand. Een voltooide opdracht met resultaat onbekend wordt alleen aanvaard wanneer alle fysieke controles slagen. Daarna controleert Kima zijn eigen bibliotheekscan. Instellingen toont afzonderlijke wacht- en successtatussen."
+            },
+            "fork.120.file-safety": {
+                "title": "Veilige stagingrechten en herstel zonder dubbele imports",
+                "summary": "Gecontroleerde stagingbestanden blijven leesbaar na het kopi\u00ebren door Lidarr, zonder ongecontroleerde tijdelijke bestanden vrij te geven.",
+                "body": "Een tijdelijk audiobestand blijft priv\u00e9 totdat de volledige validatie slaagt. Daarna krijgen uitsluitend de gecontroleerde stagingbestanden passende leesrechten, ook als Lidarr en Kima als verschillende systeemgebruikers werken. De Kima-only-modus behoudt zijn bestaande bestandsrechten. Pad- en mountcontroles, publiceren zonder overschrijven, eenmalige importopdrachten en duurzame databasebevestigingen voorkomen dubbele imports. Bestaande muziek wordt niet massaal verplaatst of verwijderd."
+            },
+            "fork.120.portable-setup": {
+                "title": "Draagbare Docker-configuratie en Nederlandse statusweergave",
+                "summary": "Gebruik ondersteunde Docker-installaties met expliciete opslagkoppelingen en heldere Nederlands/Engelse importstatussen.",
+                "body": "De optionele Compose-uitbreiding koppelt alleen een bestaande gedeelde stagingmap. Een normale installatie zonder Lidarr heeft die niet nodig. Kima verifieert de muziekschijf, de aparte downloadsmap en of Lidarr de stagingmap kan zien voordat de koppeling actief wordt. De interface maakt onderscheid tussen wachten op Lidarr, wachten op de Kima-scan, door Lidarr bevestigd en door Kima ge\u00efmporteerd."
+            },
+            "fork.120.safe-upgrade": {
+                "title": "Aanvullende migraties en gecontroleerd bijwerken",
+                "summary": "Oudere RC6-imports en bestaande Docker-koppelingen blijven behouden; een gecontroleerde back-up is vereist voor een veilige upgrade.",
+                "body": "De extra databasevelden en het importregister zijn aanvullend en standaard uitgeschakeld. Kima verandert bij het bijwerken geen bestaande muziekmappen, externe scripts, oude imports of gebruikerssessies. Maak v\u00f3\u00f3r een productie-upgrade een volledige back-up van /data en de configuratie en controleer een onafhankelijk herstel. Een oudere container terugzetten draait PostgreSQL-migraties niet terug. Voor de offici\u00eble versie blijven onafhankelijke AMD64/ARM64-controles en beoordeling van beveiligingsbevindingen verplicht."
+            }
+        }
+    },
     // release-candidate:1.19.0
     "1.19.0": {
         "titles": {
