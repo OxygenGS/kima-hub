@@ -2,7 +2,62 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.19.0 — current published release (7 November 2026)
+## v1.21.0 — current published release (12 November 2026)
+
+The [v1.21.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43303576669)
+verified the exact released source commit `7eb292db3a3fc74ffa446c449ba098245f2b7488`.
+It built native AMD64 and ARM64 images, checked architecture and revision labels,
+and scanned image vulnerabilities and embedded secrets. The
+[explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/43306060604)
+and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43306092748)
+succeeded after a registry upload retry. Both architectures were verified in
+the final stable OCI index.
+
+| Native v1.21.0 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 327 | 8 | 0 |
+| linux/arm64 | 326 | 8 | 0 |
+
+**These are unresolved findings, not a declaration of safety.** Trivy reported
+no explicit patched versions for these HIGH/CRITICAL findings. This is not
+proof that mitigations are impossible, that the issues are unexploitable,
+or that affected libraries are unreachable. Both images passed the configured
+secret scan and the automatic fixable-vulnerability gate. Media decoders,
+system libraries and services processing untrusted input require exposure-aware
+review.
+
+The eight CRITICAL advisories on both architectures are:
+
+| Advisory | Package | Scanner status |
+| :--- | :--- | :--- |
+| CVE-2023-45853 | `zlib1g` | will_not_fix |
+| CVE-2023-6879 | `libaom3` | affected |
+| CVE-2025-47917 | `libmbedcrypto7` | end_of_life |
+| CVE-2025-7458 | `libsqlite3-0` | affected |
+| CVE-2026-34873 | `libmbedcrypto7` | affected |
+| CVE-2026-34875 | `libmbedcrypto7` | affected |
+| CVE-2026-58016 | `libglib2.0-0` | fix_deferred |
+| CVE-2026-6653 | `libxml2` | fix_deferred |
+
+- [AMD64 preflight scan artifact](https://github.com/OxygenGS/kima-hub/actions/runs/43303576669/artifacts/13982164432)
+- [ARM64 preflight scan artifact](https://github.com/OxygenGS/kima-hub/actions/runs/43303576669/artifacts/13983507251)
+- [Published v1.21.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0): `ghcr.io/oxygengs/kima-hub:v1.21.0`.
+
+These counts describe preflight images and one scanner database snapshot,
+not a separate, refreshed post-publication registry scan or a guarantee for
+a deployed host. The retired external importer code is absent from v1.21.0;
+existing music and historical database records are preserved. Operators must
+verify a complete `/data` backup, preserve the correct `/music` mount and
+review network exposure before updating.
+
+## Historical: v1.20.0 — published 12 November 2026
+
+This release introduced experimental Downtify importing and optional Lidarr
+handoff; those application features were retired in v1.21.0. Historical
+database migrations and already imported music are preserved.
+[Release archive](https://github.com/OxygenGS/kima-hub/releases/tag/v1.20.0).
+
+## Historical: v1.19.0 — published 7 November 2026
 
 The [v1.19.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879)
 passed on the **exact published source commit**
