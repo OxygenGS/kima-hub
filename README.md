@@ -118,6 +118,8 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 **Current stable version:** [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.22.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
 
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`
+
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
 ### Docker — new installations only
