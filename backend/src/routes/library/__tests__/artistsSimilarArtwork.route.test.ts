@@ -160,6 +160,58 @@ describe("the similar-artists strip and where its pictures come from", () => {
         mockGetReleaseGroups.mockReset().mockResolvedValue({ kind: "absent" });
     });
 
+    it("keeps album and top-track playback contracts without per-track album joins", async () => {
+        const track = {
+            id: "owned-track", albumId: "owned-album", title: "My Song",
+            duration: 215, trackNo: 1, discNumber: 1, recordingMbid: null,
+        };
+        mockArtistFindUnique.mockResolvedValue({
+            ...subject(null),
+            mbid: null,
+            albums: [{
+                id: "owned-album", title: "My Album", coverUrl: "native:albums/owned.jpg",
+                year: 2024, rgMbid: "local-release", tracks: [track],
+            }],
+        });
+        mockDeezerTopTracks.mockResolvedValue([{
+            title: "My Song", album: "My Album", durationMs: 215000, rank: 1200,
+            coverUrl: "https://deezer.example/art.jpg",
+        }]);
+
+        const res = await request(makeApp()).get("/library/artists/art-1");
+        expect(res.status).toBe(200);
+        const tracksQuery = mockArtistFindUnique.mock.calls[0][0].include.albums.include.tracks;
+        // Albums are already loaded by the parent include; never rejoin them per track.
+        expect(tracksQuery.orderBy).toEqual({ trackNo: "asc" });
+        expect(tracksQuery.include).toBeUndefined();
+
+        const albumDetails = { id: "owned-album", title: "My Album", coverUrl: "native:albums/owned.jpg" };
+        expect(res.body.albums[0].tracks[0].album).toEqual(albumDetails);
+        expect(res.body.albums[0].tracks[0].audioFeatures).toHaveProperty("bpm", null);
+        expect(res.body.topTracks[0]).toMatchObject({
+            id: "owned-track", popularitySource: "global", album: { ...albumDetails, coverArt: albumDetails.coverUrl },
+        });
+    });
+
+    it("reuses parent album data for the fallback popular tracks on a cold library", async () => {
+        mockArtistFindUnique.mockResolvedValue({
+            ...subject(null),
+            mbid: null,
+            albums: [{
+                id: "old-album", title: "Early Work", year: 1997, rgMbid: "local-release",
+                coverUrl: "native:albums/early.jpg",
+                tracks: [{ id: "early-track", albumId: "old-album", title: "Early", duration: 160, trackNo: 1 }],
+            }],
+        });
+        const res = await request(makeApp()).get("/library/artists/art-1");
+        expect(res.status).toBe(200);
+        expect(res.body.topTracks).toHaveLength(1);
+        expect(res.body.topTracks[0]).toMatchObject({
+            id: "early-track", releaseDate: "1997-01-01",
+            album: { id: "old-album", title: "Early Work", coverArt: "native:albums/early.jpg" },
+        });
+    });
+
     it("requests independent enrichments while a MusicBrainz discography is still pending", async () => {
         mockArtistFindUnique.mockResolvedValue(subject(null));
 
