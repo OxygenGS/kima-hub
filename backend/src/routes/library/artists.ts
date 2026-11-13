@@ -84,6 +84,7 @@ async function resolveSimilarArtists(similar: SimilarArtistSource[]) {
       normalizedName: true,
       mbid: true,
       heroUrl: true,
+      userHeroUrl: true,
       _count: {
         select: {
           albums: {
@@ -99,7 +100,7 @@ async function resolveSimilarArtists(similar: SimilarArtistSource[]) {
 
   const libraryByName = new Map(
     libraryMatches.map((a) => [
-      a.normalizedName?.toLowerCase() || a.name.toLowerCase(),
+      normalizeArtistName(a.normalizedName || a.name),
       a,
     ]),
   );
@@ -112,9 +113,11 @@ async function resolveSimilarArtists(similar: SimilarArtistSource[]) {
     similar.map((s) => imageLimit(async () => {
       const libraryArtist =
         (s.mbid && libraryByMbid.get(s.mbid)) ||
-        libraryByName.get(s.name.toLowerCase());
+        libraryByName.get(normalizeArtistName(s.name));
 
-      let image = libraryArtist?.heroUrl || null;
+      // A saved custom portrait takes precedence over automatic enrichment.
+      // Matching a normalized local name avoids unnecessary remote art calls.
+      let image = libraryArtist?.userHeroUrl || libraryArtist?.heroUrl || null;
       if (!image) {
         image =
           (await findArtistArtwork({ name: s.name, mbid: s.mbid || undefined }))
@@ -891,10 +894,17 @@ router.get("/artists/:id", async (req, res) => {
       return similarArtists;
     };
 
+    // Artist and all of its scalar fields were loaded at the start of this
+    // request. Do not query the same Artist a second time in dataCache when
+    // an image is already saved; only missing artwork needs provider fallback.
+    const savedHero = artist.userHeroUrl ?? artist.heroUrl;
+    const heroImage = savedHero
+      ? Promise.resolve(savedHero)
+      : dataCacheService.getArtistImage(artist.id, artist.name, effectiveMbid);
     const [albumsWithOwnership, topTracks, heroUrl, similarArtists] = await Promise.all([
       loadAlbums(),
       loadTopTracks(),
-      dataCacheService.getArtistImage(artist.id, artist.name, effectiveMbid),
+      heroImage,
       loadSimilarArtists(),
     ]);
 

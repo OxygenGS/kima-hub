@@ -99,9 +99,10 @@ jest.mock("../../../services/musicbrainz", () => ({
     },
 }));
 
+const mockGetArtistImage = jest.fn();
 jest.mock("../../../services/dataCache", () => ({
     dataCacheService: {
-        getArtistImage: jest.fn().mockResolvedValue(null),
+        getArtistImage: (...args: unknown[]) => mockGetArtistImage(...args),
         getAlbumCover: jest.fn().mockResolvedValue(null),
         getArtistImagesBatch: jest.fn().mockResolvedValue(new Map()),
     },
@@ -153,6 +154,7 @@ describe("the similar-artists strip and where its pictures come from", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockFindArtistArtwork.mockResolvedValue(null);
+        mockGetArtistImage.mockReset().mockResolvedValue(null);
         mockArtistFindMany.mockResolvedValue([]);
         mockGetSimilarArtists.mockResolvedValue([]);
         mockGlobalTopRecordings.mockResolvedValue([]);
@@ -239,6 +241,69 @@ describe("the similar-artists strip and where its pictures come from", () => {
         const response = await responsePromise;
         expect(response.status).toBe(200);
         expect(response.body.albums).toEqual([]);
+    });
+
+    describe("reuse existing artist images without extra database or provider requests", () => {
+        it("serves a manually selected hero from the already loaded artist", async () => {
+            mockArtistFindUnique.mockResolvedValue({
+                ...subject(null),
+                heroUrl: "native:artists/automatic.jpg",
+                userHeroUrl: "native:artists/manual.jpg",
+            });
+
+            const res = await request(makeApp()).get("/library/artists/art-1");
+            expect(res.status).toBe(200);
+            expect(res.body.coverArt).toBe("native:artists/manual.jpg");
+            expect(mockGetArtistImage).not.toHaveBeenCalled();
+        });
+
+        it("uses the existing fallback lookup only for artists with no saved photo", async () => {
+            mockArtistFindUnique.mockResolvedValue(subject(null));
+            mockGetArtistImage.mockResolvedValue(FOUND);
+
+            const res = await request(makeApp()).get("/library/artists/art-1");
+            expect(res.status).toBe(200);
+            expect(res.body.coverArt).toBe(FOUND);
+            expect(mockGetArtistImage).toHaveBeenCalledTimes(1);
+            expect(mockGetArtistImage).toHaveBeenCalledWith(
+                "art-1", "Perturbator", "11111111-2222-3333-4444-555555555555",
+            );
+        });
+
+        it("recognizes accented and ampersand names locally and prefers manual portraits", async () => {
+            mockArtistFindUnique.mockResolvedValue(subject([
+                { name: "Sigur Rós", mbid: null, match: 0.91 },
+                { name: "Hall & Oates", mbid: null, match: 0.89 },
+            ]));
+            mockArtistFindMany.mockResolvedValue([
+                {
+                    id: "local-sigur", name: "Sigur Rós", normalizedName: "sigur ros",
+                    mbid: null, heroUrl: "native:artists/sigur.jpg",
+                    userHeroUrl: null, _count: { albums: 2 },
+                },
+                {
+                    id: "local-hall", name: "Hall & Oates", normalizedName: "hall and oates",
+                    mbid: null, heroUrl: "native:artists/hall-auto.jpg",
+                    userHeroUrl: "native:artists/hall-custom.jpg",
+                    _count: { albums: 3 },
+                },
+            ]);
+
+            const res = await request(makeApp()).get("/library/artists/art-1");
+            expect(res.status).toBe(200);
+            expect(res.body.similarArtists).toMatchObject([
+                {
+                    id: "local-sigur", inLibrary: true, ownedAlbumCount: 2,
+                    coverArt: "native:artists/sigur.jpg",
+                },
+                {
+                    id: "local-hall", inLibrary: true, ownedAlbumCount: 3,
+                    coverArt: "native:artists/hall-custom.jpg",
+                },
+            ]);
+            expect(mockArtistFindMany.mock.calls[0][0].select.userHeroUrl).toBe(true);
+            expect(mockFindArtistArtwork).not.toHaveBeenCalled();
+        });
     });
 
     describe("built from the artist's own enriched data", () => {
