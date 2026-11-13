@@ -166,6 +166,23 @@ describe('DELETE /discover/clear -- filesystem containment', () => {
         expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
     });
 
+    it('refuses tracked music behind an out-of-root symlink before deleting in Lidarr', async () => {
+        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
+            activeAlbum('Normal', 'Album'),
+        ]);
+        (prisma.album.findFirst as jest.Mock).mockResolvedValueOnce({
+            tracks: [{ filePath: 'Other/track.flac' }],
+        });
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) =>
+            p === '/music/Other' ? '/external/private' : p,
+        );
+
+        await request(app).delete('/discover/clear');
+
+        expect(fs.rmSync).not.toHaveBeenCalled();
+        expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
+    });
+
     it('refuses a linked discovery artist folder before Lidarr or database deletion', async () => {
         (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
             activeAlbum('Linked', 'Album'),
