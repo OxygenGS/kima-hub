@@ -146,6 +146,7 @@ describe('DELETE /discover/clear -- filesystem containment', () => {
             expect(String(call[0]).startsWith(DISCOVERY_ROOT + '/')).toBe(true);
         }
         expect(fs.rmSync).not.toHaveBeenCalled();
+        expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
     });
 
     it('deletes nothing outside it when the climb lands back inside the music root', async () => {
@@ -162,6 +163,7 @@ describe('DELETE /discover/clear -- filesystem containment', () => {
             expect(String(call[0]).startsWith(DISCOVERY_ROOT + '/')).toBe(true);
         }
         expect(fs.rmSync).not.toHaveBeenCalled();
+        expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
     });
 
     it('refuses a linked discovery artist folder before Lidarr or database deletion', async () => {
