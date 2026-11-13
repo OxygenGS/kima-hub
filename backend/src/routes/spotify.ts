@@ -221,8 +221,11 @@ router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicP
                 url?.trim() ||
                 `https://open.spotify.com/playlist/${spotifyPlaylistId}`;
 
-            if (effectiveUrl.includes("deezer.com")) {
-                const deezerMatch = effectiveUrl.match(/playlist[\/:](\d+)/);
+            const link = importableLink(effectiveUrl);
+            if (!link) return refuseLink(res, effectiveUrl);
+
+            if (link.platform === "deezer") {
+                const deezerMatch = link.url.match(/playlist[\/:](\d+)/);
                 if (!deezerMatch) {
                     return res
                         .status(400)
@@ -236,10 +239,10 @@ router.post("/import", requireMusicPermission("canRequestAlbums"), requireMusicP
                         .json({ error: "Deezer playlist not found" });
                 }
                 preview = await spotifyImportService.generatePreviewFromDeezer(deezerPlaylist);
-            } else if (spotifyImportService.isExternalPlatformUrl(effectiveUrl)) {
-                preview = await spotifyImportService.generatePreviewFromExternalPlatform(effectiveUrl);
+            } else if (link.platform !== "spotify") {
+                preview = await spotifyImportService.generatePreviewFromExternalPlatform(link);
             } else {
-                preview = await spotifyImportService.generatePreview(effectiveUrl);
+                preview = await spotifyImportService.generatePreview(link.url);
             }
         }
 

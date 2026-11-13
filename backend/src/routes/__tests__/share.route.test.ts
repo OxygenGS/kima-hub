@@ -168,7 +168,7 @@ describe('GET /share/:token -- resolve share link', () => {
         const playlistLink = { ...BASE_SHARE_LINK, entityType: 'playlist', entityId: 'playlist-1' };
         const mockPlaylist = {
             id: 'playlist-1',
-            title: 'My Mix',
+            title: 'My Mix', name: 'My Mix',
             items: [],
             user: { username: 'testuser' },
         };
@@ -343,10 +343,10 @@ describe('GET /share/:token -- public metadata projection', () => {
         expect(res.status).toBe(200);
         const args = (prisma.track.findUnique as jest.Mock).mock.calls[0][0];
         expect(args).not.toHaveProperty('include');
-        expect(args.select).toEqual(expect.objectContaining({
+        expect(args.select).toMatchObject({
             id: true, title: true, duration: true,
             album: { select: { title: true, coverUrl: true, artist: { select: { name: true } } } },
-        }));
+        });
         expect(JSON.stringify(args.select)).not.toMatch(/filePath|userId|acoustidFingerprint|apiKey|tokenVersion/);
     });
 
@@ -360,12 +360,10 @@ describe('GET /share/:token -- public metadata projection', () => {
         const res = await request(app).get('/share/valid-token-abc');
         expect(res.status).toBe(200);
         const select = (prisma.playlist.findUnique as jest.Mock).mock.calls[0][0].select;
-        expect(select).toEqual(expect.objectContaining({
+        expect(select).toMatchObject({
             id: true, name: true,
-            items: expect.objectContaining({
-                select: { track: { select: expect.objectContaining({ title: true, duration: true }) } },
-            }),
-        }));
+            items: { select: { track: { select: { title: true, duration: true } } } },
+        });
         expect(select.items.select.track.select.album.select.coverUrl).toBe(true);
         expect(JSON.stringify(select)).not.toMatch(/filePath|userId|spotifyPlaylistUrl|acoustidFingerprint/);
     });
@@ -381,13 +379,11 @@ describe('GET /share/:token -- public metadata projection', () => {
         const res = await request(app).get('/share/valid-token-abc');
         expect(res.status).toBe(200);
         const select = (prisma.album.findUnique as jest.Mock).mock.calls[0][0].select;
-        expect(select).toEqual(expect.objectContaining({
+        expect(select).toMatchObject({
             id: true, title: true, coverUrl: true,
             artist: { select: { name: true } },
-            tracks: expect.objectContaining({
-                select: expect.objectContaining({ id: true, title: true, duration: true }),
-            }),
-        }));
+            tracks: { select: { id: true, title: true, duration: true } },
+        });
         expect(JSON.stringify(select)).not.toMatch(/filePath|userId|userCoverUrl|acoustidFingerprint/);
     });
 });

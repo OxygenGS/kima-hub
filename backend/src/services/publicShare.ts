@@ -95,6 +95,8 @@ export async function loadPublicPlaylist(id: string) {
     return {
         id: playlist.id,
         name: playlist.name,
+        // Preserve the existing share-preview contract for OxygenGS consumers.
+        title: playlist.name,
         items: playlist.items.map((item) => ({ id: item.id, sort: item.sort, track: publicTrack(item.track) })),
     };
 }
