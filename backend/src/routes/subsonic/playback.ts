@@ -4,6 +4,7 @@ import path from "path";
 import { ListenSource } from "@prisma/client";
 import { prisma } from "../../utils/db";
 import { logger } from "../../utils/logger";
+import { isFileGone } from "../../utils/errors";
 import { subsonicOk, subsonicError, SubsonicError } from "../../utils/subsonicResponse";
 import { getAudioStreamingService } from "../../services/audioStreaming";
 import { config } from "../../config";
@@ -37,13 +38,18 @@ async function streamTrackById(
         config.music.transcodeCacheMaxGb,
     );
 
-    const { filePath, mimeType } = await streamingService.getStreamFilePath(
-        track.id,
-        quality,
-        track.fileModified,
-        absolutePath,
-    );
-    await streamingService.streamFileWithRangeSupport(req, res, filePath, mimeType);
+    try {
+        const { filePath, mimeType } = await streamingService.getStreamFilePath(
+            track.id,
+            quality,
+            track.fileModified,
+            absolutePath,
+        );
+        await streamingService.streamFileWithRangeSupport(req, res, filePath, mimeType);
+    } catch (err) {
+        if (!isFileGone(err) || res.headersSent) throw err;
+        return subsonicError(req, res, SubsonicError.NOT_FOUND, "Song not found");
+    }
 }
 
 // ===================== NOW PLAYING =====================

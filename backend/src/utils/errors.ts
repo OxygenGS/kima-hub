@@ -107,3 +107,9 @@ export class ConfigurationError extends Error {
 }
 
 
+
+/** Missing or broken filesystem paths are not an internal streaming failure. */
+export function isFileGone(err: unknown): boolean {
+    const code = (err as NodeJS.ErrnoException | null)?.code;
+    return code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP";
+}
