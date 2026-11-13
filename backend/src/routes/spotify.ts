@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import multer from "multer";
 import path from "path";
 import { createRateLimiter } from "../middleware/rateLimiter";
@@ -12,6 +12,7 @@ import { spotifyImportService, getImportJob } from "../services/spotifyImport";
 import { deezerService } from "../services/deezer";
 import { readSessionLog, getSessionLogPath } from "../utils/playlistLogger";
 import { parseM3U } from "../services/m3uParser";
+import { recogniseMusicLink, lacksLinkScheme, FULL_LINK_MESSAGE, type MusicLink, type MusicPlatform } from "../services/musicLink";
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.use(requireAuthOrToken);
 
 // Validation schemas
 const parseUrlSchema = z.object({
-    url: z.string().url(),
+    url: z.string(),
 });
 
 const importSchema = z.object({
@@ -45,24 +46,49 @@ const importSchema = z.object({
 });
 
 const quickImportSchema = z.object({
-    url: z.string().url(),
+    url: z.string(),
     playlistName: z.string().min(1).max(200).optional(),
 });
 
-// Every supported playlist source, with the URL shape the quick import accepts;
-// the preview check only needs the domain half of each pair.
-const PLAYLIST_URL_PREFIXES: Array<[string, string]> = [
-    ["spotify.com", "/playlist/"],
-    ["deezer.com", "/playlist/"],
-    ["deezer.com", "/playlist:"],
-    ["youtube.com", "/playlist"],
-    ["music.youtube.com", "/playlist"],
-    ["youtube.com", "/watch"],
-    ["youtu.be", "/"],
-    ["soundcloud.com", "/"],
-    ["bandcamp.com", "/"],
-    ["mixcloud.com", "/"],
-];
+// The sites a playlist can be imported from.
+const IMPORT_PLATFORMS: ReadonlySet<MusicPlatform> = new Set([
+    "spotify",
+    "deezer",
+    "youtube",
+    "youtubeMusic",
+    "soundcloud",
+    "mixcloud",
+]);
+
+// What a quick import also needs of the address: the start of its path, per site. A site missing here takes any path.
+const QUICK_IMPORT_PATHS: Partial<Record<MusicPlatform, string[]>> = {
+    spotify: ["/playlist/"],
+    deezer: ["/playlist/", "/playlist:"],
+    youtube: ["/playlist", "/watch"],
+    youtubeMusic: ["/playlist", "/watch"],
+};
+
+const INVALID_URL = "Invalid URL. Supported: Spotify, Deezer, YouTube, SoundCloud, Mixcloud.";
+
+/** The 400 reply for an address that is not an importable music link. */
+function refuseLink(res: Response, raw: string) {
+    return res.status(400).json({ error: lacksLinkScheme(raw) ? FULL_LINK_MESSAGE : INVALID_URL });
+}
+
+/** The address as a music link on a site playlists can be imported from, or null. */
+function importableLink(raw: string): MusicLink | null {
+    const link = recogniseMusicLink(raw);
+    return link && IMPORT_PLATFORMS.has(link.platform) ? link : null;
+}
+
+/** The address as a music link that a quick import can start from, or null. */
+function quickImportableLink(raw: string): MusicLink | null {
+    const link = importableLink(raw);
+    if (!link || link.domain === "youtu.be") return link;
+    const paths = QUICK_IMPORT_PATHS[link.platform];
+    const { pathname } = new URL(link.url);
+    return !paths || paths.some((start) => pathname.startsWith(start)) ? link : null;
+}
 
 /**
  * POST /api/spotify/parse
@@ -72,7 +98,9 @@ router.post("/parse", async (req, res) => {
     try {
         const { url } = parseUrlSchema.parse(req.body);
 
-        const parsed = spotifyService.parseUrl(url);
+        const link = recogniseMusicLink(url);
+        if (!link || link.platform !== "spotify") return refuseLink(res, url);
+        const parsed = spotifyService.parseUrl(link.url);
         if (!parsed) {
             return res.status(400).json({
                 error: "Invalid Spotify URL. Please provide a valid playlist URL.",
@@ -108,14 +136,11 @@ router.post("/preview/start", async (req, res) => {
     try {
         const { url } = parseUrlSchema.parse(req.body);
 
-        if (!PLAYLIST_URL_PREFIXES.some(([domain]) => url.includes(domain))) {
-            return res.status(400).json({
-                error: "Invalid URL. Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud.",
-            });
-        }
+        const link = importableLink(url);
+        if (!link) return refuseLink(res, url);
 
-        logger.debug(`[Playlist Import] Starting preview job for: ${url}`);
-        const { jobId } = await spotifyImportService.startPreviewJob(url, req.user!.id);
+        logger.debug(`[Playlist Import] Starting preview job for: ${link.url}`);
+        const { jobId } = await spotifyImportService.startPreviewJob(link.url, req.user!.id);
         res.json({ jobId });
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -154,13 +179,10 @@ router.post("/import/quick", requireMusicPermission("canRequestAlbums"), require
     try {
         const { url, playlistName } = quickImportSchema.parse(req.body);
 
-        if (!PLAYLIST_URL_PREFIXES.some(([domain, path]) => url.includes(domain + path))) {
-            return res.status(400).json({
-                error: "Invalid URL. Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud.",
-            });
-        }
+        const link = quickImportableLink(url);
+        if (!link) return refuseLink(res, url);
 
-        const { jobId } = await spotifyImportService.quickImport(url, req.user!.id, playlistName);
+        const { jobId } = await spotifyImportService.quickImport(link.url, req.user!.id, playlistName);
 
         res.json({ jobId });
     } catch (error) {
