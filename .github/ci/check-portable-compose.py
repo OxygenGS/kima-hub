@@ -18,13 +18,35 @@ COMPOSE = ROOT / "docker-compose.prod.yml"
 
 
 def checked_release_image():
-    # Align the source-level Compose default with both versioned packages.
-    # A floating tag, mismatched packages or stale release pin fails closed.
+    # A source release candidate is not a published Docker image. New
+    # installations must continue to default to the last published stable tag,
+    # even when backend/frontend packages have advanced to a candidate version.
     backend = json.loads((ROOT / "backend/package.json").read_text(encoding="utf-8"))["version"]
     frontend = json.loads((ROOT / "frontend/package.json").read_text(encoding="utf-8"))["version"]
     if backend != frontend or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", backend):
         raise AssertionError("Inconsistent or invalid native release versions")
-    return f"ghcr.io/oxygengs/kima-hub:v{backend}"
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    releases = re.findall(
+        r"^\\*\\*Versioned image:\\*\\* \`(ghcr\\.io/oxygengs/kima-hub:(v[0-9]+\\.[0-9]+\\.[0-9]+))\`[ \\t]*$",
+        readme, flags=re.MULTILINE,
+    )
+    if len(releases) != 1:
+        raise AssertionError("README must specify one published stable image")
+    image, published = releases[0]
+    candidate = f"v{backend}"
+    if candidate != published:
+        # Explicitly declared source-only candidates may be newer than the
+        # published image, but must never silently change the install default.
+        spec_path = ROOT / ".github/releases" / f"{candidate}.json"
+        if not spec_path.is_file():
+            raise AssertionError("Unpublished source candidate has no release spec")
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        if spec.get("release", {}).get("version") != backend:
+            raise AssertionError("Release candidate spec version mismatch")
+        if f"**Unpublished release candidate:** [{candidate}]" not in readme:
+            raise AssertionError("Unpublished source candidate must be disclosed")
+    return image
 
 
 def config(env):
