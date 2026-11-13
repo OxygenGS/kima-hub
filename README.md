@@ -8,7 +8,7 @@
 
 A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
 
-[![Stable release](https://img.shields.io/badge/stable-v1.22.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0)
+[![Stable release](https://img.shields.io/badge/stable-v1.23.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![Platforms](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-41434f?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
@@ -116,11 +116,11 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 ## Quick start
 
-**Current stable version:** [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.22.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable version:** [v1.23.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.23.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.23.0`
 
-**Unpublished release candidate:** [v1.23.0](https://github.com/OxygenGS/kima-hub/pull/242). This version is source-only while CI, native image preflight and security approval are pending. Do not pull or deploy the candidate tag before publication.
+**New in v1.23.0:** security improvements, safer library scanning and deletion, more reliable playback synchronization, and hardened Lidarr/Soulseek integrations from upstream Kima v1.12.3–v1.12.4. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0).
 
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
@@ -133,17 +133,17 @@ docker run -d \
   -p 3030:3030 \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.22.0
+  ghcr.io/oxygengs/kima-hub:v1.23.0
 ```
 
 Replace `/absolute/path/to/music` with an **existing** host directory holding your music. Open **http://localhost:3030** from the Docker host and finish the first-run setup.
 
 ### Docker Compose / Dockge — new installations only
 
-The [production Compose file](docker-compose.prod.yml) pins a versioned source image and requires `MUSIC_PATH` to point to an existing music directory. During release preparation, the source default can be newer than the published stable image; set `VERSION=v1.22.0` explicitly until v1.23.0 has been published.
+The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.23.0 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.22.0 \
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.23.0 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -155,7 +155,7 @@ The [optional companion stack](docker-compose.server.yml) includes additional me
 ## Security and release quality
 
 - Stable releases use native AMD64/ARM64 builds, checks and an explicit security-reviewed publication process. The `:latest` image alias is **not** automatically advanced.
-- The v1.22.0 image still has reported HIGH/CRITICAL security advisories. Passing the automated release gates does **not** mean zero vulnerabilities. Review the [current image-security report](docs/image-security.md) and restrict network exposure appropriately.
+- The v1.23.0 image preflight still reports HIGH/CRITICAL security advisories. Passing the automated release gates does **not** mean zero vulnerabilities. Review the [current image-security report](docs/image-security.md) and restrict network exposure appropriately.
 - Applications, media mounts and running Docker containers **are not** changed by editing this GitHub repository or publishing a release.
 
 [Security policy](SECURITY.md) · [Published image advisories](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
