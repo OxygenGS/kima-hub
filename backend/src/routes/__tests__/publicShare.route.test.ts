@@ -100,6 +100,8 @@ it("a playlist share has only the listed fields, in the app's order", async () =
         entity: {
             id: playlistId,
             name: "The Playlist",
+            // OxygenGS share previews also consume the legacy title alias.
+            title: "The Playlist",
             items: [
                 { id: firstItem, sort: 1, track: firstReply() },
                 { id: secondItem, sort: 0, track: secondReply() },
