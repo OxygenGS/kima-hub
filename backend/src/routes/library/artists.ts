@@ -404,17 +404,10 @@ router.get("/artists/:id", async (req, res) => {
       albums: {
         orderBy: { year: Prisma.SortOrder.desc },
         include: {
+          // The parent albums are already included. Loading each track's
+          // album relation again duplicates the same metadata in the query.
           tracks: {
             orderBy: { trackNo: Prisma.SortOrder.asc },
-            include: {
-              album: {
-                select: {
-                  id: true,
-                  title: true,
-                  coverUrl: true,
-                },
-              },
-            },
           },
         },
       },
@@ -439,6 +432,18 @@ router.get("/artists/:id", async (req, res) => {
     // Keep the local library identity stable; enrichment never changes it on a page visit.
     const effectiveMbid = artist.mbid;
 
+    // Construct the small track.album shape from the albums already fetched
+    // above. Popular tracks and playable album tracks both need this shape,
+    // but the database must not load the same Album relation per track.
+    const artistAlbums = artist.albums.map((album) => ({
+      ...album,
+      tracks: album.tracks.map((track) => ({
+        ...track,
+        album: { id: album.id, title: album.title, coverUrl: album.coverUrl },
+      })),
+    }));
+    const albumById = new Map(artistAlbums.map((album) => [album.id, album]));
+
     // The album catalog, popularity, artwork and recommendations are independent.
     // Running them together prevents external MusicBrainz/ListenBrainz/Deezer
     // calls from blocking each other in a long serial waterfall. Each task
@@ -448,7 +453,7 @@ router.get("/artists/:id", async (req, res) => {
       const ownedRgMbids = new Set(artist.ownedAlbums.map((o) => o.rgMbid));
 
 
-      const dbAlbums = artist.albums.map((album) => ({
+      const dbAlbums = artistAlbums.map((album) => ({
         ...album,
         tracks: album.tracks.map((t) => ({
           ...t,
@@ -586,7 +591,7 @@ router.get("/artists/:id", async (req, res) => {
     };
 
     const loadTopTracks = async () => {
-      const allTracks = artist.albums.flatMap((a) => a.tracks);
+      const allTracks = artistAlbums.flatMap((a) => a.tracks);
       let topTracks: any[];
 
       const userId = req.user!.id;
@@ -782,7 +787,7 @@ router.get("/artists/:id", async (req, res) => {
             }
             const dated = allTracks
               .map((t) => {
-                const album = artist.albums.find((a) => a.id === t.albumId);
+                const album = albumById.get(t.albumId);
                 const date =
                   (album && releaseDateByRg.get(album.rgMbid)) ||
                   (album?.year ? `${album.year}-01-01` : "9999");
