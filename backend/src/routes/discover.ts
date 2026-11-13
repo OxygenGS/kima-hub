@@ -1344,8 +1344,8 @@ router.delete("/clear", async (req, res) => {
                             resolveWithinMusicRoot("discovery", `${album.artistName} - ${album.albumTitle}`),
                         ].filter((p): p is string => !!p && p.startsWith(discoveryRoot + path.sep))
                         : [];
-                    if (candidatePaths.some((p) => !safeDiscoveryDeletePath(p))) {
-                        logger.warn(`[DiscoverClear] Refused linked-out directory for ${album.artistName} - ${album.albumTitle}`);
+                    if (candidatePaths.length === 0 || candidatePaths.some((p) => !safeDiscoveryDeletePath(p))) {
+                        logger.warn(`[DiscoverClear] Refused invalid or linked-out directory for ${album.artistName} - ${album.albumTitle}`);
                         continue;
                     }
 
