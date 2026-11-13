@@ -122,6 +122,8 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 **New in v1.23.0:** security improvements, safer library scanning and deletion, more reliable playback synchronization, and hardened Lidarr/Soulseek integrations from upstream Kima v1.12.3–v1.12.4. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0).
 
+**Unpublished release candidate:** [v1.24.0](https://github.com/OxygenGS/kima-hub/tree/release/v1.24.0). Source-only artist artwork and performance updates. The Docker tag is NOT published; retain v1.23.0 for installations until candidate CI, native image preflight and an explicit security review pass.
+
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
 ### Docker — new installations only
