@@ -1,38 +1,38 @@
 # Security — OxygenGS Kima Hub
 
-This is an independently maintained [Kima Hub fork](https://github.com/Chevron7Locked/kima-hub), not an official upstream security release. Security assurances apply to **specific source commits, images and configurations**, not to every installation.
+OxygenGS is an independently maintained fork of [Kima Hub](https://github.com/Chevron7Locked/kima-hub). Release reviews apply to **specific images and source commits**, not every network or installation.
 
-## Current release and verification
+## Current stable release
 
-**Published stable:** [v1.19.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.19.0), source commit `c99605cbb4946a0aee38ea153263732b29eb72cb`.
+**[v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0)** was published on **13 November 2026**, from commit `64b7fbfa4839bcec89f160dc43103fe2887bc979`.
 
-The [exact-source native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/42394711879) and [stable Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/42397561696) succeeded for AMD64 and ARM64. Their configured checks found no image-embedded secrets, but reported **8 CRITICAL and 265–266 HIGH** vulnerability advisories with **no scanner-listed fixes**. CI success is not proof of zero residual risk. See the [full image security report](docs/image-security.md).
+- [Exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43379684353): AMD64 and ARM64 builds, image vulnerability scans and configured secret scans passed.
+- [Security-reviewed approval](https://github.com/OxygenGS/kima-hub/actions/runs/43391025604) and [stable Docker publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43391050043): completed successfully for both architectures.
+- **Residual risk remains:** Trivy reported **327 HIGH / 8 CRITICAL** (AMD64) and **326 HIGH / 8 CRITICAL** (ARM64) advisories. None had an explicitly scanner-listed patched version. This **does not** establish that they are unexploitable or harmless. Review [current image security evidence](docs/image-security.md) before exposing your installation to untrusted networks.
 
 ## Authentication and authorization
 
-- Enforce roles and the current account's acquisition/download permissions on every backend request, regardless of front-end visibility or language.
-- Keep downloaded music, tokens, user data and image endpoints isolated by account. Reject untrusted paths or filenames escaping the configured music root.
-- Native-player API tokens should be unique per client, revocable, and handled as credentials; no legacy authentication or compatibility mode is required for freshly configured supported clients.
-- Downtify settings use **administrator-only**, server-and-account-bound encrypted device pairing. All active controls default OFF. No other user's jobs or devices may be exposed through the queue or dispatch APIs.
-- A saved Spotify request does not automatically start a download; manual Downtify dispatch must be explicitly authorized and independently checked. Uncertain dispatch outcomes must not be automatically retried.
+- Enforce account roles, data isolation and music acquisition/download permissions in the backend, not only by hiding buttons in the frontend.
+- Keep tokens, playlists, saved service credentials and per-account download information private. Reject untrusted file paths escaping configured media storage.
+- Use a distinct, revocable API token per supported OpenSubsonic client. New supported clients can use modern authentication without enabling legacy authentication.
+- The experimental Downtify connection, paired credentials UI, dispatch API and import worker were **removed in v1.21.0**. Do not treat historical receipts and schema records as active integrations.
 
-## Data and upgrade boundaries
+## Safe deployment and data continuity
 
-- Private installation values (credentials, hostnames, addresses, media paths, backups, container IDs and runtime logs) must not be committed to public source or issues.
-- A release merge, tag, build or GitHub Action does **not** deploy changes to a running Docker/Proxmox installation.
-- Before any upgrade, create a **cold, complete backup** of the original persistent `/data` (including generated secrets), retain the original deployment configuration and verify an independent restore.
-- Database migrations, including the new v1.19.0 Downtify pairing table, are not reversed by changing the Docker image tag. Restore an untouched pre-upgrade `/data` backup when rolling back across migrations.
-- No browser setting provisions a new Docker staging mount or automatically authorizes SSD-to-DAS file transfers, import cleanup or replacement of the existing external importer.
+- Do not commit a live instance's credentials, hostnames, IP addresses, paths, runtime logs, screenshots or backup archives to this public repository.
+- GitHub merges, tags, releases and image uploads **never** update a user-operated Docker host automatically.
+- Before changing an existing container, stop application writes, back up its **entire original `/data` volume** and generated secrets, and independently verify a restore. Keep the original Compose/Dockge project identity and `/music` mounts.
+- Historical schema migrations remain for upgrades and data preservation. A container-tag rollback is **not** a database rollback; restore a verified pre-upgrade backup when required.
+- Do not run `docker compose down -v` against an installation whose data must remain intact.
 
-## Known limitations and release review
+## Known limitations
 
-- Native scans block HIGH/CRITICAL findings only when the scanner explicitly reports a patched version. Findings without one are **not automatically accepted as safe**. Review actual runtime reachability, vendor status and deployment exposure before each stable release.
-- Independent permission and abuse-case testing remains necessary; static analysis, regression suites and smoke tests are not penetration tests.
-- Docker images may contain vulnerable components even when the source repository contains no secrets. Reassess installed packages and scan the actual deployed image.
-- Upstream source changes must preserve fork-specific authentication, privacy, storage and data-loss safeguards.
+- The automatic vulnerability gate blocks HIGH/CRITICAL findings only when the scanner explicitly reports a patched version. Review remaining findings, runtime reachability, vendor advice and exposure manually before accepting release risk.
+- CI scans and unit/browser tests are not a penetration test or an independently updated security audit of a deployed digest.
+- Keep the reverse proxy on HTTPS, restrict network access and enable appropriate administrator protection. [Deployment security guide](docs/security.md).
 
 ## Reporting vulnerabilities
 
-Do not publish exploitable details, credentials or personal data in public GitHub issues or pull requests. Contact the maintainer through an available **private** GitHub security-reporting channel when enabled. This document makes no promise of a specific response time or availability of a private advisory inbox.
+Do not post exploits, private data or tokens in public pull requests. Use a private security-reporting channel provided by the repository if one is enabled; this project does not guarantee that a private GitHub advisory inbox is available.
 
-See [Privacy](PRIVACY.md), [Secure upgrades](docs/safe-aio-updates.md), [Image security](docs/image-security.md) and the [release history](CHANGELOG.md).
+[Privacy](PRIVACY.md) · [Safe upgrades](docs/safe-aio-updates.md) · [Image advisories](docs/image-security.md) · [Changelog](CHANGELOG.md)
