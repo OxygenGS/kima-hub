@@ -138,7 +138,7 @@ Replace `/absolute/path/to/music` with an **existing** host directory holding yo
 
 ### Docker Compose / Dockge — new installations only
 
-The [production Compose file](docker-compose.prod.yml) pins the stable version and requires `MUSIC_PATH` to point to an existing music directory.
+The [production Compose file](docker-compose.prod.yml) pins a versioned source image and requires `MUSIC_PATH` to point to an existing music directory. During release preparation, the source default can be newer than the published stable image; set `VERSION=v1.22.0` explicitly until v1.23.0 has been published.
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.22.0 \
