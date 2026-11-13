@@ -12,7 +12,7 @@ import { useMemo, useEffect, useRef, useState, useCallback } from "react";
  * external identifiers can have many shapes. Keep this as frontend-only
  * metadata on the cached response; it is never written back to the server.
  */
-type ArtistWithOrigin = { __kimaArtistOrigin?: ArtistSource };
+type ArtistWithOrigin = { id?: string; __kimaArtistOrigin?: ArtistSource };
 
 export function resolveArtistSource(
     full: ArtistWithOrigin | null | undefined,
