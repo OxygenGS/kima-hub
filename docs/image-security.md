@@ -2,7 +2,35 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.22.0 — current published release (13 November 2026)
+## v1.23.0 — current published release (13 November 2026)
+
+The [v1.23.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43441027590) verified the exact `main` source commit `7357993d70bfe4c51eca4e5f54cb813a31c17f8a`, native AMD64/ARM64 image architecture and revision labels, the configured secret scan and the vulnerability gate. [Explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/43444147613) preceded the [successful multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43444182159). The stable image is `ghcr.io/oxygengs/kima-hub:v1.23.0`.
+
+| Native v1.23.0 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 327 | 8 | 0 |
+| linux/arm64 | 326 | 8 | 0 |
+
+**Known residual risk:** These are unresolved scanner findings, not a declaration of safety. The preflight found no explicitly listed patched versions for the HIGH/CRITICAL advisories. That does not establish that a vulnerable package cannot be exploited or that a fix is unavailable elsewhere. The same eight CRITICAL advisories observed in v1.22.0 remain:
+
+| Advisory | Package | Trivy status |
+| :--- | :--- | :--- |
+| CVE-2023-45853 | `zlib1g` | will_not_fix |
+| CVE-2023-6879 | `libaom3` | affected |
+| CVE-2025-47917 | `libmbedcrypto7` | end_of_life |
+| CVE-2025-7458 | `libsqlite3-0` | affected |
+| CVE-2026-34873 | `libmbedcrypto7` | affected |
+| CVE-2026-34875 | `libmbedcrypto7` | affected |
+| CVE-2026-58016 | `libglib2.0-0` | fix_deferred |
+| CVE-2026-6653 | `libxml2` | fix_deferred |
+
+- [AMD64 exact-source scan artifact](https://github.com/OxygenGS/kima-hub/actions/runs/43441027590/artifacts/14047546020)
+- [ARM64 exact-source scan artifact](https://github.com/OxygenGS/kima-hub/actions/runs/43441027590/artifacts/14046810977)
+- [Published v1.23.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0)
+
+The counts above describe the native *preflight images*, not an independent post-publication registry digest scan or an operator's runtime exposure. Kima includes media processing and network-facing components; restrict remote exposure, patch the host and proxy, protect credentials, and maintain a separately restorable `/data` backup. Future releases should revisit the vendor advisories.
+
+## Historical: v1.22.0 — published 13 November 2026
 
 The [v1.22.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43379684353)
 verified source commit `64b7fbfa4839bcec89f160dc43103fe2887bc979`.
