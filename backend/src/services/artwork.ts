@@ -44,6 +44,8 @@ export interface ArtistArtworkQuery {
     candidateUrl?: string | null;
     /** Set on page-view calls so the fanart.tv queue runs this ahead of enrichment work. */
     interactive?: boolean;
+    /** Admin-initiated recovery may retry previously cached provider misses. */
+    refresh?: boolean;
 }
 
 export interface ArtworkResult {
@@ -91,7 +93,9 @@ const ARTIST_SOURCES: Source<ArtistArtworkQuery>[] = [
     },
     {
         name: "deezer",
-        find: (q) => deezerService.getArtistImage(q.name),
+        find: (q) => q.refresh
+            ? deezerService.getArtistImage(q.name, { refresh: true })
+            : deezerService.getArtistImage(q.name),
     },
 ];
 
@@ -165,7 +169,8 @@ const albumKey = (q: AlbumArtworkQuery) =>
     );
 
 const artistKey = (q: ArtistArtworkQuery) =>
-    keyFor("artist", isMbid(q.mbid) ? `mb:${q.mbid}` : `n:${q.name.toLowerCase()}`);
+    // v2 bypasses old cached misses from the first-Deezer-hit-only matcher.
+    keyFor("artist-v2", isMbid(q.mbid) ? `mb:${q.mbid}` : `n:${q.name.toLowerCase()}`);
 
 /** `undefined` means we have not asked yet; `null` means we asked and nobody had it. */
 async function remembered(key: string): Promise<string | null | undefined> {
@@ -229,18 +234,20 @@ export async function findArtistArtwork(
     return findArtwork(artistKey(query), ARTIST_SOURCES, query, query.name);
 }
 
-async function findArtwork<Q extends { candidateUrl?: string | null }>(
+async function findArtwork<Q extends { candidateUrl?: string | null; refresh?: boolean }>(
     key: string,
     sources: Source<Q>[],
     query: Q,
     label: string,
 ): Promise<ArtworkResult | null> {
-    const cached = await remembered(key);
+    const cached = query.refresh ? undefined : await remembered(key);
     if (cached !== undefined) {
         return cached ? { url: cached, source: "cache" } : null;
     }
 
-    return once(key, async () => {
+    // An explicit retry must not join a passive in-flight lookup that was
+    // permitted to use its caches. Concurrent retries still share one run.
+    return once(query.refresh ? `${key}:refresh` : key, async () => {
         const { found: fromSources, everyoneAnswered } = await firstAnswer(sources, query, label);
 
         let found = fromSources;
