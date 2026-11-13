@@ -47,6 +47,7 @@ vi.mock("@/hooks/usePlayReporting", () => ({ usePlayReporting: () => undefined }
 vi.mock("@/hooks/useLiveReporting", () => ({ upNext: () => [], useLiveReporting: () => undefined }));
 vi.mock("@/lib/features-context", () => ({ useFeatures: () => ({ liveReporting: false }) }));
 
+import { LanguageProvider } from "@/lib/i18n/language-context";
 import { AudioControllerContext } from "@/lib/audio-controller-context";
 import type { AudioController } from "@/lib/audio-controller";
 import { AudioStateProvider, useAudioState } from "@/lib/audio-state-context";
@@ -104,15 +105,17 @@ async function open() {
     root = createRoot(container);
     await act(async () => {
         root.render(
-            <AudioControllerContext.Provider value={fakeController()}>
-                <AudioStateProvider>
-                    <AudioPlaybackProvider>
-                        <AudioControlsProvider>
-                            <Probe />
-                        </AudioControlsProvider>
-                    </AudioPlaybackProvider>
-                </AudioStateProvider>
-            </AudioControllerContext.Provider>,
+            <LanguageProvider>
+                <AudioControllerContext.Provider value={fakeController()}>
+                    <AudioStateProvider>
+                        <AudioPlaybackProvider>
+                            <AudioControlsProvider>
+                                <Probe />
+                            </AudioControlsProvider>
+                        </AudioPlaybackProvider>
+                    </AudioStateProvider>
+                </AudioControllerContext.Provider>
+            </LanguageProvider>,
         );
     });
 }
