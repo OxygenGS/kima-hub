@@ -64,15 +64,15 @@ function LazyAlbumCard({
 }) {
     const { canRequestAlbums } = useMusicPermissions();
     const { t } = useLanguage();
-    const [coverArt, setCoverArt] = useState<string | null>(() => {
-        if (source === "library" && album.coverArt) {
-            return api.getCoverArtUrl(album.coverArt, 300);
-        }
-        if (album.coverUrl) {
-            return api.getCoverArtUrl(album.coverUrl, 300);
-        }
-        return null;
-    });
+    // The overview and complete artist response arrive at different times.
+    // Treat the current album props as authoritative so a new/edited cover
+    // replaces the earlier missing or auto-fetched image without remounting.
+    const knownCover = (source === "library" && album.coverArt)
+        || album.coverUrl
+        || null;
+    const propCoverArt = knownCover ? api.getCoverArtUrl(knownCover, 300) : null;
+    const [fetchedCoverArt, setFetchedCoverArt] = useState<string | null>(null);
+    const coverArt = propCoverArt || fetchedCoverArt;
     const [fetchAttempted, setFetchAttempted] = useState(false);
     const mbid = [album.rgMbid, album.mbid].find(isMbid);
     const { targetRef, nearViewport } = useNearViewport(!coverArt && !fetchAttempted && !!mbid);
@@ -80,26 +80,32 @@ function LazyAlbumCard({
     useEffect(() => {
         if (coverArt || fetchAttempted || !mbid || !nearViewport) return;
 
-        // Fetch cover art from our backend (which caches it)
+        let cancelled = false;
+        // Fetch cover art from our backend (which caches it). If enrichment
+        // updates the album while this request is in flight, ignore its stale
+        // result instead of overriding the newer supplied cover.
         const fetchCover = async () => {
             try {
                 const response = await api.request<{ coverUrl: string }>(
                     `/library/album-cover/${mbid}`
                 );
-                if (response.coverUrl) {
-                    setCoverArt(api.getCoverArtUrl(response.coverUrl, 300));
+                if (!cancelled && response.coverUrl) {
+                    setFetchedCoverArt(api.getCoverArtUrl(response.coverUrl, 300));
                 }
             } catch {
                 // Cover not found, leave as null
             } finally {
-                setFetchAttempted(true);
+                if (!cancelled) setFetchAttempted(true);
             }
         };
 
         // Only nearby covers request artwork. Cap staggering so album #200
         // is not delayed by 20 seconds when a user scrolls straight there.
         const timeoutId = setTimeout(fetchCover, (index % 6) * 100);
-        return () => clearTimeout(timeoutId);
+        return () => {
+            cancelled = true;
+            clearTimeout(timeoutId);
+        };
     }, [mbid, coverArt, fetchAttempted, nearViewport, index]);
 
     const albumMbid = album.rgMbid || album.mbid || "";
