@@ -233,6 +233,25 @@ describe("the one door for artwork", () => {
         it("returns nothing when every source has said no", async () => {
             expect(await findArtistArtwork(ARTIST)).toBeNull();
         });
+
+        it("bypasses stale negative artwork caches only for an explicit admin refresh", async () => {
+            mockGet.mockResolvedValue("NONE");
+            deezerArtist.mockResolvedValue(DEEZER_URL);
+
+            expect(await findArtistArtwork(ARTIST)).toBeNull();
+            expect(deezerArtist).not.toHaveBeenCalled();
+
+            expect(await findArtistArtwork({ ...ARTIST, refresh: true })).toEqual({
+                url: DEEZER_URL, source: "deezer",
+            });
+            expect(mockGet).toHaveBeenCalledTimes(1);
+            expect(deezerArtist).toHaveBeenCalledWith(ARTIST.name, { refresh: true });
+            expect(mockSetex).toHaveBeenCalledWith(
+                expect.stringContaining("artwork:artist-v2:"),
+                expect.any(Number),
+                DEEZER_URL,
+            );
+        });
     });
 
     describe("what counts as evidence of absence", () => {

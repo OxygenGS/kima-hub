@@ -101,7 +101,9 @@ async function recoverArtist(
     if (!hasReadableAudio) return "skipped";
 
     try {
-        const found = await findArtistArtwork({ name: artist.name, mbid: artist.mbid });
+        // A deliberate admin retry must re-check providers instead of reusing
+        // yesterday's negative answer from either artwork cache layer.
+        const found = await findArtistArtwork({ name: artist.name, mbid: artist.mbid, refresh: true });
         if (!found) return "skipped";
         return (await storeImage(artist, found.url)) ? "external" : "skipped";
     } finally {
