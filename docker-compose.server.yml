@@ -10,7 +10,7 @@ services:
     # ==============================================================================
 
     kima:
-        # Match the fork Compose version; before v1.23.0 publication, set VERSION=v1.22.0.
+        # Match the published stable fork image. Pin the existing version until the upgrade is reviewed.
         # Existing deployments must explicitly keep their old pin until a reviewed update.
         image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.23.0}
         container_name: kima
