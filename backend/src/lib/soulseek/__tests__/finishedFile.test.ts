@@ -283,6 +283,10 @@ describe('with slskd answering', () => {
     })
 
     beforeEach(async () => {
+      // slskd reads its completed files from the separately mounted downloads
+      // folder (SLSKD_DOWNLOADS), not the Kima music import destination.
+      // Every test creates a new temp directory, so point the adapter at it.
+      configureSlskd({ url: url(), apiKey: 'k', downloads: root })
       library = path.join(base, 'library')
       await fs.promises.mkdir(library)
       const data = {
