@@ -71,6 +71,8 @@ jest.mock('../../config', () => ({
 
 jest.mock('fs', () => ({
     existsSync: jest.fn().mockReturnValue(false),
+    // Ordinary folders resolve to themselves; symlink refusal is tested separately.
+    realpathSync: jest.fn((p: string) => p),
     unlinkSync: jest.fn(),
     readdirSync: jest.fn().mockReturnValue([]),
     rmdirSync: jest.fn(),
