@@ -1,0 +1,93 @@
+{
+  "release": {
+    "version": "1.24.0",
+    "title": "Kima Hub 1.24.0 — Artist Artwork & Faster Pages",
+    "summary": "More reliable artist images, less duplicated work on artist pages, consistent custom album covers, and correct library/discovery navigation in the OxygenGS fork.",
+    "date": "2026-11-13",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.124.artist-photos",
+        "title": "Find the right artist photo",
+        "summary": "Verify Deezer artist matches and retry missing photos from Settings.",
+        "body": "Deezer photo lookup now checks more than the first result and selects artwork only for verified artist-name matches. A manually started recovery retries previously cached misses. The existing local-first repair, saved image choices, and administrator-only workflow are preserved.",
+        "links": [
+          {
+            "label": "Artwork settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.124.artist-performance",
+        "title": "Faster artist pages with less duplicate work",
+        "summary": "Reuse already loaded albums and saved artist photos instead of repeating lookups.",
+        "body": "The full artist details response reuses parent album records for track and popular-track data rather than loading the same album relationship for each track. Saved artist images are reused without another database lookup, and similar artists already in the local library use their local portraits where possible. These changes reduce redundant work; exact speed gains depend on the library.",
+        "links": [
+          {
+            "label": "Artist library",
+            "href": "/collection?tab=artists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.124.custom-covers",
+        "title": "Keep your chosen album covers",
+        "summary": "Preserve custom covers on albums, popular tracks, and refreshed album cards.",
+        "body": "User-selected album covers now take priority both in the first local overview and in the later enriched artist details. Popular tracks and locally played tracks retain the same cover. Album cards update when artwork arrives or changes instead of holding onto a missing or stale image.",
+        "links": [
+          {
+            "label": "Album library",
+            "href": "/collection?tab=albums"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.124.artist-navigation",
+        "title": "Correct local and discovered artist actions",
+        "summary": "Identify artist origin from API results, not the characters in an artist ID.",
+        "body": "An artist whose local ID contains a dash or looks like a UUID no longer gets classified as external solely because of the ID format. The app uses the verified library response or external-discovery fallback to choose the correct actions, picture and navigation behavior.",
+        "links": [
+          {
+            "label": "Browse artists",
+            "href": "/collection?tab=artists"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.24.0 — Artist Artwork & Faster Pages": "Kima Hub 1.24.0 — Artiestenfoto's en snellere pagina's"
+    },
+    "summaries": {
+      "More reliable artist images, less duplicated work on artist pages, consistent custom album covers, and correct library/discovery navigation in the OxygenGS fork.": "Betrouwbaardere artiestenfoto's, minder dubbel werk bij artiestpagina's, consistente eigen albumcovers en correcte navigatie in onze OxygenGS-fork."
+    },
+    "items": {
+      "fork.124.artist-photos": {
+        "title": "Vind de juiste artiestenfoto",
+        "summary": "Controleer Deezer-resultaten en probeer ontbrekende foto's opnieuw te herstellen.",
+        "body": "Deezer controleert nu meerdere zoekresultaten en accepteert alleen foto's van artiesten met een overeenkomende naam. Een handmatig gestarte herstelactie probeert eerder gemiste foto's opnieuw te vinden. Het bestaande herstel, de voorrang voor eigen afbeeldingen en de beheerdersrechten blijven behouden."
+      },
+      "fork.124.artist-performance": {
+        "title": "Snellere artiestpagina's met minder dubbel werk",
+        "summary": "Hergebruik geladen albums en opgeslagen foto's in plaats van dubbele zoekopdrachten.",
+        "body": "De volledige artiestweergave hergebruikt albumgegevens voor nummers en populaire tracks. Daardoor hoeft de database dezelfde albumrelatie niet per nummer opnieuw op te halen. Opgeslagen artiestenfoto's worden direct gebruikt en vergelijkbare artiesten uit de eigen bibliotheek krijgen zo mogelijk hun lokale foto. De daadwerkelijke snelheidswinst hangt af van de omvang van de bibliotheek."
+      },
+      "fork.124.custom-covers": {
+        "title": "Behoud je zelfgekozen albumcovers",
+        "summary": "Eigen covers blijven zichtbaar bij albums, populaire nummers en vernieuwde albumkaarten.",
+        "body": "Een zelfgekozen albumcover heeft voorrang in zowel de snelle eerste weergave als de volledig geladen artiestpagina. Populaire en lokaal afgespeelde nummers houden dezelfde afbeelding. Albumkaarten tonen nieuwe of gewijzigde afbeeldingen meteen in plaats van een oude of ontbrekende cover vast te houden."
+      },
+      "fork.124.artist-navigation": {
+        "title": "Correcte acties voor lokale en ontdekte artiesten",
+        "summary": "Herken de herkomst via de API, niet via het formaat van een artiest-ID.",
+        "body": "Een lokale artiest met streepjes of een UUID als ID wordt niet langer automatisch als externe artiest gezien. De app gebruikt de werkelijke reactie van de bibliotheek of de externe zoekfunctie om de juiste bediening, afbeelding en navigatie te tonen."
+      }
+    }
+  },
+  "changelog": "This source update improves artist artwork and artist-page responsiveness while keeping the OxygenGS fork independently configurable. It retains Settings Studio 2.0, Dutch/English UI, the existing Lidarr/Soulseek workflows and modern OpenSubsonic authentication.\n\n### Better artist artwork and manual recovery\n- PR #244: search up to 25 Deezer artist candidates; require verified artist-name matches, prefer a valid high-quality photo and refresh stale negative caches on an explicit administrator recovery request.\n- Preserve existing local artwork, hand-picked photos and conditional updates rather than overwriting user choices or changing existing media files.\n\n### Less duplicate work on artist pages\n- PR #245: reuse the albums already fetched for playable tracks and popular-track response data, removing redundant per-track album joins.\n- PR #246: reuse stored artist portraits without another artist-row lookup and normalize accented or ampersand artist names when matching similar artists to the local library.\n- These are query and rendering improvements; no measured universal page-load speedup is claimed.\n\n### Consistent covers and reliable navigation\n- PR #247: keep user-selected album covers across the quick overview, full artist detail, popular tracks and local-play-count fallback.\n- PR #248: determine local-library versus external-discovery source from the successful API response, rather than inferring it from dashed or undashed IDs.\n- PR #249: update visible album cards when enriched artwork becomes available and prevent late lazy-cover requests from replacing newer supplied images.\n\n### Verification and safe upgrades\n- The individual PRs passed source CI, native AIO build checks, security scans and relevant Dutch/English UI verification before merge. New regression tests cover artwork precedence, image refresh, source classification, artist-data contracts and local library matching.\n- No database migration, new dependency, new Docker volume, automatic media move, new storage mount, or live deployment is introduced. Existing accounts, music, settings and library data remain unchanged by preparing the source release.\n- v1.24.0 is a source release candidate until its matching package metadata, complete CI, exact-main native AMD64/ARM64 image preflight and explicit review of remaining image vulnerabilities pass. Do not deploy an unpublished tag. Back up and independently verify restoration of /data before upgrading any live deployment."
+}

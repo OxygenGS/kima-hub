@@ -1,5 +1,28 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.24.0 — release preparation (unpublished)
+
+This source update improves artist artwork and artist-page responsiveness while keeping the OxygenGS fork independently configurable. It retains Settings Studio 2.0, Dutch/English UI, the existing Lidarr/Soulseek workflows and modern OpenSubsonic authentication.
+
+### Better artist artwork and manual recovery
+- PR #244: search up to 25 Deezer artist candidates; require verified artist-name matches, prefer a valid high-quality photo and refresh stale negative caches on an explicit administrator recovery request.
+- Preserve existing local artwork, hand-picked photos and conditional updates rather than overwriting user choices or changing existing media files.
+
+### Less duplicate work on artist pages
+- PR #245: reuse the albums already fetched for playable tracks and popular-track response data, removing redundant per-track album joins.
+- PR #246: reuse stored artist portraits without another artist-row lookup and normalize accented or ampersand artist names when matching similar artists to the local library.
+- These are query and rendering improvements; no measured universal page-load speedup is claimed.
+
+### Consistent covers and reliable navigation
+- PR #247: keep user-selected album covers across the quick overview, full artist detail, popular tracks and local-play-count fallback.
+- PR #248: determine local-library versus external-discovery source from the successful API response, rather than inferring it from dashed or undashed IDs.
+- PR #249: update visible album cards when enriched artwork becomes available and prevent late lazy-cover requests from replacing newer supplied images.
+
+### Verification and safe upgrades
+- The individual PRs passed source CI, native AIO build checks, security scans and relevant Dutch/English UI verification before merge. New regression tests cover artwork precedence, image refresh, source classification, artist-data contracts and local library matching.
+- No database migration, new dependency, new Docker volume, automatic media move, new storage mount, or live deployment is introduced. Existing accounts, music, settings and library data remain unchanged by preparing the source release.
+- v1.24.0 is a source release candidate until its matching package metadata, complete CI, exact-main native AMD64/ARM64 image preflight and explicit review of remaining image vulnerabilities pass. Do not deploy an unpublished tag. Back up and independently verify restoration of /data before upgrading any live deployment.
+
 ## OxygenGS fork v1.23.0 — released 2026-11-13
 
 This release integrates the stable upstream Kima 1.12.3 and 1.12.4 improvements into OxygenGS without replacing the fork, its Settings Studio 2.0, EN/NL locale, custom branding, modern OpenSubsonic app-key support, library performance improvements or its Lidarr/Soulseek features.

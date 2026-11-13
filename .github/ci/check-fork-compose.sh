@@ -6,54 +6,9 @@ set -euo pipefail
 # Fail on release-fixture column drift before either architecture builds an image.
 python3 .github/ci/check-release-ui-fixture.py --self-test
 
-# Derive the pinned image from the checked-in candidate, not from a
-# historical release constant. Both architecture build guards use this.
-release_version="$(python3 - <<'PY'
-import json
-import re
-from pathlib import Path
-versions = [
-    json.loads(Path(side, "package.json").read_text(encoding="utf-8"))["version"]
-    for side in ("backend", "frontend")
-]
-assert versions[0] == versions[1], "Backend/frontend release versions differ"
-assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", versions[0]), "Invalid SemVer"
-print(versions[0])
-PY
-)"
-expected_default="ghcr.io/oxygengs/kima-hub:v${release_version}"
-
-for file in docker-compose.prod.yml docker-compose.server.yml; do
-    echo "Checking $file for safe fork image, data mounts and kernel settings..."
-    # Both examples must use the exact candidate version by default,
-    # never a moving alias or a historic fallback.
-    synthetic_music="${RUNNER_TEMP:-/tmp}/kima-compose-ci-unmounted-library"
-    MUSIC_PATH="$synthetic_music" VERSION= docker compose -f "$file" config --format json | EXPECTED_PIN="$expected_default" python3 -c '
-import json, sys
-c = json.load(sys.stdin)
-svc = c["services"]["kima"]
-image = svc["image"]
-import os
-assert image == os.environ["EXPECTED_PIN"], image
-volumes = svc["volumes"]
-assert any(v.get("type") == "volume" and v.get("target") == "/data" and v.get("source") == "kima_data" for v in volumes), volumes
-assert any(v.get("type") == "bind" and v.get("target") == "/music" for v in volumes), volumes
-sysctls = svc.get("sysctls", {})
-assert "vm.overcommit_memory" not in sysctls, sysctls
-assert c["volumes"].get("kima_data"), c["volumes"]
-print("Pinned stable configuration valid:", image)
-'
-    # A synthetic new tag proves Dockge/Compose can select a future version
-    # without changing the persistent mount. No image is pulled or published.
-    MUSIC_PATH="$synthetic_music" VERSION=v9.9.9 docker compose -f "$file" config --format json | python3 -c '
-import json, sys
-svc = json.load(sys.stdin)["services"]["kima"]
-assert svc["image"] == "ghcr.io/oxygengs/kima-hub:v9.9.9", svc["image"]
-assert any(v.get("target") == "/data" and v.get("source") == "kima_data" for v in svc["volumes"])
-print("User-selected update version accepted")
-'
-done
-
+# Read the published image and validate any explicit source-only candidate
+# BEFORE checking Compose. Unpublished source tags must never become the
+# installation default just because backend/frontend package versions moved.
 # Consumer installation instructions must point to the actual stable version
 # advertised on the public README, not a hard-coded version from a past release.
 # This also keeps a new release's install guide and README aligned without
@@ -97,13 +52,46 @@ if version != candidate:
 print(image)
 PY
 )"
+expected_default="$published_image"
+
+for file in docker-compose.prod.yml docker-compose.server.yml; do
+    echo "Checking $file for safe fork image, data mounts and kernel settings..."
+    # Both examples must use the actual published stable release by default,
+    # never a moving alias or the unpublished candidate source version.
+    synthetic_music="${RUNNER_TEMP:-/tmp}/kima-compose-ci-unmounted-library"
+    MUSIC_PATH="$synthetic_music" VERSION= docker compose -f "$file" config --format json | EXPECTED_PIN="$expected_default" python3 -c '
+import json, sys
+c = json.load(sys.stdin)
+svc = c["services"]["kima"]
+image = svc["image"]
+import os
+assert image == os.environ["EXPECTED_PIN"], image
+volumes = svc["volumes"]
+assert any(v.get("type") == "volume" and v.get("target") == "/data" and v.get("source") == "kima_data" for v in volumes), volumes
+assert any(v.get("type") == "bind" and v.get("target") == "/music" for v in volumes), volumes
+sysctls = svc.get("sysctls", {})
+assert "vm.overcommit_memory" not in sysctls, sysctls
+assert c["volumes"].get("kima_data"), c["volumes"]
+print("Pinned stable configuration valid:", image)
+'
+    # A synthetic new tag proves Dockge/Compose can select a future version
+    # without changing the persistent mount. No image is pulled or published.
+    MUSIC_PATH="$synthetic_music" VERSION=v9.9.9 docker compose -f "$file" config --format json | python3 -c '
+import json, sys
+svc = json.load(sys.stdin)["services"]["kima"]
+assert svc["image"] == "ghcr.io/oxygengs/kima-hub:v9.9.9", svc["image"]
+assert any(v.get("target") == "/data" and v.get("source") == "kima_data" for v in svc["volumes"])
+print("User-selected update version accepted")
+'
+done
+
 for doc in docs/install.md docs/gpu.md; do
     if grep -Eq 'chevron7locked/kima(:|@)|ghcr[.]io/chevron7locked/kima' "$doc"; then
         echo "FORK DOCUMENT CHECK FAILED: upstream installation image in $doc" >&2
         exit 1
     fi
-    # Both guides must reference the source candidate's fixed, versioned image.
-    # For published releases this is the corresponding stable tag.
+    # Both guides must point to the published stable tag while source
+    # candidates remain unavailable in the registry.
     expected_image="$published_image"
     grep -Fq "$expected_image" "$doc" || {
         echo "FORK DOCUMENT CHECK FAILED: expected fork image $expected_image missing in $doc" >&2
