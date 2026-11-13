@@ -77,6 +77,7 @@ jest.mock('../../config', () => ({ config: { music: { musicPath: '/music' } } })
 
 jest.mock('fs', () => ({
     existsSync: jest.fn().mockReturnValue(true),
+    realpathSync: jest.fn((p: string) => p),
     rmSync: jest.fn(),
     readdirSync: jest.fn().mockReturnValue([]),
     unlinkSync: jest.fn(),
@@ -127,6 +128,7 @@ describe('DELETE /discover/clear -- filesystem containment', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (fs.existsSync as jest.Mock).mockReturnValue(true);
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) => p);
         (prisma.discoveryAlbum.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
     });
 
@@ -160,6 +162,22 @@ describe('DELETE /discover/clear -- filesystem containment', () => {
             expect(String(call[0]).startsWith(DISCOVERY_ROOT + '/')).toBe(true);
         }
         expect(fs.rmSync).not.toHaveBeenCalled();
+    });
+
+    it('refuses a linked discovery artist folder before Lidarr or database deletion', async () => {
+        (prisma.discoveryAlbum.findMany as jest.Mock).mockResolvedValue([
+            activeAlbum('Linked', 'Album'),
+        ]);
+        // The lexical path is within /music/discovery, but this artist
+        // directory physically points outside the mounted library.
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) =>
+            p.startsWith('/music/discovery/Linked') ? '/external/private' : p,
+        );
+
+        await request(app).delete('/discover/clear');
+
+        expect(fs.rmSync).not.toHaveBeenCalled();
+        expect(prisma.discoveryAlbum.updateMany).not.toHaveBeenCalled();
     });
 
     it('still deletes an ordinary discovery album folder', async () => {
