@@ -1,0 +1,101 @@
+{
+  "release": {
+    "version": "1.23.0",
+    "title": "Kima Hub 1.23.0 — Security, Playback & Library",
+    "summary": "Upstream Kima 1.12.3–1.12.4 security and playback improvements, carefully adapted to the independent OxygenGS fork.",
+    "date": "2026-11-13",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.123.security",
+        "title": "Safer authentication and secrets",
+        "summary": "Keep unreadable credentials safe and limit repeated password guessing for web and Subsonic sign-ins.",
+        "body": "If a stored encrypted connection secret cannot be decrypted, Kima now preserves the original value instead of erasing it when unrelated settings are saved. Web and Subsonic sign-ins apply separate per-username failed-password limits without disabling valid app keys or sessions. Existing user accounts and saved connections remain in place.",
+        "links": [
+          {
+            "label": "Review settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.123.devices",
+        "title": "Approve connected devices and protect shares",
+        "summary": "New device links require owner approval; shared links reveal fewer internal details.",
+        "body": "A device entering the correct pairing code must still be approved by the account owner before receiving its key. Public music shares return only the fields required to display the shared content. Existing OpenSubsonic app-key authentication for compatible clients is preserved.",
+        "links": [
+          {
+            "label": "Device linking",
+            "href": "/device"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.123.library",
+        "title": "Safer scans and missing-file handling",
+        "summary": "Scan links within the music folder, avoid dangerous linked-folder deletion, and handle missing audio gracefully.",
+        "body": "Library scans follow in-root file and folder symlinks while deduplicating songs reached through multiple paths. Unlike upstream, OxygenGS deliberately refuses symlinks whose targets escape the music root, matching existing stream and deletion protections. Discover Weekly cleanup also checks linked paths before deleting through Lidarr. Missing audio returns an unavailable response rather than a generic server error.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.123.playback",
+        "title": "Playback stays consistent across devices",
+        "summary": "Cleared queues stay cleared, restored playback does not overwrite other devices, and audiobook resets persist.",
+        "body": "A cleared queue no longer brings back the last song after reload, and queue clears synchronize across connected devices. Reloading a page does not echo stale playback state over another device's current session. Resetting audiobook progress stays reset.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.123.integrations",
+        "title": "Safer music imports and library sharing",
+        "summary": "Improve Soulseek, Lidarr and music-link validation, and publish the version 2 public-library feed.",
+        "body": "Soulseek/slskd rejects completed files whose paths leave its downloads folder and can try another source. Lidarr webhook-secret recovery handles unreadable credentials without accepting unsigned events. Playlist imports validate supported music-site URLs and reject the outdated Bandcamp importer. The optional public-library feed uses version 2 and includes daily play counts subject to sharing settings. Settings Studio 2.0, English/Dutch UI, OxygenGS branding, Lidarr/Soulseek integration and modern OpenSubsonic client support remain available.",
+        "links": [
+          {
+            "label": "Music imports",
+            "href": "/import/playlist"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.23.0 — Security, Playback & Library": "Kima Hub 1.23.0 — Beveiliging, afspelen en bibliotheek"
+    },
+    "summaries": {
+      "Upstream Kima 1.12.3–1.12.4 security and playback improvements, carefully adapted to the independent OxygenGS fork.": "Beveiliging en afspeelverbeteringen uit Kima 1.12.3–1.12.4, zorgvuldig aangepast aan onze onafhankelijke OxygenGS-fork."
+    },
+    "items": {
+      "fork.123.security": {
+        "title": "Veiligere aanmelding en geheimen",
+        "summary": "Versleutelde gegevens blijven bewaard als ze tijdelijk onleesbaar zijn; herhaald raden van wachtwoorden wordt beperkt.",
+        "body": "Als een opgeslagen versleuteld verbindingsgeheim niet kan worden ontsleuteld, bewaart Kima de oorspronkelijke waarde bij het opslaan van andere instellingen. Aanmeldingen via web en Subsonic krijgen afzonderlijke limieten per gebruikersnaam voor mislukte wachtwoorden. Geldige app-sleutels en bestaande sessies blijven werken. Accounts en ingestelde verbindingen blijven behouden."
+      },
+      "fork.123.devices": {
+        "title": "Apparaten goedkeuren en gedeelde links beveiligen",
+        "summary": "Nieuwe apparaten hebben toestemming van de eigenaar nodig; gedeelde links tonen minder interne informatie.",
+        "body": "Zelfs met de juiste koppelcode krijgt een nieuw apparaat pas toegang na goedkeuring door de accounteigenaar. Publieke muzieklinks geven alleen gegevens terug die nodig zijn om de gedeelde inhoud weer te geven. Moderne OpenSubsonic-authenticatie met app-sleutels blijft beschikbaar."
+      },
+      "fork.123.library": {
+        "title": "Veiligere bibliotheekscans en ontbrekende bestanden",
+        "summary": "Verwerk verwijzingen binnen de muziekmap, voorkom onveilig verwijderen en behandel ontbrekende audio correct.",
+        "body": "De scanner volgt symbolische links naar bestanden en mappen binnen de muziekroot en voorkomt dubbele nummers. Onze OxygenGS-fork weigert bewust links die buiten de muziekroot verwijzen, in overeenstemming met de bestaande afspeel- en verwijderbeveiliging. Discover Weekly controleert links ook voordat Lidarr of de opruimfunctie bestanden verwijdert. Ontbrekende audio geeft een duidelijke niet-beschikbaarmelding in plaats van een algemene serverfout."
+      },
+      "fork.123.playback": {
+        "title": "Consistente weergave op al je apparaten",
+        "summary": "Leeggemaakte wachtrijen blijven leeg en voortgangsresets voor audioboeken blijven bewaard.",
+        "body": "Na het leegmaken van de wachtrij verschijnt het laatste nummer niet opnieuw bij het herladen. Een gewiste wachtrij wordt doorgegeven aan andere apparaten. Het opnieuw openen van een pagina overschrijft de actuele weergave op een ander apparaat niet met verouderde informatie. Het resetten van audioboekvoortgang blijft behouden."
+      },
+      "fork.123.integrations": {
+        "title": "Veiligere imports en gedeelde bibliotheek",
+        "summary": "Verbeteringen voor Soulseek, Lidarr en muzieklinks, met versie 2 van de publieke bibliotheekfeed.",
+        "body": "Soulseek/slskd weigert downloads die buiten de downloadmap verwijzen en kan de volgende bron proberen. Lidarr herstelt onleesbare webhookgeheimen zonder onbeveiligde gebeurtenissen te accepteren. Imports controleren ondersteunde muziek-URL's; de niet meer werkende Bandcamp-import is verwijderd. De optionele publieke bibliotheekfeed gebruikt versie 2 en toont dagelijkse afspeeltellingen volgens de ingestelde deelrechten. Settings Studio 2.0, Nederlands/Engels, OxygenGS-branding, Lidarr, Soulseek en moderne OpenSubsonic-clients blijven behouden."
+      }
+    }
+  },
+  "changelog": "This release integrates the stable upstream Kima 1.12.3 and 1.12.4 improvements into OxygenGS without replacing the fork, its Settings Studio 2.0, EN/NL locale, custom branding, modern OpenSubsonic app-key support, library performance improvements or its Lidarr/Soulseek features.\n\n### Security, accounts and external links\n- Preserve encrypted credentials that temporarily cannot be decrypted; add separate per-username failed-login limits for web and Subsonic requests.\n- Require owner approval for device pairing; tighten public share responses to an allowlist of fields.\n- Validate imported music URLs and downloader extractors; reject obsolete Bandcamp imports.\n- Keep slskd finished-file access inside its configured downloads directory, and repair Lidarr webhook secrets without accepting unsigned callbacks.\n\n### Library, queue and listening\n- Follow and deduplicate symlinks within the music root; deliberately block targets outside that root to retain OxygenGS stream and deletion safeguards.\n- Extend safe deletion to Discover Weekly's Lidarr/file cleanup and handle missing audio files without internal server errors.\n- Preserve cleared queues across reloads and devices, avoid stale playback echo, and persist audiobook progress resets.\n- Add daily playback counts to the opt-in public library export (feed version 2).\n\n### Verification and upgrades\n- Upstream integration PR #241 passed source, UI, Dutch/English browser, backend, database upgrade/restore, real browser security E2E and native AMD64/ARM64 AIO build checks.\n- No Prisma migration or Docker media mount change is introduced by this update. Existing accounts, music and historical migration records remain in place; retired Downtify code remains absent.\n- Do not deploy this release candidate without a verified restorable /data backup. A separate exact-source release preflight and explicit review of unresolved image vulnerabilities are required before a stable tag or container image can be published."
+}
