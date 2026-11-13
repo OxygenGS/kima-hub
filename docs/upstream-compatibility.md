@@ -57,3 +57,13 @@ The report is a planning input, never permission to merge automatically.
 The existing merge audit originally compared the fork to upstream `v1.11.0`;
 it now accepts an explicitly chosen stable upstream tag through the manual
 workflow. No automatic upstream synchronization is enabled.
+
+## Stable upstream v1.12.3/v1.12.4 review — pending in PR #241
+
+The upstream changes are being integrated into OxygenGS on a separate, draft pull request. We preserve all existing fork behavior and do not deploy the integration automatically.
+
+- **Security:** credential-preservation handling, linked-device owner approval, login limits, strict imported URLs and downloader arguments, slskd path containment, public share projections and Lidarr webhook repair.
+- **Scanner:** include in-root symlinks with canonical-target deduplication. Upstream permits symlink targets outside the configured music folder; OxygenGS intentionally refuses these to preserve its stream/download containment invariant. No filesystem path outside the configured music root may be indexed or deleted through a link.
+- **Playback:** handle disappearing files, avoid restore echo, update queue changes across devices, and clear removed audiobook IDs.
+- **Fork invariants:** keep EN/NL translations, Settings Studio, branding, OpenSubsonic support, library performance enhancements, existing migration history and publication workflow. Do not reactivate removed integrations or change mount paths.
+- **Release status:** still unpublished. Review CI, native AMD64/ARM64 image builds, security scan, database upgrade/restore checks and regression suites before making the PR mergeable.
