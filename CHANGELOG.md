@@ -21,26 +21,6 @@ This release integrates the stable upstream Kima 1.12.3 and 1.12.4 improvements 
 - No Prisma migration or Docker media mount change is introduced by this update. Existing accounts, music and historical migration records remain in place; retired Downtify code remains absent.
 - Do not deploy this release candidate without a verified restorable /data backup. A separate exact-source release preflight and explicit review of unresolved image vulnerabilities are required before a stable tag or container image can be published.
 
-## Unreleased — upstream Kima Hub v1.12.3 and v1.12.4 integration (PR #241)
-
-This unreleased integration adopts the stable upstream improvements while retaining the OxygenGS fork's Settings Studio 2.0, EN/NL translations, instance branding, OpenSubsonic app-key support, Soulseek/Lidarr behavior, library enhancements, release process, and media/database mounts.
-
-### Security and privacy
-- Protect encrypted connection credentials against accidental destruction when their stored ciphertext is unreadable; repair Lidarr webhook secrets as appropriate.
-- Enforce per-username authentication attempt limits, constrain trusted proxy hops, and require explicit owner approval for new linked devices.
-- Parse and validate music service URL hosts before passing requests to importers/yt-dlp, restrict slskd completed-file paths, and return only allowlisted public shared metadata.
-
-### Library and playback
-- Follow in-root file/folder symlinks during scans while deduplicating real files and preferring already indexed paths. Links escaping the music root intentionally remain blocked by OxygenGS filesystem containment policy.
-- Return a normal not-found response when audio files disappear during native/Subsonic streaming instead of treating every missing file as a server error.
-- Guard deletion through symlinked directories that escape the library.
-- Avoid sending restored playback state back to the server; synchronize newer remote queue changes, propagate cleared media IDs, and preserve audiobook progress clearing.
-- Improve device-approval proxy timeout and playlist import error handling.
-
-### Release gate
-- All changes are staged in PR #241. This is **not yet a published release** and must not be deployed until the full test, architecture-build, security and upgrade/restore gates pass.
-- No upstream database migration or automatic production modification is introduced.
-
 ## OxygenGS fork v1.22.0 — released 2026-11-13
 
 Settings Studio replaces Kima's old sprawling Settings page with a focused, responsive configuration experience that matches the OxygenGS fork's dark theme and amber accent color.
