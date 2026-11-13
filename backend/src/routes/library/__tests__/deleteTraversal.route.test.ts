@@ -88,7 +88,7 @@ describe('library delete routes stay inside the music root', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (fs.existsSync as jest.Mock).mockReturnValue(true);
-        (fs.realpathSync as jest.Mock).mockImplementation((p: string) => p);
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) => p);
     });
 
     it('DELETE /tracks/:id refuses a filePath that escapes the root', async () => {
@@ -137,7 +137,7 @@ describe('library delete routes stay inside the music root', () => {
             id: 'ar-1', name: 'Radiohead', mbid: null,
             albums: [{ id: 'al-1', title: 'Album', tracks: [{ id: 'tr-1', filePath: 'Linked/Album/01.flac' }] }],
         });
-        (fs.realpathSync as jest.Mock).mockImplementation((p: string) =>
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) =>
             p.includes('/Linked') ? '/external/private' : p);
 
         const res = await request(app).delete('/artists/ar-1');
