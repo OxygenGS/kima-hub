@@ -14,7 +14,7 @@ export type WebhookSecretSettings = Pick<Resolved, "lidarrWebhookSecret" | "unre
 
 /** An unreadable secret is still a stored one: nothing can match it until Kima replaces it. */
 export function lidarrWebhookSecretHeld(settings: WebhookSecretSettings | null | undefined): boolean {
-    return !!settings && (!!settings.lidarrWebhookSecret || settings.unreadableFields.includes("lidarrWebhookSecret"));
+    return !!settings && (!!settings.lidarrWebhookSecret || (settings.unreadableFields?.includes("lidarrWebhookSecret") ?? false));
 }
 
 /** Fields Kima replaces by itself when unreadable, so admins need no notice: the secret, while the Lidarr API key reads. */
