@@ -8,7 +8,7 @@ import { resolveViewWeek, resolveGenerationWeekStart, weekStartKey } from "../li
 import { createLidarrClient, isLidarrConfigured } from "../services/lidarrClient";
 import fs from "fs";
 import path from "path";
-import { resolveWithinMusicRoot } from "./library/trackPath";
+import { isBehindLinkOut, resolveWithinMusicRoot } from "./library/trackPath";
 
 import { discoverQueue } from "../workers/queues";
 import { requestScan } from "../workers/scanRequest";
@@ -1333,6 +1333,21 @@ router.delete("/clear", async (req, res) => {
 
             for (const album of activeAlbums) {
                 try {
+                    // Match upstream's track-level linked-out guard as well:
+                    // Lidarr can remove tracked files before our direct cleanup.
+                    const indexedAlbum = await prisma.album.findFirst({
+                        where: {
+                            title: album.albumTitle,
+                            artist: { name: album.artistName },
+                            location: "DISCOVER",
+                        },
+                        select: { tracks: { select: { filePath: true } } },
+                    });
+                    if (indexedAlbum?.tracks.some((track) => track.filePath && isBehindLinkOut(track.filePath))) {
+                        logger.warn(`[DiscoverClear] Refused linked-out track for ${album.artistName} - ${album.albumTitle}`);
+                        continue;
+                    }
+
                     // A discovery album may contain a linked artist folder. Check
                     // physical paths before deleting from Lidarr or claiming the row,
                     // so an unsafe entry remains ACTIVE instead of being erased.
