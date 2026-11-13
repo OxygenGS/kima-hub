@@ -99,6 +99,11 @@ describe("indexed artist photo repair", () => {
             where: { id: "remote", heroUrl: null, userHeroUrl: null },
             data: { heroUrl: "https://example.org/artist.jpg" },
         });
+        expect(mockArtwork).toHaveBeenCalledWith({
+            name: "Remote Artist",
+            mbid: "9f916af0-6156-4c7f-b6f5-f11705824b00",
+            refresh: true,
+        });
         expect(mockSetex).toHaveBeenCalledWith(
             "hero:local", 7 * 24 * 60 * 60, "native:artists/local-recovered.jpg"
         );
