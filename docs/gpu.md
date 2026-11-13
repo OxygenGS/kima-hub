@@ -1,8 +1,6 @@
 # NVIDIA GPU
 
-This page describes optional NVIDIA GPU acceleration for the OxygenGS Kima Hub v1.11.0 fork. GPU support depends on host drivers, container privileges and NVIDIA hardware; automated CPU-based tests are not a substitute for a real GPU test.
-
-The previous versioned image, `ghcr.io/oxygengs/kima-hub:v1.10.0`, remains available for **unchanged v1.10 data**. Never start it against a volume already migrated by v1.11; use an independent pre-upgrade backup if rolling back.
+This page covers optional NVIDIA GPU acceleration in the current [OxygenGS v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) fork. GPU support depends on host drivers, container privileges and NVIDIA hardware; CPU-based CI builds are **not** a real GPU hardware test. Before changing an existing deployment, back up and independently test a restore of `/data`. Never point an older image at a newer migrated database.
 
 Kima runs on the processor by default and nothing about the graphics card is touched until an administrator turns it on. If the container can see an NVIDIA card, two jobs can run on it:
 
@@ -28,7 +26,7 @@ docker run -d --gpus all \
   -p 3030:3030 \
   -v /path/to/your/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.11.0
+  ghcr.io/oxygengs/kima-hub:v1.22.0
 ```
 
 The `--device` lines keep the card available after the host reloads its services (`systemctl daemon-reload`). Without them, on hosts where systemd manages Docker's control groups, anything the container starts afterwards cannot open the card. NVIDIA describes this in its [troubleshooting notes](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/troubleshooting.html).

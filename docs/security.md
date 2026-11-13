@@ -46,7 +46,7 @@ Kima is built for a home network. If you open it to the internet:
 2. Set `SECURE_COOKIES=true`.
 3. Set `ALLOWED_ORIGINS` to the address people use to open Kima.
 4. Turn on two-factor authentication for administrator accounts.
-5. Keep Kima updated; see [install.md](install.md#updating).
+5. Keep Kima updated; see [install.md](install.md#updating-an-existing-installation).
 
 Kima trusts the proxy's forwarded address, so the login limit counts the real client address as long as your proxy sets it.
 
@@ -56,4 +56,4 @@ Kima has no telemetry and sends nothing to its author. It contacts outside servi
 
 ## Image vulnerability reports
 
-The published v1.19.0 AMD64/ARM64 preflight found remaining HIGH/CRITICAL advisories without scanner-listed fixed versions. These findings are not automatically exploitable in every deployment, but neither are they proven safe. See the [current image-security report](image-security.md) and [security policy](../SECURITY.md) before exposing a server to untrusted networks.
+The published [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) AMD64/ARM64 preflight reported 327/326 HIGH and 8 CRITICAL advisories without scanner-listed patched versions. The configured security gates passed, but that does **not** mean the image is free of known vulnerabilities. Read the [current image-security report](image-security.md) and [security policy](../SECURITY.md) before exposing a server to untrusted networks.

@@ -1,15 +1,17 @@
 # Configuration
 
-Most of Kima is configured in the web app, under **Settings**. Environment variables cover the few things that have to be known before the app starts: where the database is, the secrets, and the address Lidarr should call back to.
+Most Kima configuration lives in **Settings Studio** (v1.22.0), organized into Personal, Appearance, Downloads & Services, Music Library, and Administration. Desktop users get grouped sidebar search; on mobile, choose a category and section. Environment variables cover the few values needed before the app starts: database connections, secrets and the Lidarr callback address.
 
 ## Settings in the web app
 
 | Section | What it holds | Who sees it |
 | --- | --- | --- |
 | Account | Password, two-factor authentication | Everyone |
+| Language | Switch between English and Dutch | Everyone |
 | Native Apps | Subsonic-client tokens and the server address to give a client | Everyone |
 | Playback | Streaming quality, track title format, queue limit | Everyone |
 | Scrobbling | A ListenBrainz user token, to record your plays there | Everyone |
+| Branding | App name, logo and appearance | Admins |
 | Download Preferences | Primary download source, Soulseek concurrent downloads | Admins |
 | Download Services | Lidarr | Admins |
 | Media Servers | Audiobookshelf | Admins |
@@ -64,7 +66,7 @@ With the split stack (`docker-compose.yml`), set both in a `.env` file next to t
 | --- | --- | --- |
 | `MUSIC_PATH` | **Required; no default** | Absolute path to an existing, mounted music directory. Missing values fail Compose configuration; the example does not auto-create missing host paths. An existing directory still does not prove the correct NAS/DAS is mounted. |
 | `PORT` | `3030` | The port on the host. |
-| `VERSION` | `v1.20.0` (fixed versioned release) | Production Compose uses this fixed tag by default for new installs, **never** `:latest`. Existing installations must preserve their own pinned version until safely backed up and upgraded. |
+| `VERSION` | `v1.22.0` (fixed versioned release) | Production Compose uses this fixed tag by default for new installs, **never** `:latest`. Existing installations must preserve their own pinned version until safely backed up and upgraded. |
 
 ### Audio analysis (split stack)
 
