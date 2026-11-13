@@ -98,6 +98,8 @@ const nextConfig: NextConfig = {
             { source: "/import/spotify", destination: "/import/playlist", permanent: true },
         ];
     },
+    // Device approval may take 45 seconds; preserve it through the Next.js proxy.
+    experimental: { proxyTimeout: 60_000 },
     // /api/* goes to the backend. Images set NEXT_PUBLIC_BACKEND_URL; the
     // fallback is the local dev backend (backend/.env PORT=3111). /api/events
     // is excluded: app/api/events/route.ts streams it without buffering.

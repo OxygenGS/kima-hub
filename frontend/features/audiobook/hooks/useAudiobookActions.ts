@@ -27,7 +27,7 @@ export function useAudiobookActions(
   } = useAudio();
   const { t } = useLanguage();
   const { playAudiobookAt } = useAudioControls();
-  const { setCurrentAudiobook, setPlaybackType } = useAudioState();
+  const { setCurrentAudiobook } = useAudioState();
 
   const isThisBookPlaying =
     currentAudiobook?.id === audiobookId && playbackType === "audiobook";
@@ -107,8 +107,8 @@ export function useAudiobookActions(
       await api.deleteAudiobookProgress(audiobookId);
 
       if (currentAudiobook?.id === audiobookId) {
+        // Keep the playback type long enough to save the cleared audiobook to the server.
         setCurrentAudiobook(null);
-        setPlaybackType(null);
         updateCurrentTime(0);
       }
 
@@ -124,7 +124,6 @@ export function useAudiobookActions(
     isPlaying,
     pause,
     setCurrentAudiobook,
-    setPlaybackType,
     updateCurrentTime,
     refetch,
     t,
