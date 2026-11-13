@@ -9,6 +9,10 @@ process.env.JWT_SECRET ??= 'test-jwt-secret-for-testing-purposes-only-32chars';
 process.env.SESSION_SECRET ??= 'test-session-secret-for-testing-purposes-only';
 process.env.DATABASE_URL ??= DATABASE_URL_FALLBACK;
 process.env.REDIS_URL ??= REDIS_URL_FALLBACK;
+// Each Jest worker gets its own Postgres database and Prisma pool. The default
+// production pool (20) multiplied by workers exceeds a disposable CI server's
+// max_connections. Keep the test-only pool small without changing production.
+process.env.DATABASE_POOL_SIZE ??= '4';
 // Required by utils/encryption at module load. Tests that transitively import the
 // encryption chain (e.g. audiobookshelf via routes) fail to load without it.
 process.env.SETTINGS_ENCRYPTION_KEY ??= '/pqt6ujDwltWiWSK1uSkpQOfwXQpORT0CWScZ8m66Kg=';
