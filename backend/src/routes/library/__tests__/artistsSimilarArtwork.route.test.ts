@@ -26,6 +26,7 @@ const authenticate = (req: any, _res: any, next: any) => {
 
 const mockArtistFindUnique = jest.fn();
 const mockArtistFindMany = jest.fn();
+const mockLocalPlays = jest.fn();
 
 jest.mock("../../../utils/db", () => {
     const prisma = {
@@ -41,7 +42,7 @@ jest.mock("../../../utils/db", () => {
         // The handler counts this user's plays across the artist's tracks
         // before it ever gets to the similar-artists strip.
         play: { groupBy: jest.fn().mockResolvedValue([]) },
-        $queryRaw: jest.fn().mockResolvedValue([]),
+        $queryRaw: (...args: any[]) => mockLocalPlays(...args),
         $transaction: (fn: any) => fn(prisma),
     };
     return {
@@ -159,6 +160,7 @@ describe("the similar-artists strip and where its pictures come from", () => {
         mockGetSimilarArtists.mockResolvedValue([]);
         mockGlobalTopRecordings.mockResolvedValue([]);
         mockDeezerTopTracks.mockResolvedValue([]);
+        mockLocalPlays.mockReset().mockResolvedValue([]);
         mockGetReleaseGroups.mockReset().mockResolvedValue({ kind: "absent" });
     });
 
@@ -187,11 +189,71 @@ describe("the similar-artists strip and where its pictures come from", () => {
         expect(tracksQuery.orderBy).toEqual({ trackNo: "asc" });
         expect(tracksQuery.include).toBeUndefined();
 
-        const albumDetails = { id: "owned-album", title: "My Album", coverUrl: "native:albums/owned.jpg" };
+        const albumDetails = {
+            id: "owned-album", title: "My Album",
+            coverUrl: "native:albums/owned.jpg", coverArt: "native:albums/owned.jpg",
+        };
         expect(res.body.albums[0].tracks[0].album).toEqual(albumDetails);
         expect(res.body.albums[0].tracks[0].audioFeatures).toHaveProperty("bpm", null);
         expect(res.body.topTracks[0]).toMatchObject({
             id: "owned-track", popularitySource: "global", album: { ...albumDetails, coverArt: albumDetails.coverUrl },
+        });
+    });
+
+    it("keeps user-selected album artwork across overview, full details and globally popular tracks", async () => {
+        const manualCover = "native:albums/manual.jpg";
+        const defaultCover = "native:albums/default.jpg";
+        mockArtistFindUnique.mockResolvedValue({
+            ...subject(null),
+            mbid: null,
+            albums: [{
+                id: "favorite", title: "Favorite", year: 2026, rgMbid: "local-rg",
+                coverUrl: defaultCover, userCoverUrl: manualCover,
+                tracks: [{ id: "favorite-track", albumId: "favorite", title: "Song", duration: 200, trackNo: 1 }],
+            }],
+        });
+        mockDeezerTopTracks.mockResolvedValue([{
+            title: "Song", album: "Favorite", durationMs: 200000,
+            rank: 120, coverUrl: "https://deezer.example/default.jpg",
+        }]);
+
+        const res = await request(makeApp()).get("/library/artists/art-1");
+        expect(res.status).toBe(200);
+        expect(res.body.albums[0]).toMatchObject({
+            id: "favorite", coverUrl: defaultCover, userCoverUrl: manualCover,
+            coverArt: manualCover,
+            tracks: [{ album: { id: "favorite", coverUrl: manualCover, coverArt: manualCover } }],
+        });
+        expect(res.body.topTracks[0]).toMatchObject({
+            id: "favorite-track", album: { id: "favorite", coverUrl: manualCover, coverArt: manualCover },
+        });
+    });
+
+    it("uses the manual cover in locally-played popular tracks, not the automatic SQL cover", async () => {
+        mockArtistFindUnique.mockResolvedValue({
+            ...subject(null),
+            mbid: null,
+            albums: [{
+                id: "favorite", title: "Favorite", coverUrl: "native:albums/automatic.jpg",
+                userCoverUrl: "native:albums/manual.jpg",
+                tracks: [{ id: "played-track", albumId: "favorite", title: "Song", duration: 200, trackNo: 1 }],
+            }],
+        });
+        mockLocalPlays.mockResolvedValue([{
+            id: "played-track", title: "Song", duration: 200,
+            albumId: "favorite", albumTitle: "Favorite",
+            albumCoverUrl: "native:albums/automatic.jpg",
+            artistId: "art-1", artistName: "Perturbator", playCount: 5n,
+        }]);
+
+        const res = await request(makeApp()).get("/library/artists/art-1");
+        expect(res.status).toBe(200);
+        expect(res.body.topTracks[0]).toMatchObject({
+            id: "played-track", playCount: 5, userPlayCount: 5,
+            album: {
+                id: "favorite", coverUrl: "native:albums/manual.jpg",
+                coverArt: "native:albums/manual.jpg",
+            },
         });
     });
 

@@ -438,13 +438,21 @@ router.get("/artists/:id", async (req, res) => {
     // Construct the small track.album shape from the albums already fetched
     // above. Popular tracks and playable album tracks both need this shape,
     // but the database must not load the same Album relation per track.
-    const artistAlbums = artist.albums.map((album) => ({
-      ...album,
-      tracks: album.tracks.map((track) => ({
-        ...track,
-        album: { id: album.id, title: album.title, coverUrl: album.coverUrl },
-      })),
-    }));
+    const artistAlbums = artist.albums.map((album) => {
+      // The initial overview already uses user-selected covers. Preserve
+      // that choice when the full details replace the overview in the UI.
+      const displayCover = album.userCoverUrl || album.coverUrl;
+      return {
+        ...album,
+        tracks: album.tracks.map((track) => ({
+          ...track,
+          album: {
+            id: album.id, title: album.title,
+            coverUrl: displayCover, coverArt: displayCover,
+          },
+        })),
+      };
+    });
     const albumById = new Map(artistAlbums.map((album) => [album.id, album]));
 
     // The album catalog, popularity, artwork and recommendations are independent.
@@ -463,7 +471,7 @@ router.get("/artists/:id", async (req, res) => {
           audioFeatures: toAudioFeaturesDTO(t),
         })),
         owned: true,
-        coverArt: album.coverUrl,
+        coverArt: album.userCoverUrl || album.coverUrl,
         source: "database" as const,
       }));
 
@@ -754,20 +762,26 @@ router.get("/artists/:id", async (req, res) => {
           LIMIT 10
         `;
         if (played.length > 0) {
-          topTracks = played.map((t) => ({
-            ...t,
-            playCount: Number(t.playCount),
-            listeners: 0,
-            userPlayCount: Number(t.playCount),
-            album: {
-              id: t.albumId,
-              title: t.albumTitle,
-              artistId: t.artistId,
-              coverUrl: t.albumCoverUrl,
-              artist: { id: t.artistId, name: t.artistName, mbid: "" },
-              coverArt: t.albumCoverUrl,
-            },
-          }));
+          topTracks = played.map((t) => {
+            // The legacy listen-count SQL returns an automatic cover. The
+            // already loaded Album row also contains a manual override.
+            const savedAlbum = albumById.get(t.albumId);
+            const displayCover = savedAlbum?.userCoverUrl || savedAlbum?.coverUrl || t.albumCoverUrl;
+            return {
+              ...t,
+              playCount: Number(t.playCount),
+              listeners: 0,
+              userPlayCount: Number(t.playCount),
+              album: {
+                id: t.albumId,
+                title: t.albumTitle,
+                artistId: t.artistId,
+                coverUrl: displayCover,
+                artist: { id: t.artistId, name: t.artistName, mbid: "" },
+                coverArt: displayCover,
+              },
+            };
+          });
           logger.debug(
             `[Artist] Top tracks from local listens (${played.length})`,
           );
