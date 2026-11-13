@@ -18,6 +18,7 @@ import {
     gpuSupported,
 } from "../services/gpuRuntime";
 import { configureLidarrWebhook } from "../services/lidarrWebhookSetup";
+import { lidarrSelfRepairingFields } from "../services/lidarrWebhookSecret";
 import { createLidarrClient } from "../services/lidarrClient";
 import { safeError } from "../utils/errors";
 
@@ -140,7 +141,7 @@ router.get("/", async (_req, res) => {
     }
 
     // Decrypt every field in ENCRYPTED_FIELDS before sending to the client.
-    const resolved = await resolveEncryptedSettings({ ...settings });
+    const { unreadableFields: _unreadable, ...resolved } = await resolveEncryptedSettings({ ...settings }, lidarrSelfRepairingFields);
 
     res.json(resolved);
   } catch (error) {
@@ -160,12 +161,12 @@ router.post("/", async (req, res) => {
       data.transcodeCacheMaxGb,
     );
 
-    // Encrypt every supplied field from ENCRYPTED_FIELDS; fields the
-    // payload omits stay untouched by the upsert.
-    const encryptedData = encryptSettings(data as Record<string, unknown>) as any;
-
     // Fetch existing settings before save to detect credential changes
     const existingSettings = await prisma.systemSettings.findUnique({ where: { id: "default" } });
+
+    // Encrypt every supplied field from ENCRYPTED_FIELDS; fields the
+    // payload omits stay untouched by the upsert.
+    const encryptedData = encryptSettings(data as Record<string, unknown>, existingSettings) as any;
 
     await prisma.systemSettings.upsert({
       where: { id: "default" },
