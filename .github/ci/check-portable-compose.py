@@ -28,7 +28,7 @@ def checked_release_image():
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     releases = re.findall(
-        r"^\\*\\*Versioned image:\\*\\* \`(ghcr\\.io/oxygengs/kima-hub:(v[0-9]+\\.[0-9]+\\.[0-9]+))\`[ \\t]*$",
+        r"^\*\*Versioned image:\*\* `(ghcr\.io/oxygengs/kima-hub:(v[0-9]+\.[0-9]+\.[0-9]+))`[ \t]*$",
         readme, flags=re.MULTILINE,
     )
     if len(releases) != 1:
