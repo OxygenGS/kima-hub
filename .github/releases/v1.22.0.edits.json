@@ -1,0 +1,17 @@
+[
+  {
+    "path": "README.md",
+    "before": "**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`",
+    "after": "**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`"
+  },
+  {
+    "path": "docs/install.md",
+    "before": "**Current version:** [v1.21.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.21.0) — published 12 November 2026. The experimental Downtify integration is retired; Lidarr, Soulseek and existing music remain supported.",
+    "after": "**Current version:** [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) — source release candidate. The stable image is not published until final native preflight and security review. v1.21.0 remains the last published stable image."
+  },
+  {
+    "path": "docs/install.md",
+    "before": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.21.0` |",
+    "after": "| Stable | `ghcr.io/oxygengs/kima-hub:v1.22.0` |"
+  }
+]

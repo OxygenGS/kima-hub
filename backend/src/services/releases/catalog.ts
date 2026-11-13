@@ -101,6 +101,57 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.22.0
+    {
+        "version": "1.22.0",
+        "title": "Kima Hub 1.22.0 \u2014 Settings Studio",
+        "summary": "A redesigned Settings Studio with grouped navigation, a calmer visual hierarchy, and responsive forms that retain unfinished changes.",
+        "date": "2026-11-12",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.122.overview",
+                "title": "Settings Studio overview",
+                "summary": "Explore personal, appearance, connections, library and administration settings from a clear overview.",
+                "body": "The previous long settings page is replaced with a category dashboard. Choose an area and work in one focused panel instead of scanning an endless list. The dark cards, restrained amber accents and typography follow the fork's visual design. Existing music, download workflows and account configuration are unchanged.",
+                "links": [
+                    {
+                        "label": "Open Settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.122.navigation",
+                "title": "Find settings quickly on any screen",
+                "summary": "Searchable desktop navigation, mobile category chips and grouped section selection.",
+                "body": "Desktop adds a persistent grouped sidebar with search and an active-section indicator. Mobile devices use scrollable category shortcuts and a grouped selection list. Old links to valid settings continue to open the relevant panel; obsolete or administrator-only targets fall back safely. English and Dutch navigation labels are included.",
+                "links": [
+                    {
+                        "label": "Open Settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.122.controls",
+                "title": "Accessible, consistent controls",
+                "summary": "Polished section cards, larger touch targets, visible focus states and full-width mobile connection fields.",
+                "body": "Forms use consistent spacing, borders, and brand-aware input focus styling. Password visibility buttons have accessible labels, and service URL, API key and storage path controls can use the available width on phones. The original service tests, toggles, save handlers and account security controls retain their behavior.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.122.data",
+                "title": "Preserved settings and music data",
+                "summary": "Switch panels without discarding unsaved edits; existing APIs and database history are preserved.",
+                "body": "The Settings Studio keeps underlying form components mounted while switching visible panels, so staged edits and locally held form state remain intact. The Save changes action remains available. Administrator-only controls stay hidden from regular members. No backend routes, Prisma migrations, Docker storage mounts, or existing music files are changed by this UI upgrade. Back up and independently verify the persistent /data volume before any live container upgrade.",
+                "links": []
+            }
+        ]
+    },
     // release-candidate:1.21.0
     {
         "version": "1.21.0",

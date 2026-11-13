@@ -11,7 +11,7 @@ services:
 
     kima:
         # Match the normal fork Compose example; override VERSION for a reviewed update.
-        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.21.0}
+        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.22.0}
         container_name: kima
         ports:
             - "${FRONTEND_PORT:-3030}:3030"

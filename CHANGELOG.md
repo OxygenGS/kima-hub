@@ -1,5 +1,21 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.22.0 — release preparation (unpublished)
+
+Settings Studio replaces Kima's old sprawling Settings page with a focused, responsive configuration experience that matches the OxygenGS fork's dark theme and amber accent color.
+
+### Redesigned settings
+- Introduce a five-category overview with personal, appearance, downloads/services, music library and administration cards, plus a persistent searchable navigation sidebar on desktop.
+- Provide responsive mobile category shortcuts and grouped section selection; remove a dead Integrations navigation target.
+- Show one focused settings panel at a time while keeping all underlying forms mounted so unsaved state survives panel switching.
+- Use consistent themed section cards, accessible inputs, toggles, selections and larger interactive targets, with mobile-width service connection fields.
+- Preserve the existing Settings APIs, user/admin permissions, two-factor authentication, Lidarr, Soulseek, artwork management, user management and library maintenance.
+
+### Verification and safe updates
+- Settings UI PR #237 passed frontend and backend tests, English/Dutch browser checks, fork compatibility and security workflow checks.
+- No new database migrations, media moves, deleted files, or automatic host changes.
+- Run the exact-main native AMD64/ARM64 image preflight and explicitly review residual vulnerabilities before stable image publication. Existing v1.21.0 installations remain pinned until a complete, independently verified /data backup and controlled update.
+
 ## OxygenGS fork v1.21.0 — released 2026-11-12
 
 This release retires the experimental Downtify integration after post-upgrade setup and storage verification proved unreliable across container identities. The application once again focuses on stable, independently configurable Kima, Lidarr and Soulseek workflows.

@@ -1,0 +1,83 @@
+{
+  "release": {
+    "version": "1.22.0",
+    "title": "Kima Hub 1.22.0 — Settings Studio",
+    "summary": "A redesigned Settings Studio with grouped navigation, a calmer visual hierarchy, and responsive forms that retain unfinished changes.",
+    "date": "2026-11-12",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.122.overview",
+        "title": "Settings Studio overview",
+        "summary": "Explore personal, appearance, connections, library and administration settings from a clear overview.",
+        "body": "The previous long settings page is replaced with a category dashboard. Choose an area and work in one focused panel instead of scanning an endless list. The dark cards, restrained amber accents and typography follow the fork's visual design. Existing music, download workflows and account configuration are unchanged.",
+        "links": [
+          {
+            "label": "Open Settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.122.navigation",
+        "title": "Find settings quickly on any screen",
+        "summary": "Searchable desktop navigation, mobile category chips and grouped section selection.",
+        "body": "Desktop adds a persistent grouped sidebar with search and an active-section indicator. Mobile devices use scrollable category shortcuts and a grouped selection list. Old links to valid settings continue to open the relevant panel; obsolete or administrator-only targets fall back safely. English and Dutch navigation labels are included.",
+        "links": [
+          {
+            "label": "Open Settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.122.controls",
+        "title": "Accessible, consistent controls",
+        "summary": "Polished section cards, larger touch targets, visible focus states and full-width mobile connection fields.",
+        "body": "Forms use consistent spacing, borders, and brand-aware input focus styling. Password visibility buttons have accessible labels, and service URL, API key and storage path controls can use the available width on phones. The original service tests, toggles, save handlers and account security controls retain their behavior.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.122.data",
+        "title": "Preserved settings and music data",
+        "summary": "Switch panels without discarding unsaved edits; existing APIs and database history are preserved.",
+        "body": "The Settings Studio keeps underlying form components mounted while switching visible panels, so staged edits and locally held form state remain intact. The Save changes action remains available. Administrator-only controls stay hidden from regular members. No backend routes, Prisma migrations, Docker storage mounts, or existing music files are changed by this UI upgrade. Back up and independently verify the persistent /data volume before any live container upgrade.",
+        "links": []
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.22.0 — Settings Studio": "Kima Hub 1.22.0 — Settings Studio"
+    },
+    "summaries": {
+      "A redesigned Settings Studio with grouped navigation, a calmer visual hierarchy, and responsive forms that retain unfinished changes.": "Een volledig vernieuwd instellingenmenu met duidelijke categorieën, rustige vormgeving en mobiele formulieren die onopgeslagen wijzigingen behouden."
+    },
+    "items": {
+      "fork.122.overview": {
+        "title": "Settings Studio-overzicht",
+        "summary": "Persoonlijke instellingen, weergave, verbindingen, bibliotheek en beheer in één overzicht.",
+        "body": "De lange instellingenpagina is vervangen door een overzicht met categoriekaarten. Kies een onderdeel en werk in één gericht paneel. De donkere kaarten, subtiele amberaccenten en typografie sluiten aan op de vormgeving van onze fork. Bestaande muziek, downloads en accountinstellingen veranderen niet."
+      },
+      "fork.122.navigation": {
+        "title": "Instellingen sneller vinden op ieder scherm",
+        "summary": "Doorzoekbare desktopnavigatie, mobiele categorieknoppen en een keuzemenu per onderdeel.",
+        "body": "Op desktop is er een vaste gegroepeerde sidebar met zoekfunctie en markering van het actieve onderdeel. Op mobiel gebruik je categorieknoppen en een gegroepeerd keuzemenu. Bestaande directe links naar geldige instellingen blijven werken. Ongeldige of afgeschermde beheerderslinks worden veilig naar het overzicht geleid. Nederlandse en Engelse teksten zijn inbegrepen."
+      },
+      "fork.122.controls": {
+        "title": "Consistente en toegankelijke bediening",
+        "summary": "Vernieuwde sectiekaarten, grotere aanraakvlakken, duidelijke focus en brede invoervelden op mobiel.",
+        "body": "Formulieren hebben consistente tussenruimte, kaders en focuskleuren. Knoppen voor het tonen van wachtwoorden hebben toegankelijke labels. URL-, API-sleutel- en opslagvelden gebruiken waar nodig de beschikbare breedte op telefoons. Bestaande verbindingstests, schakelaars, opslagfuncties en accountbeveiliging blijven hetzelfde werken."
+      },
+      "fork.122.data": {
+        "title": "Instellingen en muziek blijven behouden",
+        "summary": "Wissel van onderdeel zonder onopgeslagen wijzigingen te verliezen; API's en databasegeschiedenis blijven intact.",
+        "body": "Settings Studio houdt de onderliggende formulieren actief terwijl je tussen zichtbare onderdelen wisselt. Niet-opgeslagen wijzigingen en tijdelijke formulierstatus blijven daardoor bewaard. Wijzigingen opslaan blijft beschikbaar. Beheerdersopties zijn verborgen voor gewone gebruikers. Deze interface-update wijzigt geen backendroutes, Prisma-migraties, Docker-opslagkoppelingen of bestaande muziekbestanden. Maak vóór een live-update een volledige back-up van /data en controleer dat herstel werkt."
+      }
+    }
+  },
+  "changelog": "Settings Studio replaces Kima's old sprawling Settings page with a focused, responsive configuration experience that matches the OxygenGS fork's dark theme and amber accent color.\n\n### Redesigned settings\n- Introduce a five-category overview with personal, appearance, downloads/services, music library and administration cards, plus a persistent searchable navigation sidebar on desktop.\n- Provide responsive mobile category shortcuts and grouped section selection; remove a dead Integrations navigation target.\n- Show one focused settings panel at a time while keeping all underlying forms mounted so unsaved state survives panel switching.\n- Use consistent themed section cards, accessible inputs, toggles, selections and larger interactive targets, with mobile-width service connection fields.\n- Preserve the existing Settings APIs, user/admin permissions, two-factor authentication, Lidarr, Soulseek, artwork management, user management and library maintenance.\n\n### Verification and safe updates\n- Settings UI PR #237 passed frontend and backend tests, English/Dutch browser checks, fork compatibility and security workflow checks.\n- No new database migrations, media moves, deleted files, or automatic host changes.\n- Run the exact-main native AMD64/ARM64 image preflight and explicitly review residual vulnerabilities before stable image publication. Existing v1.21.0 installations remain pinned until a complete, independently verified /data backup and controlled update."
+}

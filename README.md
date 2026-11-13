@@ -28,6 +28,15 @@ This fork focuses on local music playback, modern OpenSubsonic apps, Lidarr, Sou
 
 [Release history](CHANGELOG.md) · [Update safety](docs/safe-aio-updates.md)
 
+### Next version: Settings Studio (v1.22.0 candidate)
+
+The next source release introduces a redesigned **Settings Studio** that matches the fork's dark, amber-accented interface. A five-category overview replaces the long unstructured list, with desktop sidebar search, mobile navigation and focused settings panels. Existing user/admin permissions, Lidarr and Soulseek connections, account security, storage preferences and music files are preserved. Switching panels does not discard pending edits.
+
+This interface is **merged into source code**, not yet part of the published v1.21.0 image. v1.22.0 must complete its own CI, native preflight and approved Docker publication before use.
+
+[Settings Studio source PR](https://github.com/OxygenGS/kima-hub/pull/237)
+
+
 ## Features
 
 | Listen | Discover | Manage |
@@ -55,7 +64,9 @@ The **Downloads** page shows the current account's Kima jobs for Lidarr and Soul
 
 ## Installation
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.21.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`
+
+**Release candidate only.** The v1.22.0 image is not published yet. Existing installations should stay on the validated v1.21.0 image until release approval and backup/restore verification.
 
 **Platforms:** `linux/amd64`, `linux/arm64` · **Web/API:** port `3030`.
 
@@ -70,17 +81,17 @@ docker run -d \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
   --restart unless-stopped \
-  ghcr.io/oxygengs/kima-hub:v1.21.0
+  ghcr.io/oxygengs/kima-hub:v1.22.0
 ```
 
 Open `http://localhost:3030` to complete the first-run setup. Replace the example music path with your own.
 
 ### Docker Compose / Dockge
 
-Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The example pins the published `v1.21.0` image, never `:latest`. Existing deployments must preserve their Compose identity, media mounts and verified `/data` backups when updating:
+Use [docker-compose.prod.yml](docker-compose.prod.yml). Set a real, existing music directory. The source example pins **candidate** `v1.22.0`, not `:latest`; it cannot be deployed until publication. Existing deployments must preserve their Compose identity, media mounts and verified `/data` backups when updating:
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.21.0 docker compose -f docker-compose.prod.yml up -d
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.22.0 docker compose -f docker-compose.prod.yml up -d
 ```
 
 **New installs:** `MUSIC_PATH` is mandatory; Docker Compose will not create an absent host music directory. An existing directory is not proof that a removable or network disk is mounted—verify the actual backing storage. **Existing installs:** keep the original Compose project, `/music` and `/data` mounts, and the running version pinned until a verified backup/restore and controlled upgrade. The fixed example tag never follows `:latest`.
