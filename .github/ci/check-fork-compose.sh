@@ -82,7 +82,18 @@ if f"| Stable | `{image}` |" not in guide:
     sys.exit("FORK DOCUMENT CHECK FAILED: install guide stable image differs from README")
 candidate = "v" + json.loads(Path("backend/package.json").read_text(encoding="utf-8"))["version"]
 if version != candidate:
-    sys.exit("FORK DOCUMENT CHECK FAILED: README version differs from checked-in candidate")
+    # The checked-in source can be a release candidate while the README and
+    # install guide must continue to advertise the actually published image.
+    # Permit that distinction only for an explicitly documented candidate
+    # with matching machine-readable release metadata.
+    spec_path = Path(".github/releases") / f"{candidate}.json"
+    if not spec_path.is_file():
+        sys.exit("FORK DOCUMENT CHECK FAILED: unpublished candidate has no release spec")
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    if spec.get("release", {}).get("version") != candidate[1:]:
+        sys.exit("FORK DOCUMENT CHECK FAILED: candidate release spec version differs")
+    if f"**Unpublished release candidate:** [{candidate}]" not in readme:
+        sys.exit("FORK DOCUMENT CHECK FAILED: README does not identify unpublished candidate")
 print(image)
 PY
 )"

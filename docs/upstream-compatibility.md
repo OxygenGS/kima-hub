@@ -58,15 +58,13 @@ The existing merge audit originally compared the fork to upstream `v1.11.0`;
 it now accepts an explicitly chosen stable upstream tag through the manual
 workflow. No automatic upstream synchronization is enabled.
 
-## Stable upstream v1.12.3/v1.12.4 review — pending in PR #241
+## Integrated upstream Kima v1.12.3 and v1.12.4 — merged in PR #241
 
-The upstream changes are being integrated into OxygenGS on a separate, draft pull request. We preserve all existing fork behavior and do not deploy the integration automatically.
+Upstream improvements have been adapted to OxygenGS and merged into `main` as commit `9cff1929f4a41aca7d1f46a6c414a93049a7491d`. Our independent branding, Settings Studio 2.0, English/Dutch UI, OpenSubsonic app-key support, Soulseek/Lidarr integrations, library improvements and existing user data remain part of the fork.
 
-- **Security:** credential-preservation handling, linked-device owner approval, login limits, strict imported URLs and downloader arguments, slskd path containment, public share projections and Lidarr webhook repair.
-- **Scanner:** include in-root symlinks with canonical-target deduplication. Upstream permits symlink targets outside the configured music folder; OxygenGS intentionally refuses these to preserve its stream/download containment invariant. No filesystem path outside the configured music root may be indexed or deleted through a link.
-- **Playback:** handle disappearing files, avoid restore echo, update queue changes across devices, and clear removed audiobook IDs.
-- **Fork invariants:** keep EN/NL translations, Settings Studio, branding, OpenSubsonic support, library performance enhancements, existing migration history and publication workflow. Do not reactivate removed integrations or change mount paths.
-- **Discovery cleanup:** OxygenGS uses its own `routes/discover.ts` instead of upstream's `discoverClearing.ts`. Its cleanup now refuses symlinked paths outside the music root before claiming the album, calling Lidarr, or recursively removing directories. Existing ordinary album cleanup is covered by regression tests.
-- **Release links:** OxygenGS renders in-app release notes with `WhatsNewWindow.tsx` rather than upstream's separate ReleaseLinks component; external HTTPS links now open in a separate safe tab.
-- **Security E2E:** the pull request's normal Security Checks workflow only runs the dependency/secret scan. The full browser security tests need an explicit `[E2E]` PR prefix and new synchronized commit; they must run successfully before this port is merged.
-- **Release status:** unpublished. The branch's standard source tests, native AIO build checks, database upgrade/restore and language checks passed on commit `da84fdff89e80429f8fa666a25a2216305949aec`. The explicit Security E2E test and all checks on the final commit still need verification. A separate exact-main native image preflight, residual vulnerability review and explicit stable release approval are required after source merge; no production deployment is implied.
+- **Security:** preserve encrypted credentials that temporarily cannot be read, require owner approval for new devices, rate-limit password guessing, restrict slskd file paths and imported music URLs, minimize public share fields, and repair Lidarr webhook secrets.
+- **Scanner:** follow in-root symlinks and deduplicate their targets; external link targets remain deliberately blocked to match stream and deletion containment rules. Linked-out cleanup is refused before Lidarr or filesystem removal.
+- **Playback:** handle missing files, clear queues consistently across devices, avoid stale restore echo, and preserve audiobook progress resets.
+- **Interface:** render safe external HTTPS release links inside the existing OxygenGS What's New window instead of introducing upstream's separate component.
+- **Verification:** PR #241 passed its final full frontend/backend unit suites, security browser E2E, EN/NL browser tests, database upgrade/restore rehearsal and native AMD64/ARM64 build checks on `7a3aa4e94f9555d11715764d938ada81bd19be12`.
+- **Release separation:** merged source does not publish or deploy an image. Version v1.23.0 is being prepared on a separate release branch. Before publication, run exact-main native image preflight, examine residual security advisories, and explicitly approve the stable release. No change to host-specific paths, media mounts or historical database migrations is implied.

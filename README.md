@@ -120,6 +120,8 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 **Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.22.0`
 
+**Unpublished release candidate:** [v1.23.0](https://github.com/OxygenGS/kima-hub/pull/242). This version is source-only while CI, native image preflight and security approval are pending. Do not pull or deploy the candidate tag before publication.
+
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
 ### Docker — new installations only
@@ -138,7 +140,7 @@ Replace `/absolute/path/to/music` with an **existing** host directory holding yo
 
 ### Docker Compose / Dockge — new installations only
 
-The [production Compose file](docker-compose.prod.yml) pins the stable version and requires `MUSIC_PATH` to point to an existing music directory.
+The [production Compose file](docker-compose.prod.yml) pins a versioned source image and requires `MUSIC_PATH` to point to an existing music directory. During release preparation, the source default can be newer than the published stable image; set `VERSION=v1.22.0` explicitly until v1.23.0 has been published.
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.22.0 \

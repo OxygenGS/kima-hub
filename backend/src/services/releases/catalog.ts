@@ -101,6 +101,70 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.23.0
+    {
+        "version": "1.23.0",
+        "title": "Kima Hub 1.23.0 \u2014 Security, Playback & Library",
+        "summary": "Upstream Kima 1.12.3\u20131.12.4 security and playback improvements, carefully adapted to the independent OxygenGS fork.",
+        "date": "2026-11-13",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.123.security",
+                "title": "Safer authentication and secrets",
+                "summary": "Keep unreadable credentials safe and limit repeated password guessing for web and Subsonic sign-ins.",
+                "body": "If a stored encrypted connection secret cannot be decrypted, Kima now preserves the original value instead of erasing it when unrelated settings are saved. Web and Subsonic sign-ins apply separate per-username failed-password limits without disabling valid app keys or sessions. Existing user accounts and saved connections remain in place.",
+                "links": [
+                    {
+                        "label": "Review settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.123.devices",
+                "title": "Approve connected devices and protect shares",
+                "summary": "New device links require owner approval; shared links reveal fewer internal details.",
+                "body": "A device entering the correct pairing code must still be approved by the account owner before receiving its key. Public music shares return only the fields required to display the shared content. Existing OpenSubsonic app-key authentication for compatible clients is preserved.",
+                "links": [
+                    {
+                        "label": "Device linking",
+                        "href": "/device"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.123.library",
+                "title": "Safer scans and missing-file handling",
+                "summary": "Scan links within the music folder, avoid dangerous linked-folder deletion, and handle missing audio gracefully.",
+                "body": "Library scans follow in-root file and folder symlinks while deduplicating songs reached through multiple paths. Unlike upstream, OxygenGS deliberately refuses symlinks whose targets escape the music root, matching existing stream and deletion protections. Discover Weekly cleanup also checks linked paths before deleting through Lidarr. Missing audio returns an unavailable response rather than a generic server error.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.123.playback",
+                "title": "Playback stays consistent across devices",
+                "summary": "Cleared queues stay cleared, restored playback does not overwrite other devices, and audiobook resets persist.",
+                "body": "A cleared queue no longer brings back the last song after reload, and queue clears synchronize across connected devices. Reloading a page does not echo stale playback state over another device's current session. Resetting audiobook progress stays reset.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.123.integrations",
+                "title": "Safer music imports and library sharing",
+                "summary": "Improve Soulseek, Lidarr and music-link validation, and publish the version 2 public-library feed.",
+                "body": "Soulseek/slskd rejects completed files whose paths leave its downloads folder and can try another source. Lidarr webhook-secret recovery handles unreadable credentials without accepting unsigned events. Playlist imports validate supported music-site URLs and reject the outdated Bandcamp importer. The optional public-library feed uses version 2 and includes daily play counts subject to sharing settings. Settings Studio 2.0, English/Dutch UI, OxygenGS branding, Lidarr/Soulseek integration and modern OpenSubsonic client support remain available.",
+                "links": [
+                    {
+                        "label": "Music imports",
+                        "href": "/import/playlist"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.22.0
     {
         "version": "1.22.0",

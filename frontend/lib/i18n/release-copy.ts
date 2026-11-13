@@ -49,6 +49,42 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.23.0
+    "1.23.0": {
+        "titles": {
+            "Kima Hub 1.23.0 \u2014 Security, Playback & Library": "Kima Hub 1.23.0 \u2014 Beveiliging, afspelen en bibliotheek"
+        },
+        "summaries": {
+            "Upstream Kima 1.12.3\u20131.12.4 security and playback improvements, carefully adapted to the independent OxygenGS fork.": "Beveiliging en afspeelverbeteringen uit Kima 1.12.3\u20131.12.4, zorgvuldig aangepast aan onze onafhankelijke OxygenGS-fork."
+        },
+        "items": {
+            "fork.123.security": {
+                "title": "Veiligere aanmelding en geheimen",
+                "summary": "Versleutelde gegevens blijven bewaard als ze tijdelijk onleesbaar zijn; herhaald raden van wachtwoorden wordt beperkt.",
+                "body": "Als een opgeslagen versleuteld verbindingsgeheim niet kan worden ontsleuteld, bewaart Kima de oorspronkelijke waarde bij het opslaan van andere instellingen. Aanmeldingen via web en Subsonic krijgen afzonderlijke limieten per gebruikersnaam voor mislukte wachtwoorden. Geldige app-sleutels en bestaande sessies blijven werken. Accounts en ingestelde verbindingen blijven behouden."
+            },
+            "fork.123.devices": {
+                "title": "Apparaten goedkeuren en gedeelde links beveiligen",
+                "summary": "Nieuwe apparaten hebben toestemming van de eigenaar nodig; gedeelde links tonen minder interne informatie.",
+                "body": "Zelfs met de juiste koppelcode krijgt een nieuw apparaat pas toegang na goedkeuring door de accounteigenaar. Publieke muzieklinks geven alleen gegevens terug die nodig zijn om de gedeelde inhoud weer te geven. Moderne OpenSubsonic-authenticatie met app-sleutels blijft beschikbaar."
+            },
+            "fork.123.library": {
+                "title": "Veiligere bibliotheekscans en ontbrekende bestanden",
+                "summary": "Verwerk verwijzingen binnen de muziekmap, voorkom onveilig verwijderen en behandel ontbrekende audio correct.",
+                "body": "De scanner volgt symbolische links naar bestanden en mappen binnen de muziekroot en voorkomt dubbele nummers. Onze OxygenGS-fork weigert bewust links die buiten de muziekroot verwijzen, in overeenstemming met de bestaande afspeel- en verwijderbeveiliging. Discover Weekly controleert links ook voordat Lidarr of de opruimfunctie bestanden verwijdert. Ontbrekende audio geeft een duidelijke niet-beschikbaarmelding in plaats van een algemene serverfout."
+            },
+            "fork.123.playback": {
+                "title": "Consistente weergave op al je apparaten",
+                "summary": "Leeggemaakte wachtrijen blijven leeg en voortgangsresets voor audioboeken blijven bewaard.",
+                "body": "Na het leegmaken van de wachtrij verschijnt het laatste nummer niet opnieuw bij het herladen. Een gewiste wachtrij wordt doorgegeven aan andere apparaten. Het opnieuw openen van een pagina overschrijft de actuele weergave op een ander apparaat niet met verouderde informatie. Het resetten van audioboekvoortgang blijft behouden."
+            },
+            "fork.123.integrations": {
+                "title": "Veiligere imports en gedeelde bibliotheek",
+                "summary": "Verbeteringen voor Soulseek, Lidarr en muzieklinks, met versie 2 van de publieke bibliotheekfeed.",
+                "body": "Soulseek/slskd weigert downloads die buiten de downloadmap verwijzen en kan de volgende bron proberen. Lidarr herstelt onleesbare webhookgeheimen zonder onbeveiligde gebeurtenissen te accepteren. Imports controleren ondersteunde muziek-URL's; de niet meer werkende Bandcamp-import is verwijderd. De optionele publieke bibliotheekfeed gebruikt versie 2 en toont dagelijkse afspeeltellingen volgens de ingestelde deelrechten. Settings Studio 2.0, Nederlands/Engels, OxygenGS-branding, Lidarr, Soulseek en moderne OpenSubsonic-clients blijven behouden."
+            }
+        }
+    },
     // release-candidate:1.22.0
     "1.22.0": {
         "titles": {
