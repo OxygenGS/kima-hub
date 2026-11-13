@@ -1,5 +1,26 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.23.0 — release preparation (unpublished)
+
+This release integrates the stable upstream Kima 1.12.3 and 1.12.4 improvements into OxygenGS without replacing the fork, its Settings Studio 2.0, EN/NL locale, custom branding, modern OpenSubsonic app-key support, library performance improvements or its Lidarr/Soulseek features.
+
+### Security, accounts and external links
+- Preserve encrypted credentials that temporarily cannot be decrypted; add separate per-username failed-login limits for web and Subsonic requests.
+- Require owner approval for device pairing; tighten public share responses to an allowlist of fields.
+- Validate imported music URLs and downloader extractors; reject obsolete Bandcamp imports.
+- Keep slskd finished-file access inside its configured downloads directory, and repair Lidarr webhook secrets without accepting unsigned callbacks.
+
+### Library, queue and listening
+- Follow and deduplicate symlinks within the music root; deliberately block targets outside that root to retain OxygenGS stream and deletion safeguards.
+- Extend safe deletion to Discover Weekly's Lidarr/file cleanup and handle missing audio files without internal server errors.
+- Preserve cleared queues across reloads and devices, avoid stale playback echo, and persist audiobook progress resets.
+- Add daily playback counts to the opt-in public library export (feed version 2).
+
+### Verification and upgrades
+- Upstream integration PR #241 passed source, UI, Dutch/English browser, backend, database upgrade/restore, real browser security E2E and native AMD64/ARM64 AIO build checks.
+- No Prisma migration or Docker media mount change is introduced by this update. Existing accounts, music and historical migration records remain in place; retired Downtify code remains absent.
+- Do not deploy this release candidate without a verified restorable /data backup. A separate exact-source release preflight and explicit review of unresolved image vulnerabilities are required before a stable tag or container image can be published.
+
 ## Unreleased — upstream Kima Hub v1.12.3 and v1.12.4 integration (PR #241)
 
 This unreleased integration adopts the stable upstream improvements while retaining the OxygenGS fork's Settings Studio 2.0, EN/NL translations, instance branding, OpenSubsonic app-key support, Soulseek/Lidarr behavior, library enhancements, release process, and media/database mounts.
