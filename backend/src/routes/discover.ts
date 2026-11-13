@@ -8,7 +8,7 @@ import { resolveViewWeek, resolveGenerationWeekStart, weekStartKey } from "../li
 import { createLidarrClient, isLidarrConfigured } from "../services/lidarrClient";
 import fs from "fs";
 import path from "path";
-import { resolveWithinMusicRoot } from "./library/trackPath";
+import { isBehindLinkOut, resolveWithinMusicRoot } from "./library/trackPath";
 
 import { discoverQueue } from "../workers/queues";
 import { requestScan } from "../workers/scanRequest";
@@ -26,6 +26,29 @@ import { LIBRARY_LOCATION } from "../services/libraryFilters";
 import { withArtistArtwork } from "../services/artwork";
 
 const router = Router();
+
+/**
+ * Discovery cleanup must never recurse through a linked directory outside
+ * /music/discovery. String-prefix checks alone cannot detect a parent symlink.
+ * Only folders that physically resolve inside the discovery root can be
+ * removed. This is checked before any Lidarr delete and again before rmSync.
+ */
+function safeDiscoveryDeletePath(candidate: string): boolean {
+    const discoveryRoot = resolveWithinMusicRoot("discovery");
+    if (!discoveryRoot || !candidate.startsWith(discoveryRoot + path.sep)) return false;
+    if (!fs.existsSync(candidate)) return true; // Already gone: nothing to remove.
+    try {
+        const actualMusicRoot = fs.realpathSync(path.dirname(discoveryRoot));
+        const actualDiscoveryRoot = fs.realpathSync(discoveryRoot);
+        const actualCandidate = fs.realpathSync(candidate);
+        return actualDiscoveryRoot.startsWith(actualMusicRoot + path.sep) &&
+            actualCandidate.startsWith(actualDiscoveryRoot + path.sep);
+    } catch {
+        // Unreadable, missing, or broken path: never use recursive deletion.
+        return false;
+    }
+}
+
 
 router.use(requireAuthOrToken);
 
@@ -1310,6 +1333,37 @@ router.delete("/clear", async (req, res) => {
 
             for (const album of activeAlbums) {
                 try {
+                    // Match upstream's track-level linked-out guard as well:
+                    // Lidarr can remove tracked files before our direct cleanup.
+                    const indexedAlbum = await prisma.album.findFirst({
+                        where: {
+                            title: album.albumTitle,
+                            artist: { name: album.artistName },
+                            location: "DISCOVER",
+                        },
+                        select: { tracks: { select: { filePath: true } } },
+                    });
+                    if (indexedAlbum?.tracks.some((track) => track.filePath && isBehindLinkOut(track.filePath))) {
+                        logger.warn(`[DiscoverClear] Refused linked-out track for ${album.artistName} - ${album.albumTitle}`);
+                        continue;
+                    }
+
+                    // A discovery album may contain a linked artist folder. Check
+                    // physical paths before deleting from Lidarr or claiming the row,
+                    // so an unsafe entry remains ACTIVE instead of being erased.
+                    const discoveryRoot = resolveWithinMusicRoot("discovery");
+                    const candidatePaths = discoveryRoot
+                        ? [
+                            resolveWithinMusicRoot("discovery", album.artistName, album.albumTitle),
+                            resolveWithinMusicRoot("discovery", album.artistName),
+                            resolveWithinMusicRoot("discovery", `${album.artistName} - ${album.albumTitle}`),
+                        ].filter((p): p is string => !!p && p.startsWith(discoveryRoot + path.sep))
+                        : [];
+                    if (candidatePaths.length === 0 || candidatePaths.some((p) => !safeDiscoveryDeletePath(p))) {
+                        logger.warn(`[DiscoverClear] Refused invalid or linked-out directory for ${album.artistName} - ${album.albumTitle}`);
+                        continue;
+                    }
+
                     // Claim the row before deleting anything: if the user liked it since the
                     // snapshot (count 0), skip both the Lidarr/file delete and the row delete.
                     const claimed = await prisma.discoveryAlbum.updateMany({
@@ -1329,31 +1383,14 @@ router.delete("/clear", async (req, res) => {
 
                     // Direct filesystem delete, in case Lidarr's deleteFiles left files behind
                     try {
-                        // artistName and albumTitle come from tags and imports, so "../.." is
-                        // possible, and the result goes to rmSync(recursive). Contain it within the
-                        // discovery folder, not just the music root.
-                        const discoveryRoot = resolveWithinMusicRoot("discovery");
-                        const withinDiscovery = (p: string | null): p is string =>
-                            !!p &&
-                            !!discoveryRoot &&
-                            p.startsWith(discoveryRoot + path.sep);
-
-                        // Try common folder structures: /discovery/Artist/Album or /discovery/Artist - Album
-                        const possiblePaths = [
-                            resolveWithinMusicRoot(
-                                "discovery",
-                                album.artistName,
-                                album.albumTitle
-                            ),
-                            resolveWithinMusicRoot("discovery", album.artistName),
-                            resolveWithinMusicRoot(
-                                "discovery",
-                                `${album.artistName} - ${album.albumTitle}`
-                            ),
-                        ].filter(withinDiscovery);
-
-                        for (const albumPath of possiblePaths) {
+                        // Candidate paths were checked before Lidarr cleanup.
+                        // Check physical containment again immediately before rmSync.
+                        for (const albumPath of candidatePaths) {
                             if (fs.existsSync(albumPath)) {
+                                if (!safeDiscoveryDeletePath(albumPath)) {
+                                    logger.warn(`[DiscoverClear] Skipped unsafe directory: ${albumPath}`);
+                                    break;
+                                }
                                 fs.rmSync(albumPath, {
                                     recursive: true,
                                     force: true,

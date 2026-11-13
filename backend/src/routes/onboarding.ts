@@ -6,13 +6,15 @@ import { z } from "zod";
 import axios from "axios";
 import crypto from "crypto";
 import { invalidateSystemSettingsCache } from "../utils/systemSettings";
-import { encryptField } from "../utils/encryption";
+import { encryptSettings } from "../utils/encryptedFields";
 import { writeEnvFile } from "../utils/envWriter";
 import { generateToken, requireAuth, requireAdmin } from "../middleware/auth";
 import { defaultUserSettingsFor } from "../utils/userSettingsDefaults";
 import { createLidarrClient } from "../services/lidarrClient";
 
 const router = Router();
+
+const settingsRow = () => prisma.systemSettings.findUnique({ where: { id: "default" } });
 
 // Validation schemas
 const registerSchema = z.object({
@@ -206,19 +208,15 @@ router.post("/lidarr", requireAuth, requireAdmin, async (req, res) => {
         }
 
         // Save to system settings (even if connection test failed)
+        const data = encryptSettings({
+            lidarrEnabled: config.enabled,
+            lidarrUrl: config.url || null,
+            lidarrApiKey: config.apiKey ?? null,
+        }, await settingsRow()) as any;
         await prisma.systemSettings.upsert({
             where: { id: "default" },
-            create: {
-                id: "default",
-                lidarrEnabled: config.enabled,
-                lidarrUrl: config.url || null,
-                lidarrApiKey: encryptField(config.apiKey),
-            },
-            update: {
-                lidarrEnabled: config.enabled,
-                lidarrUrl: config.url || null,
-                lidarrApiKey: encryptField(config.apiKey),
-            },
+            create: { id: "default", ...data },
+            update: data,
         });
         invalidateSystemSettingsCache();
 
@@ -284,19 +282,15 @@ router.post("/audiobookshelf", requireAuth, requireAdmin, async (req, res) => {
         }
 
         // Save to system settings (even if connection test failed)
+        const data = encryptSettings({
+            audiobookshelfEnabled: config.enabled,
+            audiobookshelfUrl: config.url || null,
+            audiobookshelfApiKey: config.apiKey ?? null,
+        }, await settingsRow()) as any;
         await prisma.systemSettings.upsert({
             where: { id: "default" },
-            create: {
-                id: "default",
-                audiobookshelfEnabled: config.enabled,
-                audiobookshelfUrl: config.url || null,
-                audiobookshelfApiKey: encryptField(config.apiKey),
-            },
-            update: {
-                audiobookshelfEnabled: config.enabled,
-                audiobookshelfUrl: config.url || null,
-                audiobookshelfApiKey: encryptField(config.apiKey),
-            },
+            create: { id: "default", ...data },
+            update: data,
         });
         invalidateSystemSettingsCache();
 
@@ -326,19 +320,13 @@ router.post("/soulseek", requireAuth, requireAdmin, async (req, res) => {
     try {
         const config = soulseekConfigSchema.parse(req.body);
 
-        // If not enabled, clear credentials
+        // Preserve ciphertext if the stored password is temporarily unreadable.
         if (!config.enabled) {
+            const data = encryptSettings({ soulseekUsername: null, soulseekPassword: null }, await settingsRow()) as any;
             await prisma.systemSettings.upsert({
                 where: { id: "default" },
-                create: {
-                    id: "default",
-                    soulseekUsername: null,
-                    soulseekPassword: null,
-                },
-                update: {
-                    soulseekUsername: null,
-                    soulseekPassword: null,
-                },
+                create: { id: "default", ...data },
+                update: data,
             });
             invalidateSystemSettingsCache();
             return res.json({ success: true, tested: false });
@@ -351,18 +339,12 @@ router.post("/soulseek", requireAuth, requireAdmin, async (req, res) => {
             });
         }
 
-        // Save to system settings
+        // Save without erasing unreadable stored credentials.
+        const data = encryptSettings({ soulseekUsername: config.username, soulseekPassword: config.password }, await settingsRow()) as any;
         await prisma.systemSettings.upsert({
             where: { id: "default" },
-            create: {
-                id: "default",
-                soulseekUsername: config.username,
-                soulseekPassword: encryptField(config.password),
-            },
-            update: {
-                soulseekUsername: config.username,
-                soulseekPassword: encryptField(config.password),
-            },
+            create: { id: "default", ...data },
+            update: data,
         });
         invalidateSystemSettingsCache();
 

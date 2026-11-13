@@ -52,6 +52,8 @@ export default function DeviceLinkPage() {
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pendingRevoke, setPendingRevoke] = useState<LinkedDevice | null>(null);
+    const [askingDevice, setAskingDevice] = useState<string | null>(null);
+    const [answering, setAnswering] = useState(false);
 
     useEffect(() => {
         if (!authLoading && !isAuthenticated) {
@@ -81,6 +83,7 @@ export default function DeviceLinkPage() {
         setIsGenerating(true);
         setError(null);
         setCodeUsed(false);
+        setAskingDevice(null);
 
         try {
             const response = await api.request<DeviceLinkCode>("/device-link/generate", {
@@ -116,6 +119,7 @@ export default function DeviceLinkPage() {
                     `/device-link/status/${linkCode.code}`
                 );
 
+                setAskingDevice(status.status === "waiting" ? (status.deviceName ?? t("a device")) : null);
                 if (status.status === "used") {
                     setCodeUsed(true);
                     loadDevices();
@@ -127,6 +131,24 @@ export default function DeviceLinkPage() {
 
         return () => clearInterval(pollInterval);
     }, [linkCode, expired, codeUsed, loadDevices]);
+
+    const answerDevice = async (answer: "approve" | "deny") => {
+        if (!linkCode) return;
+        setAnswering(true);
+        setError(null);
+        try {
+            await api.request(`/device-link/${answer}/${linkCode.code}`, { method: "POST" });
+            setAskingDevice(null);
+            if (answer === "deny") {
+                setLinkCode(null);
+                setTimeRemaining(0);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : t("Could not send your answer"));
+        } finally {
+            setAnswering(false);
+        }
+    };
 
     const copyCode = async () => {
         if (linkCode && (await copyText(linkCode.code))) {
@@ -244,6 +266,20 @@ export default function DeviceLinkPage() {
                                                 <RefreshCw className="w-4 h-4 inline mr-2" />
                                                 {t("Generate New Code")}
                                             </Button>
+                                        </div>
+                                    ) : askingDevice !== null ? (
+                                        <div className="py-8" aria-live="polite">
+                                            <Smartphone className="w-12 h-12 text-brand mx-auto mb-4" />
+                                            <h3 className="text-xl font-bold text-white mb-2">{askingDevice} {t("wants to link")}</h3>
+                                            <p className="text-[var(--text-secondary)] mb-4">{t("Only approve if you entered this code on your device.")}</p>
+                                            <div className="flex items-center justify-center gap-3">
+                                                <Button variant="primary" disabled={answering} onClick={() => answerDevice("approve")}>
+                                                    {answering ? t("Sending...") : t("Approve")}
+                                                </Button>
+                                                <Button variant="secondary" disabled={answering} onClick={() => answerDevice("deny")}>
+                                                    {t("Deny")}
+                                                </Button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <>

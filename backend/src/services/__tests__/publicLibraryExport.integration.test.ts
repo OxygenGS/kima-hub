@@ -112,7 +112,7 @@ describe("public library export", () => {
 
     it("lists the mapped tracks with their nearest mapped tracks", async () => {
         const doc = unpack((await refreshLibraryExport()).gzipped);
-        expect(doc.version).toBe(1);
+        expect(doc.version).toBe(2);
         expect(doc.library).toEqual({ id: "vibe-tester", name: "Vibe Tester", engine: { analyzer: null, embedding: MATCHING_MODEL } });
         expect(doc.artists).toEqual([{ id: "art_pub", name: "Pub Artist" }]);
         expect(doc.albums).toEqual([{ id: "alb_pub", artistId: "art_pub", title: "Pub Album", year: 2001 }]);
@@ -120,7 +120,7 @@ describe("public library export", () => {
         expect(doc.excluded).toBe(2);
 
         const a = doc.tracks[0];
-        expect(a).toMatchObject({ xyz: [0.1, 0.2, 0.3], duration: 200, energy: 0.712, valence: 0.2 });
+        expect(a).toMatchObject({ xyz: [0.1, 0.2, 0.3], duration: 200, energy: 0.712, valence: 0.2, plays: 0 });
         // trk_a's album also holds trk_b and trk_c; with trk_a counted it has room for one.
         expect(a.neighbours.map(([id]: [string]) => id)).toEqual(["trk_b"]);
         expect(Math.abs(a.neighbours[0][1] - (await formulaMatch("trk_a", "trk_b")))).toBeLessThanOrEqual(5e-5);

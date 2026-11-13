@@ -232,19 +232,6 @@ function ImportUrlPanel({ onClose }: { onClose: () => void }) {
         const trimmed = url.trim();
         if (!trimmed) return;
 
-        try {
-            new URL(trimmed);
-        } catch {
-            setError("Enter a valid URL");
-            return;
-        }
-
-        const supportedDomains = ["spotify.com", "deezer.com", "youtube.com", "youtu.be", "soundcloud.com", "bandcamp.com", "mixcloud.com"];
-        if (!supportedDomains.some(domain => trimmed.includes(domain))) {
-            setError("Supported: Spotify, Deezer, YouTube, SoundCloud, Bandcamp, Mixcloud");
-            return;
-        }
-
         setIsSubmitting(true);
         setError(null);
         try {

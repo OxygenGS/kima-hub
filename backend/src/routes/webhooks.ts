@@ -6,6 +6,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { processStoredEvent } from "../services/webhookHandlers";
 import { WEBHOOK_SECRET_HEADER } from "../services/lidarrWebhookSetup";
+import { lidarrWebhookSecretHeld } from "../services/lidarrWebhookSecret";
 import { webhookLimiter } from "../middleware/rateLimiter";
 import { getSystemSettings } from "../utils/systemSettings";
 import { isLidarrConfigured } from "../services/lidarrClient";
@@ -59,7 +60,7 @@ router.post("/lidarr", async (req, res) => {
             });
         }
 
-        if (settings.lidarrWebhookSecret) {
+        if (lidarrWebhookSecretHeld(settings)) {
             if (!res.locals.webhookVerified) {
                 logger.debug(`[WEBHOOK] Lidarr webhook received with invalid or missing secret`);
                 return res.status(401).json({

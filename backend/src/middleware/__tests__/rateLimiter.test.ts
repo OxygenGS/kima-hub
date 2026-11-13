@@ -45,10 +45,11 @@ describe('apiLimiter skip predicate', () => {
 
 describe('createRateLimiter', () => {
     it('raises no proxy-trust warning behind the trusted proxy chain', async () => {
-        const { createRateLimiter } = await import('../rateLimiter');
+        const { createRateLimiter, trustOneProxyHop } = await import('../rateLimiter');
         const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
         const app = express();
-        app.set('trust proxy', true);
+        trustOneProxyHop(app);
+        expect(app.get('trust proxy')).toBe(1);
         app.use(createRateLimiter({ windowMs: 60 * 1000, max: 10 }));
         app.get('*', (_req, res) => res.status(200).json({ ok: true }));
 

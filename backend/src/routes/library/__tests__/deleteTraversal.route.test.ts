@@ -45,6 +45,7 @@ jest.mock('../../../services/dataCache', () => ({ dataCacheService: { get: jest.
 
 jest.mock('fs', () => ({
     existsSync: jest.fn().mockReturnValue(true),
+    realpathSync: jest.fn((p: string) => p),
     unlinkSync: jest.fn(),
     rmSync: jest.fn(),
     rmdirSync: jest.fn(),
@@ -87,6 +88,7 @@ describe('library delete routes stay inside the music root', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         (fs.existsSync as jest.Mock).mockReturnValue(true);
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) => p);
     });
 
     it('DELETE /tracks/:id refuses a filePath that escapes the root', async () => {
@@ -128,6 +130,20 @@ describe('library delete routes stay inside the music root', () => {
         }
         expect(fs.rmSync).not.toHaveBeenCalled();
         expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('DELETE /artists/:id refuses deleting through a folder link outside the root', async () => {
+        (prisma.artist.findUnique as jest.Mock).mockResolvedValue({
+            id: 'ar-1', name: 'Radiohead', mbid: null,
+            albums: [{ id: 'al-1', title: 'Album', tracks: [{ id: 'tr-1', filePath: 'Linked/Album/01.flac' }] }],
+        });
+        (fs.realpathSync as unknown as jest.Mock).mockImplementation((p: string) =>
+            p.includes('/Linked') ? '/external/private' : p);
+
+        const res = await request(app).delete('/artists/ar-1');
+        expect(res.status).toBe(409);
+        expect(touchedPaths()).toEqual([]);
+        expect(prisma.artist.delete).not.toHaveBeenCalled();
     });
 
     it('DELETE /artists/:id still deletes an ordinary artist folder', async () => {
