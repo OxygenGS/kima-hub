@@ -101,6 +101,67 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.24.0
+    {
+        "version": "1.24.0",
+        "title": "Kima Hub 1.24.0 \u2014 Artist Artwork & Faster Pages",
+        "summary": "More reliable artist images, less duplicated work on artist pages, consistent custom album covers, and correct library/discovery navigation in the OxygenGS fork.",
+        "date": "2026-11-13",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.124.artist-photos",
+                "title": "Find the right artist photo",
+                "summary": "Verify Deezer artist matches and retry missing photos from Settings.",
+                "body": "Deezer photo lookup now checks more than the first result and selects artwork only for verified artist-name matches. A manually started recovery retries previously cached misses. The existing local-first repair, saved image choices, and administrator-only workflow are preserved.",
+                "links": [
+                    {
+                        "label": "Artwork settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.124.artist-performance",
+                "title": "Faster artist pages with less duplicate work",
+                "summary": "Reuse already loaded albums and saved artist photos instead of repeating lookups.",
+                "body": "The full artist details response reuses parent album records for track and popular-track data rather than loading the same album relationship for each track. Saved artist images are reused without another database lookup, and similar artists already in the local library use their local portraits where possible. These changes reduce redundant work; exact speed gains depend on the library.",
+                "links": [
+                    {
+                        "label": "Artist library",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.124.custom-covers",
+                "title": "Keep your chosen album covers",
+                "summary": "Preserve custom covers on albums, popular tracks, and refreshed album cards.",
+                "body": "User-selected album covers now take priority both in the first local overview and in the later enriched artist details. Popular tracks and locally played tracks retain the same cover. Album cards update when artwork arrives or changes instead of holding onto a missing or stale image.",
+                "links": [
+                    {
+                        "label": "Album library",
+                        "href": "/collection?tab=albums"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.124.artist-navigation",
+                "title": "Correct local and discovered artist actions",
+                "summary": "Identify artist origin from API results, not the characters in an artist ID.",
+                "body": "An artist whose local ID contains a dash or looks like a UUID no longer gets classified as external solely because of the ID format. The app uses the verified library response or external-discovery fallback to choose the correct actions, picture and navigation behavior.",
+                "links": [
+                    {
+                        "label": "Browse artists",
+                        "href": "/collection?tab=artists"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.23.0
     {
         "version": "1.23.0",

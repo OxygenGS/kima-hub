@@ -49,6 +49,37 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.24.0
+    "1.24.0": {
+        "titles": {
+            "Kima Hub 1.24.0 \u2014 Artist Artwork & Faster Pages": "Kima Hub 1.24.0 \u2014 Artiestenfoto's en snellere pagina's"
+        },
+        "summaries": {
+            "More reliable artist images, less duplicated work on artist pages, consistent custom album covers, and correct library/discovery navigation in the OxygenGS fork.": "Betrouwbaardere artiestenfoto's, minder dubbel werk bij artiestpagina's, consistente eigen albumcovers en correcte navigatie in onze OxygenGS-fork."
+        },
+        "items": {
+            "fork.124.artist-photos": {
+                "title": "Vind de juiste artiestenfoto",
+                "summary": "Controleer Deezer-resultaten en probeer ontbrekende foto's opnieuw te herstellen.",
+                "body": "Deezer controleert nu meerdere zoekresultaten en accepteert alleen foto's van artiesten met een overeenkomende naam. Een handmatig gestarte herstelactie probeert eerder gemiste foto's opnieuw te vinden. Het bestaande herstel, de voorrang voor eigen afbeeldingen en de beheerdersrechten blijven behouden."
+            },
+            "fork.124.artist-performance": {
+                "title": "Snellere artiestpagina's met minder dubbel werk",
+                "summary": "Hergebruik geladen albums en opgeslagen foto's in plaats van dubbele zoekopdrachten.",
+                "body": "De volledige artiestweergave hergebruikt albumgegevens voor nummers en populaire tracks. Daardoor hoeft de database dezelfde albumrelatie niet per nummer opnieuw op te halen. Opgeslagen artiestenfoto's worden direct gebruikt en vergelijkbare artiesten uit de eigen bibliotheek krijgen zo mogelijk hun lokale foto. De daadwerkelijke snelheidswinst hangt af van de omvang van de bibliotheek."
+            },
+            "fork.124.custom-covers": {
+                "title": "Behoud je zelfgekozen albumcovers",
+                "summary": "Eigen covers blijven zichtbaar bij albums, populaire nummers en vernieuwde albumkaarten.",
+                "body": "Een zelfgekozen albumcover heeft voorrang in zowel de snelle eerste weergave als de volledig geladen artiestpagina. Populaire en lokaal afgespeelde nummers houden dezelfde afbeelding. Albumkaarten tonen nieuwe of gewijzigde afbeeldingen meteen in plaats van een oude of ontbrekende cover vast te houden."
+            },
+            "fork.124.artist-navigation": {
+                "title": "Correcte acties voor lokale en ontdekte artiesten",
+                "summary": "Herken de herkomst via de API, niet via het formaat van een artiest-ID.",
+                "body": "Een lokale artiest met streepjes of een UUID als ID wordt niet langer automatisch als externe artiest gezien. De app gebruikt de werkelijke reactie van de bibliotheek of de externe zoekfunctie om de juiste bediening, afbeelding en navigatie te tonen."
+            }
+        }
+    },
     // release-candidate:1.23.0
     "1.23.0": {
         "titles": {
