@@ -18,7 +18,8 @@ vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));
 vi.mock("@/components/cards/MediaCard", () => ({
-    MediaCard: ({ title }: { title: string }) => <div>{title}</div>,
+    MediaCard: ({ title, imageUrl }: { title: string; imageUrl?: string | null }) =>
+        <div data-image-url={imageUrl ?? ""}>{title}</div>,
 }));
 
 import { api } from "@/lib/api";
@@ -89,6 +90,45 @@ describe("artist available-album artwork", () => {
     it("skips artwork lookups when the cover is already known", async () => {
         await renderAlbums([{ ...album, coverUrl: "/already-known.jpg" }]);
         expect(callbacks).toHaveLength(0);
+        await act(async () => { await vi.runAllTimersAsync(); });
+        expect(api.request).not.toHaveBeenCalled();
+    });
+
+    it("uses a newly enriched cover on the same album card without remounting", async () => {
+        await renderAlbums();
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url")).toBe("");
+
+        // Complete artist enrichment has replaced the album prop but kept its ID.
+        await renderAlbums([{ ...album, coverUrl: "/newly-enriched.jpg" }]);
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url"))
+            .toBe("/newly-enriched.jpg");
+        await act(async () => { await vi.runAllTimersAsync(); });
+        expect(api.request).not.toHaveBeenCalled();
+    });
+
+    it("prioritizes a changed stored cover over an earlier lazy-fetched cover", async () => {
+        await renderAlbums();
+        await act(async () => {
+            callbacks[0]([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+        });
+        await act(async () => { await vi.runAllTimersAsync(); });
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url"))
+            .toBe("/cached/artwork.jpg");
+
+        await renderAlbums([{ ...album, coverUrl: "/new-user-choice.jpg" }]);
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url"))
+            .toBe("/new-user-choice.jpg");
+        expect(api.request).toHaveBeenCalledTimes(1);
+    });
+
+    it("updates a known cover when the album props change without a network request", async () => {
+        await renderAlbums([{ ...album, coverUrl: "/first-cover.jpg" }]);
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url"))
+            .toBe("/first-cover.jpg");
+
+        await renderAlbums([{ ...album, coverUrl: "/replacement-cover.jpg" }]);
+        expect(host.querySelector("[data-image-url]")?.getAttribute("data-image-url"))
+            .toBe("/replacement-cover.jpg");
         await act(async () => { await vi.runAllTimersAsync(); });
         expect(api.request).not.toHaveBeenCalled();
     });
