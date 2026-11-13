@@ -5,7 +5,7 @@ import { logger } from "../../utils/logger";
 import { deezerService } from "../../services/deezer";
 import { lidarrService } from "../../services/lidarr";
 import { safeError } from "../../utils/errors";
-import { resolveWithinMusicRoot } from "./trackPath";
+import { LINKED_OUT_REFUSAL, isBehindLinkOut, resolveWithinMusicRoot } from "./trackPath";
 import { parseLimit } from "./paging";
 import fs from "fs";
 import pLimit from "p-limit";
@@ -218,6 +218,10 @@ router.delete("/albums/:id", requireAdmin, async (req, res) => {
 
     if (!album) {
       return res.status(404).json({ error: "Album not found" });
+    }
+
+    if (album.tracks.some((t) => t.filePath && isBehindLinkOut(t.filePath))) {
+      return res.status(409).json({ error: LINKED_OUT_REFUSAL });
     }
 
     let deletedFiles = 0;

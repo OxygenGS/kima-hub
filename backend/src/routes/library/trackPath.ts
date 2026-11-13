@@ -51,3 +51,20 @@ export async function resolveExistingMusicFile(filePath: string): Promise<string
     return null;
   }
 }
+
+/** Refuse deleting a song through a linked folder outside the configured music root. */
+export const LINKED_OUT_REFUSAL =
+  "This music is in a linked folder outside the music library. Remove the link instead.";
+
+/** Deleting a file link itself is safe, but deleting through a linked folder may escape the root. */
+export function isBehindLinkOut(filePath: string): boolean {
+  const absolutePath = resolveWithinMusicRoot(filePath);
+  if (!absolutePath) return false;
+  try {
+    const root = fs.realpathSync(path.resolve(config.music.musicPath));
+    const folder = fs.realpathSync(path.dirname(absolutePath));
+    return folder !== root && !folder.startsWith(root + path.sep);
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+}
