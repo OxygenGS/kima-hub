@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.22.0 — release preparation (unpublished)
+## OxygenGS fork v1.22.0 — released 2026-11-13
 
 Settings Studio replaces Kima's old sprawling Settings page with a focused, responsive configuration experience that matches the OxygenGS fork's dark theme and amber accent color.
 
@@ -14,7 +14,7 @@ Settings Studio replaces Kima's old sprawling Settings page with a focused, resp
 ### Verification and safe updates
 - Settings UI PR #237 passed frontend and backend tests, English/Dutch browser checks, fork compatibility and security workflow checks.
 - No new database migrations, media moves, deleted files, or automatic host changes.
-- Run the exact-main native AMD64/ARM64 image preflight and explicitly review residual vulnerabilities before stable image publication. Existing v1.21.0 installations remain pinned until a complete, independently verified /data backup and controlled update.
+- The [exact-main native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43379684353), [explicit security approval](https://github.com/OxygenGS/kima-hub/actions/runs/43391025604) and [stable multi-architecture publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43391050043) all succeeded for v1.22.0. Residual HIGH/CRITICAL advisories remain in [image security](docs/image-security.md). Before upgrading an existing installation, independently verify a complete `/data` backup and preserve its `/music` mount and Compose identity.
 
 ## OxygenGS fork v1.21.0 — released 2026-11-12
 
