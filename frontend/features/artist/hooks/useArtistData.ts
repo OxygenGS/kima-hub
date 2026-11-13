@@ -6,15 +6,37 @@ import { useDownloadContext } from "@/lib/download-context";
 import { ArtistSource } from "../types";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 
+/**
+ * The API route that resolved the artist is the only reliable indication of
+ * whether it belongs to the library. Local IDs can contain dashes/UUIDs, and
+ * external identifiers can have many shapes. Keep this as frontend-only
+ * metadata on the cached response; it is never written back to the server.
+ */
+type ArtistWithOrigin = { id?: string; __kimaArtistOrigin?: ArtistSource };
+
+export function resolveArtistSource(
+    full: ArtistWithOrigin | null | undefined,
+    overview: unknown,
+): ArtistSource | null {
+    if (full?.__kimaArtistOrigin === "library" || full?.__kimaArtistOrigin === "discovery") {
+        return full.__kimaArtistOrigin;
+    }
+    // Partial overview is fetched only from the authenticated local library.
+    // If neither response proves the origin, do not guess from the ID format.
+    return overview ? "library" : null;
+}
+
 /** Shared full lookup for navigation prefetch and external discovery. */
 export async function fetchArtistDetails(id: string) {
     if (!id) throw new Error("Artist ID is required");
     try {
-        return await api.getArtist(id);
+        const artist = await api.getArtist(id);
+        return { ...artist, __kimaArtistOrigin: "library" as const };
     } catch (error) {
         if ((error as { status?: number }).status !== 404) throw error;
         try {
-            return await api.getArtistDiscovery(id);
+            const artist = await api.getArtistDiscovery(id);
+            return { ...artist, __kimaArtistOrigin: "discovery" as const };
         } catch (discoveryError) {
             if ((discoveryError as { status?: number }).status === 404) return null;
             throw discoveryError;
@@ -80,11 +102,10 @@ export function useArtistData() {
         prevActiveCountRef.current = count;
     }, [downloadStatus.activeDownloads.length, reloadArtist]);
 
-    const source: ArtistSource | null = useMemo(() => {
-        if (!artist) return null;
-        if (overview.data) return "library";
-        return artist.id && !artist.id.includes("-") ? "library" : "discovery";
-    }, [artist, overview.data]);
+    const source: ArtistSource | null = useMemo(
+        () => resolveArtistSource(full.data, overview.data),
+        [full.data, overview.data],
+    );
     const [sortBy, setSortBy] = useState<"year" | "dateAdded">("year");
     const artistAlbums = artist?.albums;
     const albums = useMemo(() => !artistAlbums ? [] : [...artistAlbums].sort((a, b) => {
