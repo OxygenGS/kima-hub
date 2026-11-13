@@ -376,17 +376,30 @@ export function WhatsNewWindow({
             )}
             {item.links && item.links.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                    {item.links.map((link) => (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            onClick={(e) => { if (opensHere(e)) onNavigate?.(); }}
-                            className="min-h-11 py-2.5 px-4 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white text-sm font-medium flex items-center gap-2 transition-colors"
-                        >
-                            {link.label}
-                            <ArrowRight className="w-4 h-4" />
-                        </Link>
-                    ))}
+                    {item.links.map((link) =>
+                        link.href.startsWith("https://") ? (
+                            <a
+                                key={link.href}
+                                href={link.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="min-h-11 py-2.5 px-4 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white text-sm font-medium flex items-center gap-2 transition-colors"
+                            >
+                                {link.label}
+                                <ArrowRight className="w-4 h-4" />
+                            </a>
+                        ) : (
+                            <Link
+                                key={link.href}
+                                href={link.href}
+                                onClick={(e) => { if (opensHere(e)) onNavigate?.(); }}
+                                className="min-h-11 py-2.5 px-4 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white text-sm font-medium flex items-center gap-2 transition-colors"
+                            >
+                                {link.label}
+                                <ArrowRight className="w-4 h-4" />
+                            </Link>
+                        )
+                    )}
                 </div>
             )}
         </section>
