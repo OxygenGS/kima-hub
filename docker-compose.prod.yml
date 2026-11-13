@@ -9,14 +9,14 @@
 # Usage:
 #   1. Set MUSIC_PATH to the absolute path of an existing music directory.
 #      On a NAS/DAS check that the intended external filesystem is mounted.
-#   2. Set VERSION=v1.22.0 for the currently published release until v1.23.0 is approved and published.
+#   2. Set VERSION=v1.23.0 for the published stable release, or pin your current known-good tag.
 #   3. Run: docker compose -f docker-compose.prod.yml up -d
-#   3. Open http://localhost:3030
+#   4. Open http://localhost:3030
 
 services:
   kima:
-    # Fixed, versioned release candidate. Never automatically follow :latest.
-    # Until v1.23.0 is published, set VERSION=v1.22.0 for fresh installs.
+    # Fixed, published stable version. Never automatically follow :latest.
+    # For existing deployments, retain the existing image tag until backups and a restore test pass.
     # Pin VERSION to an existing deployment's tag for any controlled upgrade.
     image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.23.0}
     container_name: kima

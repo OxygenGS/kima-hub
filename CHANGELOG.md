@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.23.0 — release preparation (unpublished)
+## OxygenGS fork v1.23.0 — released 2026-11-13
 
 This release integrates the stable upstream Kima 1.12.3 and 1.12.4 improvements into OxygenGS without replacing the fork, its Settings Studio 2.0, EN/NL locale, custom branding, modern OpenSubsonic app-key support, library performance improvements or its Lidarr/Soulseek features.
 

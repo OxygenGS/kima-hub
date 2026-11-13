@@ -56,4 +56,4 @@ Kima has no telemetry and sends nothing to its author. It contacts outside servi
 
 ## Image vulnerability reports
 
-The published [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0) AMD64/ARM64 preflight reported 327/326 HIGH and 8 CRITICAL advisories without scanner-listed patched versions. The configured security gates passed, but that does **not** mean the image is free of known vulnerabilities. Read the [current image-security report](image-security.md) and [security policy](../SECURITY.md) before exposing a server to untrusted networks.
+The published [v1.23.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.23.0) AMD64/ARM64 preflight reported 327/326 HIGH and 8 CRITICAL advisories without scanner-listed patched versions. The configured security gates passed, but that does **not** mean the image is free of known vulnerabilities. Read the [current image-security report](image-security.md) and [security policy](../SECURITY.md) before exposing a server to untrusted networks.
