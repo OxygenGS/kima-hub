@@ -20,6 +20,7 @@ import { KeyboardShortcutsTooltip } from "./KeyboardShortcutsTooltip";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
 import { VibeToggleButton } from "./VibeToggleButton";
+import { ConnectButton } from "./ConnectButton";
 import { PlayerCover } from "./PlayerCover";
 import styles from "./PlayerDock.module.css";
 
@@ -134,6 +135,7 @@ export function FullPlayer() {
 
                 <div className={styles.tools}>
                     <div className={styles.toolRow}>
+                        <ConnectButton className={styles.button} />
                         <VibeToggleButton unavailable={!hasMedia || playbackType !== "track"}
                             className={styles.button} iconClassName="w-4 h-4"
                             idleClassName="text-[var(--text-secondary)]" activeClassName="text-brand" />

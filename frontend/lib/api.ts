@@ -1,6 +1,22 @@
 import type { MapTrack } from "@/features/vibe/types";
 import { backendUrl } from "@/lib/backend-url";
 
+export interface ConnectDevice {
+    id: string;
+    name: string;
+    status: "idle" | "playing" | "paused";
+    trackTitle: string | null;
+    lastSeen: number;
+}
+
+export type ConnectCommandType = "pause" | "next" | "previous";
+
+export interface ConnectCommand {
+    id: string;
+    type: ConnectCommandType;
+    createdAt: number;
+}
+
 export interface AlbumCoverRecoveryStatus {
     inProgress: boolean;
     total: number;
@@ -1587,6 +1603,30 @@ class ApiClient {
         return this.request<{ queued: number; total: number; message: string }>(
             "/podcasts/refresh-all",
             { method: "POST" }
+        );
+    }
+
+    // Kima Connect - short-lived, account-scoped browser players (no external services).
+    async getConnectDevices() {
+        return this.request<{ devices: ConnectDevice[] }>("/connect/devices");
+    }
+
+    async connectHeartbeat(device: {
+        id: string;
+        name: string;
+        status: "idle" | "playing" | "paused";
+        trackTitle: string | null;
+    }) {
+        return this.request<{ command: ConnectCommand | null; ttlSeconds: number }>("/connect/heartbeat", {
+            method: "POST",
+            body: JSON.stringify(device),
+        });
+    }
+
+    async sendConnectCommand(deviceId: string, type: ConnectCommandType) {
+        return this.request<{ queued: true; commandId: string }>(
+            "/connect/devices/" + encodeURIComponent(deviceId) + "/command",
+            { method: "POST", body: JSON.stringify({ type }) },
         );
     }
 
