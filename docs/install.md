@@ -103,7 +103,7 @@ Create a new API key under **Settings → Native Apps** for each client; use the
 | Channel | Image | Recommendation |
 | :--- | :--- | :--- |
 | Stable | `ghcr.io/oxygengs/kima-hub:v1.24.0` | Versioned production release; pin a tag or immutable digest. |
-| Pre-release | Explicit published `prerelease-…` tag or digest | Testing only. |
+| Historical test images | Older explicitly pinned `prerelease-…` tags, if retained | Unsupported test artifacts; do not treat as stable. |
 | `:latest` | Not automatically promoted | Avoid for controlled updates. |
 
 The [v1.24.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835), [explicit security approval](https://github.com/OxygenGS/kima-hub/actions/runs/43517341212) and [multi-architecture publication](https://github.com/OxygenGS/kima-hub/actions/runs/43517365837) all succeeded. Residual HIGH and CRITICAL advisories remain; automatic scanner success and explicit approval do not establish that an image is vulnerability-free. See the [image security report](image-security.md) and the exact release's native preflight for risk guidance.
