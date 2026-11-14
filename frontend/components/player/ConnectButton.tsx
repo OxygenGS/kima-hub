@@ -69,7 +69,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                 <div
                     role="dialog"
                     aria-label="Kima Connect"
-                    className={`absolute right-0 z-[80] w-[min(350px,90vw)] rounded-2xl border border-white/15 bg-[#171b26] p-4 text-white shadow-2xl ${placement === "below" ? "top-full mt-3" : "bottom-full mb-3"}`}
+                    className={`absolute right-0 z-[80] w-[min(350px,90vw)] rounded-2xl border border-white/15 bg-[#171b26] p-4 text-white shadow-2xl ${placement === "below" ? "fixed left-1/2 top-[calc(var(--topbar-h,56px)+var(--standalone-safe-area-top,0px)+8px)] -translate-x-1/2" : "bottom-full mb-3"}`}
                 >
                     <div className="mb-3 flex items-start justify-between gap-2">
                         <div>
