@@ -31,6 +31,7 @@ export interface ConnectHandoff {
     positionSeconds: number;
     createdAt: number;
     expiresAt: number;
+    serverNow: number;
     status: ConnectHandoffStatus;
 }
 
