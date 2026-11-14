@@ -8,6 +8,7 @@ import { useLanguage } from "@/lib/i18n/language-context";
 import { PlayCountLine } from "@/features/stats/PlayCountLine";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { VibeToggleButton } from "./VibeToggleButton";
+import { ConnectButton } from "./ConnectButton";
 import { usePlayerSwipe } from "./hooks/usePlayerSwipe";
 import { boundedProgress } from "./playerPresentation";
 import styles from "./MobilePlayer.module.css";
@@ -97,6 +98,7 @@ export function MobilePlayer() {
                     </button>
                 </div>
                 {showTools && <div className={styles.menu} data-player-command>
+                    <ConnectButton className={styles.button} />
                     <button type="button" onClick={() => changeMode("minimized")}>
                         <ChevronLeft size={16} aria-hidden="true" />{locale === "nl" ? "Speler verkleinen" : "Minimize player"}
                     </button>
