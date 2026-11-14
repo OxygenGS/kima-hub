@@ -110,7 +110,10 @@ export function ConnectHandoffPrompt({
         setMessage(null);
         setStarting(true);
         const track = tracks[handoff.currentIndex];
-        const position = Math.min(handoff.positionSeconds, Math.max(0, track.duration - 0.5));
+        // Advance the offered position by the time the original player has
+        // continued playing while the receiver considered the transfer.
+        const elapsed = Math.max(0, (Date.now() - handoff.createdAt) / 1000);
+        const position = Math.min(handoff.positionSeconds + elapsed, Math.max(0, track.duration - 0.5));
         const initialGeneration = controller.getSnapshot().generation;
         const expectedPath = api.getStreamUrl(track.id).split("?")[0];
         let handled = false;
