@@ -133,6 +133,8 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 **New in v1.24.0:** verified artist-photo matching, faster artist-page data handling, manual album-cover precedence and more reliable library/discovery navigation. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0).
 
+**Unpublished release candidate:** [v1.24.1](https://github.com/OxygenGS/kima-hub/tree/release/v1.24.1). A targeted scanner reliability patch: permission-denied subfolders no longer prevent readable Lidarr and Soulseek music from being indexed, and historical media inside inaccessible directories is not falsely marked missing. Also removes an obsolete Downtify scanqueue code path. This is **source only** until full CI, native-image preflight and explicit review of residual security findings succeed. Install the published v1.24.0 image until then.
+
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
 ### Docker — new installations only
