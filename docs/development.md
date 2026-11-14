@@ -86,7 +86,7 @@ KIMA_TEST_USERNAME=<user> KIMA_TEST_PASSWORD=<password> \
 npm run test:predeploy
 ```
 
-`npm run test:predeploy` covers sign-in, integrations, the library and playback. `npm run test:dogfood` runs the longer walkthrough. In CI the shorter set runs on a built image when a pull request carries the `run-e2e` label, and the full suite runs nightly.
+`npm run test:predeploy` covers sign-in, integrations, the library and playback. `npm run test:dogfood` runs the longer walkthrough. For a full browser regression, label a pull request `run-e2e` or manually start the **Integration Tests** workflow. The separate Security Checks workflow runs its security E2E suite weekly, manually or for an explicitly `[E2E]`-prefixed PR. The former duplicate daily full-image/nightly workflow has been retired.
 
 ## Building the image
 
@@ -98,4 +98,4 @@ The root `Dockerfile` builds the all-in-one image. `docker-compose.yml` builds t
 
 ## Releases
 
-Stable releases are built from explicitly tagged `main` commits by `.github/workflows/docker-publish.yml`, scanned separately on native AMD64 and ARM64 runners, and published to **GitHub Container Registry (GHCR)** only. The optional **Pre-release Image** workflow is manual-only and does not change the stable tag or `:latest`. See [release and security notes](install.md#release-and-security-notes).
+Stable releases require an exact-commit **Native Release Preflight** (`v112-native-preflight.yml`) with separate native AMD64 and ARM64 scans, a reviewed **Publish approved stable release** gate (`publish-approved-stable.yml`), and the final tag-based Docker publisher (`docker-publish.yml`). Only the approved stable workflow may publish an official release; no workflow advances `:latest` automatically. The former generic prerelease staging workflow and obsolete size audits have been retired. See [release and security notes](install.md#release-and-security-notes).
