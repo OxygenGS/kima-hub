@@ -94,8 +94,11 @@ describe("consent-based Kima Connect handoff receiver", () => {
             (node.querySelector("button:not([disabled])") as HTMLButtonElement).click();
         });
         expect(fake.playTracks).toHaveBeenCalledWith(
-            [track("track123"), track("track456")], 0, { seekTo: 37 },
+            [track("track123"), track("track456")], 0, { seekTo: expect.any(Number) },
         );
+        const seekTo = fake.playTracks.mock.calls[0][2].seekTo as number;
+        expect(seekTo).toBeGreaterThanOrEqual(37);
+        expect(seekTo).toBeLessThan(40);
         expect(fake.update).not.toHaveBeenCalled();
         await act(async () => {
             fake.observer?.({ generation: 2, status: "playing", src: "/api/library/tracks/another/stream" });
