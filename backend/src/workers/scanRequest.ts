@@ -16,8 +16,6 @@ export interface ScanRequest {
     source: string;
     /** Download/album/import ids to reconcile after the walk. */
     downloadId?: string;
-    /** A native Downtify import batch or receipt retry has its own scan key. */
-    downtifyNativeImportId?: string;
     albumMbid?: string;
     artistMbid?: string;
     spotifyImportJobId?: string;
@@ -39,9 +37,8 @@ const LIVE_STATES = new Set(["waiting", "delayed", "active", "paused", "prioriti
 export function scanDedupeKey(req: ScanRequest): string {
     // BullMQ forbids ':' in custom job ids (it owns that character for
     // Redis key layout), so the namespace separator is '-'. Scope ids are
-    // cuids/mbids, never containing '-', so scopes stay prefix-free.
+    // and no retired external-import connector can create a dedicated scope.
     const scopeId =
-        (req.downtifyNativeImportId ? `downtify-${req.downtifyNativeImportId}` : undefined) ??
         req.downloadId ??
         req.albumMbid ??
         req.artistMbid ??
