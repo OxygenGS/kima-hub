@@ -37,10 +37,10 @@ beforeEach(() => {
 describe("Kima Connect API", () => {
     it("rejects anonymous presence, listing and remote commands", async () => {
         expect((await request(app).get("/api/connect/devices")).status).toBe(401);
-        expect((await request(app).post("/api/connect/heartbeat").mockSend({
+        expect((await request(app).post("/api/connect/heartbeat").send({
             id: A, name: "Kima desktop", status: "playing", trackTitle: null,
         })).status).toBe(401);
-        expect((await request(app).post("/api/connect/devices/" + B + "/command").mockSend({ type: "pause" })).status).toBe(401);
+        expect((await request(app).post("/api/connect/devices/" + B + "/command").send({ type: "pause" })).status).toBe(401);
         expect(mockList).not.toHaveBeenCalled();
         expect(mockSend).not.toHaveBeenCalled();
     });
@@ -58,10 +58,10 @@ describe("Kima Connect API", () => {
             { id: A, name: "Phone", status: "running", trackTitle: null },
             { id: A, name: "Phone", status: "idle", trackTitle: null, userId: "bob" },
         ]) {
-            await request(app).post("/api/connect/heartbeat").set("x-test-user", "alice").mockSend(bad).expect(400);
+            await request(app).post("/api/connect/heartbeat").set("x-test-user", "alice").send(bad).expect(400);
         }
         expect(mockPulse).not.toHaveBeenCalled();
-        await request(app).post("/api/connect/heartbeat").set("x-test-user", "alice").mockSend({
+        await request(app).post("/api/connect/heartbeat").set("x-test-user", "alice").send({
             id: A, name: "Phone", status: "playing", trackTitle: "Song",
         }).expect(200);
         expect(mockPulse).toHaveBeenCalledWith("alice", expect.objectContaining({ id: A }));
@@ -69,19 +69,19 @@ describe("Kima Connect API", () => {
 
     it("rejects unknown commands, cross-account targets and stale players", async () => {
         await request(app).post("/api/connect/devices/" + B + "/command").set("x-test-user", "alice")
-            .mockSend({ type: "deleteFiles" }).expect(400);
+            .send({ type: "deleteFiles" }).expect(400);
         await request(app).post("/api/connect/devices/invalid/command").set("x-test-user", "alice")
-            .mockSend({ type: "pause" }).expect(400);
+            .send({ type: "pause" }).expect(400);
         expect(mockSend).not.toHaveBeenCalled();
         mockSend.mockResolvedValueOnce(null);
         await request(app).post("/api/connect/devices/" + B + "/command").set("x-test-user", "bob")
-            .mockSend({ type: "pause" }).expect(404);
+            .send({ type: "pause" }).expect(404);
         expect(mockSend).toHaveBeenCalledWith("bob", B, "pause");
     });
 
     it("returns 202 for queued commands; does not claim the browser already executed them", async () => {
         const res = await request(app).post("/api/connect/devices/" + B + "/command")
-            .set("x-test-user", "alice").mockSend({ type: "next" }).expect(202);
+            .set("x-test-user", "alice").send({ type: "next" }).expect(202);
         expect(res.body).toEqual({ queued: true, commandId: "cmd1" });
         expect(mockSend).toHaveBeenCalledWith("alice", B, "next");
         expect(res.headers["cache-control"]).toBe("private, no-store");
