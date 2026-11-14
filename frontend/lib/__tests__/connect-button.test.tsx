@@ -6,13 +6,14 @@ import { ConnectButton } from "@/components/player/ConnectButton";
 const fake = vi.hoisted(() => ({
     getDevices: vi.fn(),
     sendCommand: vi.fn(),
+    authUser: { id: "alice" } as { id: string },
 }));
 
 vi.mock("@/lib/api", () => ({
     api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand },
 }));
 vi.mock("@/lib/auth-context", () => ({
-    useAuth: () => ({ user: { id: "alice" } }),
+    useAuth: () => ({ user: fake.authUser }),
 }));
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "en" }),
@@ -37,6 +38,7 @@ let root: Root;
 
 beforeEach(() => {
     vi.clearAllMocks();
+    fake.authUser = { id: "alice" };
     fake.getDevices.mockResolvedValue({ devices: [own, remote] });
     fake.sendCommand.mockResolvedValue({ queued: true, commandId: "cmd1" });
     host = document.createElement("div");
@@ -87,6 +89,21 @@ describe("Kima Connect device menu", () => {
         expect(pause.disabled).toBe(true);
         expect(next.disabled).toBe(true);
         expect(fake.sendCommand).not.toHaveBeenCalled();
+    });
+
+    it("never displays the previous account's devices after switching accounts", async () => {
+        await open();
+        expect(host.textContent).toContain("Kima mobile");
+
+        fake.authUser = { id: "bob" };
+        fake.getDevices.mockImplementation(() => new Promise(() => {}));
+        await act(async () => {
+            root.render(<ConnectButton />);
+            await Promise.resolve();
+        });
+
+        expect(host.textContent).not.toContain("Kima mobile");
+        expect(host.querySelector('[aria-label="Pause - Kima mobile"]')).toBeNull();
     });
 
     it("does not send an instruction when the user only opens the menu", async () => {
