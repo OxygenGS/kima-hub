@@ -13,34 +13,41 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
     const { user } = useAuth();
     const [open, setOpen] = useState(false);
     const [devices, setDevices] = useState<ConnectDevice[]>([]);
+    const [devicesOwnerId, setDevicesOwnerId] = useState<string | null>(null);
     const [ownId, setOwnId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
 
     const nl = locale === "nl";
+    const userId = user?.id ?? null;
     const refresh = useCallback(async () => {
+        if (!userId) return;
         try {
             const response = await api.getConnectDevices();
             setDevices(response.devices);
+            setDevicesOwnerId(userId);
             setMessage(null);
         } catch {
+            setDevices([]);
+            setDevicesOwnerId(null);
             setMessage(nl ? "Apparaten niet bereikbaar." : "Unable to reach devices.");
         } finally {
             setLoading(false);
         }
-    }, [nl]);
+    }, [nl, userId]);
 
     useEffect(() => {
-        if (!open || !user?.id) return;
-        setOwnId(getConnectDeviceId(user.id));
+        if (!open || !userId) return;
+        setOwnId(getConnectDeviceId(userId));
         setLoading(true);
         void refresh();
         const interval = window.setInterval(() => { void refresh(); }, 10_000);
         return () => window.clearInterval(interval);
-    }, [open, refresh, user?.id]);
+    }, [open, refresh, userId]);
 
     const send = async (id: string, type: ConnectCommandType) => {
+        if (!userId || devicesOwnerId !== userId) return;
         setBusy(id);
         setMessage(null);
         try {
@@ -65,7 +72,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
             >
                 <Cast size={18} aria-hidden="true" />
             </button>
-            {open && (
+            {open && userId && (
                 <div
                     role="dialog"
                     aria-label="Kima Connect"
@@ -98,7 +105,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                             </button>
                         </div>
                     </div>
-                    {devices.length === 0 ? (
+                    {(devicesOwnerId === userId ? devices : []).length === 0 ? (
                         <p className="rounded-lg bg-white/5 p-3 text-xs text-white/70">
                             {loading
                                 ? (nl ? "Apparaten laden..." : "Loading devices...")
@@ -106,7 +113,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                         </p>
                     ) : (
                         <ul className="max-h-60 space-y-2 overflow-y-auto">
-                            {devices.map(device => {
+                            {devicesOwnerId === userId && devices.map(device => {
                                 const local = device.id === ownId;
                                 return (
                                     <li key={device.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
