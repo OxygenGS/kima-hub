@@ -8,7 +8,7 @@ import { useLanguage } from "@/lib/i18n/language-context";
 import { getConnectDeviceId } from "@/lib/connect-device-id";
 
 /** A small account-scoped remote-control surface. Playback stays on the target browser. */
-export function ConnectButton({ className = "" }: { className?: string }) {
+export function ConnectButton({ className = "", placement = "above" }: { className?: string; placement?: "above" | "below" }) {
     const { locale } = useLanguage();
     const { user } = useAuth();
     const [open, setOpen] = useState(false);
@@ -69,7 +69,7 @@ export function ConnectButton({ className = "" }: { className?: string }) {
                 <div
                     role="dialog"
                     aria-label="Kima Connect"
-                    className="absolute bottom-full right-0 z-[80] mb-3 w-[min(350px,90vw)] rounded-2xl border border-white/15 bg-[#171b26] p-4 text-white shadow-2xl"
+                    className={`absolute right-0 z-[80] w-[min(350px,90vw)] rounded-2xl border border-white/15 bg-[#171b26] p-4 text-white shadow-2xl ${placement === "below" ? "top-full mt-3" : "bottom-full mb-3"}`}
                 >
                     <div className="mb-3 flex items-start justify-between gap-2">
                         <div>
