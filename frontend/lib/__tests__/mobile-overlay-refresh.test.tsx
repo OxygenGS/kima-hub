@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
     pause: vi.fn(), resume: vi.fn(), next: vi.fn(), previous: vi.fn(), mode: vi.fn(), close: vi.fn(),
     seek: vi.fn(), forward: vi.fn(), back: vi.fn(), shuffle: vi.fn(), toggleRepeat: vi.fn(), lyricsToggle: vi.fn(),
 }));
+// Kima Connect has its own authenticated-player tests; transport tests stay presentation-only.
+vi.mock("@/components/player/ConnectButton", () => ({ ConnectButton: () => null }));
 vi.mock("@/hooks/usePlayerControls", () => ({ usePlayerControls: () => ({
     currentTrack: state.hasMedia && state.type === "track" ? { id: state.id } : null,
     currentPodcast: state.hasMedia && state.type === "podcast" ? { id: state.id } : null,
