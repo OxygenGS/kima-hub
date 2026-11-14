@@ -2,7 +2,36 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.23.0 — current published release (13 November 2026)
+## v1.24.0 — current published release (13 November 2026)
+
+The [v1.24.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835) verified exact `main` source SHA `8f4402d0c1c25adbbc6edfe4afb8d97f9d75aa67`. Native AMD64 and ARM64 AIO images built successfully and passed configured architecture, source revision, secret and fixable-vulnerability gates. The [explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/43517341212) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43517365837). The published stable tag is `ghcr.io/oxygengs/kima-hub:v1.24.0`.
+
+| Native v1.24.0 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 327 | 8 | 0 |
+| linux/arm64 | 326 | 8 | 0 |
+
+**Unresolved security risk:** These results do **not** mean the published image is free of vulnerabilities or that the affected code is unreachable. The Trivy reports list no patched versions for the HIGH/CRITICAL issues; scanner availability is not proof that no remediation or upstream fix exists. The following eight CRITICAL advisory identifiers remain present on both architectures (same as the v1.23.0 preflight):
+
+| Advisory | Reported package | Trivy status |
+| :--- | :--- | :--- |
+| CVE-2023-45853 | `zlib1g` | will_not_fix |
+| CVE-2023-6879 | `libaom3` | affected |
+| CVE-2025-47917 | `libmbedcrypto7` | end_of_life |
+| CVE-2025-7458 | `libsqlite3-0` | affected |
+| CVE-2026-34873 | `libmbedcrypto7` | affected |
+| CVE-2026-34875 | `libmbedcrypto7` | affected |
+| CVE-2026-58016 | `libglib2.0-0` | fix_deferred |
+| CVE-2026-6653 | `libxml2` | fix_deferred |
+
+- [AMD64 vulnerability evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835/artifacts/14080463333)
+- [ARM64 vulnerability evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835/artifacts/14079963241)
+- [Recorded advisory and exposure review](https://github.com/OxygenGS/kima-hub/pull/250#issuecomment-6866100706)
+- [Published GitHub Release v1.24.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0)
+
+These counts describe the preflight images and that scanner database snapshot, not an independent re-scan of every deployed registry digest. Restrict network access, protect application secrets, patch the host and reverse proxy, and maintain a verified separately restorable `/data` backup.
+
+## Historical: v1.23.0 — published 13 November 2026
 
 The [v1.23.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43441027590) verified the exact `main` source commit `7357993d70bfe4c51eca4e5f54cb813a31c17f8a`, native AMD64/ARM64 image architecture and revision labels, the configured secret scan and the vulnerability gate. [Explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/43444147613) preceded the [successful multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43444182159). The stable image is `ghcr.io/oxygengs/kima-hub:v1.23.0`.
 
