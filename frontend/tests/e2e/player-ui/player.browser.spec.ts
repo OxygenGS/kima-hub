@@ -17,7 +17,7 @@ test.beforeAll(async () => {
     const mocked = new Set([
         "next/link", "@/hooks/usePlayerControls", "@/hooks/useMediaInfo", "@/hooks/useMediaQuery",
         "@/hooks/useLyricsToggle", "@/lib/i18n/language-context", "@/features/stats/PlayCountLine",
-        "@/components/ui/CachedImage", "@/components/lyrics/LyricsView", "./SleepTimer", "./SeekSlider", "./VibeToggleButton",
+        "@/components/ui/CachedImage", "@/components/lyrics/LyricsView", "./SleepTimer", "./SeekSlider", "./VibeToggleButton", "./ConnectButton",
     ]);
     const outDir = resolve(root, "test-results/player-ui-bundle");
     await build({
