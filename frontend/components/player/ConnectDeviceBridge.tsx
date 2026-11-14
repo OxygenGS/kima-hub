@@ -27,7 +27,7 @@ export function ConnectDeviceBridge() {
     const controls = useAudioControls();
     const latest = useRef({ state, playback, controls });
     const handledSourceHandoffs = useRef(new Set<string>());
-    const [incoming, setIncoming] = useState<{ ownerId: string; handoff: ConnectHandoff } | null>(null);
+    const [incoming, setIncoming] = useState<{ ownerId: string; handoff: ConnectHandoff; receivedAtMs: number } | null>(null);
 
     useEffect(() => {
         latest.current = { state, playback, controls };
@@ -91,7 +91,7 @@ export function ConnectDeviceBridge() {
                     setIncoming(previous => {
                         if (!handoff) return previous?.ownerId === ownerId ? null : previous;
                         if (previous?.ownerId === ownerId && previous.handoff.id === handoff.id) return previous;
-                        return { ownerId, handoff };
+                        return { ownerId, handoff, receivedAtMs: Date.now() };
                     });
                 }
 
@@ -105,7 +105,7 @@ export function ConnectDeviceBridge() {
                             if (first) handledSourceHandoffs.current.delete(first);
                         }
                         const expectedTime = handoff.positionSeconds +
-                            (Date.now() - handoff.createdAt) / 1000;
+                            Math.max(0, (handoff.serverNow - handoff.createdAt) / 1000);
                         const stillOriginalPlayback = recent.playback.isPlaying &&
                             recent.state.playbackType === "track" &&
                             recent.state.currentTrack?.id === handoff.sourceTrackId &&
@@ -138,6 +138,7 @@ export function ConnectDeviceBridge() {
         <ConnectHandoffPrompt
             key={incoming.handoff.id}
             handoff={incoming.handoff}
+            receivedAtMs={incoming.receivedAtMs}
             deviceId={deviceId}
             onDismiss={() => setIncoming(null)}
         />
