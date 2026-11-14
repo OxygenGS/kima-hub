@@ -9,7 +9,7 @@ Docker volume, reverse proxy, IP address or external subscription service.
 Kima Connect adds an account-private device menu to desktop and mobile playback.
 Signed-in Kima browser tabs announce a temporary, per-user browser identity and
 current playback status. The menu shows only that account's active players and
-supports remote **Pause**, **Previous**, and **Next** commands on another tab.
+supports remote **Pause**, **Previous**, and **Next** commands on another actively playing tab. Paused/idle devices remain visible but their transport buttons are disabled. The receiver also checks its actual player state before a skip; a delayed command cannot start audio on a paused browser.
 
 - The existing web player, queue, gapless engine and playback-state synchronizer
   remain the owners of audio. Connect does not create a second player.
