@@ -6,6 +6,7 @@ import { api, type ConnectHandoff } from "@/lib/api";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioController } from "@/lib/audio-controller-context";
 import type { Track } from "@/lib/audio-state-context";
+import type { EngineSnapshot } from "@/lib/audio-engine-policy";
 import { useLanguage } from "@/lib/i18n/language-context";
 
 const FETCH_BATCH_SIZE = 5;
@@ -125,7 +126,7 @@ export function ConnectHandoffPrompt({
         let handled = false;
         let unsubscribe = () => {};
         let timeout = 0;
-        const onSnapshot = (snap: ReturnType<typeof controller.getSnapshot>) => {
+        const onSnapshot = (snap: EngineSnapshot) => {
             if (handled || snap.generation <= initialGeneration || snap.status !== "playing" ||
                 snap.src?.split("?")[0] !== expectedPath) return;
             handled = true;
