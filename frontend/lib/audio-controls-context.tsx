@@ -40,7 +40,7 @@ function operationTrackIds(operation: VibeOperation): string[] {
 interface AudioControlsContextType {
     // Track methods
     playTrack: (track: Track) => void;
-    playTracks: (tracks: Track[], startIndex?: number) => void;
+    playTracks: (tracks: Track[], startIndex?: number, options?: { seekTo?: number }) => void;
 
     // Audiobook methods
     playAudiobook: (audiobook: Audiobook) => void;
@@ -280,7 +280,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     );
 
     const playTracks = useCallback(
-        (tracks: Track[], startIndex = 0, { skipOperationCheck = false } = {}) => {
+        (tracks: Track[], startIndex = 0, { skipOperationCheck = false, seekTo }: { skipOperationCheck?: boolean; seekTo?: number } = {}) => {
             if (tracks.length === 0) return;
 
             if (!skipOperationCheck && state.activeOperation.type !== 'idle') {
@@ -297,14 +297,14 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             state.setQueue(tracks);
             state.setCurrentIndex(startIndex);
             state.setCurrentTrack(tracks[startIndex]);
-            setCurrentTimeRef.current(0);
+            setCurrentTimeRef.current(seekTo ?? 0);
             state.setRepeatOneCount(0);
             state.setShuffleIndices(
                 generateShuffleIndices(tracks.length, startIndex)
             );
 
             const streamUrl = api.getStreamUrl(tracks[startIndex].id);
-            controllerRef.current?.load(streamUrl, { autoplay: true, expectedDurationS: tracks[startIndex].duration });
+            controllerRef.current?.load(streamUrl, { autoplay: true, seekTo, expectedDurationS: tracks[startIndex].duration });
         },
         [state, generateShuffleIndices]
     );
