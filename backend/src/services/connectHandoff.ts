@@ -29,7 +29,7 @@ export interface ConnectHandoff {
     createdAt: number;
     expiresAt: number;
 }
-export interface HandoffView extends ConnectHandoff { status: HandoffStatus; }
+export interface HandoffView extends ConnectHandoff { status: HandoffStatus; serverNow: number; }
 export interface HandoffOffer {
     sourceDeviceId: string;
     targetDeviceId: string;
@@ -80,12 +80,12 @@ async function liveDevice(userId: string, id: string, now: number): Promise<Conn
     }
 }
 
-async function readOffer(userId: string, offerId: string): Promise<HandoffView | null> {
+async function readOffer(userId: string, offerId: string, now: number): Promise<HandoffView | null> {
     const [raw, status] = await redisClient.mget(recordKey(userId, offerId), statusKey(userId, offerId));
     if (!raw || !status || !VALID_STATUSES.has(status)) return null;
     try {
         const request = JSON.parse(raw) as ConnectHandoff;
-        return request.id === offerId ? { ...request, status: status as HandoffStatus } : null;
+        return request.id === offerId ? { ...request, status: status as HandoffStatus, serverNow: now } : null;
     } catch {
         return null;
     }
@@ -148,7 +148,7 @@ export async function getIncomingConnectHandoff(
     if (!await liveDevice(userId, targetDeviceId, now)) return null;
     const id = await redisClient.get(targetKey(userId, targetDeviceId));
     if (!id) return null;
-    const offer = await readOffer(userId, id);
+    const offer = await readOffer(userId, id, now);
     return offer && offer.targetDeviceId === targetDeviceId &&
         offer.status === "pending" && now < offer.expiresAt ? offer : null;
 }
@@ -160,7 +160,7 @@ export async function getOutgoingConnectHandoff(
     if (!await liveDevice(userId, sourceDeviceId, now)) return null;
     const id = await redisClient.get(sourceKey(userId, sourceDeviceId));
     if (!id) return null;
-    const offer = await readOffer(userId, id);
+    const offer = await readOffer(userId, id, now);
     return offer && offer.sourceDeviceId === sourceDeviceId && now < offer.expiresAt ? offer : null;
 }
 
@@ -169,7 +169,7 @@ type Transition = "started" | "declined" | "cancelled" | "observed";
 export async function transitionConnectHandoff(
     userId: string, offerId: string, deviceId: string, to: Transition, now = Date.now(),
 ): Promise<HandoffStatus> {
-    const offer = await readOffer(userId, offerId);
+    const offer = await readOffer(userId, offerId, now);
     if (!offer || now >= offer.expiresAt) throw new HandoffUnavailableError("Handoff expired");
     const isSource = to === "cancelled" || to === "observed";
     if ((isSource ? offer.sourceDeviceId : offer.targetDeviceId) !== deviceId) {
