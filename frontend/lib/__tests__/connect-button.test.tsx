@@ -7,13 +7,14 @@ const fake = vi.hoisted(() => ({
     getDevices: vi.fn(),
     sendCommand: vi.fn(),
     offerHandoff: vi.fn(),
+    updateHandoff: vi.fn(),
     playing: true,
     currentTime: 42,
     authUser: { id: "alice" } as { id: string },
 }));
 
 vi.mock("@/lib/api", () => ({
-    api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand, offerConnectHandoff: fake.offerHandoff },
+    api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand, offerConnectHandoff: fake.offerHandoff, updateConnectHandoff: fake.updateHandoff },
 }));
 vi.mock("@/lib/auth-context", () => ({
     useAuth: () => ({ user: fake.authUser }),
@@ -58,6 +59,7 @@ beforeEach(() => {
     fake.getDevices.mockResolvedValue({ devices: [own, remote] });
     fake.sendCommand.mockResolvedValue({ queued: true, commandId: "cmd1" });
     fake.offerHandoff.mockResolvedValue({ id: "handoff1", expiresAt: 12345 });
+    fake.updateHandoff.mockResolvedValue({ status: "cancelled" });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -138,6 +140,23 @@ describe("Kima Connect device menu", () => {
         });
         expect(host.textContent).toContain("Confirm playback on the other device");
         expect(fake.sendCommand).not.toHaveBeenCalled();
+    });
+
+    it("allows cancelling an offered transfer before the receiver accepts", async () => {
+        await open();
+        await act(async () => {
+            (host.querySelector('[title="Offer playback transfer to this device"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain("Cancel pending transfer");
+        await act(async () => {
+            const button = Array.from(host.querySelectorAll("button"))
+                .find(b => b.textContent?.includes("Cancel pending transfer"));
+            button?.click();
+            await Promise.resolve();
+        });
+        expect(fake.updateHandoff).toHaveBeenCalledWith("handoff1", own.id, "cancelled");
+        expect(host.textContent).toContain("Transfer cancelled");
     });
 
     it("disables transfer if no audio is currently playing", async () => {
