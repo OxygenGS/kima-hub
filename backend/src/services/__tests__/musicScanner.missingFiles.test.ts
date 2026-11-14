@@ -391,3 +391,54 @@ describe("scan with an unreadable file", () => {
         expect(await findTrack()).toBeNull();
     });
 });
+
+describe("partial scans across an unreadable import directory", () => {
+    it("indexes new accessible tracks without marking the locked folder's existing tracks missing", async () => {
+        const scanner = new MusicScannerService();
+        await scanner.scanLibrary(musicDir);
+        const originalTrack = await findTrack();
+        expect(originalTrack).not.toBeNull();
+
+        const blocked = path.dirname(path.dirname(trackFile));
+        const newRel = path.join("NewSource", "02 - New.flac");
+        const newPath = path.join(musicDir, newRel);
+        fs.mkdirSync(path.dirname(newPath), { recursive: true });
+        fs.writeFileSync(newPath, "new audio bytes");
+
+        const metadata = fakeMetadata();
+        metadata.common.title = "New Track";
+        metadata.common.track.no = 2;
+        (parseFile as jest.Mock).mockResolvedValue(metadata);
+
+        const originalReaddir = fs.promises.readdir.bind(fs.promises);
+        const originalAccess = fs.promises.access.bind(fs.promises);
+        const readdirSpy = jest.spyOn(fs.promises, "readdir").mockImplementation((async (...args: any[]) => {
+            if (String(args[0]) === blocked) {
+                throw Object.assign(new Error("EACCES: permission denied, scandir"), { code: "EACCES" });
+            }
+            return (originalReaddir as any)(...args);
+        }) as any);
+        const accessSpy = jest.spyOn(fs.promises, "access").mockImplementation((async (...args: any[]) => {
+            if (String(args[0]) === trackFile) {
+                throw Object.assign(new Error("EACCES: permission denied, access"), { code: "EACCES" });
+            }
+            return (originalAccess as any)(...args);
+        }) as any);
+
+        try {
+            const result = await scanner.scanLibrary(musicDir);
+            expect(result.tracksAdded).toBe(1);
+            expect(result.tracksMissing).toBe(0);
+            expect(result.errors).toEqual([{
+                file: "Artist",
+                error: expect.stringContaining("Skipped unreadable directory (EACCES)"),
+            }]);
+            expect((await findTrack())?.missingSince).toBeNull();
+            expect(await prisma.track.findUnique({ where: { filePath: newRel } })).not.toBeNull();
+        } finally {
+            readdirSpy.mockRestore();
+            accessSpy.mockRestore();
+            await prisma.track.deleteMany({ where: { filePath: newRel } });
+        }
+    });
+});

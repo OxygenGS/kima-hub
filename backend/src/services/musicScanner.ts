@@ -170,7 +170,23 @@ export class MusicScannerService {
             },
         });
 
-        const audioFiles = await this.findAudioFiles(musicPath, existingTracks.map((t) => t.filePath));
+        // If one legacy/import directory is inaccessible, keep indexing other
+        // directories. Never mark rows inside the unreadable subtree missing.
+        // An unreadable library ROOT still aborts the entire scan.
+        const unreadableDirectories: string[] = [];
+        const audioFiles = await this.findAudioFiles(
+            musicPath,
+            existingTracks.map((t) => t.filePath),
+            (directory, error) => {
+                const relativeDirectory = path.relative(musicPath, directory);
+                unreadableDirectories.push(relativeDirectory);
+                result.errors.push({
+                    file: relativeDirectory,
+                    error: `Skipped unreadable directory (${error.code || "access denied"}); existing tracks preserved`,
+                });
+                logger.warn(`[Scanner] Skipping unreadable directory: ${directory} (${error.code})`);
+            }
+        );
         logger.debug(`Found ${audioFiles.length} audio files`);
 
         const tracksByPath = new Map(
@@ -279,7 +295,11 @@ export class MusicScannerService {
         }
 
         const pathCandidates = existingTracks.filter(
-            (t) => !scannedPaths.has(t.filePath)
+            (t) => !scannedPaths.has(t.filePath) &&
+                !unreadableDirectories.some(
+                    (directory) => t.filePath === directory ||
+                        t.filePath.startsWith(directory + path.sep)
+                )
         );
 
         if (pathCandidates.length > 0) {
@@ -600,9 +620,15 @@ export class MusicScannerService {
      * it moves with the link and not with its target. One real file is one song, however many paths reach it: real
      * paths come first, then links, the ones already holding a recorded song before the rest, so a new link never
      * takes a song from the path it is filed under. A link that cannot be followed is skipped and logged, never fatal;
-     * a real folder that cannot be read still stops the scan, since nothing it holds could be told from gone.
+     * unreadable real subfolders are reported and excluded from missing-track
+     * detection; an unreadable library root or unexpected I/O failure still stops
+     * the scan to avoid treating inaccessible media as missing.
      */
-    private async findAudioFiles(dirPath: string, recordedPaths: string[]): Promise<string[]> {
+    private async findAudioFiles(
+        dirPath: string,
+        recordedPaths: string[],
+        onUnreadableDirectory?: (directory: string, error: NodeJS.ErrnoException) => void
+    ): Promise<string[]> {
         const realRoot = await fs.promises.realpath(dirPath);
         const files: string[] = [];
         const walkedFolders = new Set<string>();
@@ -620,7 +646,14 @@ export class MusicScannerService {
             try {
                 entries = await fs.promises.readdir(dir, { withFileTypes: true });
             } catch (err) {
-                if (!viaLink) throw err;
+                if (!viaLink) {
+                    const error = err as NodeJS.ErrnoException;
+                    if (dir !== dirPath && (error.code === "EACCES" || error.code === "EPERM")) {
+                        onUnreadableDirectory?.(dir, error);
+                        return;
+                    }
+                    throw err;
+                }
                 skipped.push(`${dir}: ${(err as Error).message}`);
                 return;
             }

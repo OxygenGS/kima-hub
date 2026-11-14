@@ -60,3 +60,73 @@ it("skips broken links and loops without hanging or aborting the scan", async ()
 
     expect(await listAudio()).toEqual([song]);
 });
+
+it("skips unreadable real subfolders while continuing other files and reporting the blocked subtree", async () => {
+    const blocked = path.join(music, "singles", "downtify");
+    fs.mkdirSync(blocked, { recursive: true });
+    fs.writeFileSync(path.join(blocked, "old.flac"), "old");
+    const newSong = path.join(music, "new-song.flac");
+    fs.writeFileSync(newSong, "new");
+
+    const original = fs.promises.readdir.bind(fs.promises);
+    const spy = jest.spyOn(fs.promises, "readdir").mockImplementation((async (...args: any[]) => {
+        if (String(args[0]) === blocked) {
+            throw Object.assign(new Error("EACCES: permission denied, scandir"), { code: "EACCES" });
+        }
+        return (original as any)(...args);
+    }) as any);
+    try {
+        const skipped: string[] = [];
+        const files = await (new MusicScannerService() as any).findAudioFiles(
+            music, [], (dir: string, error: NodeJS.ErrnoException) => {
+                expect(error.code).toBe("EACCES");
+                skipped.push(dir);
+            },
+        );
+        expect(files).toEqual([newSong]);
+        expect(skipped).toEqual([blocked]);
+    } finally {
+        spy.mockRestore();
+    }
+});
+
+it("keeps unreadable library roots and unexpected disk errors fatal", async () => {
+    const child = path.join(music, "Album");
+    fs.mkdirSync(child);
+    const original = fs.promises.readdir.bind(fs.promises);
+    const spy = jest.spyOn(fs.promises, "readdir").mockImplementation((async (...args: any[]) => {
+        const directory = String(args[0]);
+        if (directory === music || directory === child) {
+            throw Object.assign(
+                new Error("Cannot read directory"),
+                { code: directory === music ? "EACCES" : "EIO" },
+            );
+        }
+        return (original as any)(...args);
+    }) as any);
+    try {
+        const skipped: string[] = [];
+        await expect(
+            (new MusicScannerService() as any).findAudioFiles(
+                music, [], (dir: string) => skipped.push(dir),
+            )
+        ).rejects.toThrow("Cannot read directory");
+        expect(skipped).toEqual([]);
+
+        // The root is now available, but an I/O error in a child still fails closed.
+        spy.mockImplementation((async (...args: any[]) => {
+            if (String(args[0]) === child) {
+                throw Object.assign(new Error("I/O error"), { code: "EIO" });
+            }
+            return (original as any)(...args);
+        }) as any);
+        await expect(
+            (new MusicScannerService() as any).findAudioFiles(
+                music, [], (dir: string) => skipped.push(dir),
+            )
+        ).rejects.toThrow("I/O error");
+        expect(skipped).toEqual([]);
+    } finally {
+        spy.mockRestore();
+    }
+});
