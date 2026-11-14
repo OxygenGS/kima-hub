@@ -8,9 +8,9 @@ import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { getConnectDeviceId, getConnectDeviceName } from "@/lib/connect-device-id";
 import { ConnectHandoffPrompt } from "@/components/player/ConnectHandoffPrompt";
+import { shouldPauseSourceForHandoff } from "@/lib/connect-handoff-policy";
 
 const PULSE_MS = 7_000;
-const MAX_SOURCE_DRIFT_SECONDS = 20;
 
 /**
  * Browser presence + local command execution. Every remote control remains
@@ -104,13 +104,12 @@ export function ConnectDeviceBridge() {
                             const first = handledSourceHandoffs.current.values().next().value;
                             if (first) handledSourceHandoffs.current.delete(first);
                         }
-                        const expectedTime = handoff.positionSeconds +
-                            Math.max(0, (handoff.serverNow - handoff.createdAt) / 1000);
-                        const stillOriginalPlayback = recent.playback.isPlaying &&
-                            recent.state.playbackType === "track" &&
-                            recent.state.currentTrack?.id === handoff.sourceTrackId &&
-                            Math.abs(recent.playback.currentTime - expectedTime) <= MAX_SOURCE_DRIFT_SECONDS;
-                        if (stillOriginalPlayback) recent.controls.pause();
+                        if (shouldPauseSourceForHandoff(handoff, {
+                            isPlaying: recent.playback.isPlaying,
+                            playbackType: recent.state.playbackType,
+                            currentTrackId: recent.state.currentTrack?.id ?? null,
+                            currentTime: recent.playback.currentTime,
+                        })) recent.controls.pause();
                     }
                     // Acknowledged even if the source has changed tracks, so no
                     // later request can unexpectedly pause a new listening session.
