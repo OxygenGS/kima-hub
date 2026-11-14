@@ -8,17 +8,23 @@
 
 A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
 
-[![Stable release](https://img.shields.io/badge/stable-v1.24.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0)
+[![Stable release](https://img.shields.io/badge/stable-v1.24.1-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![Platforms](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-41434f?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0-555?style=flat-square)](LICENSE)
 
-**[What's new](#whats-new-in-v1240) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
+**[What's new](#whats-new-in-v1241) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
 
 </div>
 
 ---
+
+## What's new in v1.24.1
+
+**Library scans that recover from restricted subfolders.** Kima keeps indexing readable music when a nested folder rejects access, reports a warning, and preserves existing tracks inside skipped locations instead of mistaking them for deleted files. This patch also removes an obsolete Downtify scanqueue code path while preserving historical database migrations.
+
+[Published release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1) · [Exact-main AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191) · [Security findings](docs/image-security.md)
 
 ## What's new in v1.24.0
 
@@ -127,13 +133,13 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 ## Quick start
 
-**Current stable version:** [v1.24.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.24.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable version:** [v1.24.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.24.1` · **Platforms:** `linux/amd64` and `linux/arm64`.
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.24.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.24.1`
 
-**New in v1.24.0:** verified artist-photo matching, faster artist-page data handling, manual album-cover precedence and more reliable library/discovery navigation. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0).
+**New in v1.24.1:** nested unreadable music folders no longer block readable library scans; existing tracks in inaccessible folders retain their status. The unused Downtify scanqueue hook was also removed. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1).
 
-**Unpublished release candidate:** [v1.24.1](https://github.com/OxygenGS/kima-hub/tree/release/v1.24.1). A targeted scanner reliability patch: permission-denied subfolders no longer prevent readable Lidarr and Soulseek music from being indexed, and historical media inside inaccessible directories is not falsely marked missing. Also removes an obsolete Downtify scanqueue code path. This is **source only** until full CI, native-image preflight and explicit review of residual security findings succeed. Install the published v1.24.0 image until then.
+**Project ONE (in development):** [Kima Connect stage 1](https://github.com/OxygenGS/kima-hub/pull/255) introduces per-account active browser player discovery and remote pause/skip controls. It is **not included** in v1.24.1. Handoff, Smart DJ and Library Guardian will be developed separately.
 
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
@@ -146,17 +152,17 @@ docker run -d \
   -p 3030:3030 \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.24.0
+  ghcr.io/oxygengs/kima-hub:v1.24.1
 ```
 
 Replace `/absolute/path/to/music` with an **existing** host directory holding your music. Open **http://localhost:3030** from the Docker host and finish the first-run setup.
 
 ### Docker Compose / Dockge — new installations only
 
-The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.24.0 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
+The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.24.1 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.24.0 \
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.24.1 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -168,7 +174,7 @@ The [optional companion stack](docker-compose.server.yml) includes additional me
 ## Security and release quality
 
 - Stable releases use native AMD64/ARM64 builds, checks and an explicit security-reviewed publication process. The `:latest` image alias is **not** automatically advanced.
-- The v1.24.0 native preflight still reports 327 HIGH and 8 CRITICAL advisories on AMD64, and 326 HIGH and 8 CRITICAL on ARM64; the scanner listed no patched versions for those findings. Passing the automated release gates does **not** mean zero vulnerabilities. Review the [current image-security report](docs/image-security.md) and restrict network exposure appropriately.
+- The v1.24.1 native preflight reports 331 HIGH and 8 CRITICAL advisories on AMD64, and 330 HIGH and 8 CRITICAL on ARM64; the scanner listed no patched versions for those findings. Passing the automated release gates does **not** mean zero vulnerabilities. Review the [current image-security report](docs/image-security.md) and restrict network exposure appropriately.
 - Applications, media mounts and running Docker containers **are not** changed by editing this GitHub repository or publishing a release.
 
 [Security policy](SECURITY.md) · [Published image advisories](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
