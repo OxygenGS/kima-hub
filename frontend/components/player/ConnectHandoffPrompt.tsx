@@ -18,9 +18,10 @@ const START_TIMEOUT_MS = 20_000;
  * status=playing for the requested track. The source keeps playing otherwise.
  */
 export function ConnectHandoffPrompt({
-    handoff, deviceId, onDismiss,
+    handoff, receivedAtMs, deviceId, onDismiss,
 }: {
     handoff: ConnectHandoff;
+    receivedAtMs: number;
     deviceId: string;
     onDismiss: () => void;
 }) {
@@ -74,8 +75,12 @@ export function ConnectHandoffPrompt({
         }
     }, []);
 
+    // Use the server clock captured at receipt to avoid different clock settings
+    // on a phone and a home server invalidating an otherwise live offer.
+    const expired = () => Date.now() - receivedAtMs >= handoff.expiresAt - handoff.serverNow;
+
     const acknowledge = async () => {
-        if (!controller || Date.now() >= handoff.expiresAt) {
+        if (!controller || expired()) {
             setMessage(nl ? "Overdracht verlopen." : "Transfer expired.");
             setStarting(false);
             return;
@@ -103,7 +108,7 @@ export function ConnectHandoffPrompt({
 
     const startHere = () => {
         if (starting || !controller || !tracks || !tracks[handoff.currentIndex]) return;
-        if (Date.now() >= handoff.expiresAt) {
+        if (expired()) {
             setMessage(nl ? "Overdracht verlopen." : "Transfer expired.");
             return;
         }
@@ -112,7 +117,8 @@ export function ConnectHandoffPrompt({
         const track = tracks[handoff.currentIndex];
         // Advance the offered position by the time the original player has
         // continued playing while the receiver considered the transfer.
-        const elapsed = Math.max(0, (Date.now() - handoff.createdAt) / 1000);
+        const elapsed = Math.max(0, (handoff.serverNow - handoff.createdAt +
+            Date.now() - receivedAtMs) / 1000);
         const position = Math.min(handoff.positionSeconds + elapsed, Math.max(0, track.duration - 0.5));
         const initialGeneration = controller.getSnapshot().generation;
         const expectedPath = api.getStreamUrl(track.id).split("?")[0];
