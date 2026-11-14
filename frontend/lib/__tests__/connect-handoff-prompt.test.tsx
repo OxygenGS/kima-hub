@@ -47,6 +47,7 @@ const offer = {
     positionSeconds: 37,
     createdAt: Date.now(),
     expiresAt: Date.now() + 100_000,
+    serverNow: Date.now(),
     status: "pending" as const,
 };
 const track = (id: string) => ({
@@ -73,7 +74,7 @@ afterEach(() => {
 
 const renderPrompt = async (data = offer) => {
     await act(async () => {
-        root.render(<ConnectHandoffPrompt handoff={data} deviceId={data.targetDeviceId} onDismiss={fake.dismiss} />);
+        root.render(<ConnectHandoffPrompt handoff={data} receivedAtMs={Date.now()} deviceId={data.targetDeviceId} onDismiss={fake.dismiss} />);
         await Promise.resolve();
         await Promise.resolve();
     });
@@ -115,13 +116,30 @@ describe("consent-based Kima Connect handoff receiver", () => {
     });
 
     it("does not load tracks after the offer has expired", async () => {
-        await renderPrompt({ ...offer, expiresAt: Date.now() - 100 });
+        await renderPrompt({ ...offer, serverNow: Date.now(), expiresAt: Date.now() - 100 });
         await act(async () => {
             (node.querySelector("button:not([disabled])") as HTMLButtonElement).click();
         });
         expect(fake.playTracks).not.toHaveBeenCalled();
         expect(fake.update).not.toHaveBeenCalled();
         expect(node.textContent).toContain("Transfer expired");
+    });
+
+    it("uses server elapsed time even if recipient's clock differs by ten minutes", async () => {
+        const serverNow = Date.now() + 600_000;
+        await renderPrompt({
+            ...offer,
+            createdAt: serverNow - 10_000,
+            serverNow,
+            expiresAt: serverNow + 90_000,
+        });
+        await act(async () => {
+            (node.querySelector("button:not([disabled])") as HTMLButtonElement).click();
+        });
+        const seek = fake.playTracks.mock.calls[0][2].seekTo as number;
+        expect(seek).toBeGreaterThanOrEqual(47);
+        expect(seek).toBeLessThan(51);
+        expect(fake.update).not.toHaveBeenCalled();
     });
 
     it("declines without touching the audio engine", async () => {
