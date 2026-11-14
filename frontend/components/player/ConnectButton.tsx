@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Cast, Loader2, Pause, RefreshCw, SkipBack, SkipForward, X } from "lucide-react";
+import { ArrowRightLeft, Cast, Loader2, Pause, RefreshCw, SkipBack, SkipForward, X } from "lucide-react";
 import { api, type ConnectDevice, type ConnectCommandType } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { getConnectDeviceId } from "@/lib/connect-device-id";
+import { useAudioState } from "@/lib/audio-state-context";
+import { useAudioPlayback } from "@/lib/audio-playback-context";
 
 /** A small account-scoped remote-control surface. Playback stays on the target browser. */
 export function ConnectButton({ className = "", placement = "above" }: { className?: string; placement?: "above" | "below" }) {
     const { locale } = useLanguage();
     const { user } = useAuth();
+    const audio = useAudioState();
+    const playback = useAudioPlayback();
     const [open, setOpen] = useState(false);
     const [devices, setDevices] = useState<ConnectDevice[]>([]);
     const [devicesOwnerId, setDevicesOwnerId] = useState<string | null>(null);
@@ -27,7 +31,6 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
             const response = await api.getConnectDevices();
             setDevices(response.devices);
             setDevicesOwnerId(userId);
-            setMessage(null);
         } catch {
             setDevices([]);
             setDevicesOwnerId(null);
@@ -45,6 +48,36 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         const interval = window.setInterval(() => { void refresh(); }, 10_000);
         return () => window.clearInterval(interval);
     }, [open, refresh, userId]);
+
+    const canHandoff = playback.isPlaying && audio.playbackType === "track" &&
+        audio.queue.length > 0 && audio.queue.length <= 50 &&
+        audio.currentIndex >= 0 && audio.currentIndex < audio.queue.length &&
+        audio.currentTrack?.id === audio.queue[audio.currentIndex]?.id;
+
+    const offerHandoff = async (targetId: string) => {
+        const sourceDeviceId = userId ? getConnectDeviceId(userId) : null;
+        if (!canHandoff || !sourceDeviceId || sourceDeviceId === targetId || devicesOwnerId !== userId) return;
+        setBusy(targetId);
+        setMessage(null);
+        try {
+            await api.offerConnectHandoff({
+                sourceDeviceId, targetDeviceId: targetId,
+                trackIds: audio.queue.map(track => track.id),
+                currentIndex: audio.currentIndex,
+                positionSeconds: Math.min(Math.max(0, playback.currentTime),
+                    Math.max(0, (audio.currentTrack?.duration ?? 0) - 0.5)),
+            });
+            setMessage(nl
+                ? "Overdracht aangeboden. Bevestig afspelen op het andere apparaat."
+                : "Transfer offered. Confirm playback on the other device.");
+        } catch {
+            setMessage(nl
+                ? "Overdracht niet mogelijk. Controleer of beide spelers actief zijn en er geen verzoek openstaat."
+                : "Transfer unavailable. Check both players are online and no other request is pending.");
+        } finally {
+            setBusy(null);
+        }
+    };
 
     const send = async (id: string, type: ConnectCommandType) => {
         if (!userId || devicesOwnerId !== userId) return;
@@ -148,10 +181,28 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                                                 ))}
                                             </div>
                                         )}
+                                        {!local && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { void offerHandoff(device.id); }}
+                                                disabled={busy !== null || !canHandoff}
+                                                title={nl ? "Bied overdracht van muziek aan op dit apparaat" : "Offer playback transfer to this device"}
+                                                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-2 text-xs font-medium text-amber-200 hover:bg-amber-400/20 disabled:opacity-40"
+                                            >
+                                                <ArrowRightLeft size={15} aria-hidden="true" />
+                                                {nl ? "Muziek hierheen overzetten" : "Transfer playback here"}
+                                            </button>
+                                        )}
                                     </li>
                                 );
                             })}
                         </ul>
+                    )}
+                    {audio.queue.length > 50 && playback.isPlaying && (
+                        <p className="mt-3 text-[11px] text-white/60">
+                            {nl ? "Overdracht ondersteunt maximaal 50 nummers per wachtrij." :
+                                "Transfer currently supports queues of up to 50 tracks."}
+                        </p>
                     )}
                     {message && <p role="status" className="mt-3 text-xs text-white/75">{message}</p>}
                     <p className="mt-3 text-[11px] text-white/50">
