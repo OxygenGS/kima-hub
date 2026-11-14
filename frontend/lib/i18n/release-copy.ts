@@ -49,6 +49,32 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.24.1
+    "1.24.1": {
+        "titles": {
+            "Kima Hub 1.24.1 \u2014 Reliable Library Scans": "Kima Hub 1.24.1 \u2014 Betrouwbaar scannen van de muziekbibliotheek"
+        },
+        "summaries": {
+            "Keep importing readable music when an individual folder denies access, preserve existing library records, and remove retired Downtify scanqueue code.": "Blijf leesbare muziek importeren als \u00e9\u00e9n map geen toegang geeft, behoud bestaande bibliotheekgegevens en verwijder verouderde Downtify-scanqueue-code."
+        },
+        "items": {
+            "fork.1241.scan-permissions": {
+                "title": "Bibliotheek verversen gaat verder",
+                "summary": "Een geblokkeerde submap stopt niet langer de volledige muziekscan.",
+                "body": "De bibliotheekscanner verwerkt nu gewoon leesbare artiest- en albummappen als een onderliggende map de toegang weigert (EACCES of EPERM). Nieuwe muziek van Lidarr of Soulseek kan daardoor verschijnen zonder te wachten op herstel van rechten in een oude importmap. Als de hoofdmap onleesbaar is of een onverwachte I/O-fout optreedt, stopt de scan nog steeds om de bibliotheek te beschermen."
+            },
+            "fork.1241.keep-history": {
+                "title": "Behoud geschiedenis bij gedeeltelijke scans",
+                "summary": "Ontoegankelijke nummers worden niet als verwijderd beschouwd.",
+                "body": "Nummers in een overgeslagen, onleesbare submap behouden hun bestaande bibliotheekregistratie en status. Een handmatige scan wordt afgerond met een duidelijke waarschuwing die de ontoegankelijke map noemt, in plaats van stilzwijgend succes te melden. Beheerders kunnen de bestandsrechten herstellen zonder muziek of bestaande geschiedenis te wissen."
+            },
+            "fork.1241.legacy-cleanup": {
+                "title": "Oude Downtify-scanqueue-code opgeruimd",
+                "summary": "De verwijderde integratie maakt geen eigen scanopdrachten meer aan.",
+                "body": "Het ongebruikte Downtify-veld voor scanverzoeken en de bijbehorende oude tests zijn verwijderd. Gewone Lidarr-, Soulseek- en volledige bibliotheekscans blijven ondersteund. Historische databasemigraties en muziekbestanden blijven behouden voor veilige upgrades en back-ups."
+            }
+        }
+    },
     // release-candidate:1.24.0
     "1.24.0": {
         "titles": {

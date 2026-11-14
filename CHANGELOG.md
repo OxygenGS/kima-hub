@@ -1,5 +1,31 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.24.1 — release preparation (unpublished)
+
+A targeted maintenance release for the OxygenGS fork after user-reported EACCES failures in old Singles folders blocked new Lidarr music. Keep the current app independently configurable and retain the published v1.24.0 image as the production default until v1.24.1 passes its own stable-release gates.
+
+### Partial scans without losing existing music
+- PR #252: treat EACCES/EPERM on nested real music directories as a documented partial scan. Continue indexing files in readable branches; never silently discard the failure.
+- Do not treat tracks in an unreadable subtree as missing: preserve track records, playlists, play history, artist/album associations and the existing missing flag.
+- Keep an unreadable library root or unexpected filesystem I/O errors fatal to avoid falsely treating inaccessible storage as deleted.
+- Update manual scan notifications to report a warning and identify a blocked directory rather than displaying an unqualified success.
+- Add regression coverage for inaccessible folders, fatal root and EIO errors, and fresh music appearing elsewhere while an existing library subtree remains inaccessible.
+
+### Retire obsolete integration hooks
+- PR #253: remove the discontinued Downtify-specific scanqueue request field, job ID branch and obsolete tests. Supported full-library, Lidarr, Soulseek, album and discovery scans remain unchanged.
+- Preserve historical Prisma migration files and tables rather than destructively rewriting existing database migration history. Do not remove, move or chmod any user music.
+
+### Documentation and build workflow cleanup
+- PR #251: refresh the public README, installation examples, changelog, security report and versioned Compose defaults for the published v1.24.0 baseline.
+- Retire four redundant, manual or duplicate GitHub Actions definitions while keeping mandatory source tests, security checks, native AMD64/ARM64 image builds and explicit stable-release approval.
+- The individual changes were merged only after complete source/compatibility/security/native AIO checks passed. This candidate requires its own full CI and exact-main native-image preflight before any stable tag, GitHub Release or Docker image may be published.
+
+### Safe installation and remaining risks
+- No new database migration, external service, download protocol, storage mount or media operation is introduced by this patch.
+- A scanner warning means some media is inaccessible; correct the actual host and container permissions to index those files. The patch does not change or bypass permissions.
+- Keep the existing Compose project identity and music/download mounts. Create and verify a restorable cold backup of the complete /data volume before any live upgrade.
+- Prior native AIO images had unresolved HIGH/CRITICAL advisories; a green build is not a zero-vulnerability claim. Review new architecture-specific scan evidence before approving a release.
+
 ## OxygenGS fork v1.24.0 — released 2026-11-13
 
 This source update improves artist artwork and artist-page responsiveness while keeping the OxygenGS fork independently configurable. It retains Settings Studio 2.0, Dutch/English UI, the existing Lidarr/Soulseek workflows and modern OpenSubsonic authentication.
