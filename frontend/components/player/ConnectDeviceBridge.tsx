@@ -62,10 +62,15 @@ export function ConnectDeviceBridge() {
                         latest.current.controls.pause();
                         break;
                     case "next":
-                        latest.current.controls.next();
+                        // A remote command must not start new audio on a paused tab.
+                        if (latest.current.playback.isPlaying && latest.current.state.playbackType === "track") {
+                            latest.current.controls.next();
+                        }
                         break;
                     case "previous":
-                        latest.current.controls.previous();
+                        if (latest.current.playback.isPlaying && latest.current.state.playbackType === "track") {
+                            latest.current.controls.previous();
+                        }
                         break;
                 }
             } catch {
