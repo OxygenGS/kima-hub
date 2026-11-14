@@ -1,6 +1,6 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.24.0 — release preparation (unpublished)
+## OxygenGS fork v1.24.0 — released 2026-11-13
 
 This source update improves artist artwork and artist-page responsiveness while keeping the OxygenGS fork independently configurable. It retains Settings Studio 2.0, Dutch/English UI, the existing Lidarr/Soulseek workflows and modern OpenSubsonic authentication.
 
@@ -21,7 +21,7 @@ This source update improves artist artwork and artist-page responsiveness while 
 ### Verification and safe upgrades
 - The individual PRs passed source CI, native AIO build checks, security scans and relevant Dutch/English UI verification before merge. New regression tests cover artwork precedence, image refresh, source classification, artist-data contracts and local library matching.
 - No database migration, new dependency, new Docker volume, automatic media move, new storage mount, or live deployment is introduced. Existing accounts, music, settings and library data remain unchanged by preparing the source release.
-- v1.24.0 is a source release candidate until its matching package metadata, complete CI, exact-main native AMD64/ARM64 image preflight and explicit review of remaining image vulnerabilities pass. Do not deploy an unpublished tag. Back up and independently verify restoration of /data before upgrading any live deployment.
+- The exact-main [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835), [explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/43517341212) and [multi-architecture publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43517365837) succeeded for v1.24.0. The image still has 327/326 HIGH and 8 CRITICAL preflight findings, with no scanner-listed fixed versions. See [image security](docs/image-security.md). Back up and independently verify restoration of `/data` before any live update.
 
 ## OxygenGS fork v1.23.0 — released 2026-11-13
 
