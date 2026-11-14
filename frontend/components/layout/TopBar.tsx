@@ -24,6 +24,7 @@ import { useAuth } from "@/lib/auth-context";
 import { APP_VERSION } from "@/lib/version";
 import { openWhatsNew } from "@/components/whats-new/WhatsNewGate";
 import { KimaMark } from "@/components/ui/KimaMark";
+import { ConnectButton } from "@/components/player/ConnectButton";
 import { useLanguage } from "@/lib/i18n/language-context";
 
 const scanEnded = (status?: string) => status === "completed" || status === "failed";
@@ -244,6 +245,8 @@ export function TopBar() {
                             />
                         </div>
                     </form>
+
+                    <ConnectButton placement="below" className="w-11 h-11 flex items-center justify-center text-[var(--text-secondary)] hover:text-white transition-colors duration-200 ml-2 flex-shrink-0" />
 
                     <button
                         onClick={() => {
