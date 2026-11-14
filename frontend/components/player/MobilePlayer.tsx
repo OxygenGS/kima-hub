@@ -8,7 +8,6 @@ import { useLanguage } from "@/lib/i18n/language-context";
 import { PlayCountLine } from "@/features/stats/PlayCountLine";
 import { CachedImage } from "@/components/ui/CachedImage";
 import { VibeToggleButton } from "./VibeToggleButton";
-import { ConnectButton } from "./ConnectButton";
 import { usePlayerSwipe } from "./hooks/usePlayerSwipe";
 import { boundedProgress } from "./playerPresentation";
 import styles from "./MobilePlayer.module.css";
@@ -92,7 +91,6 @@ export function MobilePlayer() {
                         <span aria-hidden="true" />{audioError ? t("Playback Error") : isBuffering ? t("Buffering...")
                             : isPlaying ? t("Now Playing") : locale === "nl" ? "Gepauzeerd" : "Paused"}
                     </span>
-                    <ConnectButton className={styles.button} />
                     <button type="button" className={styles.options} onClick={() => setShowTools(!showTools)}
                         aria-expanded={showTools} aria-label={locale === "nl" ? "Speleropties" : "Player options"}>
                         <ChevronDown size={16} aria-hidden="true" />
