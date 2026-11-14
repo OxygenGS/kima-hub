@@ -92,13 +92,13 @@ export function MobilePlayer() {
                         <span aria-hidden="true" />{audioError ? t("Playback Error") : isBuffering ? t("Buffering...")
                             : isPlaying ? t("Now Playing") : locale === "nl" ? "Gepauzeerd" : "Paused"}
                     </span>
+                    <ConnectButton className={styles.button} />
                     <button type="button" className={styles.options} onClick={() => setShowTools(!showTools)}
                         aria-expanded={showTools} aria-label={locale === "nl" ? "Speleropties" : "Player options"}>
                         <ChevronDown size={16} aria-hidden="true" />
                     </button>
                 </div>
                 {showTools && <div className={styles.menu} data-player-command>
-                    <ConnectButton className={styles.button} />
                     <button type="button" onClick={() => changeMode("minimized")}>
                         <ChevronLeft size={16} aria-hidden="true" />{locale === "nl" ? "Speler verkleinen" : "Minimize player"}
                     </button>
