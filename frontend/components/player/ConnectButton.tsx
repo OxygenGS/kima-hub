@@ -22,6 +22,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+    const [pendingOffer, setPendingOffer] = useState<{ id: string; sourceDeviceId: string; ownerId: string } | null>(null);
 
     const nl = locale === "nl";
     const userId = user?.id ?? null;
@@ -60,13 +61,14 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         setBusy(targetId);
         setMessage(null);
         try {
-            await api.offerConnectHandoff({
+            const offered = await api.offerConnectHandoff({
                 sourceDeviceId, targetDeviceId: targetId,
                 trackIds: audio.queue.map(track => track.id),
                 currentIndex: audio.currentIndex,
                 positionSeconds: Math.min(Math.max(0, playback.currentTime),
                     Math.max(0, (audio.currentTrack?.duration ?? 0) - 0.5)),
             });
+            setPendingOffer({ id: offered.id, sourceDeviceId, ownerId: userId! });
             setMessage(nl
                 ? "Overdracht aangeboden. Bevestig afspelen op het andere apparaat."
                 : "Transfer offered. Confirm playback on the other device.");
@@ -74,6 +76,22 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
             setMessage(nl
                 ? "Overdracht niet mogelijk. Controleer of beide spelers actief zijn en er geen verzoek openstaat."
                 : "Transfer unavailable. Check both players are online and no other request is pending.");
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const cancelHandoff = async () => {
+        if (!pendingOffer || pendingOffer.ownerId !== userId) return;
+        setBusy(pendingOffer.id);
+        try {
+            await api.updateConnectHandoff(pendingOffer.id, pendingOffer.sourceDeviceId, "cancelled");
+            setPendingOffer(null);
+            setMessage(nl ? "Overdracht geannuleerd." : "Transfer cancelled.");
+        } catch {
+            setMessage(nl ? "Annuleren niet mogelijk; het verzoek is mogelijk al afgerond." :
+                "Cannot cancel; the transfer may have completed already.");
+            setPendingOffer(null);
         } finally {
             setBusy(null);
         }
@@ -203,6 +221,12 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                             {nl ? "Overdracht ondersteunt maximaal 50 nummers per wachtrij." :
                                 "Transfer currently supports queues of up to 50 tracks."}
                         </p>
+                    )}
+                    {pendingOffer?.ownerId === userId && (
+                        <button type="button" onClick={() => { void cancelHandoff(); }} disabled={busy !== null}
+                            className="mt-3 w-full rounded-lg border border-white/20 px-3 py-2 text-xs text-white/70 hover:text-white disabled:opacity-40">
+                            {nl ? "Openstaande overdracht annuleren" : "Cancel pending transfer"}
+                        </button>
                     )}
                     {message && <p role="status" className="mt-3 text-xs text-white/75">{message}</p>}
                     <p className="mt-3 text-[11px] text-white/50">
