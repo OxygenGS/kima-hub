@@ -101,6 +101,54 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.24.1
+    {
+        "version": "1.24.1",
+        "title": "Kima Hub 1.24.1 \u2014 Reliable Library Scans",
+        "summary": "Keep importing readable music when an individual folder denies access, preserve existing library records, and remove retired Downtify scanqueue code.",
+        "date": "2026-11-14",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.1241.scan-permissions",
+                "title": "Library refresh keeps going",
+                "summary": "A blocked subfolder no longer stops the entire music scan.",
+                "body": "The library scanner now continues through readable artist and album folders when a nested directory denies access (EACCES or EPERM). This lets new Lidarr or Soulseek music appear without waiting for unrelated legacy import-folder permissions to be fixed. A blocked music root or unexpected I/O failure still stops the scan to protect the library.",
+                "links": [
+                    {
+                        "label": "Your music library",
+                        "href": "/collection"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1241.keep-history",
+                "title": "Preserve music history during partial scans",
+                "summary": "Unreachable tracks are not mistaken for deleted files.",
+                "body": "Tracks inside a skipped unreadable subtree keep their existing library records and missing-file status. A manually started scan finishes with a visible warning naming the inaccessible folder instead of silently reporting a clean run. Administrators can fix filesystem permissions without deleting music or losing existing history.",
+                "links": [
+                    {
+                        "label": "Library settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.1241.legacy-cleanup",
+                "title": "Remove old Downtify scanqueue hooks",
+                "summary": "Retired integration code no longer participates in scan job IDs.",
+                "body": "The discontinued Downtify-specific scan request field and its obsolete tests are removed. Normal Lidarr, Soulseek and full-library refresh requests remain supported. Historical database migrations and music files remain untouched for safe upgrades and backups.",
+                "links": [
+                    {
+                        "label": "Downloads",
+                        "href": "/downloads"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.24.0
     {
         "version": "1.24.0",
