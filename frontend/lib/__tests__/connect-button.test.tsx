@@ -79,6 +79,16 @@ describe("Kima Connect device menu", () => {
         expect(host.textContent).toContain("Command queued");
     });
 
+    it("does not allow remote transport actions on a paused browser", async () => {
+        fake.getDevices.mockResolvedValue({ devices: [own, { ...remote, status: "paused" }] });
+        await open();
+        const pause = host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement;
+        const next = host.querySelector('[aria-label="Next track - Kima mobile"]') as HTMLButtonElement;
+        expect(pause.disabled).toBe(true);
+        expect(next.disabled).toBe(true);
+        expect(fake.sendCommand).not.toHaveBeenCalled();
+    });
+
     it("does not send an instruction when the user only opens the menu", async () => {
         await open();
         expect(fake.sendCommand).not.toHaveBeenCalled();
