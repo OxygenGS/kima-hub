@@ -132,7 +132,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                                                         type="button"
                                                         title={label}
                                                         aria-label={label + " - " + device.name}
-                                                        disabled={busy !== null}
+                                                        disabled={busy !== null || device.status !== "playing"}
                                                         onClick={() => { void send(device.id, type); }}
                                                         className="flex flex-1 items-center justify-center rounded-lg border border-white/15 py-2 text-white/80 hover:border-amber-400/50 hover:text-amber-300 disabled:opacity-40"
                                                     >
