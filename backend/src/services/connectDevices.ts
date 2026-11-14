@@ -6,6 +6,7 @@
  * separate from persistent DeviceLinkCode (native app API-key pairing).
  */
 import { redisClient } from "../utils/redis";
+import { randomUUID } from "crypto";
 
 export type ConnectPlaybackStatus = "idle" | "paused" | "playing";
 export type ConnectCommandType = "pause" | "next" | "previous";
@@ -104,7 +105,7 @@ export async function sendConnectCommand(
     if (lastSeen === null || Number(lastSeen) <= staleBefore(now)) return null;
     if (!await redisClient.exists(deviceKey(userId, deviceId))) return null;
     const command: ConnectCommand = {
-        id: require("crypto").randomUUID(),
+        id: randomUUID(),
         type,
         createdAt: now,
     };
