@@ -47,7 +47,7 @@ export function SeekSlider({ onSeek }: { onSeek: (time: number) => void }) { ret
 export function VibeToggleButton({ unavailable, hideWhenUnavailable, className }: { unavailable: boolean; hideWhenUnavailable?: boolean; className?: string }) {
     return unavailable && hideWhenUnavailable ? null : <button type="button" className={className} disabled={unavailable} aria-label="Vibe"><AudioWaveform size={20} /></button>;
 }
-export function SleepTimer() {
+// Connect is tested independently; this isolated player fixture has no signed-in user or API.\nexport function ConnectButton() { return null; }\nexport function SleepTimer() {
     const [open, setOpen] = useState(false);
     useEffect(() => {
         const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
