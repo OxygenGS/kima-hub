@@ -839,7 +839,7 @@ export class AudioController {
         this.lastAnalyserCurrentTime = this.audio.currentTime;
 
         // Same-src dedup: if already loading this src, only update intent
-        if (src === this.snapshot.src && this.snapshot.status === "loading") {
+        if (src === this.snapshot.src && this.snapshot.status === "loading" && seekTo === undefined) {
             if (autoplay) {
                 this.dispatch({ type: "play-requested", now: Date.now() });
             }
