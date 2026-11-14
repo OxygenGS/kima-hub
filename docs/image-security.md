@@ -2,7 +2,25 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.24.0 — current published release (13 November 2026)
+## v1.24.1 — current published release (14 November 2026)
+
+The [v1.24.1 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191) validated exact `main` source SHA `94999192731eda338c6eb9c154982a6f1a9c8b68`. Native AMD64 and ARM64 builds passed the configured architecture, revision-label, secrets and fixable-vulnerability gates **without publishing an image**. [Explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/43634518503) preceded the [successful native multi-architecture publication](https://github.com/OxygenGS/kima-hub/actions/runs/43634534788). The current published image is `ghcr.io/oxygengs/kima-hub:v1.24.1`.
+
+| Native v1.24.1 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 331 | 8 | 0 |
+| linux/arm64 | 330 | 8 | 0 |
+
+**Remaining security risk:** The same eight CRITICAL advisories listed below for v1.24.0 remain present, and no fixed versions were listed by this scanner database. No assertion about code-path reachability, image safety or exploitability follows from a green workflow. In comparison with v1.24.0, the four extra HIGH findings per architecture are four packages of the **same additional advisory `CVE-2025-6020`** in the PAM family (`libpam-modules`, `libpam-modules-bin`, `libpam-runtime`, `libpam0g`), all reported at `1.5.2-6+deb12u2` with no scanner-listed fix. Package versions were unchanged across the compared preflight images. The advisory concerns potential local privilege escalation through `pam_namespace`; actual applicability to Kima's runtime has not been demonstrated and must not be assumed safe.
+
+- [AMD64 preflight evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191/artifacts/14129125573)
+- [ARM64 preflight evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191/artifacts/14128816349)
+- [Documented residual-risk review](https://github.com/OxygenGS/kima-hub/pull/254#issuecomment-6883258321)
+- [Published GitHub Release v1.24.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1)
+
+Preflight values are snapshots of **build-only images**, not post-publication registry scans or proof of safety on a particular user's Docker host. Keep network access restricted, patch the host and proxy, protect credentials and verify independently restorable `/data` backups. Reassess base image and potentially unused PAM/legacy dependencies in future releases.
+
+## Historical: v1.24.0 — published 13 November 2026
 
 The [v1.24.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43513883835) verified exact `main` source SHA `8f4402d0c1c25adbbc6edfe4afb8d97f9d75aa67`. Native AMD64 and ARM64 AIO images built successfully and passed configured architecture, source revision, secret and fixable-vulnerability gates. The [explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/43517341212) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43517365837). The published stable tag is `ghcr.io/oxygengs/kima-hub:v1.24.0`.
 
