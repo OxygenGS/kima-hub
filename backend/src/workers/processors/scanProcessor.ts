@@ -114,9 +114,13 @@ export async function processScan(
                 await notificationService
                     .create({
                         userId,
-                        type: "system",
-                        title: "Library scan finished",
-                        message: scanSummary(result),
+                        type: result.errors.length > 0 ? "error" : "system",
+                        title: result.errors.length > 0
+                            ? "Library scan finished with warnings"
+                            : "Library scan finished",
+                        message: result.errors.length > 0
+                            ? `${scanSummary(result)}; ${result.errors.length} issue(s). First: ${result.errors[0].file}: ${result.errors[0].error}`
+                            : scanSummary(result),
                         groupKey: SCAN_RESULT_KEY,
                         renotify: true,
                     })
