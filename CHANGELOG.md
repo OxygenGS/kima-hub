@@ -1,8 +1,8 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.24.1 — release preparation (unpublished)
+## OxygenGS fork v1.24.1 — released 2026-11-14
 
-A targeted maintenance release for the OxygenGS fork after user-reported EACCES failures in old Singles folders blocked new Lidarr music. Keep the current app independently configurable and retain the published v1.24.0 image as the production default until v1.24.1 passes its own stable-release gates.
+A targeted maintenance release for the OxygenGS fork after user-reported EACCES failures in old Singles folders blocked new Lidarr music. The fork remains independently configurable. The published v1.24.1 image is now the stable default for new installations; existing deployments must explicitly review and apply any upgrade.
 
 ### Partial scans without losing existing music
 - PR #252: treat EACCES/EPERM on nested real music directories as a documented partial scan. Continue indexing files in readable branches; never silently discard the failure.
@@ -18,13 +18,13 @@ A targeted maintenance release for the OxygenGS fork after user-reported EACCES 
 ### Documentation and build workflow cleanup
 - PR #251: refresh the public README, installation examples, changelog, security report and versioned Compose defaults for the published v1.24.0 baseline.
 - Retire four redundant, manual or duplicate GitHub Actions definitions while keeping mandatory source tests, security checks, native AMD64/ARM64 image builds and explicit stable-release approval.
-- The individual changes were merged only after complete source/compatibility/security/native AIO checks passed. This candidate requires its own full CI and exact-main native-image preflight before any stable tag, GitHub Release or Docker image may be published.
+- The individual changes passed source/compatibility/security/native AIO checks. The exact-main [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191) passed on commit `94999192731eda338c6eb9c154982a6f1a9c8b68`; [explicit security-reviewed publication](https://github.com/OxygenGS/kima-hub/actions/runs/43634518503) and [native Docker publishing](https://github.com/OxygenGS/kima-hub/actions/runs/43634534788) succeeded. No running installation was changed by publication.
 
 ### Safe installation and remaining risks
 - No new database migration, external service, download protocol, storage mount or media operation is introduced by this patch.
 - A scanner warning means some media is inaccessible; correct the actual host and container permissions to index those files. The patch does not change or bypass permissions.
 - Keep the existing Compose project identity and music/download mounts. Create and verify a restorable cold backup of the complete /data volume before any live upgrade.
-- Prior native AIO images had unresolved HIGH/CRITICAL advisories; a green build is not a zero-vulnerability claim. Review new architecture-specific scan evidence before approving a release.
+- The v1.24.1 native scan still reports 331 HIGH and 8 CRITICAL advisories on AMD64, and 330 HIGH and 8 CRITICAL on ARM64, without scanner-listed fixes. A green build does not mean zero vulnerabilities. Review [current image-security evidence](docs/image-security.md) before deployment.
 
 ## OxygenGS fork v1.24.0 — released 2026-11-13
 
