@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
     state: { isPlaying: false, repeatMode: "off", audioError: false, isBuffering: false, volume: 0.5, isShuffle: false },
     media: { hasMedia: true, title: "CI Original Song", subtitle: "CI Original Artist" },
 }));
+// Kima Connect has its own authenticated-player tests; transport tests stay presentation-only.
+vi.mock("@/components/player/ConnectButton", () => ({ ConnectButton: () => null }));
 vi.mock("@/hooks/usePlayerControls", () => ({
     usePlayerControls: () => ({
         currentTrack: { id: "ci-untouched-id" }, playbackType: "track",
