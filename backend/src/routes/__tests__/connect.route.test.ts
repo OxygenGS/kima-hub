@@ -16,6 +16,21 @@ jest.mock("../../middleware/auth", () => ({
     },
 }));
 
+const mockCreateHandoff = jest.fn();
+const mockIncomingHandoff = jest.fn();
+const mockOutgoingHandoff = jest.fn();
+const mockTransitionHandoff = jest.fn();
+jest.mock("../../services/connectHandoff", () => ({
+    MAX_HANDOFF_TRACKS: 50,
+    createConnectHandoff: (...args: unknown[]) => mockCreateHandoff(...args),
+    getIncomingConnectHandoff: (...args: unknown[]) => mockIncomingHandoff(...args),
+    getOutgoingConnectHandoff: (...args: unknown[]) => mockOutgoingHandoff(...args),
+    transitionConnectHandoff: (...args: unknown[]) => mockTransitionHandoff(...args),
+    HandoffUnavailableError: class HandoffUnavailableError extends Error {},
+    HandoffBusyError: class HandoffBusyError extends Error {},
+    HandoffStateError: class HandoffStateError extends Error {},
+}));
+
 import express from "express";
 import request from "supertest";
 import connectRoutes from "../connect";
@@ -32,6 +47,10 @@ beforeEach(() => {
     mockList.mockResolvedValue([]);
     mockPulse.mockResolvedValue({ command: null, ttlSeconds: 45 });
     mockSend.mockResolvedValue({ id: "cmd1", type: "pause", createdAt: Date.now() });
+    mockCreateHandoff.mockResolvedValue({ id: A, expiresAt: Date.now() + 120_000 });
+    mockIncomingHandoff.mockResolvedValue(null);
+    mockOutgoingHandoff.mockResolvedValue(null);
+    mockTransitionHandoff.mockResolvedValue("started");
 });
 
 describe("Kima Connect API", () => {
@@ -85,5 +104,62 @@ describe("Kima Connect API", () => {
         expect(res.body).toEqual({ queued: true, commandId: "cmd1" });
         expect(mockSend).toHaveBeenCalledWith("alice", B, "next");
         expect(res.headers["cache-control"]).toBe("private, no-store");
+    });
+});
+
+describe("Connect handoff API authorization and consent", () => {
+    const valid = {
+        sourceDeviceId: A, targetDeviceId: B,
+        trackIds: ["cml123", "cml456"], currentIndex: 1, positionSeconds: 30,
+    };
+
+    it("requires login for offer, incoming, outgoing and acknowledgement", async () => {
+        await request(app).post("/api/connect/handoffs").send(valid).expect(401);
+        await request(app).get("/api/connect/handoffs/incoming/" + B).expect(401);
+        await request(app).get("/api/connect/handoffs/outgoing/" + A).expect(401);
+        await request(app).post("/api/connect/handoffs/" + A + "/started").send({ deviceId: B }).expect(401);
+        expect(mockCreateHandoff).not.toHaveBeenCalled();
+        expect(mockTransitionHandoff).not.toHaveBeenCalled();
+    });
+
+    it("validates queue size, index, IDs, position and rejects forged fields", async () => {
+        const invalid = [
+            { ...valid, trackIds: [] },
+            { ...valid, currentIndex: 2 },
+            { ...valid, trackIds: ["../outside"] },
+            { ...valid, positionSeconds: -12 },
+            { ...valid, positionSeconds: 90_000 },
+            { ...valid, userId: "bob" },
+        ];
+        for (const payload of invalid) {
+            await request(app).post("/api/connect/handoffs")
+                .set("x-test-user", "alice").send(payload).expect(400);
+        }
+        expect(mockCreateHandoff).not.toHaveBeenCalled();
+    });
+
+    it("derives owner exclusively from auth and returns a bounded offer", async () => {
+        const result = await request(app).post("/api/connect/handoffs")
+            .set("x-test-user", "alice").send(valid).expect(201);
+        expect(mockCreateHandoff).toHaveBeenCalledWith("alice", valid);
+        expect(result.body.id).toBe(A);
+        expect(result.headers["cache-control"]).toBe("private, no-store");
+        await request(app).get("/api/connect/handoffs/incoming/" + B)
+            .set("x-test-user", "bob").expect(200);
+        await request(app).get("/api/connect/handoffs/outgoing/" + A)
+            .set("x-test-user", "alice").expect(200);
+        expect(mockIncomingHandoff).toHaveBeenCalledWith("bob", B);
+        expect(mockOutgoingHandoff).toHaveBeenCalledWith("alice", A);
+    });
+
+    it("keeps transitions scoped to the actor and accepts only known actions", async () => {
+        await request(app).post("/api/connect/handoffs/" + A + "/started")
+            .set("x-test-user", "alice").send({ deviceId: B }).expect(200);
+        expect(mockTransitionHandoff).toHaveBeenCalledWith("alice", A, B, "started");
+        await request(app).post("/api/connect/handoffs/" + A + "/erase")
+            .set("x-test-user", "alice").send({ deviceId: B }).expect(400);
+        await request(app).post("/api/connect/handoffs/" + A + "/started")
+            .set("x-test-user", "alice").send({ deviceId: B, userId: "bob" }).expect(400);
+        expect(mockTransitionHandoff).toHaveBeenCalledTimes(1);
     });
 });
