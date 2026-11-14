@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AudioStateProvider } from "@/lib/audio-state-context";
 import { AudioPlaybackProvider } from "@/lib/audio-playback-context";
 import { AudioControlsProvider } from "@/lib/audio-controls-context";
+import { ConnectDeviceBridge } from "@/components/player/ConnectDeviceBridge";
 import { AudioControllerContext } from "@/lib/audio-controller-context";
 import { AudioController } from "@/lib/audio-controller";
 import { useAuth } from "@/lib/auth-context";
@@ -31,6 +32,7 @@ function AudioProviderInner({ children }: { children: React.ReactNode }) {
             <AudioStateProvider>
                 <AudioPlaybackProvider>
                     <AudioControlsProvider>
+                        <ConnectDeviceBridge />
                         {children}
                     </AudioControlsProvider>
                 </AudioPlaybackProvider>
