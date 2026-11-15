@@ -50,6 +50,46 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         return () => window.clearInterval(interval);
     }, [open, refresh, userId]);
 
+    // Keep the source menu aligned with the short-lived server handoff state.
+    // A completed, declined or expired offer must not leave a stale cancel action.
+    useEffect(() => {
+        const offer = pendingOffer;
+        if (!offer || offer.ownerId !== userId) return;
+        let active = true;
+        let inFlight = false;
+
+        const check = async () => {
+            if (!active || inFlight) return;
+            inFlight = true;
+            try {
+                const { handoff } = await api.getOutgoingConnectHandoff(offer.sourceDeviceId);
+                if (!active) return;
+                if (!handoff || handoff.id !== offer.id) {
+                    setPendingOffer(current =>
+                        current?.id === offer.id && current.ownerId === offer.ownerId ? null : current);
+                    setMessage(nl
+                        ? "De overdracht is niet meer actief (afgerond, geweigerd of verlopen)."
+                        : "Transfer is no longer active (completed, declined or expired).");
+                } else if (handoff.status === "started") {
+                    setMessage(nl
+                        ? "Het andere apparaat speelt af. De bron controleert de overdracht."
+                        : "The other device is playing. The source is verifying the transfer.");
+                }
+            } catch {
+                // Keep the cancel action available during a temporary API outage.
+            } finally {
+                inFlight = false;
+            }
+        };
+
+        void check();
+        const interval = window.setInterval(() => { void check(); }, 7_000);
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+        };
+    }, [pendingOffer, userId, nl]);
+
     const canHandoff = playback.isPlaying && audio.playbackType === "track" &&
         audio.queue.length > 0 && audio.queue.length <= 50 &&
         audio.currentIndex >= 0 && audio.currentIndex < audio.queue.length &&
@@ -230,8 +270,8 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                     )}
                     {message && <p role="status" className="mt-3 text-xs text-white/75">{message}</p>}
                     <p className="mt-3 text-[11px] text-white/50">
-                        {nl ? "Alleen apparaten van je eigen account. Afspelen overnemen volgt in een volgende bouwfase."
-                            : "Your account's devices only. Playback handoff is a later phase."}
+                        {nl ? "Alleen apparaten van je eigen account. Overdracht vereist bevestiging op het ontvangende apparaat."
+                            : "Your account's devices only. Transfer requires confirmation on the receiving device."}
                     </p>
                 </div>
             )}
