@@ -39,7 +39,7 @@ Browsers generally require a local gesture to start a newly opened audio
 session. We will not silently bypass that restriction or claim that a remote
 command succeeded before the target confirms it.
 
-## Stage 2 — Explicit playback handoff (development PR; not released)
+## Stage 2 — Explicit playback handoff (merged into main; not released)
 
 A signed-in person can offer their current playing **local-library track queue** to a
 second active Kima browser under the same account. The destination sees a
@@ -66,12 +66,46 @@ source observes that acknowledgement.
   warns that both devices may be playing, and permits retry.
 - Existing account access, OpenSubsonic clients, media files and mounts are
   unaffected; the protocol adds no ports and no database migration.
-- This draft does **not** implement synchronized multiroom, external-player
+- This stage does **not** implement synchronized multiroom, external-player
   control, automatic device wake-up or a guarantee of gapless transition
   between physically separate browsers.
 
 This is not a published stable release. Source and end-to-end checks, exact
 native build checks and a controlled release review must pass first.
+
+## Stage 3 — Remote command receipts (development PR; not released)
+
+The Kima Connect device menu tracks the most recently sent **Pause**, **Previous**
+or **Next** command. The sender initially sees **queued**; after a receiver
+heartbeat, that browser reports whether it called the corresponding local
+player handler (**handled**) or refused it because the current player state
+does not allow the action (**ignored**).
+
+- The command and receipt are written together to Redis. Every receipt uses an
+  authenticated account-scoped key and expires after 90 seconds. A queued
+  command is shown as **expired / unconfirmed** after its 20-second delivery
+  window, including when a newer instruction replaces an undelivered command.
+- The browser sends a strict-schema acknowledgement including its own temporary
+  device ID. Server checks the authenticated owner, command ID, recipient ID and
+  deadline, then atomically transitions the receipt; duplicate confirmations
+  are idempotent and conflicting confirmations do not overwrite a result.
+- The open device menu checks the status of only the latest command every
+  2.5 seconds. The interface does not display a previous account's receipt.
+  Brief network failures do not alter audio; an unconfirmed action is not
+  represented as successful.
+- **Handled is not proof that playback changed or audio was audible.** It
+  means the existing browser player callback was invoked. The audio engine
+  remains authoritative for actual track/playback state.
+- Existing players running older versions can still receive commands but do
+  not send acknowledgements; their commands will show as unconfirmed. No ports,
+  database migration, media move, deployment change or new external service.
+- Commands still use the existing seven-second heartbeat and its single
+  per-device command slot. A newer pending command replaces the previous one;
+  this stage does not yet use push/SSE or guarantee real-time delivery.
+
+Stage 3 is not published in the stable Docker image. All backend, frontend,
+language, source-privacy, security and native AIO gates must pass before merge
+and any later release review.
 
 ## Further development
 
@@ -79,9 +113,9 @@ native build checks and a controlled release review must pass first.
 
 1. **Handoff reliability:** add low-latency confirmation delivery, explicit source
    status receipts, and carefully verified recovery when a browser disconnects.
-2. **Live remote controls:** acknowledge commands and show delivery/execution
-   statuses, optionally use the existing authenticated SSE event channel for
-   lower latency, with durable stale-client cleanup.
+2. **Low-latency delivery:** evaluate authenticated SSE for remote command
+   signalling and richer playback-state confirmation, without weakening
+   browser gesture requirements or Redis's bounded delivery window.
 3. **Smart DJ:** use existing library audio-analysis, Vibe similarity, likes,
    user preferences and listening history to produce on-device/library-only
    listening sessions. All suggested tracks must be available and playable.
