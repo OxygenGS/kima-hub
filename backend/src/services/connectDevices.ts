@@ -156,7 +156,9 @@ export async function sendConnectCommand(
         .set(receiptKey(userId, command.id), JSON.stringify(receipt), "EX", RECEIPT_SECONDS)
         .set(commandKey(userId, deviceId), JSON.stringify(command), "EX", COMMAND_SECONDS)
         .exec();
-    if (!result) throw new Error("Unable to queue remote command");
+    if (!result || result.length !== 2 || result.some(([error]) => error !== null)) {
+        throw new Error("Unable to queue remote command");
+    }
     return command;
 }
 
