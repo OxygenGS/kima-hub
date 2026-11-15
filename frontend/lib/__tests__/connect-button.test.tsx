@@ -8,13 +8,14 @@ const fake = vi.hoisted(() => ({
     sendCommand: vi.fn(),
     offerHandoff: vi.fn(),
     updateHandoff: vi.fn(),
+    getOutgoing: vi.fn(),
     playing: true,
     currentTime: 42,
     authUser: { id: "alice" } as { id: string },
 }));
 
 vi.mock("@/lib/api", () => ({
-    api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand, offerConnectHandoff: fake.offerHandoff, updateConnectHandoff: fake.updateHandoff },
+    api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand, offerConnectHandoff: fake.offerHandoff, updateConnectHandoff: fake.updateHandoff, getOutgoingConnectHandoff: fake.getOutgoing },
 }));
 vi.mock("@/lib/auth-context", () => ({
     useAuth: () => ({ user: fake.authUser }),
@@ -60,6 +61,7 @@ beforeEach(() => {
     fake.sendCommand.mockResolvedValue({ queued: true, commandId: "cmd1" });
     fake.offerHandoff.mockResolvedValue({ id: "handoff1", expiresAt: 12345 });
     fake.updateHandoff.mockResolvedValue({ status: "cancelled" });
+    fake.getOutgoing.mockResolvedValue({ handoff: { id: "handoff1", status: "pending" } });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -157,6 +159,25 @@ describe("Kima Connect device menu", () => {
         });
         expect(fake.updateHandoff).toHaveBeenCalledWith("handoff1", own.id, "cancelled");
         expect(host.textContent).toContain("Transfer cancelled");
+    });
+
+    it("clears a completed transfer after reconciling the server state", async () => {
+        let finishStatus!: (value: { handoff: null }) => void;
+        fake.getOutgoing.mockImplementation(() => new Promise(resolve => { finishStatus = resolve; }));
+        await open();
+        await act(async () => {
+            (host.querySelector('[title="Offer playback transfer to this device"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain("Cancel pending transfer");
+        expect(fake.getOutgoing).toHaveBeenCalledWith(own.id);
+
+        await act(async () => {
+            finishStatus({ handoff: null });
+            await Promise.resolve();
+        });
+        expect(host.textContent).not.toContain("Cancel pending transfer");
+        expect(host.textContent).toContain("Transfer is no longer active");
     });
 
     it("disables transfer if no audio is currently playing", async () => {
