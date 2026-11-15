@@ -29,7 +29,10 @@ const make = (id: string) => ({ id, name: "Desktop", status: "playing" as const,
 
 beforeEach(() => {
     jest.clearAllMocks();
-    const pipeline = { zadd: jest.fn(), expire: jest.fn(), set: jest.fn(), exec: jest.fn().mockResolvedValue([]) };
+    const pipeline = {
+        zadd: jest.fn(), expire: jest.fn(), set: jest.fn(),
+        exec: jest.fn().mockResolvedValue([[null, "OK"], [null, "OK"]]),
+    };
     pipeline.zadd.mockReturnValue(pipeline);
     pipeline.expire.mockReturnValue(pipeline);
     pipeline.set.mockReturnValue(pipeline);
@@ -89,6 +92,17 @@ describe("Kima Connect Redis device scope", () => {
         expect(await sendConnectCommand("bob", idA, "next", NOW)).toBeNull();
         expect(await sendConnectCommand("alice", idA, "next", NOW)).toBeNull();
         expect(redis.multi).not.toHaveBeenCalled();
+    });
+
+    it("does not claim a command was queued when Redis rejected one of the writes", async () => {
+        (redis.zscore as jest.Mock).mockResolvedValue(String(NOW - 1000));
+        const failed = {
+            set: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([[new Error("OOM"), null], [null, "OK"]]),
+        };
+        (redis.multi as jest.Mock).mockReturnValueOnce(failed);
+        await expect(sendConnectCommand("alice", idB, "pause", NOW))
+            .rejects.toThrow("Unable to queue remote command");
     });
 
     it("returns account-scoped command receipts and derives expiry from server time", async () => {
