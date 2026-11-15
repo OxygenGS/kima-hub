@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Cast, Loader2, Pause, RefreshCw, SkipBack, SkipForward, X } from "lucide-react";
+import { ArrowRightLeft, Cast, Loader2, Pause, RefreshCw, SkipBack, SkipForward, X } from "lucide-react";
 import { api, type ConnectDevice, type ConnectCommandType } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { getConnectDeviceId } from "@/lib/connect-device-id";
+import { useAudioState } from "@/lib/audio-state-context";
+import { useAudioPlayback } from "@/lib/audio-playback-context";
 
 /** A small account-scoped remote-control surface. Playback stays on the target browser. */
 export function ConnectButton({ className = "", placement = "above" }: { className?: string; placement?: "above" | "below" }) {
     const { locale } = useLanguage();
     const { user } = useAuth();
+    const audio = useAudioState();
+    const playback = useAudioPlayback();
     const [open, setOpen] = useState(false);
     const [devices, setDevices] = useState<ConnectDevice[]>([]);
     const [devicesOwnerId, setDevicesOwnerId] = useState<string | null>(null);
@@ -18,6 +22,7 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
+    const [pendingOffer, setPendingOffer] = useState<{ id: string; sourceDeviceId: string; ownerId: string } | null>(null);
 
     const nl = locale === "nl";
     const userId = user?.id ?? null;
@@ -27,7 +32,6 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
             const response = await api.getConnectDevices();
             setDevices(response.devices);
             setDevicesOwnerId(userId);
-            setMessage(null);
         } catch {
             setDevices([]);
             setDevicesOwnerId(null);
@@ -45,6 +49,93 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         const interval = window.setInterval(() => { void refresh(); }, 10_000);
         return () => window.clearInterval(interval);
     }, [open, refresh, userId]);
+
+    // Keep the source menu aligned with the short-lived server handoff state.
+    // A completed, declined or expired offer must not leave a stale cancel action.
+    useEffect(() => {
+        const offer = pendingOffer;
+        if (!offer || offer.ownerId !== userId) return;
+        let active = true;
+        let inFlight = false;
+
+        const check = async () => {
+            if (!active || inFlight) return;
+            inFlight = true;
+            try {
+                const { handoff } = await api.getOutgoingConnectHandoff(offer.sourceDeviceId);
+                if (!active) return;
+                if (!handoff || handoff.id !== offer.id) {
+                    setPendingOffer(current =>
+                        current?.id === offer.id && current.ownerId === offer.ownerId ? null : current);
+                    setMessage(nl
+                        ? "De overdracht is niet meer actief (afgerond, geweigerd of verlopen)."
+                        : "Transfer is no longer active (completed, declined or expired).");
+                } else if (handoff.status === "started") {
+                    setMessage(nl
+                        ? "Het andere apparaat speelt af. De bron controleert de overdracht."
+                        : "The other device is playing. The source is verifying the transfer.");
+                }
+            } catch {
+                // Keep the cancel action available during a temporary API outage.
+            } finally {
+                inFlight = false;
+            }
+        };
+
+        void check();
+        const interval = window.setInterval(() => { void check(); }, 7_000);
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+        };
+    }, [pendingOffer, userId, nl]);
+
+    const canHandoff = playback.isPlaying && audio.playbackType === "track" &&
+        audio.queue.length > 0 && audio.queue.length <= 50 &&
+        audio.currentIndex >= 0 && audio.currentIndex < audio.queue.length &&
+        audio.currentTrack?.id === audio.queue[audio.currentIndex]?.id;
+
+    const offerHandoff = async (targetId: string) => {
+        const sourceDeviceId = userId ? getConnectDeviceId(userId) : null;
+        if (!canHandoff || !sourceDeviceId || sourceDeviceId === targetId || devicesOwnerId !== userId) return;
+        setBusy(targetId);
+        setMessage(null);
+        try {
+            const offered = await api.offerConnectHandoff({
+                sourceDeviceId, targetDeviceId: targetId,
+                trackIds: audio.queue.map(track => track.id),
+                currentIndex: audio.currentIndex,
+                positionSeconds: Math.min(Math.max(0, playback.currentTime),
+                    Math.max(0, (audio.currentTrack?.duration ?? 0) - 0.5)),
+            });
+            setPendingOffer({ id: offered.id, sourceDeviceId, ownerId: userId! });
+            setMessage(nl
+                ? "Overdracht aangeboden. Bevestig afspelen op het andere apparaat."
+                : "Transfer offered. Confirm playback on the other device.");
+        } catch {
+            setMessage(nl
+                ? "Overdracht niet mogelijk. Controleer of beide spelers actief zijn en er geen verzoek openstaat."
+                : "Transfer unavailable. Check both players are online and no other request is pending.");
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const cancelHandoff = async () => {
+        if (!pendingOffer || pendingOffer.ownerId !== userId) return;
+        setBusy(pendingOffer.id);
+        try {
+            await api.updateConnectHandoff(pendingOffer.id, pendingOffer.sourceDeviceId, "cancelled");
+            setPendingOffer(null);
+            setMessage(nl ? "Overdracht geannuleerd." : "Transfer cancelled.");
+        } catch {
+            setMessage(nl ? "Annuleren niet mogelijk; het verzoek is mogelijk al afgerond." :
+                "Cannot cancel; the transfer may have completed already.");
+            setPendingOffer(null);
+        } finally {
+            setBusy(null);
+        }
+    };
 
     const send = async (id: string, type: ConnectCommandType) => {
         if (!userId || devicesOwnerId !== userId) return;
@@ -148,15 +239,39 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                                                 ))}
                                             </div>
                                         )}
+                                        {!local && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { void offerHandoff(device.id); }}
+                                                disabled={busy !== null || !canHandoff}
+                                                title={nl ? "Bied overdracht van muziek aan op dit apparaat" : "Offer playback transfer to this device"}
+                                                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-2 text-xs font-medium text-amber-200 hover:bg-amber-400/20 disabled:opacity-40"
+                                            >
+                                                <ArrowRightLeft size={15} aria-hidden="true" />
+                                                {nl ? "Muziek hierheen overzetten" : "Transfer playback here"}
+                                            </button>
+                                        )}
                                     </li>
                                 );
                             })}
                         </ul>
                     )}
+                    {audio.queue.length > 50 && playback.isPlaying && (
+                        <p className="mt-3 text-[11px] text-white/60">
+                            {nl ? "Overdracht ondersteunt maximaal 50 nummers per wachtrij." :
+                                "Transfer currently supports queues of up to 50 tracks."}
+                        </p>
+                    )}
+                    {pendingOffer?.ownerId === userId && (
+                        <button type="button" onClick={() => { void cancelHandoff(); }} disabled={busy !== null}
+                            className="mt-3 w-full rounded-lg border border-white/20 px-3 py-2 text-xs text-white/70 hover:text-white disabled:opacity-40">
+                            {nl ? "Openstaande overdracht annuleren" : "Cancel pending transfer"}
+                        </button>
+                    )}
                     {message && <p role="status" className="mt-3 text-xs text-white/75">{message}</p>}
                     <p className="mt-3 text-[11px] text-white/50">
-                        {nl ? "Alleen apparaten van je eigen account. Afspelen overnemen volgt in een volgende bouwfase."
-                            : "Your account's devices only. Playback handoff is a later phase."}
+                        {nl ? "Alleen apparaten van je eigen account. Overdracht vereist bevestiging op het ontvangende apparaat."
+                            : "Your account's devices only. Transfer requires confirmation on the receiving device."}
                     </p>
                 </div>
             )}

@@ -17,6 +17,24 @@ export interface ConnectCommand {
     createdAt: number;
 }
 
+export type ConnectHandoffStatus = "pending" | "started" | "declined" | "cancelled" | "observed";
+
+export interface ConnectHandoff {
+    id: string;
+    sourceDeviceId: string;
+    targetDeviceId: string;
+    sourceName: string;
+    trackTitle: string | null;
+    sourceTrackId: string;
+    trackIds: string[];
+    currentIndex: number;
+    positionSeconds: number;
+    createdAt: number;
+    expiresAt: number;
+    serverNow: number;
+    status: ConnectHandoffStatus;
+}
+
 export interface AlbumCoverRecoveryStatus {
     inProgress: boolean;
     total: number;
@@ -1627,6 +1645,42 @@ class ApiClient {
         return this.request<{ queued: true; commandId: string }>(
             "/connect/devices/" + encodeURIComponent(deviceId) + "/command",
             { method: "POST", body: JSON.stringify({ type }) },
+        );
+    }
+
+    // Explicit, receiver-confirmed playback transfer. The source keeps playing until
+    // the target reports actual playback and the source bridge sees that receipt.
+    async offerConnectHandoff(offer: {
+        sourceDeviceId: string;
+        targetDeviceId: string;
+        trackIds: string[];
+        currentIndex: number;
+        positionSeconds: number;
+    }) {
+        return this.request<{ id: string; expiresAt: number }>("/connect/handoffs", {
+            method: "POST",
+            body: JSON.stringify(offer),
+        });
+    }
+
+    async getIncomingConnectHandoff(deviceId: string) {
+        return this.request<{ handoff: ConnectHandoff | null }>(
+            "/connect/handoffs/incoming/" + encodeURIComponent(deviceId),
+        );
+    }
+
+    async getOutgoingConnectHandoff(deviceId: string) {
+        return this.request<{ handoff: ConnectHandoff | null }>(
+            "/connect/handoffs/outgoing/" + encodeURIComponent(deviceId),
+        );
+    }
+
+    async updateConnectHandoff(
+        handoffId: string, deviceId: string, action: "started" | "declined" | "cancelled" | "observed",
+    ) {
+        return this.request<{ status: ConnectHandoffStatus }>(
+            "/connect/handoffs/" + encodeURIComponent(handoffId) + "/" + action,
+            { method: "POST", body: JSON.stringify({ deviceId }) },
         );
     }
 

@@ -39,12 +39,46 @@ Browsers generally require a local gesture to start a newly opened audio
 session. We will not silently bypass that restriction or claim that a remote
 command succeeded before the target confirms it.
 
-## Next implementation slices (not yet part of the code)
+## Stage 2 — Explicit playback handoff (development PR; not released)
 
-1. **Explicit handoff:** request an authenticated transfer to a chosen Kima
-   browser with queue and position; target must confirm locally before playback.
-   Include nonce, TTL and source/target state version checks, stopping the
-   source only after the target actually starts.
+A signed-in person can offer their current playing **local-library track queue** to a
+second active Kima browser under the same account. The destination sees a
+non-automatic prompt and must tap **Play here**. The source keeps playing until
+the receiver's **existing audio engine** reports a new generation actually
+playing the requested track, the receiver sends an acknowledgement, and the
+source observes that acknowledgement.
+
+- The offer includes library track IDs (not file paths), current queue index,
+  seek position, device IDs and small display labels. Redis scopes the request
+  to the authenticated account with a two-minute acceptance window.
+- The destination loads track metadata with the existing authenticated library
+  API, in small batches, **before** accepting. A missing track blocks transfer;
+  no unvalidated file paths or stream URLs are relayed.
+- Browser gesture restrictions are respected: the receiver explicitly clicks
+  Play to start the existing player. No remotely triggered autoplay.
+- After the receiver reports *playing*, the source stops only if it is still
+  on the same track and its play position remains approximately continuous.
+  Changed sessions are never forcibly paused.
+- The source's transfer is bounded to 50 queue entries for this first slice.
+  Longer queues are rejected rather than silently truncated.
+- Network loss, browser throttling, failed stream playback or a timed-out
+  offer leave the source playing. A receiver with a failed acknowledgement
+  warns that both devices may be playing, and permits retry.
+- Existing account access, OpenSubsonic clients, media files and mounts are
+  unaffected; the protocol adds no ports and no database migration.
+- This draft does **not** implement synchronized multiroom, external-player
+  control, automatic device wake-up or a guarantee of gapless transition
+  between physically separate browsers.
+
+This is not a published stable release. Source and end-to-end checks, exact
+native build checks and a controlled release review must pass first.
+
+## Further development
+
+
+
+1. **Handoff reliability:** add low-latency confirmation delivery, explicit source
+   status receipts, and carefully verified recovery when a browser disconnects.
 2. **Live remote controls:** acknowledge commands and show delivery/execution
    statuses, optionally use the existing authenticated SSE event channel for
    lower latency, with durable stale-client cleanup.
