@@ -9,6 +9,7 @@ import { requireAuth } from "../middleware/auth";
 import { asyncHandler } from "../middleware/asyncHandler";
 import {
     ConnectDeviceLimitError, heartbeatConnectDevice, listConnectDevices, sendConnectCommand,
+    getConnectCommandReceipt, acknowledgeConnectCommand,
 } from "../services/connectDevices";
 
 import {
@@ -65,6 +66,44 @@ router.post("/devices/:id/command", asyncHandler(async (req, res) => {
     }
     res.set("Cache-Control", "private, no-store");
     res.status(202).json({ queued: true, commandId: command.id });
+}));
+
+// The sender sees a server-queued state until the target browser reports a
+// local control callback, rejection or timeout. Receipts are owner-scoped.
+router.get("/commands/:id", asyncHandler(async (req, res) => {
+    const id = deviceId.safeParse(req.params.id);
+    if (!id.success) {
+        res.status(400).json({ error: "Invalid command ID" });
+        return;
+    }
+    const receipt = await getConnectCommandReceipt(req.user!.id, id.data);
+    res.set("Cache-Control", "private, no-store");
+    if (!receipt) {
+        res.status(404).json({ error: "Command receipt unavailable" });
+        return;
+    }
+    res.json({ command: receipt });
+}));
+
+router.post("/commands/:id/ack", asyncHandler(async (req, res) => {
+    const id = deviceId.safeParse(req.params.id);
+    const body = z.object({
+        deviceId,
+        outcome: z.enum(["handled", "ignored"]),
+    }).strict().safeParse(req.body);
+    if (!id.success || !body.success) {
+        res.status(400).json({ error: "Invalid command acknowledgement" });
+        return;
+    }
+    const receipt = await acknowledgeConnectCommand(
+        req.user!.id, id.data, body.data.deviceId, body.data.outcome,
+    );
+    res.set("Cache-Control", "private, no-store");
+    if (!receipt) {
+        res.status(404).json({ error: "Command unavailable or already resolved" });
+        return;
+    }
+    res.json({ command: receipt });
 }));
 
 // Explicit handoff: a receiver always opts in locally. Nothing remotely auto-plays.
