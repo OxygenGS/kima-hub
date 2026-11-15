@@ -106,9 +106,12 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
             inFlight = true;
             try {
                 const { command } = await api.getConnectCommandReceipt(tracked.id);
-                if (active) setCommandReceipt(current =>
-                    current?.id === tracked.id && current.ownerId === tracked.ownerId &&
-                    current.status === "queued" ? { ...current, status: command.status } : current);
+                if (active && command.id === tracked.id && command.deviceId === tracked.deviceId) {
+                    setCommandReceipt(current =>
+                        current?.id === tracked.id && current.ownerId === tracked.ownerId &&
+                        current.status === "queued" && command.status !== "queued"
+                            ? { ...current, status: command.status } : current);
+                }
             } catch {
                 if (active && Date.now() - tracked.sentAt > 25_000) {
                     setCommandReceipt(current =>
