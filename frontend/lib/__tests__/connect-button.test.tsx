@@ -64,7 +64,7 @@ beforeEach(() => {
     fake.currentTime = 42;
     fake.getDevices.mockResolvedValue({ devices: [own, remote] });
     fake.sendCommand.mockResolvedValue({ queued: true, commandId: "cmd1" });
-    fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", status: "queued" } });
+    fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "queued" } });
     fake.offerHandoff.mockResolvedValue({ id: "handoff1", expiresAt: 12345 });
     fake.updateHandoff.mockResolvedValue({ status: "cancelled" });
     fake.getOutgoing.mockResolvedValue({ handoff: { id: "handoff1", status: "pending" } });
@@ -109,7 +109,7 @@ describe("Kima Connect device menu", () => {
     });
 
     it("shows a browser-handled receipt only after the remote status endpoint confirms it", async () => {
-        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", status: "handled" } });
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "handled" } });
         await open();
         await act(async () => {
             (host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement).click();
@@ -122,7 +122,7 @@ describe("Kima Connect device menu", () => {
     });
 
     it("distinguishes an ignored command from a successful handler", async () => {
-        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", status: "ignored" } });
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "ignored" } });
         await open();
         await act(async () => {
             (host.querySelector('[aria-label="Next track - Kima mobile"]') as HTMLButtonElement).click();
@@ -134,7 +134,7 @@ describe("Kima Connect device menu", () => {
     });
 
     it("indicates an unconfirmed command after the server deadline", async () => {
-        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", status: "expired" } });
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "expired" } });
         await open();
         await act(async () => {
             (host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement).click();
