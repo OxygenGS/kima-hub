@@ -25,14 +25,52 @@ export interface ConnectCommand {
     createdAt: number;
 }
 
+/** A short-lived browser report; "handled" means the callback ran, not audible output. */
+export type ConnectCommandOutcome = "handled" | "ignored";
+export type ConnectCommandStatus = "queued" | ConnectCommandOutcome | "expired";
+export interface ConnectCommandReceipt extends ConnectCommand {
+    deviceId: string;
+    status: "queued" | ConnectCommandOutcome;
+    reportedAt?: number;
+}
+export type ConnectCommandView = Omit<ConnectCommandReceipt, "status"> & {
+    status: ConnectCommandStatus;
+};
+
 const PRESENCE_SECONDS = 45;
 const COMMAND_SECONDS = 20;
+const RECEIPT_SECONDS = 90;
 const INDEX_SECONDS = 120;
 const MAX_DEVICES = 12;
 
 const indexKey = (userId: string) => "connect:devices:" + userId;
 const deviceKey = (userId: string, id: string) => "connect:device:" + userId + ":" + id;
 const commandKey = (userId: string, id: string) => "connect:command:" + userId + ":" + id;
+const receiptKey = (userId: string, id: string) => "connect:receipt:" + userId + ":" + id;
+
+// Preserve the receipt's original expiry while atomically resolving a report.
+const resolveReceiptScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+    return 1
+end
+return 0
+`;
+
+function parseReceipt(raw: string | null): ConnectCommandReceipt | null {
+    if (!raw) return null;
+    try {
+        const record = JSON.parse(raw) as ConnectCommandReceipt;
+        if (typeof record.id !== "string" || typeof record.deviceId !== "string" ||
+            !Number.isFinite(record.createdAt) ||
+            !["pause", "previous", "next"].includes(record.type) ||
+            !["queued", "handled", "ignored"].includes(record.status)) return null;
+        return record;
+    } catch {
+        return null;
+    }
+}
+
 
 function staleBefore(now: number): number {
     return now - PRESENCE_SECONDS * 1000;
@@ -109,7 +147,55 @@ export async function sendConnectCommand(
         type,
         createdAt: now,
     };
-    // One pending instruction per player. A newer user action replaces an older one.
-    await redisClient.set(commandKey(userId, deviceId), JSON.stringify(command), "EX", COMMAND_SECONDS);
+    // Keep receipt and delivery slot in one Redis transaction: a fast receiver
+    // cannot acknowledge a command whose receipt has not been stored yet.
+    // A newer command may replace an older undelivered slot. Older receipts
+    // will be shown as unconfirmed once their twenty-second window expires.
+    const receipt: ConnectCommandReceipt = { ...command, deviceId, status: "queued" };
+    const result = await redisClient.multi()
+        .set(receiptKey(userId, command.id), JSON.stringify(receipt), "EX", RECEIPT_SECONDS)
+        .set(commandKey(userId, deviceId), JSON.stringify(command), "EX", COMMAND_SECONDS)
+        .exec();
+    if (!result) throw new Error("Unable to queue remote command");
     return command;
+}
+
+/** Inspect only receipts belonging to the authenticated account. */
+export async function getConnectCommandReceipt(
+    userId: string, commandId: string, now = Date.now(),
+): Promise<ConnectCommandView | null> {
+    const receipt = parseReceipt(await redisClient.get(receiptKey(userId, commandId)));
+    if (!receipt || receipt.id !== commandId) return null;
+    return {
+        ...receipt,
+        status: receipt.status === "queued" && now >= receipt.createdAt + COMMAND_SECONDS * 1000
+            ? "expired" : receipt.status,
+    };
+}
+
+/**
+ * The addressed browser reports that its control callback ran, or that the
+ * command was ignored because its player state no longer allowed the action.
+ * This is a client acknowledgement, not proof of audible playback.
+ */
+export async function acknowledgeConnectCommand(
+    userId: string, commandId: string, deviceId: string,
+    outcome: ConnectCommandOutcome, now = Date.now(),
+): Promise<ConnectCommandView | null> {
+    const key = receiptKey(userId, commandId);
+    const raw = await redisClient.get(key);
+    const receipt = parseReceipt(raw);
+    if (!receipt || receipt.id !== commandId || receipt.deviceId !== deviceId) return null;
+    if (receipt.status !== "queued") {
+        return receipt.status === outcome ? receipt : null; // idempotent retry
+    }
+    if (now >= receipt.createdAt + COMMAND_SECONDS * 1000) return null;
+    const updated: ConnectCommandReceipt = { ...receipt, status: outcome, reportedAt: now };
+    const applied = await redisClient.eval(
+        resolveReceiptScript, 1, key, raw!, JSON.stringify(updated),
+    );
+    if (Number(applied) === 1) return updated;
+    const current = parseReceipt(await redisClient.get(key));
+    return current?.id === commandId && current.deviceId === deviceId &&
+        current.status === outcome ? current : null;
 }
