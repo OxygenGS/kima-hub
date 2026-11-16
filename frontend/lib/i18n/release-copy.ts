@@ -49,6 +49,42 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.25.0
+    "1.25.0": {
+        "titles": {
+            "Kima Hub 1.25.0 \u2014 Kima Connect": "Kima Hub 1.25.0 \u2014 Kima Connect"
+        },
+        "summaries": {
+            "Discover your signed-in Kima browsers, request remote playback controls, and explicitly hand off local-library music with verified acknowledgements and safe fallbacks.": "Ontdek je aangemelde Kima-browsers, bedien andere spelers en draag muziek uit je bibliotheek bewust over met bevestigingen en veilige terugvalopties."
+        },
+        "items": {
+            "fork.125.devices": {
+                "title": "Bekijk je eigen actieve Kima-spelers",
+                "summary": "Vind browservensters van je eigen account zonder apparaten van anderen te tonen.",
+                "body": "Kima Connect toont recente desktop-, mobiele, tablet- en tv-browsers die met hetzelfde account zijn aangemeld. De server bewaart tijdelijke apparaatstatus in Redis, geen muziekbestanden of aanmeldgegevens. Elk browsertabblad is een afzonderlijke speler; willekeurige speakers of OpenSubsonic-apps worden niet automatisch ontdekt."
+            },
+            "fork.125.handoff": {
+                "title": "Draag je wachtrij over naar een andere browser",
+                "summary": "De ontvangende browser moet zelf op Hier afspelen klikken.",
+                "body": "Vanuit een afspelend nummer uit je eigen bibliotheek kun je maximaal 50 nummer-ID's, de wachtrijpositie en een geschatte afspeelpositie aanbieden aan een andere actieve browser onder hetzelfde account. Het ontvangende apparaat laadt eerst de benodigde nummergegevens en start pas na een lokale klik de bestaande afspeelengine. De bron pauzeert alleen als de ontvanger afspelen bevestigt en het oorspronkelijke nummer en de afspeelpositie nog overeenkomen. Een gewijzigde luistersessie wordt niet onderbroken. Aanbiedingen verlopen automatisch; dit is geen multiroomfunctie of gegarandeerd naadloze overgang."
+            },
+            "fork.125.receipts": {
+                "title": "Controleer of bediening op afstand is verwerkt",
+                "summary": "Pauzeren, Vorige en Volgende tonen een eerlijke opdrachtstatus.",
+                "body": "Opdrachten komen eerst in een tijdelijke Redis-wachtrij. De ontvangende browser bevestigt wanneer een bestaande speleractie is aangeroepen of wanneer een verouderde opdracht is genegeerd. De verzender ziet de status in plaats van automatisch succes aan te nemen. 'Verwerkt' betekent dat de browser de bediening heeft aangeroepen, niet dat hoorbaar geluid of een voltooide nummerwisseling is gegarandeerd."
+            },
+            "fork.125.events": {
+                "title": "Snellere reactie met een veilige terugval",
+                "summary": "Hergebruik de beveiligde liveverbinding zonder extra poorten.",
+                "body": "Als de bestaande SSE-verbinding beschikbaar is, laat een accountgebonden signaal de bedoelde browser direct zijn Redis-opdracht controleren. Anders blijft de controle elke zeven seconden werken. Zo'n signaal bevat alleen het doelapparaat-ID, geen opdracht, wachtwoord, streamadres of wachtrij. Bij een inactieve browser, netwerkstoring of meerdere serverprocessen kan de aflevering alsnog vertraging oplopen."
+            },
+            "fork.125.recovery": {
+                "title": "Veiligere overdracht en herstel na fouten",
+                "summary": "De bron krijgt sneller bevestiging en tijdelijke Redis-fouten worden veilig verwerkt.",
+                "body": "Nadat de ontvanger echt afspelen heeft bevestigd, krijgt de bron een melding via het bestaande eventkanaal. De bron controleert nog steeds zijn nummer en positie voordat hij pauzeert. Een mislukte Redis-transactie wordt niet als geslaagde overdracht gemeld. Als het opruimen na een vastgelegde statuswijziging mislukt, verlopen de tijdelijke sleutels vanzelf en kan een herhaalde bevestiging het opruimen opnieuw proberen. Muziekbestanden, accounts, opslagmounts en historische databaserecords blijven ongemoeid."
+            }
+        }
+    },
     // release-candidate:1.24.1
     "1.24.1": {
         "titles": {

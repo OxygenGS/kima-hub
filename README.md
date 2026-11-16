@@ -20,6 +20,16 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 ---
 
+## Preview — Kima Connect (v1.25.0 release candidate)
+
+**In development; not in the published v1.24.1 image.** Project ONE adds an account-private device picker for signed-in Kima browser tabs. From the player, you can see your other active browsers, request Pause / Previous / Next, and offer your current local-library track queue to another browser.
+
+The destination must explicitly choose **Play here**. Kima verifies that the receiving audio engine has started before the source considers pausing, and protects a source that has meanwhile switched tracks. Remote command status distinguishes **queued**, **handled**, **ignored** and **unconfirmed**; a handled command is not proof that sound was audible. The existing authenticated SSE stream speeds up delivery when available, with the original Redis heartbeat as fallback.
+
+No other account can browse your devices. This does not enable automatic remote autoplay, third-party OpenSubsonic player control, guaranteed instant delivery, synchronized multiroom audio or gapless handoff between physical devices. It does not require new ports, a separate service, a media migration or a database schema change.
+
+[Technical design, limitations and rollout notes](docs/project-one.md) · [Development PRs #255–#260](https://github.com/OxygenGS/kima-hub/pull/260)
+
 ## What's new in v1.24.1
 
 **Library scans that recover from restricted subfolders.** Kima keeps indexing readable music when a nested folder rejects access, reports a warning, and preserves existing tracks inside skipped locations instead of mistaking them for deleted files. This patch also removes an obsolete Downtify scanqueue code path while preserving historical database migrations.
@@ -139,7 +149,7 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 **New in v1.24.1:** nested unreadable music folders no longer block readable library scans; existing tracks in inaccessible folders retain their status. The unused Downtify scanqueue hook was also removed. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1).
 
-**Project ONE (in development):** [Kima Connect stage 1](https://github.com/OxygenGS/kima-hub/pull/255) introduces per-account active browser player discovery and remote pause/skip controls. It is **not included** in v1.24.1. Handoff, Smart DJ and Library Guardian will be developed separately.
+**Project ONE (v1.25.0 release candidate):** Five Kima Connect stages are merged into the development source but **not present** in published v1.24.1. See the [Kima Connect preview](#preview--kima-connect-v1250-release-candidate) and [technical documentation](docs/project-one.md). Smart DJ and Library Guardian remain future plans.
 
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
