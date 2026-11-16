@@ -196,6 +196,21 @@ interface VibePathTrack {
     artistName: string;
 }
 
+export type NovaFlowStyle = "familiar" | "balanced" | "adventurous";
+export type NovaFlowReason = "seed" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
+export interface NovaFlowTrack {
+    id: string;
+    title: string;
+    duration: number;
+    artist: { id: string; name: string };
+    album: { id: string; title: string; coverArt: string | null };
+    reason: NovaFlowReason;
+}
+export interface NovaFlowPreview {
+    seedTrackId: string | null;
+    tracks: NovaFlowTrack[];
+}
+
 /** Similar-tracks answers share this shape; /vibe/similar and /vibe/alchemy send no trackNo. */
 interface VibeTrack {
     id: string;
@@ -2274,6 +2289,25 @@ class ApiClient {
 
     async clearAllDownloadHistory(): Promise<{ success: boolean }> {
         return this.post("/notifications/downloads/clear-all");
+    }
+
+    // NOVA guided Flow. Read-only preview: audio starts only from a local click.
+    async getNovaFlowPreview(
+        options: {
+            seedTrackId?: string;
+            style: NovaFlowStyle;
+            energy: number;
+            discovery: number;
+            limit?: number;
+            excludeTrackIds?: string[];
+        },
+        signal?: AbortSignal,
+    ) {
+        return this.request<NovaFlowPreview>("/vibe/flow", {
+            method: "POST",
+            body: JSON.stringify(options),
+            signal,
+        });
     }
 
     // Vibe (CLAP Similarity) API
