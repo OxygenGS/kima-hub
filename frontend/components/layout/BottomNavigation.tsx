@@ -15,10 +15,10 @@ const navigationItems = [
         matchPattern: "/collection"
     },
     {
-        name: "Vibe",
-        href: "/vibe",
+        name: "Flow",
+        href: "/flow",
         icon: Sparkles,
-        matchPattern: "/vibe"
+        matchPattern: "/flow"
     },
     {
         name: "Audiobooks",
