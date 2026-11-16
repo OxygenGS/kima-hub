@@ -36,7 +36,7 @@ describe("NOVA Flow ranking", () => {
     it("spreads artists and albums instead of repeating one voice immediately", () => {
         const prefs = { style: "balanced" as const, energy: 50, discovery: 15 };
         const tracks = [
-            make("a1", "artist-a", 0.94, 0.5),
+            make("a1", "artist-a", 0.94, 0.5, 0, true),
             make("a2", "artist-a", 0.93, 0.5),
             make("b1", "artist-b", 0.91, 0.5),
             make("c1", "artist-c", 0.90, 0.5),
