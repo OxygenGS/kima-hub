@@ -4,7 +4,12 @@ Project ONE is a staged improvement to the **OxygenGS fork**, designed for any
 self-hosted Kima deployment. It does not assume a particular NAS, hostname,
 Docker volume, reverse proxy, IP address or external subscription service.
 
-## Stage 1 — Discover and control your own browser players (development)
+**Release status (16 November 2026):** all five stages are merged into `main`
+and are being prepared as the **v1.25.0 release candidate**. The published
+stable version is still **v1.24.1**, which does not contain Kima Connect.
+Do not use a v1.25.0 Docker tag until its actual publication is verified.
+
+## Stage 1 — Discover and control your own browser players (merged; unreleased)
 
 Kima Connect adds an account-private device menu to desktop and mobile playback.
 Signed-in Kima browser tabs announce a temporary, per-user browser identity and
@@ -140,7 +145,7 @@ and 90-second status receipt; then the existing per-account event bus emits
 This stage is merged into main, but not published in the stable Docker image.
 A reviewed native release remains necessary before deployment.
 
-## Stage 5 — Reliable transfer receipts and source wake (development PR; not released)
+## Stage 5 — Reliable transfer receipts and source wake (merged; unreleased)
 
 After a destination explicitly chooses **Play here** and its audio engine confirms
 a newly playing generation, the destination transitions the existing Redis
@@ -169,13 +174,12 @@ authenticated per-user SSE connection.
   multiroom playback. Source playback still continues if confirmation cannot
   be observed, unless source continuity is safely verified.
 
-No new ports, services, database tables, media paths, player engines, password
-requirements or Docker releases. Full regression and native build checks are
-required before merge; a separate release review is needed before deployment.
+No new ports, services, database tables, media paths, player engines or password
+requirements were introduced by this stage. Source CI passed before merge,
+but the v1.25.0 release candidate still requires complete regression checks,
+native image preflight and a separate release approval before deployment.
 
 ## Further development
-
-
 
 1. **Handoff recovery:** evaluate explicit source pause result reporting and
    multi-process notification fan-out, with safe behavior after browser disconnects.
