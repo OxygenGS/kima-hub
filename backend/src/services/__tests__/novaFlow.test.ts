@@ -1,5 +1,3 @@
-const mock = jest.fn;
-
 jest.mock("../../utils/db", () => ({
     prisma: {
         track: {
