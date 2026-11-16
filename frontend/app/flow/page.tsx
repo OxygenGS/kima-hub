@@ -12,7 +12,6 @@ import { useLanguage } from "@/lib/i18n/language-context";
 import { Button } from "@/components/ui/Button";
 
 type Prepared = { key: string; ownerId: string; preview: NovaFlowPreview };
-const PRESET_STYLES: NovaFlowStyle[] = ["familiar", "balanced", "adventurous"];
 
 const COPY = {
     en: {
@@ -83,9 +82,9 @@ export default function FlowPage() {
     useEffect(() => {
         if (!user?.id) return;
         const ctrl = new AbortController();
-        setLoading(true);
-        setFailed(false);
         const timer = window.setTimeout(() => {
+            setLoading(true);
+            setFailed(false);
             void api.getNovaFlowPreview({
                 seedTrackId, style, energy, discovery, limit: 25,
             }, ctrl.signal).then(result => {
