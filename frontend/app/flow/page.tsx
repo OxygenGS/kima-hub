@@ -62,7 +62,7 @@ export default function FlowPage() {
     const { locale } = useLanguage();
     const text = COPY[locale];
     const { user } = useAuth();
-    const { playbackType, currentTrack, queue, currentIndex, setActiveOperation, setIsShuffle } = useAudioState();
+    const { playbackType, currentTrack, queue, currentIndex, setActiveOperation, setIsShuffle, setRepeatMode } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { playTracks, setUpcoming, resumeWithGesture } = useAudioControls();
 
@@ -77,7 +77,7 @@ export default function FlowPage() {
 
     const seedTrackId = playbackType === "track" ? currentTrack?.id : undefined;
     const requestKey = `${user?.id ?? ""}:${seedTrackId ?? ""}:${style}:${energy}:${discovery}:${generation}`;
-    const preview = prepared?.ownerId === user?.id && prepared.key === requestKey
+    const preview = prepared && prepared.ownerId === user?.id && prepared.key === requestKey
         ? prepared.preview : null;
 
     useEffect(() => {
@@ -113,6 +113,7 @@ export default function FlowPage() {
             && queue[currentIndex]?.id === currentTrack?.id;
         setActiveOperation({ type: "idle" });
         setIsShuffle(false); // Keep the music journey's intentional sequence.
+        setRepeatMode("off"); // Never let a previous repeat-one setting trap the Flow.
         if (canContinue) {
             setUpcoming(tracks.slice(1), true);
             if (!isPlaying) resumeWithGesture();
