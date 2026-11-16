@@ -15,6 +15,7 @@ const fake = vi.hoisted(() => ({
     setUpcoming: vi.fn(),
     resume: vi.fn(),
     setShuffle: vi.fn(),
+    setRepeat: vi.fn(),
     setOperation: vi.fn(),
 }));
 
@@ -29,6 +30,7 @@ vi.mock("@/lib/audio-state-context", () => ({
         currentIndex: fake.index,
         setActiveOperation: fake.setOperation,
         setIsShuffle: fake.setShuffle,
+        setRepeatMode: fake.setRepeat,
     }),
 }));
 vi.mock("@/lib/audio-playback-context", () => ({ useAudioPlayback: () => ({ isPlaying: fake.playing }) }));
@@ -101,6 +103,7 @@ describe("NOVA Flow guided listening", () => {
         expect(fake.setUpcoming.mock.calls[0][0].map((t: { id: string }) => t.id)).toEqual(["next"]);
         expect(fake.playTracks).not.toHaveBeenCalled();
         expect(fake.setShuffle).toHaveBeenCalledWith(false);
+        expect(fake.setRepeat).toHaveBeenCalledWith("off");
         expect(fake.setOperation).toHaveBeenCalledWith({ type: "idle" });
     });
 
