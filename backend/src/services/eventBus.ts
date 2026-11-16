@@ -17,7 +17,8 @@ type SSEEventType =
     | "preview:complete"
     | "enrichment:progress"
     | "playlist:updated"
-    | "connect:command-wake";
+    | "connect:command-wake"
+    | "connect:handoff-wake";
 
 export interface SSEEvent {
     type: SSEEventType;
