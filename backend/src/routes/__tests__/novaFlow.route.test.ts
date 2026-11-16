@@ -62,6 +62,6 @@ describe("NOVA Flow authenticated preview", () => {
         generate.mockResolvedValueOnce({ unavailableSeed: true, seedTrackId: "missing", tracks: [] });
         const res = await request(app).post("/api/vibe/flow")
             .set("x-test-user", "alice").send({ seedTrackId: "missing" }).expect(404);
-        expect(res.body.error).toMatch(/not available/);
+        expect(res.body.error).toMatch(/no longer available in your library/);
     });
 });
