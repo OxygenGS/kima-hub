@@ -2,7 +2,27 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.24.1 — current published release (14 November 2026)
+## v1.25.0 — current published release (16 November 2026)
+
+The [exact-main v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) verified `main` source `0bda03e90ac12260b0f9307c799f2fc3a96a44a2`, built separate AMD64/ARM64 images, confirmed their architecture and revision labels, and passed configured secret and fixable-vulnerability checks without publishing. [Explicit approved stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307). The current published image is `ghcr.io/oxygengs/kima-hub:v1.25.0`.
+
+| Native v1.25.0 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | **393** | **8** | **0** |
+| linux/arm64 | **392** | **8** | **0** |
+
+Relative to the v1.24.1 preflight, the HIGH count increased by 62 per architecture while CRITICAL remained at eight. The change is dominated by seven newly listed FFmpeg vulnerabilities distributed over nine FFmpeg packages; the affected installed FFmpeg version did not change between these builds. This is not a declaration of exploitability or safety: media-processing code may handle untrusted input, so the vulnerabilities require exposure-aware review.
+
+**Eight CRITICAL advisories remain unresolved:** `CVE-2023-45853`, `CVE-2023-6879`, `CVE-2025-47917`, `CVE-2025-7458`, `CVE-2026-34873`, `CVE-2026-34875`, `CVE-2026-58016` and `CVE-2026-6653`. No fixed package version was explicitly listed in the Trivy output. Do not assume these vulnerabilities cannot be exploited just because an automated gate passed.
+
+- [AMD64 Trivy evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293/artifacts/14265201415)
+- [ARM64 Trivy evidence](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293/artifacts/14263234002)
+- [Recorded residual-risk review](https://github.com/OxygenGS/kima-hub/pull/261#issuecomment-6927678235)
+- [Published GitHub Release v1.25.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0)
+
+These figures are from the *build-only preflight images* and that scanner database snapshot, not independent post-publication registry or live-host scans. Apply host/proxy updates, restrict public exposure, protect secrets and maintain a separately restorable cold backup of `/data`.
+
+## Historical: v1.24.1 — published 14 November 2026
 
 The [v1.24.1 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191) validated exact `main` source SHA `94999192731eda338c6eb9c154982a6f1a9c8b68`. Native AMD64 and ARM64 builds passed the configured architecture, revision-label, secrets and fixable-vulnerability gates **without publishing an image**. [Explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/43634518503) preceded the [successful native multi-architecture publication](https://github.com/OxygenGS/kima-hub/actions/runs/43634534788). The current published image is `ghcr.io/oxygengs/kima-hub:v1.24.1`.
 
