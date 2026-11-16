@@ -41,6 +41,7 @@ export function ConnectDeviceBridge() {
         const name = getConnectDeviceName();
         let mounted = true;
         let inFlight = false;
+        let wakePending = false;
 
         const pulse = async () => {
             if (!mounted || inFlight) return;
@@ -133,13 +134,32 @@ export function ConnectDeviceBridge() {
                 // API/Redis outages never change local playback.
             } finally {
                 inFlight = false;
+                // A wake signal may arrive during a heartbeat which already
+                // consumed its previous command. Drain one extra pulse rather
+                // than losing that signal until the seven-second fallback.
+                if (mounted && wakePending) {
+                    wakePending = false;
+                    void pulse();
+                }
             }
         };
+
+        const onWake = (event: Event) => {
+            if (!mounted || (event as CustomEvent<{ deviceId?: string }>).detail?.deviceId !== id) return;
+            wakePending = true;
+            if (!inFlight) {
+                wakePending = false;
+                void pulse();
+            }
+        };
+        window.addEventListener("kima-connect-command-wake", onWake);
 
         void pulse();
         const interval = window.setInterval(() => { void pulse(); }, PULSE_MS);
         return () => {
             mounted = false;
+            wakePending = false;
+            window.removeEventListener("kima-connect-command-wake", onWake);
             window.clearInterval(interval);
         };
     }, [user?.id]);
