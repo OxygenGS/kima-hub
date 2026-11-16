@@ -167,6 +167,15 @@ export function useEventSource() {
                                 }));
                             }
                             break;
+                        case "connect:handoff-wake":
+                            // Receipt was committed server-side; this is only a
+                            // per-device signal to check the existing handoff API.
+                            if (typeof data.deviceId === "string") {
+                                window.dispatchEvent(new CustomEvent("kima-connect-handoff-wake", {
+                                    detail: { deviceId: data.deviceId },
+                                }));
+                            }
+                            break;
                         case "connected":
                             // Only refetch on reconnect (not initial connect) to avoid
                             // duplicate requests when queries were just fetched on mount.

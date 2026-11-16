@@ -153,6 +153,7 @@ export function ConnectDeviceBridge() {
             }
         };
         window.addEventListener("kima-connect-command-wake", onWake);
+        window.addEventListener("kima-connect-handoff-wake", onWake);
 
         void pulse();
         const interval = window.setInterval(() => { void pulse(); }, PULSE_MS);
@@ -160,6 +161,7 @@ export function ConnectDeviceBridge() {
             mounted = false;
             wakePending = false;
             window.removeEventListener("kima-connect-command-wake", onWake);
+            window.removeEventListener("kima-connect-handoff-wake", onWake);
             window.clearInterval(interval);
         };
     }, [user?.id]);

@@ -115,6 +115,27 @@ describe("Connect wake over the existing authenticated event stream", () => {
         }
     });
 
+    it("forwards receiver-confirmed handoff hints to source devices without media data", async () => {
+        await renderSubscriber();
+        const wake = vi.fn();
+        window.addEventListener("kima-connect-handoff-wake", wake);
+        try {
+            await act(async () => {
+                FakeEventSource.instances[0].emit({
+                    type: "connect:handoff-wake",
+                    deviceId: "source-device",
+                    trackIds: ["private-track"],
+                });
+            });
+            expect(wake).toHaveBeenCalledOnce();
+            expect((wake.mock.calls[0][0] as CustomEvent).detail).toEqual({
+                deviceId: "source-device",
+            });
+        } finally {
+            window.removeEventListener("kima-connect-handoff-wake", wake);
+        }
+    });
+
     it("closes the old account's stream and ignores late wake events after switching users", async () => {
         await renderSubscriber();
         const alice = FakeEventSource.instances[0];

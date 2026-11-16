@@ -6,6 +6,7 @@ import { ConnectDeviceBridge } from "@/components/player/ConnectDeviceBridge";
 const fake = vi.hoisted(() => ({
     heartbeat: vi.fn(),
     ack: vi.fn(),
+    updateHandoff: vi.fn(),
     incoming: vi.fn(),
     outgoing: vi.fn(),
     pause: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/lib/api", () => ({
     api: {
         connectHeartbeat: fake.heartbeat,
         acknowledgeConnectCommand: fake.ack,
+        updateConnectHandoff: fake.updateHandoff,
         getIncomingConnectHandoff: fake.incoming,
         getOutgoingConnectHandoff: fake.outgoing,
     },
@@ -61,6 +63,7 @@ beforeEach(() => {
     fake.playbackType = "track";
     fake.heartbeat.mockResolvedValue({ command: null, ttlSeconds: 45 });
     fake.ack.mockResolvedValue({ command: { status: "handled" } });
+    fake.updateHandoff.mockResolvedValue({ status: "observed" });
     fake.incoming.mockResolvedValue({ handoff: null });
     fake.outgoing.mockResolvedValue({ handoff: null });
     host = document.createElement("div");
@@ -153,6 +156,50 @@ describe("Kima Connect command handling receipts", () => {
             await Promise.resolve();
         });
         expect(fake.heartbeat).toHaveBeenCalledTimes(2);
+    });
+
+    it("immediately observes a started handoff when the source receives its SSE hint", async () => {
+        await mountBridge();
+        expect(fake.pause).not.toHaveBeenCalled();
+        fake.outgoing.mockResolvedValue({
+            handoff: {
+                id: "handoff-started", status: "started", sourceTrackId: "track1",
+                positionSeconds: 10, createdAt: 1800000000000, serverNow: 1800000000000,
+            },
+        });
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent("kima-connect-handoff-wake", {
+                detail: { deviceId: "aa47d96f-37dd-4fd4-a550-74e10e2f7241" },
+            }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(fake.heartbeat).toHaveBeenCalledTimes(2);
+        expect(fake.pause).toHaveBeenCalledOnce();
+        expect(fake.updateHandoff).toHaveBeenCalledWith(
+            "handoff-started", "aa47d96f-37dd-4fd4-a550-74e10e2f7241", "observed",
+        );
+    });
+
+    it("never pauses changed source playback on a delayed handoff hint", async () => {
+        await mountBridge();
+        fake.outgoing.mockResolvedValue({
+            handoff: {
+                id: "handoff-changed", status: "started", sourceTrackId: "different-track",
+                positionSeconds: 10, createdAt: 1800000000000, serverNow: 1800000000000,
+            },
+        });
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent("kima-connect-handoff-wake", {
+                detail: { deviceId: "aa47d96f-37dd-4fd4-a550-74e10e2f7241" },
+            }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(fake.pause).not.toHaveBeenCalled();
+        expect(fake.updateHandoff).toHaveBeenCalledWith(
+            "handoff-changed", "aa47d96f-37dd-4fd4-a550-74e10e2f7241", "observed",
+        );
     });
 
     it("never sends a receipt for an empty command heartbeat", async () => {

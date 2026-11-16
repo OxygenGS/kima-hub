@@ -106,7 +106,7 @@ does not allow the action (**ignored**).
 Stage 3 is merged into the development branch, but not published in the stable
 Docker image. A reviewed native release remains necessary before deployment.
 
-## Stage 4 — Low-latency browser wake hints (development PR; not released)
+## Stage 4 — Low-latency browser wake hints (merged into main; not released)
 
 Kima now reuses its existing authenticated, one-time-ticket **SSE event stream**
 for a minimal device-specific *wake hint*. When an authorized sender queues a
@@ -137,17 +137,49 @@ and 90-second status receipt; then the existing per-account event bus emits
 - No new HTTP endpoint, service port, database migration, Docker service,
   audio engine, music relocation or automatic release.
 
-This stage remains unreleased pending the exact-head CI checks, language
-regressions, security/source-privacy review and native AMD64/ARM64 build checks.
+This stage is merged into main, but not published in the stable Docker image.
+A reviewed native release remains necessary before deployment.
+
+## Stage 5 — Reliable transfer receipts and source wake (development PR; not released)
+
+After a destination explicitly chooses **Play here** and its audio engine confirms
+a newly playing generation, the destination transitions the existing Redis
+handoff state from `pending` to `started`. Only after the committed transition
+does the server publish a short `connect:handoff-wake` hint via the existing
+authenticated per-user SSE connection.
+
+- The hint contains only the source device ID, not a track list, player
+  position, stream URL, command or credential. Other tabs ignore it.
+- The addressed source immediately polls its existing authenticated handoff
+  endpoint. It pauses only if its own audio engine still plays the original
+  track at a continuous position. Otherwise it acknowledges without stopping
+  the new listening session. The existing periodic seven-second heartbeat
+  remains a fallback when SSE or the event bus cannot deliver.
+- Initial Redis handoff-record writes now check the full transaction result,
+  not merely that Redis returned an array. Failed writes release the acquired
+  short-lived source/target pointers so a later retry is not blocked by an
+  incompletely created transfer.
+- Pointer deletion after a committed transition is best-effort, because
+  pointer keys have their own two-minute expiry. A repeated identical
+  transition retries cleanup; transient failures do not falsely report that a
+  receiver's confirmed playback was rejected. The backend never rolls
+  a committed `started` state back to `pending`.
+- This is an acceleration and error-recovery improvement, not a guarantee
+  of seamless gapless transfer, successful network delivery or simultaneous
+  multiroom playback. Source playback still continues if confirmation cannot
+  be observed, unless source continuity is safely verified.
+
+No new ports, services, database tables, media paths, player engines, password
+requirements or Docker releases. Full regression and native build checks are
+required before merge; a separate release review is needed before deployment.
 
 ## Further development
 
 
 
-1. **Handoff reliability:** add low-latency confirmation delivery, explicit source
-   status receipts, and carefully verified recovery when a browser disconnects.
-2. **Playback assurance:** richer audio-engine outcome reporting, and where
-   relevant a shared notification bus for multi-process backends, without
+1. **Handoff recovery:** evaluate explicit source pause result reporting and
+   multi-process notification fan-out, with safe behavior after browser disconnects.
+2. **Playback assurance:** richer audio-engine outcome reporting without
    remotely triggering autoplay or expanding Redis's bounded command window.
 3. **Smart DJ:** use existing library audio-analysis, Vibe similarity, likes,
    user preferences and listening history to produce on-device/library-only

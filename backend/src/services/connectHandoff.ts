@@ -9,6 +9,7 @@
 import { randomUUID } from "crypto";
 import { redisClient } from "../utils/redis";
 import type { ConnectDevice } from "./connectDevices";
+import { eventBus } from "./eventBus";
 
 const OFFER_SECONDS = 120;
 const RECORD_SECONDS = 150;
@@ -132,7 +133,9 @@ export async function createConnectHandoff(
             .set(recordKey(userId, id), JSON.stringify(request), "EX", RECORD_SECONDS)
             .set(statusKey(userId, id), "pending", "EX", RECORD_SECONDS)
             .exec();
-        if (!written) throw new Error("Unable to store handoff");
+        if (!written || written.length !== 2 || written.some(([error]) => error !== null)) {
+            throw new Error("Unable to store handoff");
+        }
         return { id, expiresAt: request.expiresAt };
     } catch (error) {
         await releasePointer(sourcePointer, id);
@@ -165,6 +168,39 @@ export async function getOutgoingConnectHandoff(
 }
 
 type Transition = "started" | "declined" | "cancelled" | "observed";
+
+/**
+ * The status transition is authoritative; pointer deletion is bounded cleanup.
+ * If Redis temporarily rejects a deletion, its 120-second key expiry still
+ * prevents permanent deadlocks. A repeated identical transition retries cleanup.
+ */
+async function cleanupPointers(userId: string, offer: HandoffView, to: Transition): Promise<void> {
+    const pending: Promise<void>[] = [];
+    if (to === "started" || to === "declined" || to === "cancelled") {
+        pending.push(releasePointer(targetKey(userId, offer.targetDeviceId), offer.id));
+    }
+    if (to === "observed" || to === "declined" || to === "cancelled") {
+        pending.push(releasePointer(sourceKey(userId, offer.sourceDeviceId), offer.id));
+    }
+    if (pending.length) await Promise.allSettled(pending);
+}
+
+/**
+ * A successful receiver confirmation wakes only the same account's source
+ * browser. No track data, command, token or playback position is broadcast.
+ * Missing SSE delivery never changes the Redis-backed handoff semantics.
+ */
+function signalSource(userId: string, sourceDeviceId: string): void {
+    try {
+        eventBus.emit({
+            type: "connect:handoff-wake", userId,
+            payload: { deviceId: sourceDeviceId },
+        });
+    } catch {
+        // Best effort; existing periodic polling remains the fallback.
+    }
+}
+
 /** Atomic compare-and-set rejects double confirmations and late cancellation. */
 export async function transitionConnectHandoff(
     userId: string, offerId: string, deviceId: string, to: Transition, now = Date.now(),
@@ -179,7 +215,11 @@ export async function transitionConnectHandoff(
 
     const expected = to === "observed" ? "started" : "pending";
     if (offer.status !== expected) {
-        if (offer.status === to) return offer.status; // Idempotent response for network retry.
+        if (offer.status === to) {
+            await cleanupPointers(userId, offer, to);
+            if (to === "started") signalSource(userId, offer.sourceDeviceId);
+            return offer.status; // Idempotent network retry and cleanup.
+        }
         throw new HandoffStateError("Handoff already changed");
     }
     const changed = await redisClient.eval(
@@ -187,11 +227,7 @@ export async function transitionConnectHandoff(
     );
     if (Number(changed) !== 1) throw new HandoffStateError("Handoff already changed");
 
-    if (to === "started" || to === "declined" || to === "cancelled") {
-        await releasePointer(targetKey(userId, offer.targetDeviceId), offerId);
-    }
-    if (to === "observed" || to === "declined" || to === "cancelled") {
-        await releasePointer(sourceKey(userId, offer.sourceDeviceId), offerId);
-    }
+    await cleanupPointers(userId, offer, to);
+    if (to === "started") signalSource(userId, offer.sourceDeviceId);
     return to;
 }
