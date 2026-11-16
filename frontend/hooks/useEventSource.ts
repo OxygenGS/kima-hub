@@ -13,14 +13,14 @@ function getSSEBaseUrl(): string {
 }
 
 export function useEventSource() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const queryClient = useQueryClient();
     const eventSourceRef = useRef<EventSource | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const reconnectAttemptsRef = useRef(0);
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        if (!isAuthenticated || !user?.id) {
             reconnectAttemptsRef.current = 0;
             return;
         }
@@ -157,6 +157,16 @@ export function useEventSource() {
                                 queryClient.invalidateQueries({ queryKey: ["playlist", data.playlistId] });
                             }
                             break;
+                        case "connect:command-wake":
+                            // SSE is a wake hint, never a player command. The
+                            // recipient bridge fetches the instruction from
+                            // Redis through its authenticated heartbeat.
+                            if (typeof data.deviceId === "string") {
+                                window.dispatchEvent(new CustomEvent("kima-connect-command-wake", {
+                                    detail: { deviceId: data.deviceId },
+                                }));
+                            }
+                            break;
                         case "connected":
                             // Only refetch on reconnect (not initial connect) to avoid
                             // duplicate requests when queries were just fetched on mount.
@@ -217,5 +227,5 @@ export function useEventSource() {
                 eventSourceRef.current = null;
             }
         };
-    }, [isAuthenticated, queryClient]);
+    }, [isAuthenticated, user?.id, queryClient]);
 }
