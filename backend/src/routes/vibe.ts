@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { promisify } from "node:util";
 import { gzip } from "node:zlib";
 import { logger } from "../utils/logger";
@@ -6,6 +7,7 @@ import { prisma } from "../utils/db";
 import { requireAuth } from "../middleware/auth";
 import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
+import { buildNovaFlow } from "../services/novaFlow";
 import { getVibeMap, type MapResponse } from "../services/vibeMap";
 import { currentMoodSnapshot, moodOutput } from "../services/moodBucketService";
 import { generateSongPath } from "../services/songPath";
@@ -66,6 +68,38 @@ router.get("/map", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Vibe map error:", error);
         res.status(500).json({ error: "Failed to read the vibe map" });
+    }
+});
+
+const novaFlowInput = z.object({
+    seedTrackId: z.string().min(1).max(100).optional(),
+    style: z.enum(["familiar", "balanced", "adventurous"]).default("balanced"),
+    energy: z.number().int().min(0).max(100).default(55),
+    discovery: z.number().int().min(0).max(100).default(35),
+    limit: z.number().int().min(1).max(30).default(25),
+    excludeTrackIds: z.array(z.string().min(1).max(100)).max(250).default([]),
+}).strict();
+
+/**
+ * POST /api/vibe/flow — NOVA guided Flow (phase 1).
+ * A read-only preview. Audio starts only from a local browser gesture.
+ * Source track and candidates are verified against the actual owned library.
+ */
+router.post("/flow", requireAuth, async (req, res) => {
+    const input = novaFlowInput.safeParse(req.body);
+    if (!input.success) {
+        return res.status(400).json({ error: "Invalid Flow preferences" });
+    }
+    try {
+        const result = await buildNovaFlow(req.user!.id, input.data);
+        res.set("Cache-Control", "private, no-store");
+        if (result.unavailableSeed) {
+            return res.status(404).json({ error: "The selected song is no longer available in your library" });
+        }
+        return res.json({ seedTrackId: result.seedTrackId, tracks: result.tracks });
+    } catch (error) {
+        logger.error("Generate NOVA Flow failed:", error);
+        return res.status(500).json({ error: "Could not prepare your Flow" });
     }
 });
 
