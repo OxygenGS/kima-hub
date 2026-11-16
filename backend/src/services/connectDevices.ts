@@ -7,6 +7,7 @@
  */
 import { redisClient } from "../utils/redis";
 import { randomUUID } from "crypto";
+import { eventBus } from "./eventBus";
 
 export type ConnectPlaybackStatus = "idle" | "paused" | "playing";
 export type ConnectCommandType = "pause" | "next" | "previous";
@@ -158,6 +159,15 @@ export async function sendConnectCommand(
         .exec();
     if (!result || result.length !== 2 || result.some(([error]) => error !== null)) {
         throw new Error("Unable to queue remote command");
+    }
+    // Best-effort wake-up only. No command body or token is exposed on SSE.
+    // Redis GETDEL on the target heartbeat remains the single delivery path;
+    // offline SSE clients and multi-instance deployments keep the 7s fallback.
+    try {
+        eventBus.emit({ type: "connect:command-wake", userId, payload: { deviceId } });
+    } catch {
+        // A broken live subscription must never turn a queued command into an
+        // API error or cause the sender to retry a successfully queued action.
     }
     return command;
 }
