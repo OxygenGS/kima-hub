@@ -15,6 +15,10 @@ jest.mock("../../utils/redis", () => ({
     },
 }));
 
+jest.mock("../eventBus", () => ({
+    eventBus: { emit: jest.fn() },
+}));
+import { eventBus } from "../eventBus";
 import { redisClient } from "../../utils/redis";
 import {
     ConnectDeviceLimitError, heartbeatConnectDevice, listConnectDevices, sendConnectCommand,
@@ -103,6 +107,7 @@ describe("Kima Connect Redis device scope", () => {
         (redis.multi as jest.Mock).mockReturnValueOnce(failed);
         await expect(sendConnectCommand("alice", idB, "pause", NOW))
             .rejects.toThrow("Unable to queue remote command");
+        expect(eventBus.emit).not.toHaveBeenCalled();
     });
 
     it("returns account-scoped command receipts and derives expiry from server time", async () => {
@@ -173,5 +178,15 @@ describe("Kima Connect Redis device scope", () => {
             "EX",
             20,
         );
+        expect(eventBus.emit).toHaveBeenCalledWith({
+            type: "connect:command-wake", userId: "alice", payload: { deviceId: idB },
+        });
+    });
+
+    it("treats SSE as a hint: subscription failure cannot turn a queued command into an API error", async () => {
+        (redis.zscore as jest.Mock).mockResolvedValue(String(NOW - 1000));
+        (eventBus.emit as jest.Mock).mockImplementationOnce(() => { throw new Error("no SSE clients"); });
+        const sent = await sendConnectCommand("alice", idB, "pause", NOW);
+        expect(sent?.type).toBe("pause");
     });
 });
