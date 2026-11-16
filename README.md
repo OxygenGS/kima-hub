@@ -22,6 +22,8 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 ## Preview — Kima Connect (v1.25.0 release candidate)
 
+**Unpublished release candidate:** [v1.25.0](https://github.com/OxygenGS/kima-hub/pull/261) — source preparation only. There is no published v1.25.0 Docker image yet; new installations must continue using v1.24.1.
+
 **In development; not in the published v1.24.1 image.** Project ONE adds an account-private device picker for signed-in Kima browser tabs. From the player, you can see your other active browsers, request Pause / Previous / Next, and offer your current local-library track queue to another browser.
 
 The destination must explicitly choose **Play here**. Kima verifies that the receiving audio engine has started before the source considers pausing, and protects a source that has meanwhile switched tracks. Remote command status distinguishes **queued**, **handled**, **ignored** and **unconfirmed**; a handled command is not proof that sound was audible. The existing authenticated SSE stream speeds up delivery when available, with the original Redis heartbeat as fallback.
