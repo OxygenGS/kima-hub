@@ -1,0 +1,101 @@
+{
+  "release": {
+    "version": "1.25.0",
+    "title": "Kima Hub 1.25.0 — Kima Connect",
+    "summary": "Discover your signed-in Kima browsers, request remote playback controls, and explicitly hand off local-library music with verified acknowledgements and safe fallbacks.",
+    "date": "2026-11-16",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.125.devices",
+        "title": "See your own active Kima players",
+        "summary": "Find signed-in browser tabs under your account without exposing other users' devices.",
+        "body": "Kima Connect adds an account-scoped player picker showing recent desktop, mobile, tablet and TV browser sessions. The server stores short-lived device presence in Redis, not private media files or credentials. Every tab is separate; this is not discovery of arbitrary speakers or OpenSubsonic apps.",
+        "links": [
+          {
+            "label": "Open Kima",
+            "href": "/"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.125.handoff",
+        "title": "Offer your queue to another browser",
+        "summary": "A receiving browser must explicitly choose Play here before a transfer can proceed.",
+        "body": "From a playing library track you can offer up to 50 track IDs, the queue position and an approximate seek point to another active browser on your account. That browser preloads available track metadata and starts the normal audio engine only after a local click. The source pauses only when the receiver reports playing and the original source track and play position still match; changes to the source session are protected. Transfers expire and do not provide simultaneous multiroom playback or a guaranteed gapless transition.",
+        "links": [
+          {
+            "label": "Open player",
+            "href": "/"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.125.receipts",
+        "title": "Know whether remote controls were handled",
+        "summary": "Pause, Previous and Next distinguish queued, handled, ignored and unconfirmed.",
+        "body": "Remote commands first enter a short-lived Redis queue. The receiving browser acknowledges when it invoked an existing player control or ignored a stale request. The sender sees a status rather than assuming a command took effect. A 'handled' status means the browser callback ran, not that audible playback or a completed track change is guaranteed.",
+        "links": [
+          {
+            "label": "Open Kima",
+            "href": "/"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.125.events",
+        "title": "Quicker response with live connection fallback",
+        "summary": "Use existing authenticated SSE wake hints without opening more ports.",
+        "body": "When the existing live event connection is available, an account-scoped signal prompts the addressed browser to check its Redis command slot immediately; otherwise the seven-second heartbeat continues. Wake hints contain only an addressed device ID, never commands, credentials, stream URLs or playlists. Delivery remains best-effort across browser backgrounding, network interruptions and multi-process servers.",
+        "links": []
+      },
+      {
+        "kind": "note",
+        "key": "fork.125.recovery",
+        "title": "Safer handoff confirmation and retry",
+        "summary": "Confirm receiver playback sooner and recover from short-lived Redis cleanup errors.",
+        "body": "After verified receiver playback, the source is notified through the existing event channel and checks its playback continuity before pausing. Failed Redis transaction writes do not report a successful transfer. If pointer cleanup fails after a committed status change, the short-lived pointers expire and idempotent retries can clean them up. No music files, user accounts, media mounts or historical database records are moved or rewritten.",
+        "links": []
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.25.0 — Kima Connect": "Kima Hub 1.25.0 — Kima Connect"
+    },
+    "summaries": {
+      "Discover your signed-in Kima browsers, request remote playback controls, and explicitly hand off local-library music with verified acknowledgements and safe fallbacks.": "Ontdek je aangemelde Kima-browsers, bedien andere spelers en draag muziek uit je bibliotheek bewust over met bevestigingen en veilige terugvalopties."
+    },
+    "items": {
+      "fork.125.devices": {
+        "title": "Bekijk je eigen actieve Kima-spelers",
+        "summary": "Vind browservensters van je eigen account zonder apparaten van anderen te tonen.",
+        "body": "Kima Connect toont recente desktop-, mobiele, tablet- en tv-browsers die met hetzelfde account zijn aangemeld. De server bewaart tijdelijke apparaatstatus in Redis, geen muziekbestanden of aanmeldgegevens. Elk browsertabblad is een afzonderlijke speler; willekeurige speakers of OpenSubsonic-apps worden niet automatisch ontdekt."
+      },
+      "fork.125.handoff": {
+        "title": "Draag je wachtrij over naar een andere browser",
+        "summary": "De ontvangende browser moet zelf op Hier afspelen klikken.",
+        "body": "Vanuit een afspelend nummer uit je eigen bibliotheek kun je maximaal 50 nummer-ID's, de wachtrijpositie en een geschatte afspeelpositie aanbieden aan een andere actieve browser onder hetzelfde account. Het ontvangende apparaat laadt eerst de benodigde nummergegevens en start pas na een lokale klik de bestaande afspeelengine. De bron pauzeert alleen als de ontvanger afspelen bevestigt en het oorspronkelijke nummer en de afspeelpositie nog overeenkomen. Een gewijzigde luistersessie wordt niet onderbroken. Aanbiedingen verlopen automatisch; dit is geen multiroomfunctie of gegarandeerd naadloze overgang."
+      },
+      "fork.125.receipts": {
+        "title": "Controleer of bediening op afstand is verwerkt",
+        "summary": "Pauzeren, Vorige en Volgende tonen een eerlijke opdrachtstatus.",
+        "body": "Opdrachten komen eerst in een tijdelijke Redis-wachtrij. De ontvangende browser bevestigt wanneer een bestaande speleractie is aangeroepen of wanneer een verouderde opdracht is genegeerd. De verzender ziet de status in plaats van automatisch succes aan te nemen. 'Verwerkt' betekent dat de browser de bediening heeft aangeroepen, niet dat hoorbaar geluid of een voltooide nummerwisseling is gegarandeerd."
+      },
+      "fork.125.events": {
+        "title": "Snellere reactie met een veilige terugval",
+        "summary": "Hergebruik de beveiligde liveverbinding zonder extra poorten.",
+        "body": "Als de bestaande SSE-verbinding beschikbaar is, laat een accountgebonden signaal de bedoelde browser direct zijn Redis-opdracht controleren. Anders blijft de controle elke zeven seconden werken. Zo'n signaal bevat alleen het doelapparaat-ID, geen opdracht, wachtwoord, streamadres of wachtrij. Bij een inactieve browser, netwerkstoring of meerdere serverprocessen kan de aflevering alsnog vertraging oplopen."
+      },
+      "fork.125.recovery": {
+        "title": "Veiligere overdracht en herstel na fouten",
+        "summary": "De bron krijgt sneller bevestiging en tijdelijke Redis-fouten worden veilig verwerkt.",
+        "body": "Nadat de ontvanger echt afspelen heeft bevestigd, krijgt de bron een melding via het bestaande eventkanaal. De bron controleert nog steeds zijn nummer en positie voordat hij pauzeert. Een mislukte Redis-transactie wordt niet als geslaagde overdracht gemeld. Als het opruimen na een vastgelegde statuswijziging mislukt, verlopen de tijdelijke sleutels vanzelf en kan een herhaalde bevestiging het opruimen opnieuw proberen. Muziekbestanden, accounts, opslagmounts en historische databaserecords blijven ongemoeid."
+      }
+    }
+  },
+  "changelog": "This release candidate introduces Project ONE / Kima Connect to the independent OxygenGS fork. The v1.24.1 image stays the published stable default until this candidate passes separate source checks, native architecture preflight and explicit security review. This work is based on merged feature PRs #255, #257, #258, #259 and #260; documentation PR #256 already updated the previous stable baseline.\n\n### Your browser players and explicit consent\n- PR #255: discover up to 12 short-lived authenticated Kima browser sessions per account and offer remote Pause, Previous and Next without controlling external OpenSubsonic clients.\n- PR #257: a recipient can explicitly choose Play here to accept a maximum 50-track local-library queue, with approximate position handoff, prefetch validation and actual-playing engine receipt before the source may pause.\n- The source remains playing on failed confirmation, network loss or timeout. Browsers require user interaction to start playback; no automatic autoplay or multiroom output is introduced.\n\n### Command receipts, live hints and handoff recovery\n- PR #258: show bounded Redis command statuses (queued, handled, ignored, unconfirmed) without claiming guaranteed audible playback. Receipts are account-scoped and avoid overwrites on conflicting acknowledgement retries.\n- PR #259: reuse the existing authenticated SSE event stream for best-effort device wake hints, retaining Redis GETDEL and seven-second heartbeat delivery when SSE is unavailable or browser tabs are throttled.\n- PR #260: wake the source after the receiver confirms actual playback, retain source-track/position checks, reject failed Redis record transactions and make committed-transition pointer cleanup retry-safe.\n- No additional ports or required external integrations. Multi-process SSE fan-out remains best-effort and may fall back to the periodic heartbeat.\n\n### Upgrade safety, compatibility and release gate\n- The five feature PRs passed their individual backend/frontend tests, EN/NL browser checks, security checks and native AMD64/ARM64 AIO build gates before merge. These do not replace an exact release-candidate and exact-main preflight or controlled end-to-end verification.\n- No new database migration, new container service, automatic media relocation, music permission change or adjustment to existing Docker mounts. Maintain user accounts, playlists, historical data, Lidarr/Soulseek and compatible OpenSubsonic app-key clients.\n- Before updating a live installation, verify a separately restorable cold backup of the entire /data volume and preserve the existing Compose identity and media bindings.\n- The currently published v1.24.1 container still has numerous HIGH and CRITICAL scanner findings documented in docs/image-security.md; new native candidate scans and explicit residual-risk approval are mandatory. A green CI result is not a claim that the new image has no vulnerabilities or is safe to expose publicly.\n- This release candidate is not published. Do not pull a non-existent v1.25.0 tag or update production until the new release is explicitly approved and its native Docker images are verified."
+}

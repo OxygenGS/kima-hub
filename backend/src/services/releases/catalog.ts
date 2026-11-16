@@ -101,6 +101,70 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.25.0
+    {
+        "version": "1.25.0",
+        "title": "Kima Hub 1.25.0 \u2014 Kima Connect",
+        "summary": "Discover your signed-in Kima browsers, request remote playback controls, and explicitly hand off local-library music with verified acknowledgements and safe fallbacks.",
+        "date": "2026-11-16",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.125.devices",
+                "title": "See your own active Kima players",
+                "summary": "Find signed-in browser tabs under your account without exposing other users' devices.",
+                "body": "Kima Connect adds an account-scoped player picker showing recent desktop, mobile, tablet and TV browser sessions. The server stores short-lived device presence in Redis, not private media files or credentials. Every tab is separate; this is not discovery of arbitrary speakers or OpenSubsonic apps.",
+                "links": [
+                    {
+                        "label": "Open Kima",
+                        "href": "/"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.125.handoff",
+                "title": "Offer your queue to another browser",
+                "summary": "A receiving browser must explicitly choose Play here before a transfer can proceed.",
+                "body": "From a playing library track you can offer up to 50 track IDs, the queue position and an approximate seek point to another active browser on your account. That browser preloads available track metadata and starts the normal audio engine only after a local click. The source pauses only when the receiver reports playing and the original source track and play position still match; changes to the source session are protected. Transfers expire and do not provide simultaneous multiroom playback or a guaranteed gapless transition.",
+                "links": [
+                    {
+                        "label": "Open player",
+                        "href": "/"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.125.receipts",
+                "title": "Know whether remote controls were handled",
+                "summary": "Pause, Previous and Next distinguish queued, handled, ignored and unconfirmed.",
+                "body": "Remote commands first enter a short-lived Redis queue. The receiving browser acknowledges when it invoked an existing player control or ignored a stale request. The sender sees a status rather than assuming a command took effect. A 'handled' status means the browser callback ran, not that audible playback or a completed track change is guaranteed.",
+                "links": [
+                    {
+                        "label": "Open Kima",
+                        "href": "/"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.125.events",
+                "title": "Quicker response with live connection fallback",
+                "summary": "Use existing authenticated SSE wake hints without opening more ports.",
+                "body": "When the existing live event connection is available, an account-scoped signal prompts the addressed browser to check its Redis command slot immediately; otherwise the seven-second heartbeat continues. Wake hints contain only an addressed device ID, never commands, credentials, stream URLs or playlists. Delivery remains best-effort across browser backgrounding, network interruptions and multi-process servers.",
+                "links": []
+            },
+            {
+                "kind": "note",
+                "key": "fork.125.recovery",
+                "title": "Safer handoff confirmation and retry",
+                "summary": "Confirm receiver playback sooner and recover from short-lived Redis cleanup errors.",
+                "body": "After verified receiver playback, the source is notified through the existing event channel and checks its playback continuity before pausing. Failed Redis transaction writes do not report a successful transfer. If pointer cleanup fails after a committed status change, the short-lived pointers expire and idempotent retries can clean them up. No music files, user accounts, media mounts or historical database records are moved or rewritten.",
+                "links": []
+            }
+        ]
+    },
     // release-candidate:1.24.1
     {
         "version": "1.24.1",

@@ -1,5 +1,27 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.25.0 — release preparation (unpublished)
+
+This release candidate introduces Project ONE / Kima Connect to the independent OxygenGS fork. The v1.24.1 image stays the published stable default until this candidate passes separate source checks, native architecture preflight and explicit security review. This work is based on merged feature PRs #255, #257, #258, #259 and #260; documentation PR #256 already updated the previous stable baseline.
+
+### Your browser players and explicit consent
+- PR #255: discover up to 12 short-lived authenticated Kima browser sessions per account and offer remote Pause, Previous and Next without controlling external OpenSubsonic clients.
+- PR #257: a recipient can explicitly choose Play here to accept a maximum 50-track local-library queue, with approximate position handoff, prefetch validation and actual-playing engine receipt before the source may pause.
+- The source remains playing on failed confirmation, network loss or timeout. Browsers require user interaction to start playback; no automatic autoplay or multiroom output is introduced.
+
+### Command receipts, live hints and handoff recovery
+- PR #258: show bounded Redis command statuses (queued, handled, ignored, unconfirmed) without claiming guaranteed audible playback. Receipts are account-scoped and avoid overwrites on conflicting acknowledgement retries.
+- PR #259: reuse the existing authenticated SSE event stream for best-effort device wake hints, retaining Redis GETDEL and seven-second heartbeat delivery when SSE is unavailable or browser tabs are throttled.
+- PR #260: wake the source after the receiver confirms actual playback, retain source-track/position checks, reject failed Redis record transactions and make committed-transition pointer cleanup retry-safe.
+- No additional ports or required external integrations. Multi-process SSE fan-out remains best-effort and may fall back to the periodic heartbeat.
+
+### Upgrade safety, compatibility and release gate
+- The five feature PRs passed their individual backend/frontend tests, EN/NL browser checks, security checks and native AMD64/ARM64 AIO build gates before merge. These do not replace an exact release-candidate and exact-main preflight or controlled end-to-end verification.
+- No new database migration, new container service, automatic media relocation, music permission change or adjustment to existing Docker mounts. Maintain user accounts, playlists, historical data, Lidarr/Soulseek and compatible OpenSubsonic app-key clients.
+- Before updating a live installation, verify a separately restorable cold backup of the entire /data volume and preserve the existing Compose identity and media bindings.
+- The currently published v1.24.1 container still has numerous HIGH and CRITICAL scanner findings documented in docs/image-security.md; new native candidate scans and explicit residual-risk approval are mandatory. A green CI result is not a claim that the new image has no vulnerabilities or is safe to expose publicly.
+- This release candidate is not published. Do not pull a non-existent v1.25.0 tag or update production until the new release is explicitly approved and its native Docker images are verified.
+
 ## OxygenGS fork v1.24.1 — released 2026-11-14
 
 A targeted maintenance release for the OxygenGS fork after user-reported EACCES failures in old Singles folders blocked new Lidarr music. The fork remains independently configurable. The published v1.24.1 image is now the stable default for new installations; existing deployments must explicitly review and apply any upgrade.
