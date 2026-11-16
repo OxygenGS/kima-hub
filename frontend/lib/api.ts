@@ -17,6 +17,14 @@ export interface ConnectCommand {
     createdAt: number;
 }
 
+export type ConnectCommandOutcome = "handled" | "ignored";
+export type ConnectCommandStatus = "queued" | ConnectCommandOutcome | "expired";
+export interface ConnectCommandReceipt extends ConnectCommand {
+    deviceId: string;
+    status: ConnectCommandStatus;
+    reportedAt?: number;
+}
+
 export type ConnectHandoffStatus = "pending" | "started" | "declined" | "cancelled" | "observed";
 
 export interface ConnectHandoff {
@@ -1645,6 +1653,21 @@ class ApiClient {
         return this.request<{ queued: true; commandId: string }>(
             "/connect/devices/" + encodeURIComponent(deviceId) + "/command",
             { method: "POST", body: JSON.stringify({ type }) },
+        );
+    }
+
+    /** These receipts describe the target browser's handler, not guaranteed audible playback. */
+    async getConnectCommandReceipt(commandId: string) {
+        return this.request<{ command: ConnectCommandReceipt }>(
+            "/connect/commands/" + encodeURIComponent(commandId),
+            { silent404: true },
+        );
+    }
+
+    async acknowledgeConnectCommand(commandId: string, deviceId: string, outcome: ConnectCommandOutcome) {
+        return this.request<{ command: ConnectCommandReceipt }>(
+            "/connect/commands/" + encodeURIComponent(commandId) + "/ack",
+            { method: "POST", body: JSON.stringify({ deviceId, outcome }), silent404: true },
         );
     }
 

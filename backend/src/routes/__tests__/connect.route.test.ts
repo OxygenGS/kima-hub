@@ -2,10 +2,14 @@
 const mockList = jest.fn();
 const mockPulse = jest.fn();
 const mockSend = jest.fn();
+const mockGetReceipt = jest.fn();
+const mockAckReceipt = jest.fn();
 jest.mock("../../services/connectDevices", () => ({
     listConnectDevices: (...args: unknown[]) => mockList(...args),
     heartbeatConnectDevice: (...args: unknown[]) => mockPulse(...args),
     sendConnectCommand: (...args: unknown[]) => mockSend(...args),
+    getConnectCommandReceipt: (...args: unknown[]) => mockGetReceipt(...args),
+    acknowledgeConnectCommand: (...args: unknown[]) => mockAckReceipt(...args),
     ConnectDeviceLimitError: class ConnectDeviceLimitError extends Error {},
 }));
 jest.mock("../../middleware/auth", () => ({
@@ -47,6 +51,8 @@ beforeEach(() => {
     mockList.mockResolvedValue([]);
     mockPulse.mockResolvedValue({ command: null, ttlSeconds: 45 });
     mockSend.mockResolvedValue({ id: "cmd1", type: "pause", createdAt: Date.now() });
+    mockGetReceipt.mockResolvedValue(null);
+    mockAckReceipt.mockResolvedValue(null);
     mockCreateHandoff.mockResolvedValue({ id: A, expiresAt: Date.now() + 120_000 });
     mockIncomingHandoff.mockResolvedValue(null);
     mockOutgoingHandoff.mockResolvedValue(null);
@@ -104,6 +110,57 @@ describe("Kima Connect API", () => {
         expect(res.body).toEqual({ queued: true, commandId: "cmd1" });
         expect(mockSend).toHaveBeenCalledWith("alice", B, "next");
         expect(res.headers["cache-control"]).toBe("private, no-store");
+    });
+});
+
+describe("Connect command receipt API", () => {
+    it("requires authentication to read or acknowledge remote commands", async () => {
+        await request(app).get("/api/connect/commands/" + A).expect(401);
+        await request(app).post("/api/connect/commands/" + A + "/ack")
+            .send({ deviceId: B, outcome: "handled" }).expect(401);
+        expect(mockGetReceipt).not.toHaveBeenCalled();
+        expect(mockAckReceipt).not.toHaveBeenCalled();
+    });
+
+    it("validates command UUID, target device and result without trusting body user IDs", async () => {
+        await request(app).get("/api/connect/commands/not-a-uuid")
+            .set("x-test-user", "alice").expect(400);
+        for (const bad of [
+            { deviceId: "not-a-uuid", outcome: "handled" },
+            { deviceId: B, outcome: "played" },
+            { deviceId: B, outcome: "handled", userId: "bob" },
+        ]) {
+            await request(app).post("/api/connect/commands/" + A + "/ack")
+                .set("x-test-user", "alice").send(bad).expect(400);
+        }
+        expect(mockAckReceipt).not.toHaveBeenCalled();
+    });
+
+    it("returns only the authenticated owner's receipt and never caches it", async () => {
+        const receipt = { id: A, deviceId: B, type: "pause", createdAt: 100, status: "queued" };
+        mockGetReceipt.mockResolvedValueOnce(null).mockResolvedValueOnce(receipt);
+        await request(app).get("/api/connect/commands/" + A)
+            .set("x-test-user", "bob").expect(404);
+        const got = await request(app).get("/api/connect/commands/" + A)
+            .set("x-test-user", "alice").expect(200);
+        expect(got.body.command).toEqual(receipt);
+        expect(got.headers["cache-control"]).toBe("private, no-store");
+        expect(mockGetReceipt).toHaveBeenNthCalledWith(1, "bob", A);
+        expect(mockGetReceipt).toHaveBeenNthCalledWith(2, "alice", A);
+    });
+
+    it("accepts only an existing target-scoped acknowledgement", async () => {
+        mockAckReceipt.mockResolvedValueOnce(null).mockResolvedValueOnce({
+            id: A, deviceId: B, type: "next", createdAt: 100, status: "ignored",
+        });
+        await request(app).post("/api/connect/commands/" + A + "/ack")
+            .set("x-test-user", "bob").send({ deviceId: B, outcome: "ignored" }).expect(404);
+        const confirmed = await request(app).post("/api/connect/commands/" + A + "/ack")
+            .set("x-test-user", "alice").send({ deviceId: B, outcome: "ignored" }).expect(200);
+        expect(confirmed.body.command.status).toBe("ignored");
+        expect(confirmed.headers["cache-control"]).toBe("private, no-store");
+        expect(mockAckReceipt).toHaveBeenNthCalledWith(1, "bob", A, B, "ignored");
+        expect(mockAckReceipt).toHaveBeenNthCalledWith(2, "alice", A, B, "ignored");
     });
 });
 

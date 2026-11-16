@@ -9,6 +9,8 @@ jest.mock("../../utils/redis", () => ({
         exists: jest.fn(),
         set: jest.fn(),
         getdel: jest.fn(),
+        get: jest.fn(),
+        eval: jest.fn(),
         multi: jest.fn(),
     },
 }));
@@ -16,6 +18,7 @@ jest.mock("../../utils/redis", () => ({
 import { redisClient } from "../../utils/redis";
 import {
     ConnectDeviceLimitError, heartbeatConnectDevice, listConnectDevices, sendConnectCommand,
+    getConnectCommandReceipt, acknowledgeConnectCommand,
 } from "../connectDevices";
 
 const redis = redisClient as jest.Mocked<typeof redisClient>;
@@ -26,7 +29,10 @@ const make = (id: string) => ({ id, name: "Desktop", status: "playing" as const,
 
 beforeEach(() => {
     jest.clearAllMocks();
-    const pipeline = { zadd: jest.fn(), expire: jest.fn(), set: jest.fn(), exec: jest.fn().mockResolvedValue([]) };
+    const pipeline = {
+        zadd: jest.fn(), expire: jest.fn(), set: jest.fn(),
+        exec: jest.fn().mockResolvedValue([[null, "OK"], [null, "OK"]]),
+    };
     pipeline.zadd.mockReturnValue(pipeline);
     pipeline.expire.mockReturnValue(pipeline);
     pipeline.set.mockReturnValue(pipeline);
@@ -38,6 +44,8 @@ beforeEach(() => {
     (redis.exists as jest.Mock).mockResolvedValue(1);
     (redis.getdel as jest.Mock).mockResolvedValue(null);
     (redis.set as jest.Mock).mockResolvedValue("OK");
+    (redis.get as jest.Mock).mockResolvedValue(null);
+    (redis.eval as jest.Mock).mockResolvedValue(1);
 });
 
 describe("Kima Connect Redis device scope", () => {
@@ -83,7 +91,68 @@ describe("Kima Connect Redis device scope", () => {
         (redis.zscore as jest.Mock).mockResolvedValueOnce(null).mockResolvedValueOnce(String(NOW - 60_000));
         expect(await sendConnectCommand("bob", idA, "next", NOW)).toBeNull();
         expect(await sendConnectCommand("alice", idA, "next", NOW)).toBeNull();
-        expect(redis.set).not.toHaveBeenCalled();
+        expect(redis.multi).not.toHaveBeenCalled();
+    });
+
+    it("does not claim a command was queued when Redis rejected one of the writes", async () => {
+        (redis.zscore as jest.Mock).mockResolvedValue(String(NOW - 1000));
+        const failed = {
+            set: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([[new Error("OOM"), null], [null, "OK"]]),
+        };
+        (redis.multi as jest.Mock).mockReturnValueOnce(failed);
+        await expect(sendConnectCommand("alice", idB, "pause", NOW))
+            .rejects.toThrow("Unable to queue remote command");
+    });
+
+    it("returns account-scoped command receipts and derives expiry from server time", async () => {
+        const receipt = { id: "cmd-test", deviceId: idB, type: "next", createdAt: NOW, status: "queued" };
+        (redis.get as jest.Mock).mockImplementation(async (key: string) =>
+            key === "connect:receipt:alice:cmd-test" ? JSON.stringify(receipt) : null);
+
+        expect((await getConnectCommandReceipt("alice", "cmd-test", NOW + 19_999))?.status).toBe("queued");
+        expect((await getConnectCommandReceipt("alice", "cmd-test", NOW + 20_000))?.status).toBe("expired");
+        expect(await getConnectCommandReceipt("bob", "cmd-test", NOW)).toBeNull();
+        expect(await getConnectCommandReceipt("alice", "no-such-command", NOW)).toBeNull();
+    });
+
+    it("accepts a verified target report at most once with atomic CAS", async () => {
+        const receipt = { id: "cmd-test", deviceId: idB, type: "pause", createdAt: NOW, status: "queued" };
+        (redis.get as jest.Mock).mockResolvedValue(JSON.stringify(receipt));
+        const result = await acknowledgeConnectCommand("alice", receipt.id, idB, "handled", NOW + 1000);
+        expect(result).toMatchObject({ status: "handled", reportedAt: NOW + 1000 });
+        expect(redis.eval).toHaveBeenCalledWith(
+            expect.stringContaining("KEEPTTL"),
+            1,
+            "connect:receipt:alice:cmd-test",
+            JSON.stringify(receipt),
+            expect.stringContaining('"status":"handled"'),
+        );
+
+        (redis.get as jest.Mock).mockResolvedValue(JSON.stringify({ ...receipt, status: "handled" }));
+        expect((await acknowledgeConnectCommand("alice", receipt.id, idB, "handled", NOW + 2000))?.status)
+            .toBe("handled");
+        expect(await acknowledgeConnectCommand("alice", receipt.id, idB, "ignored", NOW + 2000))
+            .toBeNull();
+        expect(redis.eval).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects receipts for another device, another account or an expired command", async () => {
+        const receipt = { id: "cmd-test", deviceId: idB, type: "next", createdAt: NOW, status: "queued" };
+        (redis.get as jest.Mock).mockImplementation(async (key: string) =>
+            key === "connect:receipt:alice:cmd-test" ? JSON.stringify(receipt) : null);
+        expect(await acknowledgeConnectCommand("bob", receipt.id, idB, "handled", NOW + 1)).toBeNull();
+        expect(await acknowledgeConnectCommand("alice", receipt.id, idA, "handled", NOW + 1)).toBeNull();
+        expect(await acknowledgeConnectCommand("alice", receipt.id, idB, "handled", NOW + 20_000)).toBeNull();
+        expect(redis.eval).not.toHaveBeenCalled();
+    });
+
+    it("does not overwrite a concurrent command result with a conflicting acknowledgement", async () => {
+        const receipt = { id: "cmd-test", deviceId: idB, type: "next", createdAt: NOW, status: "queued" };
+        (redis.get as jest.Mock).mockResolvedValueOnce(JSON.stringify(receipt))
+            .mockResolvedValueOnce(JSON.stringify({ ...receipt, status: "ignored" }));
+        (redis.eval as jest.Mock).mockResolvedValueOnce(0);
+        expect(await acknowledgeConnectCommand("alice", receipt.id, idB, "handled", NOW + 1)).toBeNull();
     });
 
     it("writes only a single short-lived pending instruction for a verified target", async () => {
@@ -91,7 +160,14 @@ describe("Kima Connect Redis device scope", () => {
         const sent = await sendConnectCommand("alice", idB, "previous", NOW);
         expect(sent?.type).toBe("previous");
         expect(sent?.id).toEqual(expect.any(String));
-        expect(redis.set).toHaveBeenCalledWith(
+        const pipeline = (redis.multi as jest.Mock).mock.results.at(-1)?.value;
+        expect(pipeline.set).toHaveBeenCalledWith(
+            "connect:receipt:alice:" + sent!.id,
+            expect.stringContaining('"status":"queued"'),
+            "EX",
+            90,
+        );
+        expect(pipeline.set).toHaveBeenCalledWith(
             "connect:command:alice:" + idB,
             expect.stringContaining('"type":"previous"'),
             "EX",

@@ -62,21 +62,35 @@ export function ConnectDeviceBridge() {
                 });
                 if (!mounted) return;
                 if (response.command) {
-                    // Use current controls rather than closures captured at mount.
-                    switch (response.command.type) {
-                        case "pause":
-                            latest.current.controls.pause();
-                            break;
-                        case "next":
-                            if (latest.current.playback.isPlaying && latest.current.state.playbackType === "track") {
-                                latest.current.controls.next();
-                            }
-                            break;
-                        case "previous":
-                            if (latest.current.playback.isPlaying && latest.current.state.playbackType === "track") {
-                                latest.current.controls.previous();
-                            }
-                            break;
+                    // Report only that the local control callback was invoked or
+                    // rejected by the current player state. Do not imply audio
+                    // actually changed until the engine separately confirms it.
+                    let outcome: "handled" | "ignored" = "ignored";
+                    try {
+                        const current = latest.current;
+                        switch (response.command.type) {
+                            case "pause":
+                                if (current.playback.isPlaying) {
+                                    current.controls.pause();
+                                    outcome = "handled";
+                                }
+                                break;
+                            case "next":
+                                if (current.playback.isPlaying && current.state.playbackType === "track") {
+                                    current.controls.next();
+                                    outcome = "handled";
+                                }
+                                break;
+                            case "previous":
+                                if (current.playback.isPlaying && current.state.playbackType === "track") {
+                                    current.controls.previous();
+                                    outcome = "handled";
+                                }
+                                break;
+                        }
+                    } finally {
+                        // A failed acknowledgement never interrupts local audio.
+                        void api.acknowledgeConnectCommand(response.command.id, id, outcome).catch(() => {});
                     }
                 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRightLeft, Cast, Loader2, Pause, RefreshCw, SkipBack, SkipForward, X } from "lucide-react";
-import { api, type ConnectDevice, type ConnectCommandType } from "@/lib/api";
+import { api, type ConnectDevice, type ConnectCommandType, type ConnectCommandStatus } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { getConnectDeviceId } from "@/lib/connect-device-id";
@@ -23,6 +23,10 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
     const [busy, setBusy] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
     const [pendingOffer, setPendingOffer] = useState<{ id: string; sourceDeviceId: string; ownerId: string } | null>(null);
+    const [commandReceipt, setCommandReceipt] = useState<{
+        ownerId: string; deviceId: string; id: string;
+        status: ConnectCommandStatus; sentAt: number;
+    } | null>(null);
 
     const nl = locale === "nl";
     const userId = user?.id ?? null;
@@ -90,6 +94,42 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         };
     }, [pendingOffer, userId, nl]);
 
+    // Follow only the latest command, and never show another account's receipt.
+    // A temporary network failure leaves the command unconfirmed, not "handled".
+    useEffect(() => {
+        const tracked = commandReceipt;
+        if (!tracked || tracked.ownerId !== userId || tracked.status !== "queued") return;
+        let active = true;
+        let inFlight = false;
+        const check = async () => {
+            if (!active || inFlight) return;
+            inFlight = true;
+            try {
+                const { command } = await api.getConnectCommandReceipt(tracked.id);
+                if (active && command.id === tracked.id && command.deviceId === tracked.deviceId) {
+                    setCommandReceipt(current =>
+                        current?.id === tracked.id && current.ownerId === tracked.ownerId &&
+                        current.status === "queued" && command.status !== "queued"
+                            ? { ...current, status: command.status } : current);
+                }
+            } catch {
+                if (active && Date.now() - tracked.sentAt > 25_000) {
+                    setCommandReceipt(current =>
+                        current?.id === tracked.id && current.ownerId === tracked.ownerId &&
+                        current.status === "queued" ? { ...current, status: "expired" } : current);
+                }
+            } finally {
+                inFlight = false;
+            }
+        };
+        void check();
+        const interval = window.setInterval(() => { void check(); }, 2_500);
+        return () => {
+            active = false;
+            window.clearInterval(interval);
+        };
+    }, [commandReceipt, userId]);
+
     const canHandoff = playback.isPlaying && audio.playbackType === "track" &&
         audio.queue.length > 0 && audio.queue.length <= 50 &&
         audio.currentIndex >= 0 && audio.currentIndex < audio.queue.length &&
@@ -141,9 +181,13 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
         if (!userId || devicesOwnerId !== userId) return;
         setBusy(id);
         setMessage(null);
+        setCommandReceipt(null);
         try {
-            await api.sendConnectCommand(id, type);
-            setMessage(nl ? "Opdracht verstuurd; uitvoering volgt op het andere apparaat." : "Command queued for the other player.");
+            const sent = await api.sendConnectCommand(id, type);
+            setCommandReceipt({
+                id: sent.commandId, deviceId: id, ownerId: userId,
+                status: "queued", sentAt: Date.now(),
+            });
         } catch {
             setMessage(nl ? "Bediening mislukt. Vernieuw de apparatenlijst." : "Command failed. Refresh the device list.");
         } finally {
@@ -267,6 +311,20 @@ export function ConnectButton({ className = "", placement = "above" }: { classNa
                             className="mt-3 w-full rounded-lg border border-white/20 px-3 py-2 text-xs text-white/70 hover:text-white disabled:opacity-40">
                             {nl ? "Openstaande overdracht annuleren" : "Cancel pending transfer"}
                         </button>
+                    )}
+                    {commandReceipt?.ownerId === userId && (
+                        <p role="status" data-testid="connect-command-status" className="mt-3 text-xs text-white/75">
+                            {commandReceipt.status === "queued"
+                                ? (nl ? "Opdracht in wachtrij; wacht op ontvangstbevestiging." : "Command queued; awaiting browser receipt.")
+                                : commandReceipt.status === "handled"
+                                  ? (nl ? "Browser heeft de opdracht verwerkt. Afspeelresultaat niet gegarandeerd."
+                                      : "Browser handled the command. Playback outcome is not guaranteed.")
+                                  : commandReceipt.status === "ignored"
+                                    ? (nl ? "Browser heeft de opdracht genegeerd: speler was niet actief."
+                                        : "Browser ignored the command: player was not active.")
+                                    : (nl ? "Niet bevestigd binnen 20 seconden; apparaat mogelijk offline of opdracht vervangen."
+                                        : "Not confirmed within 20 seconds; device may be offline or command replaced.")}
+                        </p>
                     )}
                     {message && <p role="status" className="mt-3 text-xs text-white/75">{message}</p>}
                     <p className="mt-3 text-[11px] text-white/50">

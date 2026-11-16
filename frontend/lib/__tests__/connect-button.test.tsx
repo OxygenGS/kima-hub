@@ -6,6 +6,7 @@ import { ConnectButton } from "@/components/player/ConnectButton";
 const fake = vi.hoisted(() => ({
     getDevices: vi.fn(),
     sendCommand: vi.fn(),
+    getReceipt: vi.fn(),
     offerHandoff: vi.fn(),
     updateHandoff: vi.fn(),
     getOutgoing: vi.fn(),
@@ -15,7 +16,11 @@ const fake = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-    api: { getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand, offerConnectHandoff: fake.offerHandoff, updateConnectHandoff: fake.updateHandoff, getOutgoingConnectHandoff: fake.getOutgoing },
+    api: {
+        getConnectDevices: fake.getDevices, sendConnectCommand: fake.sendCommand,
+        getConnectCommandReceipt: fake.getReceipt, offerConnectHandoff: fake.offerHandoff,
+        updateConnectHandoff: fake.updateHandoff, getOutgoingConnectHandoff: fake.getOutgoing,
+    },
 }));
 vi.mock("@/lib/auth-context", () => ({
     useAuth: () => ({ user: fake.authUser }),
@@ -59,6 +64,7 @@ beforeEach(() => {
     fake.currentTime = 42;
     fake.getDevices.mockResolvedValue({ devices: [own, remote] });
     fake.sendCommand.mockResolvedValue({ queued: true, commandId: "cmd1" });
+    fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "queued" } });
     fake.offerHandoff.mockResolvedValue({ id: "handoff1", expiresAt: 12345 });
     fake.updateHandoff.mockResolvedValue({ status: "cancelled" });
     fake.getOutgoing.mockResolvedValue({ handoff: { id: "handoff1", status: "pending" } });
@@ -100,6 +106,59 @@ describe("Kima Connect device menu", () => {
         });
         expect(fake.sendCommand).toHaveBeenCalledWith(remote.id, "pause");
         expect(host.textContent).toContain("Command queued");
+    });
+
+    it("shows a browser-handled receipt only after the remote status endpoint confirms it", async () => {
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "handled" } });
+        await open();
+        await act(async () => {
+            (host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(fake.getReceipt).toHaveBeenCalledWith("cmd1");
+        expect(host.textContent).toContain("Browser handled the command");
+        expect(host.textContent).toContain("not guaranteed");
+    });
+
+    it("distinguishes an ignored command from a successful handler", async () => {
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "ignored" } });
+        await open();
+        await act(async () => {
+            (host.querySelector('[aria-label="Next track - Kima mobile"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain("Browser ignored the command");
+        expect(host.textContent).not.toContain("Browser handled the command");
+    });
+
+    it("indicates an unconfirmed command after the server deadline", async () => {
+        fake.getReceipt.mockResolvedValue({ command: { id: "cmd1", deviceId: remote.id, status: "expired" } });
+        await open();
+        await act(async () => {
+            (host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain("Not confirmed within 20 seconds");
+    });
+
+    it("hides command receipts when the logged-in account changes", async () => {
+        await open();
+        await act(async () => {
+            (host.querySelector('[aria-label="Pause - Kima mobile"]') as HTMLButtonElement).click();
+            await Promise.resolve();
+        });
+        expect(host.textContent).toContain("Command queued");
+        fake.authUser = { id: "bob" };
+        fake.getDevices.mockImplementation(() => new Promise(() => {}));
+        await act(async () => {
+            root.render(<ConnectButton />);
+            await Promise.resolve();
+        });
+        expect(host.textContent).not.toContain("Command queued");
+        expect(host.textContent).not.toContain("Browser handled");
     });
 
     it("does not allow remote transport actions on a paused browser", async () => {
