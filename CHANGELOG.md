@@ -1,26 +1,23 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.25.0 — release preparation (unpublished)
+## OxygenGS fork v1.25.0 — released 2026-11-16
 
-This release candidate introduces Project ONE / Kima Connect to the independent OxygenGS fork. The v1.24.1 image stays the published stable default until this candidate passes separate source checks, native architecture preflight and explicit security review. This work is based on merged feature PRs #255, #257, #258, #259 and #260; documentation PR #256 already updated the previous stable baseline.
+The published [v1.25.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) introduces **Project ONE / Kima Connect** to the independent OxygenGS fork. The stable Docker image is `ghcr.io/oxygengs/kima-hub:v1.25.0` on native AMD64 and ARM64; the `:latest` alias is not automatically promoted.
 
-### Your browser players and explicit consent
-- PR #255: discover up to 12 short-lived authenticated Kima browser sessions per account and offer remote Pause, Previous and Next without controlling external OpenSubsonic clients.
-- PR #257: a recipient can explicitly choose Play here to accept a maximum 50-track local-library queue, with approximate position handoff, prefetch validation and actual-playing engine receipt before the source may pause.
-- The source remains playing on failed confirmation, network loss or timeout. Browsers require user interaction to start playback; no automatic autoplay or multiroom output is introduced.
+### Kima Connect: devices, handoff and remote controls
+- PR #255: discover up to 12 short-lived authenticated Kima browser tabs per account and offer Pause, Previous and Next to another active browser.
+- PR #257: offer up to 50 local-library track IDs, queue position and approximate seek point to another Kima browser; the receiver must explicitly choose **Play here**. The source is paused only after receiver playback confirmation and a matching source track/position check.
+- PR #258: show honest, bounded command statuses (queued, handled, ignored, unconfirmed). A browser handling a command does not prove that audio is audible.
+- PR #259: reuse the authenticated SSE event stream for best-effort device wake notifications, with the seven-second Redis heartbeat as fallback.
+- PR #260: accelerate source acknowledgement on verified receiver playback; recover safely from failed Redis writes and retry cleanup of short-lived handoff pointers.
+- The new controls are for signed-in Kima browsers under the **same account**, not third-party OpenSubsonic players or arbitrary speakers. There is no remote autoplay, synchronized multiroom or guaranteed gapless handoff.
 
-### Command receipts, live hints and handoff recovery
-- PR #258: show bounded Redis command statuses (queued, handled, ignored, unconfirmed) without claiming guaranteed audible playback. Receipts are account-scoped and avoid overwrites on conflicting acknowledgement retries.
-- PR #259: reuse the existing authenticated SSE event stream for best-effort device wake hints, retaining Redis GETDEL and seven-second heartbeat delivery when SSE is unavailable or browser tabs are throttled.
-- PR #260: wake the source after the receiver confirms actual playback, retain source-track/position checks, reject failed Redis record transactions and make committed-transition pointer cleanup retry-safe.
-- No additional ports or required external integrations. Multi-process SSE fan-out remains best-effort and may fall back to the periodic heartbeat.
-
-### Upgrade safety, compatibility and release gate
-- The five feature PRs passed their individual backend/frontend tests, EN/NL browser checks, security checks and native AMD64/ARM64 AIO build gates before merge. These do not replace an exact release-candidate and exact-main preflight or controlled end-to-end verification.
-- No new database migration, new container service, automatic media relocation, music permission change or adjustment to existing Docker mounts. Maintain user accounts, playlists, historical data, Lidarr/Soulseek and compatible OpenSubsonic app-key clients.
-- Before updating a live installation, verify a separately restorable cold backup of the entire /data volume and preserve the existing Compose identity and media bindings.
-- The currently published v1.24.1 container still has numerous HIGH and CRITICAL scanner findings documented in docs/image-security.md; new native candidate scans and explicit residual-risk approval are mandatory. A green CI result is not a claim that the new image has no vulnerabilities or is safe to expose publicly.
-- This release candidate is not published. Do not pull a non-existent v1.25.0 tag or update production until the new release is explicitly approved and its native Docker images are verified.
+### Compatibility and safe upgrade
+- Keep Settings Studio 2.0, Lidarr, Soulseek, OpenSubsonic app-key integrations, music/library data, playlists, existing accounts and media mounts. No new ports, required external services or database migrations were added for Kima Connect.
+- [Release-candidate source CI](https://github.com/OxygenGS/kima-hub/pull/261) passed, followed by the [exact-main native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) and [Docker image publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307).
+- The preflight recorded **393 HIGH / 8 CRITICAL** on AMD64 and **392 HIGH / 8 CRITICAL** on ARM64, with no scanner-listed fixed package version. Publishing the image does not establish that the findings are safe or unreachable; see [image security](docs/image-security.md).
+- Before updating a running installation, verify a separately restorable **cold backup of the full `/data` volume** and preserve the existing Compose identity and `/music` and `/downloads` mounts. An older container version might not support a migrated database; a rollback may require restoring the original data backup.
+- Publishing v1.25.0 does **not** upgrade running deployments automatically. Existing installations change only when their operator updates the pinned image.
 
 ## OxygenGS fork v1.24.1 — released 2026-11-14
 
