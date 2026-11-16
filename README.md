@@ -8,46 +8,32 @@
 
 A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
 
-[![Stable release](https://img.shields.io/badge/stable-v1.24.1-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1)
+[![Stable release](https://img.shields.io/badge/stable-v1.25.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![Platforms](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-41434f?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0-555?style=flat-square)](LICENSE)
 
-**[What's new](#whats-new-in-v1241) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
+**[What's new](#whats-new-in-v1250--kima-connect) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
 
 </div>
 
 ---
 
-## Preview — Kima Connect (v1.25.0 release candidate)
+## What's new in v1.25.0 — Kima Connect
 
-**Unpublished release candidate:** [v1.25.0](https://github.com/OxygenGS/kima-hub/pull/261) — source preparation only. There is no published v1.25.0 Docker image yet; new installations must continue using v1.24.1.
+**Your music, between your Kima browsers.** [v1.25.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) brings Project ONE / **Kima Connect** to the stable OxygenGS fork. Control an active Kima browser from another signed-in browser on the **same account**, or offer your current music queue to it.
 
-**In development; not in the published v1.24.1 image.** Project ONE adds an account-private device picker for signed-in Kima browser tabs. From the player, you can see your other active browsers, request Pause / Previous / Next, and offer your current local-library track queue to another browser.
-
-The destination must explicitly choose **Play here**. Kima verifies that the receiving audio engine has started before the source considers pausing, and protects a source that has meanwhile switched tracks. Remote command status distinguishes **queued**, **handled**, **ignored** and **unconfirmed**; a handled command is not proof that sound was audible. The existing authenticated SSE stream speeds up delivery when available, with the original Redis heartbeat as fallback.
-
-No other account can browse your devices. This does not enable automatic remote autoplay, third-party OpenSubsonic player control, guaranteed instant delivery, synchronized multiroom audio or gapless handoff between physical devices. It does not require new ports, a separate service, a media migration or a database schema change.
-
-[Technical design, limitations and rollout notes](docs/project-one.md) · [Development PRs #255–#260](https://github.com/OxygenGS/kima-hub/pull/260)
-
-## What's new in v1.24.1
-
-**Library scans that recover from restricted subfolders.** Kima keeps indexing readable music when a nested folder rejects access, reports a warning, and preserves existing tracks inside skipped locations instead of mistaking them for deleted files. This patch also removes an obsolete Downtify scanqueue code path while preserving historical database migrations.
-
-[Published release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1) · [Exact-main AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43631175191) · [Security findings](docs/image-security.md)
-
-## What's new in v1.24.0
-
-**Better artist artwork. More responsive artist pages. More consistent library browsing.** The [v1.24.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0) brings six tested improvements to the OxygenGS fork without changing existing music storage or removing the features you already use.
-
-| Artist artwork | Artist pages | Library consistency |
+| Find your players | Transfer with consent | Clear command feedback |
 | :--- | :--- | :--- |
-| **Verified image matches:** Deezer checks multiple candidates instead of trusting its first result. Administrator-initiated recovery can retry missing pictures. | **Less duplicate work:** album information and saved artist photos are reused, reducing unnecessary database and artwork-provider lookups. | **Your covers stay yours:** hand-picked album art remains visible in albums, popular tracks and refreshed cards. |
-| **Local-first:** preserve existing pictures and manually selected artwork. | **Correct artist navigation:** local artists, including UUID-style IDs, stay correctly identified as library artists. | **Reactive artwork:** new covers appear when enrichment finishes instead of leaving outdated or empty cards. |
+| See up to **12 recently active browser tabs** (desktop, mobile, tablet or TV). Devices are private to your account. | Send a **local-library queue of up to 50 tracks** and the current play position. The receiver must choose **Play here**. | Send **Pause, Previous or Next** and see **queued**, **handled**, **ignored** or **unconfirmed**, instead of assuming an action worked. |
+| No separate pairing service or new port. | The source pauses only after confirmed receiver playback and a source continuity check. | Existing authenticated SSE wake hints improve responsiveness; Redis polling remains the fallback. |
 
-These are targeted efficiency improvements, not a universal page-loading benchmark. [Release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.0) · [Changelog](CHANGELOG.md)
+**Playback handoff:** Start playing a track, open Kima Connect from the player, choose another active Kima browser, then confirm **Play here** on that browser. A failed or expired transfer leaves the original player running.
+
+**Scope:** Kima Connect works between logged-in *Kima web players*. It does not remotely control Symfonium, Feishin or arbitrary smart speakers, does not bypass browser autoplay requirements, and does not provide synchronized multiroom or guaranteed gapless cross-device audio. A browser reporting **handled** does not guarantee audible output.
+
+[Full v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect technical guide](docs/project-one.md) · [Changelog](CHANGELOG.md)
 
 ## The experience
 
@@ -127,6 +113,7 @@ Responsive desktop and mobile layouts, installable browser-based PWA support and
 | **Playlists** — make, reorder, share and import from supported links or M3U. | **Artwork tools** — repair missing artist imagery and album covers without overwriting curated artwork. |
 | **Podcasts and audiobooks** — podcast subscriptions and optional Audiobookshelf playback. | **Downloads** — per-user Kima job history with optional Lidarr and Soulseek workflows. |
 | **Modern music clients** — compatible OpenSubsonic players, including Symfonium and Feishin. | **Server controls** — separate users and roles, 2FA, branding, language and audio quality settings. |
+| **Kima Connect** — private browser-device discovery, consent-based queue transfer and remote playback control. | **Safe handoff** — playback confirmation, bounded Redis commands, timeout recovery and SSE fallback. |
 
 ### Connect the tools you already use
 
@@ -145,13 +132,11 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 ## Quick start
 
-**Current stable version:** [v1.24.1](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.24.1` · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable version:** [v1.25.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.25.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.24.1`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.25.0`
 
-**New in v1.24.1:** nested unreadable music folders no longer block readable library scans; existing tracks in inaccessible folders retain their status. The unused Downtify scanqueue hook was also removed. [Read the release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.24.1).
-
-**Project ONE (v1.25.0 release candidate):** Five Kima Connect stages are merged into the development source but **not present** in published v1.24.1. See the [Kima Connect preview](#preview--kima-connect-v1250-release-candidate) and [technical documentation](docs/project-one.md). Smart DJ and Library Guardian remain future plans.
+Kima Connect is included in this stable image. Existing Lidarr, Soulseek, Settings Studio, library artwork and modern OpenSubsonic integrations remain available. [What changed](#whats-new-in-v1250--kima-connect).
 
 The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
 
@@ -164,17 +149,17 @@ docker run -d \
   -p 3030:3030 \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.24.1
+  ghcr.io/oxygengs/kima-hub:v1.25.0
 ```
 
 Replace `/absolute/path/to/music` with an **existing** host directory holding your music. Open **http://localhost:3030** from the Docker host and finish the first-run setup.
 
 ### Docker Compose / Dockge — new installations only
 
-The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.24.1 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
+The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.25.0 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.24.1 \
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.25.0 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -185,11 +170,11 @@ The [optional companion stack](docker-compose.server.yml) includes additional me
 
 ## Security and release quality
 
-- Stable releases use native AMD64/ARM64 builds, checks and an explicit security-reviewed publication process. The `:latest` image alias is **not** automatically advanced.
-- The v1.24.1 native preflight reports 331 HIGH and 8 CRITICAL advisories on AMD64, and 330 HIGH and 8 CRITICAL on ARM64; the scanner listed no patched versions for those findings. Passing the automated release gates does **not** mean zero vulnerabilities. Review the [current image-security report](docs/image-security.md) and restrict network exposure appropriately.
-- Applications, media mounts and running Docker containers **are not** changed by editing this GitHub repository or publishing a release.
+- [v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) and [published AMD64/ARM64 images](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307) passed the configured release gates. Publication does **not** automatically change any running installation or promote the `:latest` alias.
+- The v1.25.0 native preflight recorded **393 HIGH / 8 CRITICAL** advisories (AMD64) and **392 HIGH / 8 CRITICAL** (ARM64), with **no scanner-listed fixes**. The additional FFmpeg findings compared with v1.24.1 still require risk-aware operation; a green build is not a clean security scan.
+- Keep Kima behind appropriate network access controls, maintain host and proxy updates, and protect account credentials. Before upgrades, verify a **separately restorable, complete cold backup** of `/data`. Do not change existing media mounts or Compose project identity casually.
 
-[Security policy](SECURITY.md) · [Published image advisories](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
+[Security policy](SECURITY.md) · [Image-security evidence](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
 
 ## Documentation
 
