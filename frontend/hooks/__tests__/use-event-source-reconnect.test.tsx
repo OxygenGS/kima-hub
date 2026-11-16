@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
     setQueryData: vi.fn(),
 }));
 vi.mock("@/lib/auth-context", () => ({
-    useAuth: () => ({ isAuthenticated: mocks.isAuthenticated }),
+    useAuth: () => ({ isAuthenticated: mocks.isAuthenticated, user: { id: "alice" } }),
 }));
 vi.mock("@tanstack/react-query", () => ({
     useQueryClient: () => ({
