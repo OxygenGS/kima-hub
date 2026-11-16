@@ -4,12 +4,13 @@ Project ONE is a staged improvement to the **OxygenGS fork**, designed for any
 self-hosted Kima deployment. It does not assume a particular NAS, hostname,
 Docker volume, reverse proxy, IP address or external subscription service.
 
-**Release status (16 November 2026):** all five stages are merged into `main`
-and are being prepared as the **v1.25.0 release candidate**. The published
-stable version is still **v1.24.1**, which does not contain Kima Connect.
-Do not use a v1.25.0 Docker tag until its actual publication is verified.
+**Release status:** all five Kima Connect stages are included in the
+[published stable v1.25.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0)
+for native AMD64 and ARM64. Existing deployments must explicitly upgrade
+their pinned image and preserve their volumes; a GitHub release never
+modifies a running server.
 
-## Stage 1 — Discover and control your own browser players (merged; unreleased)
+## Stage 1 — Discover and control your own browser players (v1.25.0)
 
 Kima Connect adds an account-private device menu to desktop and mobile playback.
 Signed-in Kima browser tabs announce a temporary, per-user browser identity and
@@ -44,7 +45,7 @@ Browsers generally require a local gesture to start a newly opened audio
 session. We will not silently bypass that restriction or claim that a remote
 command succeeded before the target confirms it.
 
-## Stage 2 — Explicit playback handoff (merged into main; not released)
+## Stage 2 — Explicit playback handoff (v1.25.0)
 
 A signed-in person can offer their current playing **local-library track queue** to a
 second active Kima browser under the same account. The destination sees a
@@ -75,10 +76,10 @@ source observes that acknowledgement.
   control, automatic device wake-up or a guarantee of gapless transition
   between physically separate browsers.
 
-This is not a published stable release. Source and end-to-end checks, exact
-native build checks and a controlled release review must pass first.
+This stage is included in published v1.25.0. The supported transfer remains
+limited to confirmed playback between browsers logged into the same account.
 
-## Stage 3 — Remote command receipts (merged into main; not released)
+## Stage 3 — Remote command receipts (v1.25.0)
 
 The Kima Connect device menu tracks the most recently sent **Pause**, **Previous**
 or **Next** command. The sender initially sees **queued**; after a receiver
@@ -108,10 +109,10 @@ does not allow the action (**ignored**).
   per-device command slot. A newer pending command replaces the previous one;
   this stage does not yet use push/SSE or guarantee real-time delivery.
 
-Stage 3 is merged into the development branch, but not published in the stable
-Docker image. A reviewed native release remains necessary before deployment.
+Stage 3 is included in published v1.25.0. Older running browser versions
+may continue to work without reporting a command receipt.
 
-## Stage 4 — Low-latency browser wake hints (merged into main; not released)
+## Stage 4 — Low-latency browser wake hints (v1.25.0)
 
 Kima now reuses its existing authenticated, one-time-ticket **SSE event stream**
 for a minimal device-specific *wake hint*. When an authorized sender queues a
@@ -142,10 +143,10 @@ and 90-second status receipt; then the existing per-account event bus emits
 - No new HTTP endpoint, service port, database migration, Docker service,
   audio engine, music relocation or automatic release.
 
-This stage is merged into main, but not published in the stable Docker image.
-A reviewed native release remains necessary before deployment.
+Stage 4 is included in published v1.25.0. Disconnected or multi-instance
+SSE streams continue to use the existing Redis heartbeat fallback.
 
-## Stage 5 — Reliable transfer receipts and source wake (merged; unreleased)
+## Stage 5 — Reliable transfer receipts and source wake (v1.25.0)
 
 After a destination explicitly chooses **Play here** and its audio engine confirms
 a newly playing generation, the destination transitions the existing Redis
@@ -175,9 +176,8 @@ authenticated per-user SSE connection.
   be observed, unless source continuity is safely verified.
 
 No new ports, services, database tables, media paths, player engines or password
-requirements were introduced by this stage. Source CI passed before merge,
-but the v1.25.0 release candidate still requires complete regression checks,
-native image preflight and a separate release approval before deployment.
+requirements were introduced by this stage. Its source checks, native
+preflight and explicit release approval preceded published v1.25.0.
 
 ## Further development
 
@@ -196,9 +196,8 @@ native image preflight and a separate release approval before deployment.
 
 ## Compatibility and safe rollout
 
-This feature remains **unreleased** until complete backend, frontend,
-compatibility, language and security CI passes and a new native AMD64/ARM64
-Docker release is reviewed. It must not change an installed Compose project,
-database, media mount or current stable tag. Existing OpenSubsonic clients,
-playlists, user accounts, audio quality settings and library workflows remain
-separate and compatible.
+Kima Connect is **released in v1.25.0**. Upgrading is optional and must not
+silently change an installed Compose project, database volume, media mount
+or pinned image. Back up `/data` before an upgrade. Existing OpenSubsonic
+clients, playlists, accounts, audio quality settings and library workflows
+remain separate and compatible. [Installation and rollback](install.md).
