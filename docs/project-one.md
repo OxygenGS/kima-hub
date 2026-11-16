@@ -73,7 +73,7 @@ source observes that acknowledgement.
 This is not a published stable release. Source and end-to-end checks, exact
 native build checks and a controlled release review must pass first.
 
-## Stage 3 — Remote command receipts (development PR; not released)
+## Stage 3 — Remote command receipts (merged into main; not released)
 
 The Kima Connect device menu tracks the most recently sent **Pause**, **Previous**
 or **Next** command. The sender initially sees **queued**; after a receiver
@@ -103,9 +103,42 @@ does not allow the action (**ignored**).
   per-device command slot. A newer pending command replaces the previous one;
   this stage does not yet use push/SSE or guarantee real-time delivery.
 
-Stage 3 is not published in the stable Docker image. All backend, frontend,
-language, source-privacy, security and native AIO gates must pass before merge
-and any later release review.
+Stage 3 is merged into the development branch, but not published in the stable
+Docker image. A reviewed native release remains necessary before deployment.
+
+## Stage 4 — Low-latency browser wake hints (development PR; not released)
+
+Kima now reuses its existing authenticated, one-time-ticket **SSE event stream**
+for a minimal device-specific *wake hint*. When an authorized sender queues a
+remote control action, the server first commits the 20-second Redis instruction
+and 90-second status receipt; then the existing per-account event bus emits
+`connect:command-wake` containing only the target device ID.
+
+- **No remote instruction is carried in SSE.** Each signed-in tab checks
+  whether the hint's device ID matches its own account-scoped tab ID. If so,
+  it immediately performs its existing authenticated heartbeat, retrieving the
+  command via Redis GETDEL. The callback and receipt rules from stage 3 stay in
+  force. Unrelated tabs do nothing.
+- A single pending wake is retained if a prior heartbeat is in flight, so a
+  notification cannot be lost merely because the prior call is still running.
+  Additional queued wake hints coalesce rather than causing parallel fetches.
+- Existing 7-second heartbeats continue unchanged. If the SSE ticket, socket,
+  reverse proxy, browser background tab, or process-local event bus cannot
+  deliver the hint, control requests still work through Redis on the next
+  periodic heartbeat. This is **best-effort lower latency**, not guaranteed
+  instant delivery.
+- The event stream is already authenticated per user with short-lived
+  single-use tickets and a connection cap; on account change the frontend
+  closes the old subscription and obtains a fresh user-scoped ticket.
+- The in-memory event bus does not fan out across separate backend processes.
+  Multi-instance users retain the heartbeat fallback until a shared bus is
+  introduced. The event does not include file paths, titles, media, passwords,
+  API credentials or command payloads.
+- No new HTTP endpoint, service port, database migration, Docker service,
+  audio engine, music relocation or automatic release.
+
+This stage remains unreleased pending the exact-head CI checks, language
+regressions, security/source-privacy review and native AMD64/ARM64 build checks.
 
 ## Further development
 
@@ -113,9 +146,9 @@ and any later release review.
 
 1. **Handoff reliability:** add low-latency confirmation delivery, explicit source
    status receipts, and carefully verified recovery when a browser disconnects.
-2. **Low-latency delivery:** evaluate authenticated SSE for remote command
-   signalling and richer playback-state confirmation, without weakening
-   browser gesture requirements or Redis's bounded delivery window.
+2. **Playback assurance:** richer audio-engine outcome reporting, and where
+   relevant a shared notification bus for multi-process backends, without
+   remotely triggering autoplay or expanding Redis's bounded command window.
 3. **Smart DJ:** use existing library audio-analysis, Vibe similarity, likes,
    user preferences and listening history to produce on-device/library-only
    listening sessions. All suggested tracks must be available and playable.
