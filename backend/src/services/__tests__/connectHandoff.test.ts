@@ -3,7 +3,10 @@ jest.mock("../../utils/redis", () => ({
     redisClient: { get: jest.fn(), mget: jest.fn(), set: jest.fn(), eval: jest.fn(), multi: jest.fn() },
 }));
 
+jest.mock("../eventBus", () => ({ eventBus: { emit: jest.fn() } }));
+
 import { redisClient } from "../../utils/redis";
+import { eventBus } from "../eventBus";
 import {
     createConnectHandoff, getIncomingConnectHandoff, getOutgoingConnectHandoff,
     transitionConnectHandoff, HandoffBusyError, HandoffUnavailableError, HandoffStateError,
@@ -49,7 +52,10 @@ beforeEach(() => {
         const writes: Array<[string, string]> = [];
         const tx = {
             set: (key: string, value: string) => { writes.push([key, value]); return tx; },
-            exec: async () => { writes.forEach(([key, value]) => store.set(key, value)); return []; },
+            exec: async () => {
+                writes.forEach(([key, value]) => store.set(key, value));
+                return writes.map(() => [null, "OK"]);
+            },
         };
         return tx;
     });
@@ -115,6 +121,55 @@ describe("Kima Connect handoff", () => {
         expect(await getOutgoingConnectHandoff("alice", A, NOW)).toBeNull();
         const second = await createConnectHandoff("alice", request, NOW + 1000);
         expect(second.id).not.toBe(id);
+    });
+
+    it("never claims a created handoff when a Redis write fails, and releases both device pointers", async () => {
+        const failed = {
+            set: jest.fn().mockReturnThis(),
+            exec: jest.fn().mockResolvedValue([[null, "OK"], [new Error("Redis OOM"), null]]),
+        };
+        (redis.multi as jest.Mock).mockReturnValueOnce(failed);
+        await expect(createConnectHandoff("alice", request, NOW)).rejects.toThrow("Unable to store handoff");
+        expect([...store.keys()].filter(key => key.startsWith("connect:handoff:source:"))).toHaveLength(0);
+        expect([...store.keys()].filter(key => key.startsWith("connect:handoff:target:"))).toHaveLength(0);
+        const retry = await createConnectHandoff("alice", request, NOW + 1000);
+        expect(retry.id).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it("wakes only the source browser after actual receiver confirmation, never on a pending offer", async () => {
+        const offer = await createConnectHandoff("alice", request, NOW);
+        expect(eventBus.emit).not.toHaveBeenCalled();
+        expect(await transitionConnectHandoff("alice", offer.id, B, "started", NOW + 1000)).toBe("started");
+        expect(eventBus.emit).toHaveBeenCalledWith({
+            type: "connect:handoff-wake",
+            userId: "alice",
+            payload: { deviceId: A },
+        });
+        expect(eventBus.emit).toHaveBeenCalledTimes(1);
+        await transitionConnectHandoff("alice", offer.id, A, "observed", NOW + 2000);
+        expect(eventBus.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a confirmed transfer successful when SSE emission fails", async () => {
+        const { id } = await createConnectHandoff("alice", request, NOW);
+        (eventBus.emit as jest.Mock).mockImplementationOnce(() => { throw new Error("SSE down"); });
+        await expect(transitionConnectHandoff("alice", id, B, "started", NOW + 1000))
+            .resolves.toBe("started");
+        expect((await getOutgoingConnectHandoff("alice", A, NOW + 1000))?.status).toBe("started");
+    });
+
+    it("retries idempotent pointer cleanup after a transient Redis deletion error", async () => {
+        const { id } = await createConnectHandoff("alice", request, NOW);
+        const originalEval = (redis.eval as jest.Mock).getMockImplementation()!;
+        (redis.eval as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+            if (String(args[0]).includes("return redis.call('DEL'")) throw new Error("Redis unavailable");
+            return originalEval(...args);
+        });
+        expect(await transitionConnectHandoff("alice", id, B, "started", NOW + 1000)).toBe("started");
+        expect(store.get(`connect:handoff:target:alice:${B}`)).toBe(id);
+        (redis.eval as jest.Mock).mockImplementation(originalEval);
+        expect(await transitionConnectHandoff("alice", id, B, "started", NOW + 2000)).toBe("started");
+        expect(store.has(`connect:handoff:target:alice:${B}`)).toBe(false);
     });
 
     it("does not let either player confirm an expired request", async () => {
