@@ -17,6 +17,24 @@ The home page shows the sections that have something to show:
 - **Popular Artists** (from ListenBrainz) and **Featured Playlists** (from Deezer).
 - **Popular Podcasts** and **Audiobooks.**
 
+## Kima Flow (in development; not in published v1.25.0)
+
+The new **Flow** navigation item is being developed as a simple way to listen
+without learning the 3D Vibe controls. It reuses Vibe audio matching but presents
+three straightforward listening choices (**My favorites**, **A bit of both**,
+**Surprise me**) and **Energy / Discovery** sliders. A preview shows the
+proposed library tracks and why they were selected.
+
+**Start Flow** plays the proposed songs using the existing Kima player, only
+after a user click. If the first proposed song is already playing, Flow keeps
+the song going and changes only the upcoming queue. The preview does not
+download, relocate or change any music. Click **Explore the Vibe map** to use
+the full 3D view.
+
+This first stage produces a finite ordered session. Continuous automatic
+queue refill and explicit user-feedback learning are planned for later phases.
+[Project NOVA design](project-nova.md).
+
 ## The vibe map
 
 Open **Vibe** in the sidebar. Your library appears as a 3D space where songs that match sit close together. How matching works is described in the [Vibe and music analysis](administration.md#library-enrichment).
