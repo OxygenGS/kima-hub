@@ -5,7 +5,7 @@ import FlowPage from "./page";
 
 const fake = vi.hoisted(() => ({
     user: { id: "alice" } as { id: string } | null,
-    currentTrack: { id: "seed", title: "Seed", duration: 180, artist: { name: "A" }, album: { title: "B" } } as any,
+    currentTrack: { id: "seed", title: "Seed", duration: 180, artist: { name: "A" }, album: { title: "B" } } as { id: string; title: string; duration: number; artist: { name: string }; album: { title: string } } | null,
     playbackType: "track" as string | null,
     queue: [{ id: "seed" }] as { id: string }[],
     index: 0,
