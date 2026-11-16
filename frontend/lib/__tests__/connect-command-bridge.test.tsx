@@ -107,6 +107,54 @@ describe("Kima Connect command handling receipts", () => {
         );
     });
 
+    it("wakes the addressed browser immediately without waiting for the periodic heartbeat", async () => {
+        await mountBridge();
+        expect(fake.heartbeat).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            window.dispatchEvent(new CustomEvent("kima-connect-command-wake", {
+                detail: { deviceId: "aa47d96f-37dd-4fd4-a550-74e10e2f7241" },
+            }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(fake.heartbeat).toHaveBeenCalledTimes(2);
+    });
+
+    it("ignores wake hints addressed to other browsers and unregisters on unmount", async () => {
+        await mountBridge();
+        window.dispatchEvent(new CustomEvent("kima-connect-command-wake", {
+            detail: { deviceId: "bb47d96f-37dd-4fd4-a550-74e10e2f7242" },
+        }));
+        expect(fake.heartbeat).toHaveBeenCalledTimes(1);
+
+        act(() => root.unmount());
+        window.dispatchEvent(new CustomEvent("kima-connect-command-wake", {
+            detail: { deviceId: "aa47d96f-37dd-4fd4-a550-74e10e2f7241" },
+        }));
+        expect(fake.heartbeat).toHaveBeenCalledTimes(1);
+        // Replace the already unmounted root so afterEach can always clean up.
+        root = createRoot(host);
+    });
+
+    it("does not lose a wake hint delivered while a heartbeat is in flight", async () => {
+        let releaseFirst!: (value: { command: null; ttlSeconds: number }) => void;
+        fake.heartbeat.mockImplementationOnce(() => new Promise(resolve => { releaseFirst = resolve; }));
+        await mountBridge();
+        expect(fake.heartbeat).toHaveBeenCalledTimes(1);
+        window.dispatchEvent(new CustomEvent("kima-connect-command-wake", {
+            detail: { deviceId: "aa47d96f-37dd-4fd4-a550-74e10e2f7241" },
+        }));
+        expect(fake.heartbeat).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+            releaseFirst({ command: null, ttlSeconds: 45 });
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+        expect(fake.heartbeat).toHaveBeenCalledTimes(2);
+    });
+
     it("never sends a receipt for an empty command heartbeat", async () => {
         await mountBridge();
         expect(fake.ack).not.toHaveBeenCalled();
