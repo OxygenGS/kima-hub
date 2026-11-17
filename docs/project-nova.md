@@ -86,9 +86,13 @@ and **Less like this**. Press the selected option again to undo it.
   file locations or cloud data are stored in the new table.
 - **Separate from Favorites:** no existing `LikedTrack` records are changed.
   Explicit positive choices increase future Flow ranking and appear as
-  explainable **You asked for more like this** suggestions. Negative choices
-  suppress those songs from candidate selection even without audio analysis.
+  explainable **You asked for more like this** suggestions. Strongly similar
+  tracks receive a bounded positive influence; negative choices suppress the
+  explicitly rated song and reduce the rank of its close audio neighbors.
   A song explicitly playing as the seed can still appear as the seed.
+  At most **four** recent taste signals and 45 sound neighbors each are
+  evaluated per preview. No CLAP vectors required means no derived-neighbor
+  influence, but explicit per-track feedback still works.
 - **Validation:** authenticated routes derive the owner from the session;
   only actual local, available, non-corrupt library tracks can receive new
   preferences. Strict bounded request validation, no-store response headers,
