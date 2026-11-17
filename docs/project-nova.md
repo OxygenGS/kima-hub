@@ -37,7 +37,7 @@ the existing map under **Vibe** as an optional advanced visual view.
   navigation independent of the heavy WebGL scene. No media files,
   databases, playlist records or provider integrations are modified.
 
-## Phase 2 — Continuous Flow (this PR)
+## Phase 2 — Continuous Flow (merged in PR #264)
 
 A user-initiated **Start Flow** action begins a private browser-only Flow
 session. While the session is actively playing, Kima can extend the current
@@ -74,7 +74,7 @@ Kima web player stays available. It is not infinite music from an external
 catalog, cross-device continuity guaranteed through a closed tab, or audio
 autoplay in a background browser.
 
-## Phase 3 — Music DNA explicit feedback (this PR)
+## Phase 3 — Music DNA explicit feedback (merged in PR #265)
 
 The Flow preview adds two accessible per-track preferences: **More like this**
 and **Less like this**. Press the selected option again to undo it.
@@ -113,7 +113,7 @@ automatically trained vector model, behavior-based inference, or externally
 hosted personalization service. Those can be evaluated separately after
 owner-safe listening tests.
 
-## Phase 4 — Discovery Radar (this PR)
+## Phase 4 — Discovery Radar (merged in PR #266)
 
 The Flow screen gains an **opt-in** `Beyond your library` area. A person
 clicks **Find new artists** to search for similar artists starting from the
@@ -146,12 +146,42 @@ artist pages continue to own album requests, and nonconfigured providers
 remain optional. Missing or offline external sources are shown as empty or
 partial evidence, never as fabricated recommendations.
 
+## Phase 5 — Library Guardian duplicate evidence (this PR)
+
+The existing **Settings → Library Doctor** now offers an additional,
+explicit **potential duplicate recordings** check. It is an administrator
+view only and is independent of all Flow playback/queue processing.
+
+- A single read-only, bounded PostgreSQL query groups available `LIBRARY`
+  tracks by real MusicBrainz recording ID. The result is capped to eight
+  groups by default (maximum twelve) and four tracks per group, with
+  a flag when more groups exist.
+- Album title, track duration, relative indexed filename and matching
+  recording identity provide human-review evidence. The backend optionally
+  compares the indexed acoustic fingerprints **without exporting** them
+  to the browser. Equal fingerprints and nearby durations are stronger
+  evidence than shared recording identity alone, but are **not proof of
+  identical file bytes**.
+- Results link to existing local album pages for comparison. The view has
+  no update, delete, scan, retag, move, acquire or merge action. Reports
+  describe *candidates*, never "waste" or an exact cleanup opportunity.
+- Strict admin authentication, bounded query parameters, private no-store
+  response, EN/NL UI, error and account-switch behavior; no new database
+  migration, external integration or service.
+- Review candidates may include legitimate greatest-hits compilations,
+  reissues and alternate encodings. A collection with no indexed
+  recording IDs can report none, even if it contains duplicate files.
+
+The implementation and review policy are documented in
+[Library Doctor](library-doctor.md).
+
 ## Planned phases
 
 1. **Deeper Discovery integration:** explore album-level recommendations and
    optional, permission-checked requests, always explicitly initiated.
-2. **Library Guardian:** read-only diagnosis and reviewed, storage-safe
-   repair proposals.
+2. **Library Guardian follow-up:** optional independently verified
+   audio-file fingerprint/hash auditing and explicit, reversible repairs.
+   No automatic deletion.
 
 ## Security, release and compatibility
 
@@ -161,7 +191,7 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-This phase-4 PR does not create or publish a Docker tag and cannot update a
+This phase-5 PR does not create or publish a Docker tag and cannot update a
 running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
 remain unchanged. Require backend/frontend tests, EN/NL UI, database upgrade,
