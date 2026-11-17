@@ -236,6 +236,12 @@ export interface NovaDiscoveryResult {
     artists: NovaDiscoveryArtist[];
     sourceFailed: boolean;
 }
+export interface NovaAlbumSpotlightResult {
+    artistMbid: string;
+    albums: Array<{ id: string; title: string; type: "Album" | "EP"; year: number | null }>;
+    sourceFailed: boolean;
+    readOnly: true;
+}
 
 export type NovaFlowStyle = "familiar" | "balanced" | "adventurous";
 export type NovaFlowReason = "seed" | "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
@@ -2357,6 +2363,13 @@ class ApiClient {
     async getNovaDiscovery(seedTrackId: string, limit = 8, signal?: AbortSignal) {
         return this.request<NovaDiscoveryResult>(
             `/vibe/flow/discover?seedTrackId=${encodeURIComponent(seedTrackId)}&limit=${limit}`,
+            { signal },
+        );
+    }
+    // Explicit, read-only MusicBrainz album samples: never contacts the provider on mount.
+    async getNovaAlbumSpotlight(artistMbid: string, limit = 3, signal?: AbortSignal) {
+        return this.request<NovaAlbumSpotlightResult>(
+            `/vibe/flow/discover/albums?artistMbid=${encodeURIComponent(artistMbid)}&limit=${limit}`,
             { signal },
         );
     }
