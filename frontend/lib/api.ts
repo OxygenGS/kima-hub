@@ -196,6 +196,17 @@ interface VibePathTrack {
     artistName: string;
 }
 
+export interface NovaDiscoveryArtist {
+    name: string;
+    mbid: string | null;
+    match: number;
+}
+export interface NovaDiscoveryResult {
+    seedArtist: string | null;
+    artists: NovaDiscoveryArtist[];
+    sourceFailed: boolean;
+}
+
 export type NovaFlowStyle = "familiar" | "balanced" | "adventurous";
 export type NovaFlowReason = "seed" | "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
 export type NovaFlowFeedbackChoice = "more" | "less";
@@ -2310,6 +2321,14 @@ class ApiClient {
             body: JSON.stringify(options),
             signal,
         });
+    }
+
+    // NOVA Discovery Radar: invoked only after an explicit click. Read-only.
+    async getNovaDiscovery(seedTrackId: string, limit = 8, signal?: AbortSignal) {
+        return this.request<NovaDiscoveryResult>(
+            `/vibe/flow/discover?seedTrackId=${encodeURIComponent(seedTrackId)}&limit=${limit}`,
+            { signal },
+        );
     }
 
     // Music DNA: explicit, account-scoped feedback. This is not a Favorite,
