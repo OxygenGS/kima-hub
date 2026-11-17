@@ -73,7 +73,7 @@ export function LibraryGuardianDuplicatesSection() {
     const text = COPY[locale];
     const ownerId = user?.id ?? null;
     const [snapshot, setSnapshot] = useState<{ ownerId: string; data: LibraryGuardianDuplicateReport } | null>(null);
-    const [pendingOwner, setPendingOwner] = useState<string | null>(null);
+    const [pending, setPending] = useState<{ ownerId: string; controller: AbortController } | null>(null);
     const [failedOwner, setFailedOwner] = useState<string | null>(null);
     const pendingRef = useRef<AbortController | null>(null);
 
@@ -83,7 +83,7 @@ export function LibraryGuardianDuplicatesSection() {
     }, [ownerId]);
 
     const report = snapshot?.ownerId === ownerId ? snapshot.data : null;
-    const loading = !!ownerId && pendingOwner === ownerId && !!pendingRef.current && !pendingRef.current.signal.aborted;
+    const loading = !!ownerId && pending?.ownerId === ownerId && !pending.controller.signal.aborted;
     const failed = !!ownerId && failedOwner === ownerId;
 
     const inspect = async () => {
@@ -91,7 +91,7 @@ export function LibraryGuardianDuplicatesSection() {
         pendingRef.current?.abort();
         const controller = new AbortController();
         pendingRef.current = controller;
-        setPendingOwner(ownerId);
+        setPending({ ownerId, controller });
         setFailedOwner(null);
         try {
             const result = await api.getLibraryGuardianDuplicates(8, controller.signal);
@@ -102,7 +102,7 @@ export function LibraryGuardianDuplicatesSection() {
                 setFailedOwner(ownerId);
             }
         } finally {
-            if (!controller.signal.aborted) setPendingOwner(null);
+            if (!controller.signal.aborted) setPending(null);
             if (pendingRef.current === controller) pendingRef.current = null;
         }
     };
