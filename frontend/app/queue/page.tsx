@@ -28,7 +28,7 @@ export default function QueuePage() {
 
     return (
         <>
-            {activeOperation.type === "flow" && activeOperation.ownerId === user?.id && (
+            {activeOperation?.type === "flow" && activeOperation.ownerId === user?.id && (
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-[var(--bg-secondary)] p-4">
                     <p className="text-sm text-[var(--text-secondary)]">
                         {locale === "nl" ? "Continuous Flow vult de wachtrij automatisch aan." : "Continuous Flow automatically adds upcoming music."}
