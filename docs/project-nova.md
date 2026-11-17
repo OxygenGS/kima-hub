@@ -74,13 +74,46 @@ Kima web player stays available. It is not infinite music from an external
 catalog, cross-device continuity guaranteed through a closed tab, or audio
 autoplay in a background browser.
 
+## Phase 3 — Music DNA explicit feedback (this PR)
+
+The Flow preview adds two accessible per-track preferences: **More like this**
+and **Less like this**. Press the selected option again to undo it.
+
+- **Account-private:** each preference is a `NovaFlowFeedback` record with
+  unique `(userId, trackId)`, plus its `-1/+1` value. An additive Prisma
+  migration installs the table and SQL value constraint. User or track
+  deletion cascades cleanly. No provider tokens, IPs, listening timestamps,
+  file locations or cloud data are stored in the new table.
+- **Separate from Favorites:** no existing `LikedTrack` records are changed.
+  Explicit positive choices increase future Flow ranking and appear as
+  explainable **You asked for more like this** suggestions. Negative choices
+  suppress those songs from candidate selection even without audio analysis.
+  A song explicitly playing as the seed can still appear as the seed.
+- **Validation:** authenticated routes derive the owner from the session;
+  only actual local, available, non-corrupt library tracks can receive new
+  preferences. Strict bounded request validation, no-store response headers,
+  scoped upsert and idempotent undo prevent writing into another account.
+- **No sudden playback changes:** setting or undoing feedback does not change
+  existing audio sessions or reorder songs already in the queue. Future
+  previews and subsequent Continuous Flow refills apply the new preference.
+  Feedback labels never enter the shared playback queue JSON.
+- **Bilingual and reversible:** thumbs-up/down controls on the Flow preview
+  show the current value. A second click clears it. Failed writes display a
+  clear message and do not claim success.
+- **One migration:** this is the first NOVA schema change. Back up the entire
+  `/data` volume before updating an existing installation, including the
+  PostgreSQL database. A database rollback may require restoring the backup.
+
+This initial Music DNA slice is **explicit per-track feedback**, not an
+automatically trained vector model, behavior-based inference, or externally
+hosted personalization service. Those can be evaluated separately after
+owner-safe listening tests.
+
 ## Planned phases
 
-1. **Music DNA:** explicit per-user feedback and understandable ranking
-   explanations without exporting listening profiles to external servers.
-2. **Discovery integration:** optional, explicit missing-music requests
+1. **Discovery integration:** optional, explicit missing-music requests
    through available integrations; never automatic downloads.
-3. **Library Guardian:** read-only diagnosis and reviewed, storage-safe
+2. **Library Guardian:** read-only diagnosis and reviewed, storage-safe
    repair proposals.
 
 ## Security, release and compatibility
@@ -91,7 +124,7 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-This phase-2 PR does not create or publish a Docker tag and cannot update a
+This phase-3 PR does not create or publish a Docker tag and cannot update a
 running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
 remain unchanged. Require backend/frontend tests, EN/NL UI, database upgrade,
