@@ -93,6 +93,22 @@ describe("NOVA Flow library-safe generation", () => {
         expect(flow.tracks.find(t => t.id === "seed")?.feedback).toBeNull();
     });
 
+    it("includes strongly similar songs from this user's explicit positive taste seeds", async () => {
+        db.novaFlowFeedback.findMany.mockImplementation(async ({ where }: { where: { track?: unknown } }) =>
+            where.track ? [{ trackId: "chosen-track", value: 1 }] : []);
+        (findSimilarTracks as jest.Mock).mockImplementation(async (id: string) =>
+            id === "seed" ? [] : [{ id: "next", similarity: 0.98 }]);
+        const flow = await buildNovaFlow("alice", options);
+        expect(flow.tracks.find(track => track.id === "next")).toEqual(expect.objectContaining({
+            reason: "matches-your-taste",
+        }));
+        expect(findSimilarTracks).toHaveBeenCalledWith("chosen-track", 45);
+        expect(db.novaFlowFeedback.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: "alice", track: expect.anything() }),
+            take: 4,
+        }));
+    });
+
     it("uses owner-specific negative choices in both candidate and fallback filters", async () => {
         await buildNovaFlow("alice", options);
         expect(db.track.findMany).toHaveBeenCalledWith(expect.objectContaining({
