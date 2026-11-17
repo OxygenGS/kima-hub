@@ -46,6 +46,15 @@ Tap a selected preference again to undo it. Each signed-in Kima account
 has its own saved signals, and no external service receives these choices.
 The current audio session and manually edited queue are never interrupted.
 
+**Discovery Radar (phase 4, in development):** while on Flow, click
+**Find new artists** under **Beyond your library**. This on-demand search
+compares the current playable song's artist with public similar-artist
+sources. Suggestions exclude artists with playable tracks already in your
+local library. Open **Explore albums** to reach the regular artist
+discography, where album requests are optional and governed by the
+existing user's music permissions. Radar never starts a Lidarr or Soulseek
+download on its own. It never changes the current playback or queue.
+
 Flow never starts audio automatically in response to the server. It only
 extends playback that you explicitly started. The browser must remain open,
 and the library must contain suitable songs; a small, fully used library
