@@ -413,6 +413,21 @@ model LikedTrack {
   @@index([userId])
 }
 
+/// Explicit per-user Flow taste choices. Separate from global Favorites/LikedTrack.
+model NovaFlowFeedback {
+  userId    String
+  trackId   String
+  value     Int      // -1 means less like this; +1 means more like this.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, trackId])
+  @@index([userId, value])
+  @@index([trackId])
+}
+
 model MoodBucket {
   id        String   @id @default(cuid())
   trackId   String
@@ -909,6 +924,7 @@ model Track {
   discSubtitle      String?
   cachedBy          CachedTrack[]
   likedBy           LikedTrack[]
+  novaFlowFeedback  NovaFlowFeedback[]
   moodBuckets       MoodBucket[]
   plays             Play[]
   playlistItems     PlaylistItem[]
@@ -1028,6 +1044,7 @@ model User {
   downtifyNativeImports  DowntifyNativeImport[]
   hiddenPlaylists        HiddenPlaylist[]
   likedTracks            LikedTrack[]
+  novaFlowFeedback        NovaFlowFeedback[]
   notifications          Notification[]
   plays                  Play[]
   playbackState          PlaybackState?
