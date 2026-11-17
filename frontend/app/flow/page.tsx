@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AudioLines, Compass, Disc3, Music2, Play, RefreshCw, SlidersHorizontal } from "lucide-react";
-import { api, type NovaFlowPreview, type NovaFlowReason, type NovaFlowStyle } from "@/lib/api";
+import { AudioLines, Compass, Disc3, Music2, Play, RefreshCw, SlidersHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
+import { api, type NovaFlowPreview, type NovaFlowReason, type NovaFlowStyle, type NovaFlowFeedbackChoice } from "@/lib/api";
 import { useAudioState } from "@/lib/audio-state-context";
 import { useAudioControls } from "@/lib/audio-controls-context";
 import { useAudioPlayback } from "@/lib/audio-playback-context";
@@ -29,8 +29,10 @@ const COPY = {
         more: "Preview tracks", tracks: "tracks", library: "Your library only · no automatic downloads",
         advanced: "Explore the Vibe map", already: "Flow queue ready in the player",
         seed: "Starting song", favorite: "A favorite of yours", "new-to-you": "Less familiar to you",
-        similar: "Fits the sound", energyReason: "Matches the energy", "library-pick": "From your library",
-        note2: "While Flow is active, Kima keeps your queue supplied. Editing the queue or switching modes stops automatic refill; the music keeps playing. Explicit feedback learning is planned next.",
+        similar: "Fits the sound", energyReason: "Matches the energy", "library-pick": "From your library", "more-like-this": "You asked for more like this",
+        tasteIntro: "Teach Flow your taste", moreLike: "More like this", lessLike: "Less like this",
+        feedbackError: "Your preference could not be saved. Try again.", feedbackHint: "Tap the selected button again to undo.",
+        note2: "Flow keeps your local queue supplied while active. Give a track a thumbs up or down to improve future suggestions for your own account. Manual queue edits stop auto-refill without pausing the music.",
         running: "Continuous Flow is active", stop: "Stop automatic Flow",
     },
     nl: {
@@ -48,8 +50,10 @@ const COPY = {
         more: "Voorproefje van nummers", tracks: "nummers", library: "Alleen je eigen muziek · geen automatische downloads",
         advanced: "Bekijk de Vibe-kaart", already: "Flow-wachtrij staat klaar in de speler",
         seed: "Startnummer", favorite: "Een van je favorieten", "new-to-you": "Nog niet vaak gehoord",
-        similar: "Past bij het geluid", energyReason: "Past bij de energie", "library-pick": "Uit je bibliotheek",
-        note2: "Zolang Flow actief is, blijft Kima de wachtrij aanvullen. Handmatig bewerken of van modus wisselen stopt het aanvullen; je muziek speelt door. Leren van directe feedback volgt later.",
+        similar: "Past bij het geluid", energyReason: "Past bij de energie", "library-pick": "Uit je bibliotheek", "more-like-this": "Je wilt hier meer van horen",
+        tasteIntro: "Leer Flow jouw smaak", moreLike: "Meer zoals dit", lessLike: "Minder zoals dit",
+        feedbackError: "Je voorkeur opslaan is mislukt. Probeer opnieuw.", feedbackHint: "Tik nogmaals op de gekozen knop om dit ongedaan te maken.",
+        note2: "Flow blijft je lokale wachtrij aanvullen. Geef een nummer een duim omhoog of omlaag om toekomstige aanbevelingen voor jouw account te verbeteren. Handmatige wijzigingen stoppen het aanvullen zonder de muziek te pauzeren.",
         running: "Continuous Flow is actief", stop: "Automatisch aanvullen stoppen",
     },
 } as const;
@@ -75,6 +79,8 @@ export default function FlowPage() {
     const [loading, setLoading] = useState(false);
     const [failed, setFailed] = useState(false);
     const [startedKey, setStartedKey] = useState<string | null>(null);
+    const [feedbackUpdating, setFeedbackUpdating] = useState<string | null>(null);
+    const [feedbackFailed, setFeedbackFailed] = useState(false);
 
     const seedTrackId = playbackType === "track" ? currentTrack?.id : undefined;
     const requestKey = `${user?.id ?? ""}:${seedTrackId ?? ""}:${style}:${energy}:${discovery}:${generation}`;
@@ -105,9 +111,39 @@ export default function FlowPage() {
 
     // Never play in an async response callback: browser autoplay rules require
     // a deliberate user gesture. Reuse the one canonical audio engine.
+    const changeFeedback = async (trackId: string, existing: NovaFlowFeedbackChoice | null, choice: NovaFlowFeedbackChoice) => {
+        if (!user?.id || feedbackUpdating) return;
+        const ownerId = user.id;
+        const nextChoice = existing === choice ? null : choice;
+        setFeedbackUpdating(trackId);
+        setFeedbackFailed(false);
+        try {
+            if (nextChoice) {
+                await api.setNovaFlowFeedback(trackId, nextChoice);
+            } else {
+                await api.clearNovaFlowFeedback(trackId);
+            }
+            // Update only the matching account's preview. A sign-out or
+            // another account's response must never affect this user's taste.
+            setPrepared(prev => prev?.ownerId === ownerId ? {
+                ...prev,
+                preview: {
+                    ...prev.preview,
+                    tracks: prev.preview.tracks.map(track =>
+                        track.id === trackId ? { ...track, feedback: nextChoice } : track),
+                },
+            } : prev);
+            setGeneration(value => value + 1);
+        } catch {
+            setFeedbackFailed(true);
+        } finally {
+            setFeedbackUpdating(null);
+        }
+    };
+
     const startFlow = () => {
         if (!preview?.tracks.length || !user?.id) return;
-        const tracks = preview.tracks.map(({ reason: _reason, ...track }) => ({
+        const tracks = preview.tracks.map(({ reason: _reason, feedback: _feedback, ...track }) => ({
             ...track, album: { ...track.album, coverArt: track.album.coverArt ?? undefined },
         }));
         const canContinue = playbackType === "track" && currentTrack?.id === tracks[0]?.id
@@ -236,6 +272,8 @@ export default function FlowPage() {
                     {!loading && !failed && preview && preview.tracks.length > 0 && (
                         <>
                             <p className="text-xs font-semibold text-brand">{preview.tracks.length} {text.tracks}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{text.tasteIntro}. {text.feedbackHint}</p>
+                            {feedbackFailed && <p role="alert" className="text-xs text-red-400">{text.feedbackError}</p>
                             <ol className="space-y-1">
                                 {preview.tracks.slice(0, 8).map((track, index) => (
                                     <li key={track.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/5">
@@ -245,6 +283,30 @@ export default function FlowPage() {
                                             <p className="truncate text-xs text-[var(--text-secondary)]">{track.artist.name}</p>
                                         </div>
                                         <span className="hidden max-w-28 text-right text-xs text-[var(--text-muted)] sm:block">{reasonLabel(track.reason, text)}</span>
+                                        <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`${text.tasteIntro}: ${track.title}`}>
+                                            <button type="button"
+                                                aria-label={`${text.moreLike}: ${track.title}`}
+                                                aria-pressed={track.feedback === "more"}
+                                                title={text.moreLike}
+                                                disabled={feedbackUpdating !== null}
+                                                onClick={() => { void changeFeedback(track.id, track.feedback ?? null, "more"); }}
+                                                className={`flex min-h-10 min-w-10 items-center justify-center rounded-lg border transition-colors focus-visible:outline-2 focus-visible:outline-brand ${track.feedback === "more"
+                                                    ? "border-brand bg-brand/15 text-brand"
+                                                    : "border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-brand"}`}>
+                                                <ThumbsUp size={15} aria-hidden="true" />
+                                            </button>
+                                            <button type="button"
+                                                aria-label={`${text.lessLike}: ${track.title}`}
+                                                aria-pressed={track.feedback === "less"}
+                                                title={text.lessLike}
+                                                disabled={feedbackUpdating !== null}
+                                                onClick={() => { void changeFeedback(track.id, track.feedback ?? null, "less"); }}
+                                                className={`flex min-h-10 min-w-10 items-center justify-center rounded-lg border transition-colors focus-visible:outline-2 focus-visible:outline-brand ${track.feedback === "less"
+                                                    ? "border-brand bg-brand/15 text-brand"
+                                                    : "border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-brand"}`}>
+                                                <ThumbsDown size={15} aria-hidden="true" />
+                                            </button>
+                                        </div>
                                     </li>
                                 ))}
                             </ol>
