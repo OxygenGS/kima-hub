@@ -51,8 +51,9 @@ always take priority.
 **Phase 3 (development): Music DNA feedback** lets each signed-in listener
 select **More like this** or **Less like this** directly in Flow. Your choice
 is stored privately on the Kima server, improves your future Flow results,
-and can be undone by pressing the selected button again. These signals do
-not modify Favorites or other users' taste.
+and can be undone by pressing the selected button again. Positive choices
+also favor strongly similar tracks; negative choices downrank close matches.
+These private signals do not modify Favorites or other users' taste.
 
 Flow never downloads or imports music, replaces the original 3D Vibe map,
 or runs while the originating browser is closed.
