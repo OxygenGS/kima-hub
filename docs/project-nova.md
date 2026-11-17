@@ -146,7 +146,7 @@ artist pages continue to own album requests, and nonconfigured providers
 remain optional. Missing or offline external sources are shown as empty or
 partial evidence, never as fabricated recommendations.
 
-## Phase 5 — Library Guardian duplicate evidence (this PR)
+## Phase 5 — Library Guardian duplicate evidence (merged in PR #267)
 
 The existing **Settings → Library Doctor** now offers an additional,
 explicit **potential duplicate recordings** check. It is an administrator
@@ -175,13 +175,41 @@ view only and is independent of all Flow playback/queue processing.
 The implementation and review policy are documented in
 [Library Doctor](library-doctor.md).
 
+## Phase 6 — Album Spotlight (in development)
+
+When Discovery Radar has identified a similar artist with a validated
+MusicBrainz artist ID, a separate **Preview albums** button can request a
+small catalog sample, without leaving Flow. Opening Flow, starting playback,
+and requesting artist matches alone never fetch album release groups.
+
+- New authenticated, read-only endpoint:
+  `GET /api/vibe/flow/discover/albums?artistMbid=...&limit=3` with strict
+  MusicBrainz UUID validation, an allowed limit of 1–4 and `private, no-store`.
+- Uses the established MusicBrainz release-group service in interactive mode,
+  filtered to Album/EP release groups without compilation/live/remix flags.
+  A bounded sample excludes release groups with already-playable local library
+  tracks; unindexed releases are **not** proven absent from storage.
+- Returns up to three **unranked** album names, years and release-group IDs,
+  no file paths, credentials, recommendations scores or download actions.
+  Failure and empty results remain separate. An artist without a source MBID
+  keeps the existing Explore albums link without a fabricated preview.
+- Each album links to the existing album page, where separate permission
+  checks govern any explicitly requested download. The preview never calls
+  download, scanner, media or queue endpoints.
+- EN/NL UI, opt-in fetch, abort and account/seed result isolation; no schema
+  migration, background job, data writes, port or new external provider.
+
+**Status:** phase 6 is being reviewed and is not part of v1.25.0 or the
+merged phase-5 code in main.
+
 ## Planned phases
 
-1. **Deeper Discovery integration:** explore album-level recommendations and
-   optional, permission-checked requests, always explicitly initiated.
-2. **Library Guardian follow-up:** optional independently verified
-   audio-file fingerprint/hash auditing and explicit, reversible repairs.
-   No automatic deletion.
+1. **Library Guardian follow-up:** optionally verify audio-file checksums
+   only after an explicit action, with conservative human review and no
+   automatic deletion.
+2. **Discovery follow-up:** investigate richer release metadata and optional
+   requests through existing album-page permission checks, never initiated
+   by Flow itself.
 
 ## Security, release and compatibility
 
@@ -191,7 +219,7 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-This phase-5 PR does not create or publish a Docker tag and cannot update a
+The phase-6 development PR does not create or publish a Docker tag or update a
 running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
 remain unchanged. Require backend/frontend tests, EN/NL UI, database upgrade,
