@@ -6,6 +6,7 @@ import { Compass, ExternalLink, LoaderCircle } from "lucide-react";
 import { api, type NovaDiscoveryResult } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Button } from "@/components/ui/Button";
+import { FlowAlbumSpotlight } from "./FlowAlbumSpotlight";
 
 type Saved = { key: string; data: NovaDiscoveryResult };
 
@@ -123,6 +124,14 @@ export function FlowDiscoveryRadar({
                                             href={`/artist/${encodeURIComponent(artist.mbid || artist.name)}`}>
                                             {text.open} <ExternalLink size={14} aria-hidden="true" />
                                         </Link>
+                                        {artist.mbid && ownerId && seedTrackId && (
+                                            <FlowAlbumSpotlight
+                                                key={currentKey + ":" + artist.mbid}
+                                                ownerId={ownerId}
+                                                seedTrackId={seedTrackId}
+                                                artistMbid={artist.mbid}
+                                            />
+                                        )}
                                     </li>
                                 ))}
                             </ul>
