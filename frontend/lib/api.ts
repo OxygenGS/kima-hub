@@ -131,6 +131,36 @@ export interface SmartDownloadInbox {
     items: SmartDownloadInboxItem[];
 }
 
+export type GuardianEvidence =
+    | "matching-acoustic-fingerprint"
+    | "same-recording-close-duration"
+    | "shared-recording-id";
+
+export interface GuardianTrackSummary {
+    id: string;
+    title: string;
+    duration: number;
+    filePath: string;
+    albumId: string;
+    albumTitle: string;
+    artistName: string;
+}
+
+export interface LibraryGuardianDuplicateReport {
+    generatedAt: string;
+    basis: "indexed-recording-metadata";
+    readOnly: true;
+    groupLimit: number;
+    sampleLimit: number;
+    hasMore: boolean;
+    candidates: Array<{
+        recordingMbid: string;
+        indexedCopies: number;
+        evidence: GuardianEvidence;
+        tracks: GuardianTrackSummary[];
+    }>;
+}
+
 export interface LibraryDoctorTrackSample {
     id: string;
     title: string;
@@ -2492,6 +2522,14 @@ class ApiClient {
     // On-demand, admin-only, caller-scoped Smart Download Inbox.
     async getSmartDownloadInbox(): Promise<SmartDownloadInbox> {
         return this.request<SmartDownloadInbox>("/library/doctor/inbox");
+    }
+
+    // Admin-only, explicit read-only MusicBrainz recording duplicate candidates.
+    async getLibraryGuardianDuplicates(limit = 8, signal?: AbortSignal): Promise<LibraryGuardianDuplicateReport> {
+        return this.request<LibraryGuardianDuplicateReport>(
+            `/library/doctor/guardian/duplicates?limit=${limit}`,
+            { signal },
+        );
     }
 
     // On-demand, admin-only, read-only Library Doctor report.

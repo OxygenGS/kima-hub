@@ -1,9 +1,13 @@
-# Library Doctor — v1.17.0 development
+# Library Doctor and Project NOVA Library Guardian
 
-The Library Doctor *report* is an admin-only, read-only diagnostic view of
-indexed metadata. Smart Download Inbox adds optional, explicitly confirmed
-album assignment corrections later in the same v1.17 development PR.
-The report itself does not scan, write or modify any file.
+Library Doctor provides admin-only, on-demand diagnostics of indexed music.
+The existing Smart Download Inbox separately offers explicit, reversible
+database-only album reassignment for qualifying own Soulseek downloads.
+**The Library Doctor reports and the new Library Guardian duplicate audit
+never change any indexed track or media file.**
+
+**Development status:** the phase-5 Library Guardian duplicate view is
+proposed on an unreleased branch, not included in published v1.25.0.
 
 ## Usage
 
@@ -31,14 +35,53 @@ category. The API is authenticated and separately enforces admin privileges
 and sends private, non-cacheable responses. No absolute server mount paths
 or credentials are included in the source.
 
+## Library Guardian — potential duplicate recordings (NOVA phase 5)
+
+In **Settings → Library Doctor**, an administrator may separately select
+**Inspect possible duplicates**. Nothing is queried when opening Settings
+or when merely running the standard Doctor overview. The new authenticated,
+admin-only `GET /api/library/doctor/guardian/duplicates?limit=8` reports
+read-only evidence with `Cache-Control: private, no-store`.
+
+It checks `Album.location=LIBRARY` tracks that the last scan still regards
+as present and non-corrupt. Using existing MusicBrainz recording IDs, it
+shows at most eight most frequently repeated recording groups (up to twelve
+with an explicit parameter) and at most four example tracks per group.
+A ninth group is checked only to indicate whether more exist.
+
+Evidence is deliberately graded:
+
+- **Matching acoustic fingerprint and similar duration:** the indexed
+  acoustic fingerprint values agree and track lengths differ by at most
+  three seconds. This is not a byte-for-byte file checksum.
+- **Same recording ID, title and similar duration:** recording metadata
+  agrees, but indexed fingerprints differ or are unavailable.
+- **Shared recording ID:** files may be different mixes, edits or releases;
+  evidence is not strong enough to claim an exact duplicate.
+
+Every result retains title, album, artist, relative indexed path, duration
+and a link to inspect the album. Raw acoustic fingerprints and the hash
+values used only for comparison are never returned in responses.
+Alternative editions and album compilations can legitimately contain the
+same recording. **No deletion, deduplication, merging, retagging or
+filesystem write buttons are provided.** The query performs no disk walk,
+network request or database mutation. Errors do not display fictitious
+healthy results.
+
+A music collection with no MusicBrainz recording IDs may show no candidates
+even if it contains duplicate audio files. This audit is not exhaustive
+acoustic fingerprinting, a live storage check, or a guarantee that every
+duplicate will be found.
+
 ## Planned later improvements
 
 - Automatic import lifecycle tracking beyond existing download jobs.
-- Duplicate identification with recording evidence (hash, MBID, duration).
+- Optional deeper duplicate verification using a separate, explicitly requested byte-hash check and confirmed human review.
 - More metadata source integration; no automatic file moves or edits.
 
-PR #175 and PR #176 should be reviewed separately; neither is implicitly
-merged into this development slice. The patch is not a published Docker image.
+Existing Smart Download Inbox's confirmed database-only fixes are separate
+from Library Guardian's entirely read-only duplicate evidence. No NOVA
+development PR publishes an image or changes a live installation.
 
 
 ## Smart Download Inbox (first read-only slice)

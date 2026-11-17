@@ -1,6 +1,8 @@
 import { Router } from "express";
+import { z } from "zod";
 import { requireAdmin } from "../../middleware/auth";
 import { getLibraryDoctorReport } from "../../services/libraryDoctor";
+import { getLibraryGuardianDuplicates } from "../../services/libraryGuardianDuplicates";
 import { getSmartDownloadInbox } from "../../services/smartDownloadInbox";
 import { getSmartImportSuggestion } from "../../services/smartImportSuggestion";
 import { applySmartImportRepair, undoSmartImportRepair, SmartImportRepairError } from "../../services/smartImportRepair";
@@ -17,6 +19,24 @@ router.get("/doctor/report", requireAdmin, async (_req, res) => {
     } catch (error) {
         logger.error("[LibraryDoctor] Report failed", error);
         res.status(500).json({ error: "Failed to inspect the library" });
+    }
+});
+
+// GET /api/library/doctor/guardian/duplicates — admin-only, read-only.
+const guardianInput = z.object({
+    limit: z.string().regex(/^(?:[1-9]|1[0-2])$/).optional(),
+}).strict();
+router.get("/doctor/guardian/duplicates", requireAdmin, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const parsed = guardianInput.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid Library Guardian request" });
+    try {
+        return res.json(await getLibraryGuardianDuplicates(
+            parsed.data.limit ? Number(parsed.data.limit) : 8,
+        ));
+    } catch (error) {
+        logger.error("[LibraryGuardian] Duplicate evidence audit failed", error);
+        return res.status(500).json({ error: "Failed to inspect duplicate recording candidates" });
     }
 });
 

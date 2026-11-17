@@ -31,22 +31,21 @@ the song going and changes only the upcoming queue. The preview does not
 download, relocate or change any music. Click **Explore the Vibe map** to use
 the full 3D view.
 
-Phase 1 was merged to main in PR #263. The phase-2 development branch
-adds **Continuous Flow**: while a Flow session is playing, Kima prepares
+Phases 1 and 2 were merged into main (#263–#264). **Continuous Flow**: while a Flow session is playing, Kima prepares
 more eligible library songs as the current queue nears its end. A rolling
 queue retains the most recent previously heard songs. Editing the queue
 manually or selecting a different mode automatically stops continuation
 without pausing music. Choose **Stop automatic Flow** on the Flow or Queue
 screen to stop adding new songs while keeping what is already queued.
 
-**Music DNA (phase 3, in development):** click **More like this** or
+**Music DNA (phase 3 merged, unreleased):** click **More like this** or
 **Less like this** next to a proposed Flow song. These personal preferences
 influence future Flow suggestions and are independent from global Favorites.
 Tap a selected preference again to undo it. Each signed-in Kima account
 has its own saved signals, and no external service receives these choices.
 The current audio session and manually edited queue are never interrupted.
 
-**Discovery Radar (phase 4, in development):** while on Flow, click
+**Discovery Radar (phase 4 merged, unreleased):** while on Flow, click
 **Find new artists** under **Beyond your library**. This on-demand search
 compares the current playable song's artist with public similar-artist
 sources. Suggestions exclude artists with playable tracks already in your
@@ -60,6 +59,15 @@ extends playback that you explicitly started. The browser must remain open,
 and the library must contain suitable songs; a small, fully used library
 ends naturally.
 [Project NOVA design](project-nova.md).
+
+## Library Guardian (phase 5 under development)
+
+Administrators can open **Settings → Library Doctor → Inspect possible
+duplicates**. The new on-demand report groups files sharing the same
+MusicBrainz recording ID and shows the scanned album, duration and any
+matching acoustic-fingerprint evidence. Click **Review album** to compare
+existing library editions. This is not a disk scan or a confirmed identical
+file check. It never removes or edits music automatically.
 
 ## The vibe map
 

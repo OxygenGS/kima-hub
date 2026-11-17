@@ -8,6 +8,9 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "en", t: (label: string) => label }),
 }));
+vi.mock("./LibraryGuardianDuplicatesSection", () => ({
+    LibraryGuardianDuplicatesSection: () => <aside>Guardian review is independent</aside>,
+}));
 vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({ title }: { title: string }) => <h2>{title}</h2>,
 }));

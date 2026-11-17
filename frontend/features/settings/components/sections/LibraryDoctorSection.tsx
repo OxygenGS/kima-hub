@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { api, type LibraryDoctorReport, type LibraryDoctorTrackSample } from "@/lib/api";
 import { SettingsSection } from "../ui";
+import { LibraryGuardianDuplicatesSection } from "./LibraryGuardianDuplicatesSection";
 
 /**
  * Explicitly triggered to avoid imposing database-wide counts on every visit
@@ -114,6 +115,7 @@ export function LibraryDoctorSection() {
                     </div>
                 )}
             </div>
+            <LibraryGuardianDuplicatesSection />
         </SettingsSection>
     );
 }
