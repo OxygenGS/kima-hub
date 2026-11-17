@@ -101,6 +101,93 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.26.0
+    {
+        "version": "1.26.0",
+        "title": "Kima Hub 1.26.0 \u2014 Project NOVA",
+        "summary": "Listen with guided Flow, continuous local queues and private Music DNA feedback; explore new artists and albums on demand, and review possible duplicate recordings safely.",
+        "date": "2026-11-17",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.126.flow",
+                "title": "Start listening with Kima Flow",
+                "summary": "Choose a listening style, energy and discovery level without navigating the 3D map.",
+                "body": "Kima Flow uses the existing Vibe analysis to prepare a playable queue from music in your own library. Choose My favorites, A bit of both or Surprise me and adjust Energy and Discovery. A preview explains why tracks fit; playback begins only when you choose Start Flow. The advanced 3D Vibe map remains available.",
+                "links": [
+                    {
+                        "label": "Open Flow",
+                        "href": "/flow"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.126.continuous",
+                "title": "Keep your Flow going",
+                "summary": "Continue the upcoming local queue without replacing your current song or manual edits.",
+                "body": "When you explicitly start Flow, the open browser can replenish its own local-library queue as songs run low. It checks account, playback session and queue continuity; manual queue edits or changing listening mode stop automatic continuation without pausing audio. Stop automatic Flow is always available. This is not server-side background playback or an infinite external catalog.",
+                "links": [
+                    {
+                        "label": "Open Flow",
+                        "href": "/flow"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.126.dna",
+                "title": "Teach Flow your taste with Music DNA",
+                "summary": "Give More like this or Less like this feedback and undo it whenever you choose.",
+                "body": "Your explicit per-track choices are private to your signed-in Kima account, separate from Favorites, and influence subsequent Flow suggestions. Tap a selected choice again to undo it. Preferences do not interrupt the current queue and are not sent to third-party services. Music DNA adds a database table: back up the complete /data volume before upgrading an existing installation.",
+                "links": [
+                    {
+                        "label": "Open Flow",
+                        "href": "/flow"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.126.radar",
+                "title": "Discover artists beyond your library",
+                "summary": "Ask Discovery Radar to find similar artists you do not have playable local music from.",
+                "body": "The separate Find new artists action uses existing external matching sources, then checks the playable local library before presenting results. Suggestions link to ordinary artist pages. Opening Flow or extending a queue does not run external discovery; Radar neither changes playback nor creates a download request. Unavailable sources are disclosed rather than replaced by invented suggestions.",
+                "links": [
+                    {
+                        "label": "Open Flow",
+                        "href": "/flow"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.126.guardian",
+                "title": "Review possible duplicate recordings safely",
+                "summary": "Use the admin-only Library Guardian report to compare repeated MusicBrainz recordings.",
+                "body": "Under Settings and Library Doctor, an administrator can explicitly inspect a limited, read-only list of available local tracks sharing a MusicBrainz recording ID. Duration and indexed acoustic signatures provide cautious evidence for manual comparison; equal fingerprints do not prove the audio files are identical. No track is moved, retagged, merged or deleted.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.126.albums",
+                "title": "Preview albums for discovered artists",
+                "summary": "Open a small MusicBrainz album preview inside Discovery Radar before navigating away.",
+                "body": "For suggested artists with a validated MusicBrainz ID, Preview albums retrieves up to three unranked release groups on demand. Album and EP entries link to the existing album details page. The preview does not prove music is absent from disk and cannot download, request, rescan or play anything automatically.",
+                "links": [
+                    {
+                        "label": "Open Flow",
+                        "href": "/flow"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.25.0
     {
         "version": "1.25.0",
