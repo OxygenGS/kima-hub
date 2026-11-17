@@ -3,7 +3,7 @@ import { findSimilarTracks } from "./hybridSimilarity";
 import { LIBRARY_TRACK_WHERE } from "./libraryFilters";
 import { NOT_MISSING } from "../utils/libraryEligibility";
 import { flowReason, rankFlowCandidates, type FlowPreferences } from "./novaFlowRank";
-import { buildFlowTasteAffinities, MAX_TASTE_SEEDS, TASTE_NEIGHBOR_LIMIT, type TasteNeighborhood } from "./novaFlowTaste";
+import { buildFlowTasteAffinities, MAX_TASTE_SEEDS, TASTE_NEIGHBOR_LIMIT, type FlowTasteSignal, type TasteNeighborhood } from "./novaFlowTaste";
 
 export interface FlowRequest extends FlowPreferences {
     seedTrackId?: string;
@@ -84,14 +84,15 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
         select: { trackId: true, value: true },
     });
     const neighborhoods: TasteNeighborhood[] = await Promise.all(tasteSeeds.map(async signal => {
+        const value: FlowTasteSignal = signal.value === 1 ? 1 : -1;
         try {
             const neighbors = await findSimilarTracks(signal.trackId, TASTE_NEIGHBOR_LIMIT);
             return {
-                value: signal.value === 1 ? 1 : -1,
+                value,
                 neighbors: neighbors.map(track => ({ id: track.id, similarity: track.similarity })),
             };
         } catch {
-            return { value: signal.value === 1 ? 1 : -1, neighbors: [] };
+            return { value, neighbors: [] };
         }
     }));
     const tasteAffinities = buildFlowTasteAffinities(neighborhoods);
