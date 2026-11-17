@@ -75,7 +75,7 @@ describe("Library Guardian duplicate evidence", () => {
 
     it("sends exactly one bounded, read-only SQL query and no media operations", async () => {
         await getLibraryGuardianDuplicates(999);
-        expect(query).toHaveBeenCalledOnce();
+        expect(query).toHaveBeenCalledTimes(1);
         const args = query.mock.calls[0] as [TemplateStringsArray, ...number[]];
         const sql = args[0].join("?");
         expect(sql).toContain('a.location = \'LIBRARY\'');
