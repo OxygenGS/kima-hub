@@ -137,7 +137,7 @@ router.delete("/flow/feedback/:trackId", requireAuth, async (req, res) => {
     if (!parsed.success) return res.status(400).json({ error: "Invalid track ID" });
     try {
         await clearNovaFlowFeedback(req.user!.id, parsed.data);
-        return res.status(204).end();
+        return res.json({ trackId: parsed.data, feedback: null });
     } catch (error) {
         logger.error("Clear NOVA Flow feedback failed:", error);
         return res.status(500).json({ error: "Could not clear Flow feedback" });
