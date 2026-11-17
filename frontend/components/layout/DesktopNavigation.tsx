@@ -13,6 +13,7 @@ const navigation = [
     { label: "Radio", href: "/radio", Icon: Radio, group: "explore" },
     { label: "Discovery", href: "/discover", Icon: Compass, group: "explore" },
     { label: "Release Radar", href: "/releases", Icon: CalendarDays, group: "explore" },
+    { label: "Flow", href: "/flow", Icon: Sparkles, group: "explore" },
     { label: "Vibe", href: "/vibe", Icon: Sparkles, group: "explore" },
     { label: "Browse", href: "/browse/playlists", Icon: Search, group: "explore" },
     { label: "Podcasts", href: "/podcasts", Icon: Podcast, group: "explore" },

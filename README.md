@@ -35,6 +35,21 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 [Full v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect technical guide](docs/project-one.md) · [Changelog](CHANGELOG.md)
 
+## Project NOVA — Flow (development preview)
+
+**Unreleased development work, not included in stable v1.25.0.** Project NOVA
+starts with **Kima Flow**, a simpler listening interface built on the existing
+Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
+**Surprise me**, then adjust energy and discovery. Flow prepares a
+personalized, playable queue using only indexed tracks in your local library.
+
+This first phase deliberately does **not** auto-download music, automatically
+refill a never-ending queue, or replace the original 3D Vibe map. It is
+an opt-in guided listening mode that will gain safe automatic continuation
+and explicit feedback in later development stages.
+
+[Project NOVA roadmap](docs/project-nova.md)
+
 ## The experience
 
 One music space for your favorite albums, artists, playlists and discoveries. Built for a personal library rather than a subscription catalog.
