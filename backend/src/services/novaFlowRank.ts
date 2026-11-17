@@ -15,6 +15,8 @@ export interface FlowCandidate {
     liked: boolean;
     /** Explicit user-only Flow feedback, independent from global Favorites. */
     taste?: -1 | 0 | 1;
+    /** Signed nearest-neighbor preference influence, -1..1. */
+    tasteAffinity?: number;
 }
 
 export interface FlowPreferences {
@@ -43,12 +45,14 @@ export function scoreFlowCandidate(candidate: FlowCandidate, prefs: FlowPreferen
         + 0.22 * energyFit
         + (0.10 + exploration * 0.14) * novelty
         + (candidate.liked ? favoriteWeight * (1 - exploration * 0.6) : 0)
-        + (candidate.taste === 1 ? 0.21 : candidate.taste === -1 ? -1 : 0);
+        + (candidate.taste === 1 ? 0.21 : candidate.taste === -1 ? -1 : 0)
+        + 0.26 * Math.max(-1, Math.min(1, candidate.tasteAffinity ?? 0));
 }
 
 export function flowReason(candidate: FlowCandidate, prefs: FlowPreferences):
-    "more-like-this" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick" {
+    "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick" {
     if (candidate.taste === 1) return "more-like-this";
+    if ((candidate.tasteAffinity ?? 0) >= 0.55) return "matches-your-taste";
     if (candidate.liked && prefs.style !== "adventurous") return "favorite";
     if (candidate.recentPlays === 0 && prefs.discovery >= 45) return "new-to-you";
     if (candidate.similarity !== null) return "similar";
