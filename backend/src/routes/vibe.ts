@@ -8,6 +8,7 @@ import { requireAuth } from "../middleware/auth";
 import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
 import { buildNovaFlow } from "../services/novaFlow";
+import { clearNovaFlowFeedback, setNovaFlowFeedback } from "../services/novaFlowFeedback";
 import { getVibeMap, type MapResponse } from "../services/vibeMap";
 import { currentMoodSnapshot, moodOutput } from "../services/moodBucketService";
 import { generateSongPath } from "../services/songPath";
@@ -100,6 +101,46 @@ router.post("/flow", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Generate NOVA Flow failed:", error);
         return res.status(500).json({ error: "Could not prepare your Flow" });
+    }
+});
+
+const flowFeedbackInput = z.object({
+    trackId: z.string().min(1).max(100),
+    choice: z.enum(["more", "less"]),
+}).strict();
+
+const flowTrackIdParam = z.string().min(1).max(100);
+
+/**
+ * PUT /api/vibe/flow/feedback — Explicit per-user Music DNA signal.
+ * This is separate from global Favorites and affects only future Flow
+ * recommendations. It never skips or edits currently queued songs.
+ */
+router.put("/flow/feedback", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const parsed = flowFeedbackInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid Flow feedback" });
+    try {
+        const value = await setNovaFlowFeedback(req.user!.id, parsed.data.trackId, parsed.data.choice);
+        if (!value) return res.status(404).json({ error: "Track unavailable in your music library" });
+        return res.json({ trackId: parsed.data.trackId, feedback: value });
+    } catch (error) {
+        logger.error("Save NOVA Flow feedback failed:", error);
+        return res.status(500).json({ error: "Could not save Flow feedback" });
+    }
+});
+
+/** DELETE /api/vibe/flow/feedback/:trackId — Undo this account's choice. */
+router.delete("/flow/feedback/:trackId", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const parsed = flowTrackIdParam.safeParse(req.params.trackId);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid track ID" });
+    try {
+        await clearNovaFlowFeedback(req.user!.id, parsed.data);
+        return res.status(204).end();
+    } catch (error) {
+        logger.error("Clear NOVA Flow feedback failed:", error);
+        return res.status(500).json({ error: "Could not clear Flow feedback" });
     }
 });
 
