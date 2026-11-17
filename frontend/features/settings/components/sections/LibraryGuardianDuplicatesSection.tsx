@@ -17,7 +17,7 @@ const COPY = {
         empty: "No repeated MusicBrainz recording IDs found among available local tracks.",
         candidates: "recording groups to review",
         copies: "indexed copies",
-        more: "Additional groups exist. Only the strongest candidates are shown.",
+        more: "Additional groups exist. Only the most frequently repeated recordings are shown.",
         sample: "Examples",
         album: "Review album",
         duration: "Duration",
