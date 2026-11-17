@@ -54,13 +54,21 @@ discography, where album requests are optional and governed by the
 existing user's music permissions. Radar never starts a Lidarr or Soulseek
 download on its own. It never changes the current playback or queue.
 
+**Album Spotlight (phase 6 in development):** for a MusicBrainz-identified
+new artist, choose **Preview albums** within its Discovery Radar card to see
+up to three album/EP entries. These are unranked MusicBrainz source results,
+not locally playable songs or guaranteed missing releases. Choose **Album
+details** to open the existing page; any album request is still optional
+and subject to that page's existing permission checks. No provider lookup
+runs when merely opening Flow or the artist list.
+
 Flow never starts audio automatically in response to the server. It only
 extends playback that you explicitly started. The browser must remain open,
 and the library must contain suitable songs; a small, fully used library
 ends naturally.
 [Project NOVA design](project-nova.md).
 
-## Library Guardian (phase 5 under development)
+## Library Guardian (phase 5 merged, unreleased)
 
 Administrators can open **Settings → Library Doctor → Inspect possible
 duplicates**. The new on-demand report groups files sharing the same
