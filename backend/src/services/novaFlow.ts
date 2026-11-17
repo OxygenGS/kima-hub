@@ -3,6 +3,7 @@ import { findSimilarTracks } from "./hybridSimilarity";
 import { LIBRARY_TRACK_WHERE } from "./libraryFilters";
 import { NOT_MISSING } from "../utils/libraryEligibility";
 import { flowReason, rankFlowCandidates, type FlowPreferences } from "./novaFlowRank";
+import { buildFlowTasteAffinities, MAX_TASTE_SEEDS, TASTE_NEIGHBOR_LIMIT, type FlowTasteSignal, type TasteNeighborhood } from "./novaFlowTaste";
 
 export interface FlowRequest extends FlowPreferences {
     seedTrackId?: string;
@@ -33,6 +34,8 @@ const selectFlowTrack = {
  */
 export async function buildNovaFlow(userId: string, options: FlowRequest) {
     const eligible = { ...LIBRARY_TRACK_WHERE, ...NOT_MISSING, corrupt: false };
+    // Negative choices apply only to recommendations, never to an explicit seed.
+    const acceptable = { ...eligible, novaFlowFeedback: { none: { userId, value: -1 } } };
     const exclude = new Set(options.excludeTrackIds);
     let seedId = options.seedTrackId ?? null;
 
@@ -71,10 +74,38 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
         // Similarity is optional for the initial experience.
     }
     const similarityMap = new Map(similar.map(t => [t.id, t.similarity]));
-    const poolIds = similar.map(t => t.id).filter(id => id !== seedId && !exclude.has(id));
+    // A bounded number of recent explicit choices influence tracks that
+    // sound similar to what this listener likes or dislikes. Only the
+    // originating Kima server performs these optional vector queries.
+    const tasteSeeds = await prisma.novaFlowFeedback.findMany({
+        where: { userId, track: eligible },
+        orderBy: { updatedAt: "desc" },
+        take: MAX_TASTE_SEEDS,
+        select: { trackId: true, value: true },
+    });
+    const neighborhoods: TasteNeighborhood[] = await Promise.all(tasteSeeds.map(async signal => {
+        const value: FlowTasteSignal = signal.value === 1 ? 1 : -1;
+        try {
+            const neighbors = await findSimilarTracks(signal.trackId, TASTE_NEIGHBOR_LIMIT);
+            return {
+                value,
+                neighbors: neighbors.map(track => ({ id: track.id, similarity: track.similarity })),
+            };
+        } catch {
+            return { value, neighbors: [] };
+        }
+    }));
+    const tasteAffinities = buildFlowTasteAffinities(neighborhoods);
+    const positiveSuggestions = neighborhoods
+        .filter(neighborhood => neighborhood.value === 1)
+        .flatMap(neighborhood => neighborhood.neighbors)
+        .filter(track => track.similarity >= 0.70)
+        .map(track => track.id);
+    const poolIds = [...new Set([...similar.map(t => t.id), ...positiveSuggestions])]
+        .filter(id => id !== seedId && !exclude.has(id)).slice(0, 330);
     let catalog = poolIds.length > 0
         ? await prisma.track.findMany({
-            where: { ...eligible, id: { in: poolIds } },
+            where: { ...acceptable, id: { in: poolIds } },
             select: selectFlowTrack,
         })
         : [];
@@ -83,7 +114,7 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
     // Sample a bounded library window, never load the whole catalog in memory.
     if (catalog.length < options.limit * 3 || options.discovery >= 35) {
         const excluded = [...exclude, seedId, ...catalog.map(t => t.id)];
-        const where = { ...eligible, id: { notIn: excluded } };
+        const where = { ...acceptable, id: { notIn: excluded } };
         const count = await prisma.track.count({ where });
         const take = Math.min(140, count);
         if (take > 0) {
@@ -118,6 +149,12 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
     const playCounts = new Map<string, number>();
     for (const p of plays) playCounts.set(p.trackId, (playCounts.get(p.trackId) ?? 0) + 1);
     const likedIds = new Set(favorites.map(x => x.trackId));
+    const ratedIds = [...new Set([...ids, ...(seed ? [seed.id] : [])])];
+    const explicitFeedback = ratedIds.length ? await prisma.novaFlowFeedback.findMany({
+        where: { userId, trackId: { in: ratedIds } },
+        select: { trackId: true, value: true },
+    }) : [];
+    const feedbackMap = new Map(explicitFeedback.map(x => [x.trackId, x.value]));
 
     const ranked = rankFlowCandidates(catalog.map(track => ({
         id: track.id,
@@ -127,6 +164,8 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
         energy: track.energy ?? track.arousal ?? null,
         recentPlays: playCounts.get(track.id) ?? 0,
         liked: likedIds.has(track.id),
+        taste: feedbackMap.get(track.id) === 1 ? 1 : feedbackMap.get(track.id) === -1 ? -1 : 0,
+        tasteAffinity: tasteAffinities.get(track.id) ?? 0,
     })), options, Math.max(0, options.limit - (seed ? 1 : 0)));
 
     const tracksById = new Map(catalog.map(t => [t.id, t]));
@@ -137,6 +176,8 @@ export async function buildNovaFlow(userId: string, options: FlowRequest) {
         artist: { id: track.album.artist.id, name: track.album.artist.name },
         album: { id: track.album.id, title: track.album.title, coverArt: track.album.coverUrl },
         reason,
+        feedback: feedbackMap.get(track.id) === 1 ? "more"
+            : feedbackMap.get(track.id) === -1 ? "less" : null,
     });
 
     return {

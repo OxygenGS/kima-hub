@@ -14,6 +14,40 @@ describe("NOVA Flow ranking", () => {
         expect(flowReason(favorite, familiar)).toBe("favorite");
     });
 
+    it("boosts explicit more-like-this choices without changing Favorites", () => {
+        const prefs = { style: "balanced" as const, energy: 50, discovery: 10 };
+        const neutral = make("neutral", "n", 0.85, 0.5);
+        const liked = make("liked", "l", 0.85, 0.5, 0, true);
+        const preference = { ...make("preferred", "p", 0.85, 0.5), taste: 1 as const };
+        expect(scoreFlowCandidate(preference, prefs)).toBeGreaterThan(scoreFlowCandidate(liked, prefs));
+        expect(rankFlowCandidates([neutral, liked, preference], prefs, 3)[0].id).toBe("preferred");
+        expect(flowReason(preference, prefs)).toBe("more-like-this");
+        expect(flowReason(liked, prefs)).toBe("favorite");
+    });
+
+    it("boosts related unrated songs based on positive audio-neighborhood feedback", () => {
+        const prefs = { style: "balanced" as const, energy: 50, discovery: 25 };
+        const related = { ...make("related", "related-artist", 0.80, 0.5), tasteAffinity: 0.9 };
+        const neutral = make("neutral", "neutral-artist", 0.82, 0.5);
+        expect(scoreFlowCandidate(related, prefs)).toBeGreaterThan(scoreFlowCandidate(neutral, prefs));
+        expect(rankFlowCandidates([neutral, related], prefs, 2)[0].id).toBe("related");
+        expect(flowReason(related, prefs)).toBe("matches-your-taste");
+    });
+
+    it("downweights neighbors of explicitly disliked music", () => {
+        const prefs = { style: "balanced" as const, energy: 50, discovery: 25 };
+        const relatedToDislike = { ...make("unwanted", "artist1", 0.82, 0.5), tasteAffinity: -0.95 };
+        const neutral = make("neutral", "artist2", 0.82, 0.5);
+        expect(scoreFlowCandidate(relatedToDislike, prefs)).toBeLessThan(scoreFlowCandidate(neutral, prefs));
+    });
+
+    it("never ranks a negatively rated track even with top similarity", () => {
+        const prefs = { style: "familiar" as const, energy: 50, discovery: 0 };
+        const dislike = { ...make("disliked", "x", 1, 0.5), taste: -1 as const };
+        const normal = make("safe", "y", 0.4, 0.5);
+        expect(rankFlowCandidates([dislike, normal], prefs, 10).map(x => x.id)).toEqual(["safe"]);
+    });
+
     it("uses energy without treating missing analysis as zero energy", () => {
         const high = { style: "balanced" as const, energy: 95, discovery: 20 };
         const fast = make("fast", "a", 0.8, 0.9);

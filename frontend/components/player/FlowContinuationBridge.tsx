@@ -103,7 +103,7 @@ export function FlowContinuationBridge() {
                     latest.operation.sessionId !== sessionId ||
                     !sameFlowQueue(latest.queue, originalQueueIds)) return;
 
-                const newTracks: Track[] = response.tracks.map(({ reason: _reason, ...track }) => ({
+                const newTracks: Track[] = response.tracks.map(({ reason: _reason, feedback: _feedback, ...track }) => ({
                     ...track,
                     album: { ...track.album, coverArt: track.album.coverArt ?? undefined },
                 }));

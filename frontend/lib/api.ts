@@ -197,7 +197,8 @@ interface VibePathTrack {
 }
 
 export type NovaFlowStyle = "familiar" | "balanced" | "adventurous";
-export type NovaFlowReason = "seed" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
+export type NovaFlowReason = "seed" | "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
+export type NovaFlowFeedbackChoice = "more" | "less";
 export interface NovaFlowTrack {
     id: string;
     title: string;
@@ -205,6 +206,7 @@ export interface NovaFlowTrack {
     artist: { id: string; name: string };
     album: { id: string; title: string; coverArt: string | null };
     reason: NovaFlowReason;
+    feedback: NovaFlowFeedbackChoice | null;
 }
 export interface NovaFlowPreview {
     seedTrackId: string | null;
@@ -2308,6 +2310,21 @@ class ApiClient {
             body: JSON.stringify(options),
             signal,
         });
+    }
+
+    // Music DNA: explicit, account-scoped feedback. This is not a Favorite,
+    // does not change playback and cannot request/download new music.
+    async setNovaFlowFeedback(trackId: string, choice: NovaFlowFeedbackChoice) {
+        return this.request<{ trackId: string; feedback: NovaFlowFeedbackChoice }>("/vibe/flow/feedback", {
+            method: "PUT",
+            body: JSON.stringify({ trackId, choice }),
+        });
+    }
+
+    async clearNovaFlowFeedback(trackId: string) {
+        return this.request<{ trackId: string; feedback: null }>(
+            `/vibe/flow/feedback/${encodeURIComponent(trackId)}`, { method: "DELETE" },
+        );
     }
 
     // Vibe (CLAP Similarity) API

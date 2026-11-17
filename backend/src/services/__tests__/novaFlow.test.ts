@@ -13,6 +13,7 @@ jest.mock("../../utils/db", () => ({
             findFirst: jest.fn(),
             findMany: jest.fn(),
         },
+        novaFlowFeedback: { findMany: jest.fn() },
     },
 }));
 jest.mock("../hybridSimilarity", () => ({
@@ -39,6 +40,7 @@ const db = prisma as unknown as {
     track: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock };
     play: { findFirst: jest.Mock; findMany: jest.Mock };
     likedTrack: { findFirst: jest.Mock; findMany: jest.Mock };
+    novaFlowFeedback: { findMany: jest.Mock };
 };
 
 beforeEach(() => {
@@ -50,6 +52,7 @@ beforeEach(() => {
     db.play.findMany.mockResolvedValue([]);
     db.likedTrack.findFirst.mockResolvedValue(null);
     db.likedTrack.findMany.mockResolvedValue([]);
+    db.novaFlowFeedback.findMany.mockResolvedValue([]);
     (findSimilarTracks as jest.Mock).mockResolvedValue([{ id: "next", similarity: 0.85 }]);
 });
 
@@ -65,6 +68,7 @@ describe("NOVA Flow library-safe generation", () => {
                 corrupt: false,
                 album: expect.objectContaining({ location: "LIBRARY" }),
                 id: { in: ["next"] },
+                novaFlowFeedback: { none: { userId: "alice", value: -1 } },
             }),
         }));
         expect(db.play.findMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -73,6 +77,50 @@ describe("NOVA Flow library-safe generation", () => {
         expect(db.likedTrack.findMany).toHaveBeenCalledWith(expect.objectContaining({
             where: expect.objectContaining({ userId: "alice" }),
         }));
+        expect(db.novaFlowFeedback.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: { userId: "alice", trackId: { in: ["next", "seed"] } },
+        }));
+    });
+
+    it("boosts a personal positive choice and returns that choice in private previews", async () => {
+        db.novaFlowFeedback.findMany.mockResolvedValue([
+            { trackId: "next", value: 1 },
+        ]);
+        const flow = await buildNovaFlow("alice", options);
+        expect(flow.tracks.find(t => t.id === "next")).toEqual(
+            expect.objectContaining({ feedback: "more", reason: "more-like-this" }),
+        );
+        expect(flow.tracks.find(t => t.id === "seed")?.feedback).toBeNull();
+    });
+
+    it("includes strongly similar songs from this user's explicit positive taste seeds", async () => {
+        db.novaFlowFeedback.findMany.mockImplementation(async ({ where }: { where: { track?: unknown } }) =>
+            where.track ? [{ trackId: "chosen-track", value: 1 }] : []);
+        (findSimilarTracks as jest.Mock).mockImplementation(async (id: string) =>
+            id === "seed" ? [] : [{ id: "next", similarity: 0.98 }]);
+        const flow = await buildNovaFlow("alice", options);
+        expect(flow.tracks.find(track => track.id === "next")).toEqual(expect.objectContaining({
+            reason: "matches-your-taste",
+        }));
+        expect(findSimilarTracks).toHaveBeenCalledWith("chosen-track", 45);
+        expect(db.novaFlowFeedback.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({ userId: "alice", track: expect.anything() }),
+            take: 4,
+        }));
+    });
+
+    it("uses owner-specific negative choices in both candidate and fallback filters", async () => {
+        await buildNovaFlow("alice", options);
+        expect(db.track.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: expect.objectContaining({
+                novaFlowFeedback: { none: { userId: "alice", value: -1 } },
+            }),
+        }));
+        expect(db.track.count).toHaveBeenCalledWith({
+            where: expect.objectContaining({
+                novaFlowFeedback: { none: { userId: "alice", value: -1 } },
+            }),
+        });
     });
 
     it("never includes excluded seed tracks, useful for a later refill phase", async () => {

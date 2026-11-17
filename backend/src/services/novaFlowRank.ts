@@ -13,6 +13,10 @@ export interface FlowCandidate {
     energy: number | null;
     recentPlays: number;
     liked: boolean;
+    /** Explicit user-only Flow feedback, independent from global Favorites. */
+    taste?: -1 | 0 | 1;
+    /** Signed nearest-neighbor preference influence, -1..1. */
+    tasteAffinity?: number;
 }
 
 export interface FlowPreferences {
@@ -40,11 +44,15 @@ export function scoreFlowCandidate(candidate: FlowCandidate, prefs: FlowPreferen
     return 0.56 * similarityFit
         + 0.22 * energyFit
         + (0.10 + exploration * 0.14) * novelty
-        + (candidate.liked ? favoriteWeight * (1 - exploration * 0.6) : 0);
+        + (candidate.liked ? favoriteWeight * (1 - exploration * 0.6) : 0)
+        + (candidate.taste === 1 ? 0.21 : candidate.taste === -1 ? -1 : 0)
+        + 0.26 * Math.max(-1, Math.min(1, candidate.tasteAffinity ?? 0));
 }
 
 export function flowReason(candidate: FlowCandidate, prefs: FlowPreferences):
-    "favorite" | "new-to-you" | "similar" | "energy" | "library-pick" {
+    "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick" {
+    if (candidate.taste === 1) return "more-like-this";
+    if ((candidate.tasteAffinity ?? 0) >= 0.55) return "matches-your-taste";
     if (candidate.liked && prefs.style !== "adventurous") return "favorite";
     if (candidate.recentPlays === 0 && prefs.discovery >= 45) return "new-to-you";
     if (candidate.similarity !== null) return "similar";
@@ -54,7 +62,8 @@ export function flowReason(candidate: FlowCandidate, prefs: FlowPreferences):
 
 /** Greedy artist/album spacing. Re-running with identical inputs is stable. */
 export function rankFlowCandidates(candidates: FlowCandidate[], prefs: FlowPreferences, limit: number): FlowCandidate[] {
-    const remaining = [...candidates];
+    // Fail-closed even if a caller accidentally includes negatively rated tracks.
+    const remaining = candidates.filter(candidate => candidate.taste !== -1);
     const picked: FlowCandidate[] = [];
     while (picked.length < limit && remaining.length > 0) {
         let best = 0;

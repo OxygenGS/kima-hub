@@ -12,6 +12,8 @@ const fake = vi.hoisted(() => ({
     playing: true,
     activeOperation: { type: "idle" } as { type: string; ownerId?: string; sessionId?: string },
     getPreview: vi.fn(),
+    setFeedback: vi.fn(),
+    clearFeedback: vi.fn(),
     playTracks: vi.fn(),
     setUpcoming: vi.fn(),
     resume: vi.fn(),
@@ -20,7 +22,11 @@ const fake = vi.hoisted(() => ({
     setOperation: vi.fn(),
 }));
 
-vi.mock("@/lib/api", () => ({ api: { getNovaFlowPreview: fake.getPreview } }));
+vi.mock("@/lib/api", () => ({ api: {
+    getNovaFlowPreview: fake.getPreview,
+    setNovaFlowFeedback: fake.setFeedback,
+    clearNovaFlowFeedback: fake.clearFeedback,
+} }));
 vi.mock("@/lib/auth-context", () => ({ useAuth: () => ({ user: fake.user }) }));
 vi.mock("@/lib/i18n/language-context", () => ({ useLanguage: () => ({ locale: "en" }) }));
 vi.mock("@/lib/audio-state-context", () => ({
@@ -69,6 +75,8 @@ beforeEach(() => {
     fake.playing = true;
     fake.activeOperation = { type: "idle" };
     fake.getPreview.mockResolvedValue(example);
+    fake.setFeedback.mockResolvedValue({ trackId: "next", feedback: "more" });
+    fake.clearFeedback.mockResolvedValue({ trackId: "next", feedback: null });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -137,6 +145,40 @@ describe("NOVA Flow guided listening", () => {
         expect(fake.setOperation).toHaveBeenCalledWith({ type: "idle" });
         expect(fake.playTracks).not.toHaveBeenCalled();
         expect(fake.setUpcoming).not.toHaveBeenCalled();
+    });
+
+    it("saves More like this for this track without starting or seeking audio", async () => {
+        await renderFlow();
+        const button = host.querySelector('button[aria-label="More like this: Recommended song"]') as HTMLButtonElement;
+        expect(button).toBeTruthy();
+        await act(async () => { button.click(); await Promise.resolve(); });
+        expect(fake.setFeedback).toHaveBeenCalledWith("next", "more");
+        expect(fake.playTracks).not.toHaveBeenCalled();
+        expect(fake.setUpcoming).not.toHaveBeenCalled();
+        expect(fake.clearFeedback).not.toHaveBeenCalled();
+    });
+
+    it("sends Less like this independently of Favorites", async () => {
+        await renderFlow();
+        const button = host.querySelector('button[aria-label="Less like this: Recommended song"]') as HTMLButtonElement;
+        expect(button).toBeTruthy();
+        await act(async () => { button.click(); await Promise.resolve(); });
+        expect(fake.setFeedback).toHaveBeenCalledWith("next", "less");
+        expect(fake.playTracks).not.toHaveBeenCalled();
+    });
+
+    it("allows a second click to undo a selected personal preference", async () => {
+        fake.getPreview.mockResolvedValue({
+            ...example, tracks: example.tracks.map(track =>
+                track.id === "next" ? { ...track, feedback: "more" } : track),
+        });
+        await renderFlow();
+        const button = host.querySelector('button[aria-label="More like this: Recommended song"]') as HTMLButtonElement;
+        expect(button.getAttribute("aria-pressed")).toBe("true");
+        await act(async () => { button.click(); await Promise.resolve(); });
+        expect(fake.clearFeedback).toHaveBeenCalledWith("next");
+        expect(fake.setFeedback).not.toHaveBeenCalled();
+        expect(fake.playTracks).not.toHaveBeenCalled();
     });
 
     it("does not show the previous account's preview after a user switch", async () => {
