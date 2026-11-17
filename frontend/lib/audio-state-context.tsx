@@ -95,7 +95,18 @@ export type VibeOperation =
     | { type: 'vibe'; sourceTrackId: string; matches: Record<string, number>; trackIds: string[] }
     | { type: 'drift'; startTrackId: string; endTrackId: string; pathTrackIds: string[] }
     | { type: 'blend'; addTrackIds: string[]; subtractTrackIds: string[]; resultTrackIds: string[] }
-    | { type: 'similar'; sourceTrackId: string; trackIds: string[] };
+    | { type: 'similar'; sourceTrackId: string; trackIds: string[] }
+    | {
+        type: 'flow';
+        sessionId: string;
+        ownerId: string;
+        sourceTrackId: string;
+        style: 'familiar' | 'balanced' | 'adventurous';
+        energy: number;
+        discovery: number;
+        trackIds: string[];
+        recentTrackIds: string[];
+    };
 
 interface AudioStateContextType {
     // Media state

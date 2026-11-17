@@ -31,8 +31,18 @@ the song going and changes only the upcoming queue. The preview does not
 download, relocate or change any music. Click **Explore the Vibe map** to use
 the full 3D view.
 
-This first stage produces a finite ordered session. Continuous automatic
-queue refill and explicit user-feedback learning are planned for later phases.
+Phase 1 was merged to main in PR #263. The phase-2 development branch
+adds **Continuous Flow**: while a Flow session is playing, Kima prepares
+more eligible library songs as the current queue nears its end. A rolling
+queue retains the most recent previously heard songs. Editing the queue
+manually or selecting a different mode automatically stops continuation
+without pausing music. Choose **Stop automatic Flow** on the Flow or Queue
+screen to stop adding new songs while keeping what is already queued.
+
+Flow never starts audio automatically in response to the server. It only
+extends playback that you explicitly started. The browser must remain open,
+and the library must contain suitable songs; a small, fully used library
+ends naturally. Explicit feedback learning is a later phase.
 [Project NOVA design](project-nova.md).
 
 ## The vibe map

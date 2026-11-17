@@ -43,10 +43,16 @@ Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
 **Surprise me**, then adjust energy and discovery. Flow prepares a
 personalized, playable queue using only indexed tracks in your local library.
 
-This first phase deliberately does **not** auto-download music, automatically
-refill a never-ending queue, or replace the original 3D Vibe map. It is
-an opt-in guided listening mode that will gain safe automatic continuation
-and explicit feedback in later development stages.
+**Phase 1 (merged, unreleased)** introduced guided listening and a
+playable preview. **Phase 2 (development PR)** adds Continuous Flow: after
+explicitly starting Flow, Kima can keep a small rolling queue supplied from
+your own music, automatically stopping on manual queue edits or account
+changes. You can also stop auto-refill without stopping playback.
+
+Flow never downloads music, imports new tracks, or replaces the original
+3D Vibe map. It cannot extend playback once the local library has no
+eligible songs left or the originating browser is closed. Per-user feedback
+learning is planned separately.
 
 [Project NOVA roadmap](docs/project-nova.md)
 

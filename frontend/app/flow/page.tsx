@@ -30,7 +30,8 @@ const COPY = {
         advanced: "Explore the Vibe map", already: "Flow queue ready in the player",
         seed: "Starting song", favorite: "A favorite of yours", "new-to-you": "Less familiar to you",
         similar: "Fits the sound", energyReason: "Matches the energy", "library-pick": "From your library",
-        note2: "Flow phase 1 prepares an ordered listening queue. Continuous automatic refill and live feedback learning are planned next.",
+        note2: "While Flow is active, Kima keeps your queue supplied. Editing the queue or switching modes stops automatic refill; the music keeps playing. Explicit feedback learning is planned next.",
+        running: "Continuous Flow is active", stop: "Stop automatic Flow",
     },
     nl: {
         title: "Kima Flow", subtitle: "Druk op afspelen. Laat je eigen muziek je verrassen.",
@@ -48,7 +49,8 @@ const COPY = {
         advanced: "Bekijk de Vibe-kaart", already: "Flow-wachtrij staat klaar in de speler",
         seed: "Startnummer", favorite: "Een van je favorieten", "new-to-you": "Nog niet vaak gehoord",
         similar: "Past bij het geluid", energyReason: "Past bij de energie", "library-pick": "Uit je bibliotheek",
-        note2: "Flow fase 1 maakt een geordende afspeelwachtrij. Automatisch blijven aanvullen en leren van directe feedback volgen in een volgende fase.",
+        note2: "Zolang Flow actief is, blijft Kima de wachtrij aanvullen. Handmatig bewerken of van modus wisselen stopt het aanvullen; je muziek speelt door. Leren van directe feedback volgt later.",
+        running: "Continuous Flow is actief", stop: "Automatisch aanvullen stoppen",
     },
 } as const;
 
@@ -61,7 +63,7 @@ export default function FlowPage() {
     const { locale } = useLanguage();
     const text = COPY[locale];
     const { user } = useAuth();
-    const { playbackType, currentTrack, queue, currentIndex, setActiveOperation, setIsShuffle, setRepeatMode } = useAudioState();
+    const { playbackType, currentTrack, queue, currentIndex, activeOperation, setActiveOperation, setIsShuffle, setRepeatMode } = useAudioState();
     const { isPlaying } = useAudioPlayback();
     const { playTracks, setUpcoming, resumeWithGesture } = useAudioControls();
 
@@ -110,7 +112,6 @@ export default function FlowPage() {
         }));
         const canContinue = playbackType === "track" && currentTrack?.id === tracks[0]?.id
             && queue[currentIndex]?.id === currentTrack?.id;
-        setActiveOperation({ type: "idle" });
         setIsShuffle(false); // Keep the music journey's intentional sequence.
         setRepeatMode("off"); // Never let a previous repeat-one setting trap the Flow.
         if (canContinue) {
@@ -119,8 +120,25 @@ export default function FlowPage() {
         } else {
             playTracks(tracks, 0);
         }
+        const sessionTracks = canContinue ? [currentTrack!, ...tracks.slice(1)] : tracks;
+        // The session exists only in this authenticated browser. Switching
+        // accounts or editing the generated queue cancels background refill.
+        setActiveOperation({
+            type: "flow",
+            ownerId: user.id,
+            sessionId: typeof crypto !== "undefined" && "randomUUID" in crypto
+                ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+            sourceTrackId: tracks[0].id,
+            style,
+            energy,
+            discovery,
+            trackIds: sessionTracks.map(track => track.id),
+            recentTrackIds: sessionTracks.map(track => track.id),
+        });
         setStartedKey(requestKey);
     };
+
+    const isFlowActive = activeOperation.type === "flow" && activeOperation.ownerId === user?.id;
 
     const modes = useMemo(() => [
         { value: "familiar" as const, label: text.familiar },
@@ -241,6 +259,14 @@ export default function FlowPage() {
                     )}
                 </div>
             </section>
+            {isFlowActive && (
+                <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/25 bg-[var(--bg-secondary)] p-4">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{text.running}</p>
+                    <Button size="sm" variant="secondary" onClick={() => setActiveOperation({ type: "idle" })}>
+                        {text.stop}
+                    </Button>
+                </div>
+            )}
             <p className="text-xs leading-relaxed text-[var(--text-muted)]">{text.note2}</p>
         </div>
     );

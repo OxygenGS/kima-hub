@@ -28,6 +28,7 @@ import { notify } from "@/lib/notify";
 import { BookSession, BookSessionUnavailableError } from "@/lib/book-session";
 import { insertTrack, removeTrack } from "@/lib/queue-edit";
 import { shuffleArray } from "@/lib/shuffle";
+import { planFlowAppend, sameFlowQueue, type FlowSnapshot } from "@/lib/flow-queue-policy";
 
 /** The track ids the active vibe operation holds, under whichever field its kind uses. */
 function operationTrackIds(operation: VibeOperation): string[] {
@@ -62,6 +63,10 @@ interface AudioControlsContextType {
     removeFromQueue: (index: number) => void;
     clearQueue: () => void;
     setUpcoming: (tracks: Track[], preserveOrder?: boolean) => void;
+    appendFlowTracks: (
+        expected: { sessionId: string; ownerId: string; queueIds: string[] },
+        tracks: Track[],
+    ) => boolean;
 
     // Playback modes
     toggleShuffle: () => void;
@@ -128,6 +133,7 @@ function getNextTrackInfo(
 }
 
 const OPERATION_NAMES: Record<string, string> = {
+    flow: "Flow",
     vibe: "Vibe",
     drift: "Drift",
     blend: "Blend",
@@ -774,6 +780,44 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         },
         [state, playback, generateShuffleIndices]
     );
+
+    /**
+     * Append without touching the audio engine. Every network response carries
+     * the exact original queue and session identity. A manual queue edit,
+     * account change, pause or other operation invalidates the append.
+     */
+    const appendFlowTracks = useCallback((
+        expected: { sessionId: string; ownerId: string; queueIds: string[] },
+        tracks: Track[],
+    ): boolean => {
+        const operation = state.activeOperation;
+        if (operation.type !== "flow" || operation.sessionId !== expected.sessionId ||
+            operation.ownerId !== expected.ownerId ||
+            !sameFlowQueue(queueRef.current, expected.queueIds) ||
+            !sameFlowQueue(state.queue, expected.queueIds)) {
+            return false;
+        }
+        const snapshot: FlowSnapshot = {
+            operation,
+            ownerId: expected.ownerId,
+            queue: queueRef.current,
+            currentIndex: currentIndexRef.current,
+            currentTrackId: currentTrackRef.current?.id ?? null,
+            playbackType: playbackTypeRef.current,
+            isPlaying: controllerRef.current?.isPlaying() ?? false,
+            isShuffle: isShuffleRef.current,
+            repeatMode: repeatModeRef.current,
+        };
+        const next = planFlowAppend(snapshot, tracks);
+        if (!next) return false;
+
+        queueRef.current = next.queue;
+        currentIndexRef.current = next.currentIndex;
+        state.setQueue(next.queue);
+        state.setCurrentIndex(next.currentIndex);
+        state.setActiveOperation(next.operation);
+        return true;
+    }, [state]);
 
     const toggleShuffle = useCallback(() => {
         if (state.activeOperation.type !== 'idle') {
@@ -1587,6 +1631,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             removeFromQueue,
             clearQueue,
             setUpcoming,
+            appendFlowTracks,
             toggleShuffle,
             toggleRepeat,
             updateCurrentTime,
@@ -1617,6 +1662,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             removeFromQueue,
             clearQueue,
             setUpcoming,
+            appendFlowTracks,
             toggleShuffle,
             toggleRepeat,
             updateCurrentTime,

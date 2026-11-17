@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Button } from "@/components/ui/Button";
 import { useAudioState, useAudioControls, useAudioPlayback } from "@/lib/audio-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
@@ -11,9 +12,9 @@ import { moveUpcomingTrack } from "@/features/queue/queuePresentation";
 
 export default function QueuePage() {
     const router = useRouter();
-    const { t } = useLanguage();
-    const { isAuthenticated } = useAuth();
-    const { queue, currentTrack, currentIndex, playbackType, setQueue } = useAudioState();
+    const { t, locale } = useLanguage();
+    const { isAuthenticated, user } = useAuth();
+    const { queue, currentTrack, currentIndex, playbackType, activeOperation, setActiveOperation, setQueue } = useAudioState();
     const { playTracks, removeFromQueue, clearQueue, pause, resumeWithGesture } = useAudioControls();
     const { isPlaying } = useAudioPlayback();
     const [confirmClear, setConfirmClear] = useState(false);
@@ -27,6 +28,16 @@ export default function QueuePage() {
 
     return (
         <>
+            {activeOperation?.type === "flow" && activeOperation.ownerId === user?.id && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-[var(--bg-secondary)] p-4">
+                    <p className="text-sm text-[var(--text-secondary)]">
+                        {locale === "nl" ? "Continuous Flow vult de wachtrij automatisch aan." : "Continuous Flow automatically adds upcoming music."}
+                    </p>
+                    <Button size="sm" variant="secondary" onClick={() => setActiveOperation({ type: "idle" })}>
+                        {locale === "nl" ? "Automatisch aanvullen stoppen" : "Stop automatic Flow"}
+                    </Button>
+                </div>
+            )}
             <QueueSurface
                 queue={queue} currentIndex={currentIndex} currentIsActive={currentIsActive} isPlaying={isPlaying}
                 onToggleCurrent={() => {

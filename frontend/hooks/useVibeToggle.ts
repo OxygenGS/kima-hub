@@ -13,7 +13,7 @@ export function useVibeToggle() {
     const handleVibeToggle = useCallback(async () => {
         if (!currentTrack?.id) return;
 
-        if (activeOperation.type !== "idle") {
+        if (activeOperation.type !== "idle" && activeOperation.type !== "flow") {
             stopVibeMode();
             return;
         }
