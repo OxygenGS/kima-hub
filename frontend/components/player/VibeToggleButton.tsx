@@ -34,7 +34,7 @@ export function VibeToggleButton({
 
     if (loading || !vibeEmbeddings || (unavailable && hideWhenUnavailable)) return null;
 
-    const active = activeOperation.type !== "idle";
+    const active = activeOperation.type !== "idle" && activeOperation.type !== "flow";
     const Icon = isVibeLoading ? Loader2 : AudioWaveform;
 
     return (
