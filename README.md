@@ -37,8 +37,9 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 ## Project NOVA — v1.26.0 release candidate
 
-**Six completed stages are merged and prepared for v1.26.0; the new image is
-not published. Stable remains v1.25.0.** Project NOVA starts with **Kima Flow**, a simpler listening interface built on the existing
+**Unpublished release candidate:** [v1.26.0](https://github.com/OxygenGS/kima-hub/pull/269) — six NOVA stages are merged into source, but no v1.26.0 container is published. Stable remains **v1.25.0**.
+
+Project NOVA starts with **Kima Flow**, a simpler listening interface built on the existing
 Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
 **Surprise me**, then adjust energy and discovery. Flow prepares a
 personalized, playable queue using only indexed tracks in your local library.
