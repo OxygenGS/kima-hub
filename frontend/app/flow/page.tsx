@@ -10,6 +10,7 @@ import { useAudioPlayback } from "@/lib/audio-playback-context";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { Button } from "@/components/ui/Button";
+import { FlowDiscoveryRadar } from "@/components/flow/FlowDiscoveryRadar";
 
 type Prepared = { key: string; ownerId: string; preview: NovaFlowPreview };
 
@@ -321,6 +322,7 @@ export default function FlowPage() {
                     )}
                 </div>
             </section>
+            <FlowDiscoveryRadar ownerId={user?.id ?? null} seedTrackId={seedTrackId ?? preview?.seedTrackId ?? null} />
             {isFlowActive && (
                 <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/25 bg-[var(--bg-secondary)] p-4">
                     <p className="text-sm font-medium text-[var(--text-primary)]">{text.running}</p>
