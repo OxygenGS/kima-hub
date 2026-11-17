@@ -2525,9 +2525,10 @@ class ApiClient {
     }
 
     // Admin-only, explicit read-only MusicBrainz recording duplicate candidates.
-    async getLibraryGuardianDuplicates(limit = 8): Promise<LibraryGuardianDuplicateReport> {
+    async getLibraryGuardianDuplicates(limit = 8, signal?: AbortSignal): Promise<LibraryGuardianDuplicateReport> {
         return this.request<LibraryGuardianDuplicateReport>(
             `/library/doctor/guardian/duplicates?limit=${limit}`,
+            { signal },
         );
     }
 
