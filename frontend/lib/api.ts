@@ -197,7 +197,7 @@ interface VibePathTrack {
 }
 
 export type NovaFlowStyle = "familiar" | "balanced" | "adventurous";
-export type NovaFlowReason = "seed" | "more-like-this" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
+export type NovaFlowReason = "seed" | "more-like-this" | "matches-your-taste" | "favorite" | "new-to-you" | "similar" | "energy" | "library-pick";
 export type NovaFlowFeedbackChoice = "more" | "less";
 export interface NovaFlowTrack {
     id: string;
