@@ -273,7 +273,7 @@ export default function FlowPage() {
                         <>
                             <p className="text-xs font-semibold text-brand">{preview.tracks.length} {text.tracks}</p>
                             <p className="text-xs text-[var(--text-muted)]">{text.tasteIntro}. {text.feedbackHint}</p>
-                            {feedbackFailed && <p role="alert" className="text-xs text-red-400">{text.feedbackError}</p>
+                            {feedbackFailed && <p role="alert" className="text-xs text-red-400">{text.feedbackError}</p>}
                             <ol className="space-y-1">
                                 {preview.tracks.slice(0, 8).map((track, index) => (
                                     <li key={track.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-white/5">
