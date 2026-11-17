@@ -113,10 +113,43 @@ automatically trained vector model, behavior-based inference, or externally
 hosted personalization service. Those can be evaluated separately after
 owner-safe listening tests.
 
+## Phase 4 — Discovery Radar (this PR)
+
+The Flow screen gains an **opt-in** `Beyond your library` area. A person
+clicks **Find new artists** to search for similar artists starting from the
+current playable local track (or the prepared Flow seed). Unlike normal
+Flow sessions, Radar deliberately contacts the existing external
+ListenBrainz/Deezer matching sources only after this user gesture.
+
+- Read-only `GET /api/vibe/flow/discover?seedTrackId=...&limit=8`, session
+  authentication, strict bounded query validation and `private, no-store`.
+- The seed must be an indexed, non-missing, non-corrupt **LIBRARY** track.
+  Artist candidates originate exclusively from the established similarity
+  source; Kima does not invent names or pretend an outage is no match.
+- An artist is marked missing only after verifying no local
+  `Album.location=LIBRARY` and non-missing, non-corrupt track exists for its
+  MBID or normalized identity. A bare Artist placeholder or DISCOVER catalog
+  row is not ownership proof.
+- Up to eight verified names link into the existing artist detail and
+  discography experience, where the listener may inspect albums. Any
+  subsequent download request still uses the existing explicit
+  `POST /api/downloads` route and its `canRequestAlbums` permission check;
+  the Radar endpoint never calls an acquisition service.
+- No playback or queue changes, downloading, library writes, schema
+  migration, background polling or new integration credentials. The
+  original Flow continues locally while the user explores.
+
+**Scope:** this first Discovery slice recommends **artists**, not tracks
+from a streaming subscription catalog. It does not automatically add
+missing songs to Flow or initiate a Lidarr/Soulseek request. Existing
+artist pages continue to own album requests, and nonconfigured providers
+remain optional. Missing or offline external sources are shown as empty or
+partial evidence, never as fabricated recommendations.
+
 ## Planned phases
 
-1. **Discovery integration:** optional, explicit missing-music requests
-   through available integrations; never automatic downloads.
+1. **Deeper Discovery integration:** explore album-level recommendations and
+   optional, permission-checked requests, always explicitly initiated.
 2. **Library Guardian:** read-only diagnosis and reviewed, storage-safe
    repair proposals.
 
@@ -128,7 +161,7 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-This phase-3 PR does not create or publish a Docker tag and cannot update a
+This phase-4 PR does not create or publish a Docker tag and cannot update a
 running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
 remain unchanged. Require backend/frontend tests, EN/NL UI, database upgrade,
