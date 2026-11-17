@@ -43,26 +43,24 @@ Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
 **Surprise me**, then adjust energy and discovery. Flow prepares a
 personalized, playable queue using only indexed tracks in your local library.
 
-**Phase 1 (#263) and phase 2 (#264) are merged into main, but unreleased.**
-They introduce guided listening and Continuous Flow: the queue stays supplied
-from local music while your browser is playing, but your manual queue edits
-always take priority.
+**Phases 1–4 (#263–#266 merged into main, not yet published):**
+Guided Flow starts a locally playable mix; Continuous Flow extends the
+queue without interrupting a song or overriding manual edits. Music DNA
+stores reversible, private **More like this / Less like this** preferences.
+Discovery Radar finds externally suggested similar artists missing from
+your playable library **only after you request it**, and opens their normal
+artist/discography page. No automatic downloads.
 
-**Phase 3 (#265 merged, unreleased): Music DNA feedback** lets listeners
-choose **More like this** or **Less like this** in Flow. Private, reversible
-preferences improve future suggestions, including strongly similar tracks,
-without changing Favorites or other listeners' taste.
+**Phase 5 (development PR): Library Guardian** extends the existing admin
+Library Doctor with an optional **potential duplicate recordings** review.
+Using indexed MusicBrainz recording IDs, track duration and acoustic
+fingerprint evidence, it shows a limited list of pairs/groups for manual
+comparison, with direct album links. It **never deletes, moves, merges,
+renames or retags audio files**, and doesn't claim that repeated recordings
+are unwanted copies. See [Library Doctor](docs/library-doctor.md).
 
-**Phase 4 (development): Discovery Radar** makes a deliberate **Find new
-artists** action available in Flow. It uses the current local seed track and
-existing ListenBrainz/Deezer artist-matching sources to suggest related
-artists without playable tracks in your library. Open any suggestion's
-existing artist page to inspect albums and make an **explicit**, separately
-permission-checked request if supported. **No automatic downloads or
-acquisition jobs are created by Radar.**
-
-Flow never replaces the original 3D Vibe map or continues without an open
-originating browser.
+Flow still preserves the original 3D Vibe map and requires its originating
+browser for automatic queue continuation.
 
 [Project NOVA roadmap](docs/project-nova.md)
 
