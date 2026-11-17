@@ -48,15 +48,21 @@ They introduce guided listening and Continuous Flow: the queue stays supplied
 from local music while your browser is playing, but your manual queue edits
 always take priority.
 
-**Phase 3 (development): Music DNA feedback** lets each signed-in listener
-select **More like this** or **Less like this** directly in Flow. Your choice
-is stored privately on the Kima server, improves your future Flow results,
-and can be undone by pressing the selected button again. Positive choices
-also favor strongly similar tracks; negative choices downrank close matches.
-These private signals do not modify Favorites or other users' taste.
+**Phase 3 (#265 merged, unreleased): Music DNA feedback** lets listeners
+choose **More like this** or **Less like this** in Flow. Private, reversible
+preferences improve future suggestions, including strongly similar tracks,
+without changing Favorites or other listeners' taste.
 
-Flow never downloads or imports music, replaces the original 3D Vibe map,
-or runs while the originating browser is closed.
+**Phase 4 (development): Discovery Radar** makes a deliberate **Find new
+artists** action available in Flow. It uses the current local seed track and
+existing ListenBrainz/Deezer artist-matching sources to suggest related
+artists without playable tracks in your library. Open any suggestion's
+existing artist page to inspect albums and make an **explicit**, separately
+permission-checked request if supported. **No automatic downloads or
+acquisition jobs are created by Radar.**
+
+Flow never replaces the original 3D Vibe map or continues without an open
+originating browser.
 
 [Project NOVA roadmap](docs/project-nova.md)
 

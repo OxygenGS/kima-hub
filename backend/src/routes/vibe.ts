@@ -8,6 +8,7 @@ import { requireAuth } from "../middleware/auth";
 import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
 import { buildNovaFlow } from "../services/novaFlow";
+import { buildNovaDiscovery } from "../services/novaFlowDiscovery";
 import { clearNovaFlowFeedback, setNovaFlowFeedback } from "../services/novaFlowFeedback";
 import { getVibeMap, type MapResponse } from "../services/vibeMap";
 import { currentMoodSnapshot, moodOutput } from "../services/moodBucketService";
@@ -69,6 +70,39 @@ router.get("/map", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Vibe map error:", error);
         res.status(500).json({ error: "Failed to read the vibe map" });
+    }
+});
+
+const novaDiscoverInput = z.object({
+    seedTrackId: z.string().min(1).max(100),
+    limit: z.string().regex(/^(?:[1-9]|1[0-2])$/).optional(),
+}).strict();
+
+/**
+ * GET /api/vibe/flow/discover — NOVA Discovery Radar.
+ * Only invoked after an explicit browser click. Returns verified artist
+ * suggestions, not a download intent, queue modification or playable stream.
+ */
+router.get("/flow/discover", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const parsed = novaDiscoverInput.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid Discovery Radar request" });
+    try {
+        const result = await buildNovaDiscovery(
+            parsed.data.seedTrackId,
+            parsed.data.limit ? Number(parsed.data.limit) : 8,
+        );
+        if (result.unavailableSeed) {
+            return res.status(404).json({ error: "The starting track is not playable in your library" });
+        }
+        return res.json({
+            seedArtist: result.seedArtist,
+            artists: result.artists,
+            sourceFailed: result.sourceFailed,
+        });
+    } catch (error) {
+        logger.error("Generate NOVA Discovery Radar failed:", error);
+        return res.status(503).json({ error: "Discovery sources are unavailable" });
     }
 });
 
