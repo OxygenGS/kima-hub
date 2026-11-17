@@ -39,10 +39,17 @@ manually or selecting a different mode automatically stops continuation
 without pausing music. Choose **Stop automatic Flow** on the Flow or Queue
 screen to stop adding new songs while keeping what is already queued.
 
+**Music DNA (phase 3, in development):** click **More like this** or
+**Less like this** next to a proposed Flow song. These personal preferences
+influence future Flow suggestions and are independent from global Favorites.
+Tap a selected preference again to undo it. Each signed-in Kima account
+has its own saved signals, and no external service receives these choices.
+The current audio session and manually edited queue are never interrupted.
+
 Flow never starts audio automatically in response to the server. It only
 extends playback that you explicitly started. The browser must remain open,
 and the library must contain suitable songs; a small, fully used library
-ends naturally. Explicit feedback learning is a later phase.
+ends naturally.
 [Project NOVA design](project-nova.md).
 
 ## The vibe map
