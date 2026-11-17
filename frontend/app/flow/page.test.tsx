@@ -10,6 +10,7 @@ const fake = vi.hoisted(() => ({
     queue: [{ id: "seed" }] as { id: string }[],
     index: 0,
     playing: true,
+    activeOperation: { type: "idle" } as { type: string; ownerId?: string; sessionId?: string },
     getPreview: vi.fn(),
     playTracks: vi.fn(),
     setUpcoming: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/i18n/language-context", () => ({ useLanguage: () => ({ locale: "e
 vi.mock("@/lib/audio-state-context", () => ({
     useAudioState: () => ({
         playbackType: fake.playbackType,
+        activeOperation: fake.activeOperation,
         currentTrack: fake.currentTrack,
         queue: fake.queue,
         currentIndex: fake.index,
@@ -65,6 +67,7 @@ beforeEach(() => {
     fake.queue = [{ id: "seed" }];
     fake.index = 0;
     fake.playing = true;
+    fake.activeOperation = { type: "idle" };
     fake.getPreview.mockResolvedValue(example);
     host = document.createElement("div");
     document.body.appendChild(host);
@@ -104,7 +107,11 @@ describe("NOVA Flow guided listening", () => {
         expect(fake.playTracks).not.toHaveBeenCalled();
         expect(fake.setShuffle).toHaveBeenCalledWith(false);
         expect(fake.setRepeat).toHaveBeenCalledWith("off");
-        expect(fake.setOperation).toHaveBeenCalledWith({ type: "idle" });
+        expect(fake.setOperation).toHaveBeenCalledWith(expect.objectContaining({
+            type: "flow", ownerId: "alice", sourceTrackId: "seed", style: "balanced",
+            energy: 55, discovery: 35, trackIds: ["seed", "next"],
+            recentTrackIds: ["seed", "next"],
+        }));
     });
 
     it("starts the existing player only after a local gesture for an idle listener", async () => {
@@ -118,6 +125,18 @@ describe("NOVA Flow guided listening", () => {
         await act(async () => { button!.click(); });
         expect(fake.playTracks).toHaveBeenCalledOnce();
         expect(fake.playTracks.mock.calls[0][0].map((t: { id: string }) => t.id)).toEqual(["seed", "next"]);
+        expect(fake.setOperation).toHaveBeenCalledWith(expect.objectContaining({ type: "flow", ownerId: "alice" }));
+    });
+
+    it("allows the listener to turn off auto-refill without pausing their music", async () => {
+        fake.activeOperation = { type: "flow", ownerId: "alice", sessionId: "session" };
+        await renderFlow();
+        const stop = [...host.querySelectorAll("button")].find(b => b.textContent?.includes("Stop automatic Flow"));
+        expect(stop).toBeDefined();
+        await act(async () => { stop!.click(); });
+        expect(fake.setOperation).toHaveBeenCalledWith({ type: "idle" });
+        expect(fake.playTracks).not.toHaveBeenCalled();
+        expect(fake.setUpcoming).not.toHaveBeenCalled();
     });
 
     it("does not show the previous account's preview after a user switch", async () => {
