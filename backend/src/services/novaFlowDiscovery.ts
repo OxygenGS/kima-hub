@@ -116,3 +116,111 @@ export async function buildNovaDiscovery(
         sourceFailed: external.failed,
     };
 }
+
+
+/**
+ * Phase 6 — explicit Album Spotlight. Source release groups are catalog
+ * metadata, NOT ranked recommendations or proof of missing files.
+ * No downloads, inserts, scanner calls or media operations.
+ */
+export interface NovaAlbumSuggestion {
+    id: string;
+    title: string;
+    type: "Album" | "EP";
+    year: number | null;
+}
+
+export interface NovaAlbumSpotlightResult {
+    artistMbid: string;
+    albums: NovaAlbumSuggestion[];
+    sourceFailed: boolean;
+    readOnly: true;
+}
+
+const EXCLUDED_RELEASE_TYPES = new Set([
+    "Live", "Compilation", "Soundtrack", "Remix", "DJ-mix", "Mixtape/Street",
+]);
+
+/** Convert untrusted MusicBrainz release-group records into small, safe cards. */
+export function normalizeNovaAlbumSuggestions(records: readonly unknown[]): NovaAlbumSuggestion[] {
+    const results: NovaAlbumSuggestion[] = [];
+    const seen = new Set<string>();
+    for (const entry of records) {
+        if (!entry || typeof entry !== "object") continue;
+        const record = entry as Record<string, unknown>;
+        if (typeof record.id !== "string" || !isMbid(record.id)) continue;
+        if (typeof record.title !== "string") continue;
+        const title = record.title.trim();
+        if (!title || title.length > 240) continue;
+        const type = record["primary-type"];
+        if (type !== "Album" && type !== "EP") continue;
+        const secondary = record["secondary-types"];
+        if (Array.isArray(secondary) && secondary.some(value =>
+            typeof value === "string" && EXCLUDED_RELEASE_TYPES.has(value))) continue;
+        const id = record.id.toLowerCase();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const date = record["first-release-date"];
+        const year = typeof date === "string" && /^\d{4}(?:-|$)/.test(date)
+            ? Number(date.slice(0, 4)) : null;
+        results.push({
+            id,
+            title,
+            type,
+            year: year !== null && year >= 1850 && year <= 3000 ? year : null,
+        });
+    }
+    return results;
+}
+
+/**
+ * Only called from an authenticated, explicitly clicked album-preview action.
+ * MusicBrainz may have no data or may fail; never invent an album.
+ * A small pre-filtered list is checked against available local albums.
+ */
+export async function buildNovaAlbumSpotlight(
+    artistMbid: string,
+    requestedLimit = 3,
+): Promise<NovaAlbumSpotlightResult> {
+    const limit = Number.isInteger(requestedLimit)
+        ? Math.max(1, Math.min(4, requestedLimit)) : 3;
+    const normalizedMbid = artistMbid.toLowerCase();
+    if (!isMbid(normalizedMbid)) {
+        return { artistMbid: normalizedMbid, albums: [], sourceFailed: false, readOnly: true };
+    }
+
+    // Lazy-load the existing provider only for an explicit Album Spotlight
+    // request; ordinary Flow, startup and auto-refill remain local-only.
+    const { musicBrainzService } = await import("./musicbrainz");
+    const source = await musicBrainzService.getReleaseGroups(
+        normalizedMbid, ["album", "ep"], 50, { interactive: true },
+    );
+    if (source.kind !== "answered") {
+        return {
+            artistMbid: normalizedMbid, albums: [],
+            sourceFailed: source.kind !== "absent", readOnly: true,
+        };
+    }
+
+    const candidates = normalizeNovaAlbumSuggestions(source.value).slice(0, 30);
+    if (candidates.length === 0) {
+        return { artistMbid: normalizedMbid, albums: [], sourceFailed: false, readOnly: true };
+    }
+
+    // DISCOVER placeholders and missing/corrupt files are not owned music.
+    const owned = await prisma.album.findMany({
+        where: {
+            rgMbid: { in: candidates.map(album => album.id) },
+            location: "LIBRARY",
+            tracks: { some: { missingSince: null, corrupt: false } },
+        },
+        select: { rgMbid: true },
+    });
+    const locallyPlayable = new Set(owned.map(album => album.rgMbid.toLowerCase()));
+    return {
+        artistMbid: normalizedMbid,
+        albums: candidates.filter(album => !locallyPlayable.has(album.id)).slice(0, limit),
+        sourceFailed: false,
+        readOnly: true,
+    };
+}

@@ -5,10 +5,11 @@ import { FlowDiscoveryRadar } from "./FlowDiscoveryRadar";
 
 const fake = vi.hoisted(() => ({
     discover: vi.fn(),
+    albums: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
-    api: { getNovaDiscovery: fake.discover },
+    api: { getNovaDiscovery: fake.discover, getNovaAlbumSpotlight: fake.albums },
 }));
 vi.mock("@/lib/i18n/language-context", () => ({
     useLanguage: () => ({ locale: "en" }),
@@ -31,6 +32,11 @@ let root: Root;
 beforeEach(() => {
     vi.clearAllMocks();
     fake.discover.mockResolvedValue(response);
+    fake.albums.mockResolvedValue({
+        artistMbid: "550e8400-e29b-41d4-a716-446655440000",
+        albums: [{ id: "550e8400-e29b-41d4-a716-446655440010", title: "MusicBrainz Album", type: "Album", year: 2022 }],
+        sourceFailed: false, readOnly: true,
+    });
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -63,6 +69,51 @@ describe("NOVA Discovery Radar", () => {
         const links = [...host.querySelectorAll("a[href]")].map(a => a.getAttribute("href"));
         expect(links).toContain("/artist/550e8400-e29b-41d4-a716-446655440000");
         expect(links).toContain("/artist/Independent");
+    });
+
+    it("never looks up albums until a deliberate preview click", async () => {
+        await mount();
+        expect(fake.albums).not.toHaveBeenCalled();
+        await clickDiscover();
+        expect(fake.albums).not.toHaveBeenCalled();
+        const preview = [...host.querySelectorAll("button")].find(b => b.textContent?.includes("Preview albums"));
+        expect(preview).toBeDefined();
+        await act(async () => { preview!.click(); await Promise.resolve(); });
+        expect(fake.albums).toHaveBeenCalledWith(
+            "550e8400-e29b-41d4-a716-446655440000", 3, expect.any(AbortSignal),
+        );
+        expect(host.textContent).toContain("MusicBrainz Album");
+        expect(host.querySelector('a[href="/album/550e8400-e29b-41d4-a716-446655440010"]')).not.toBeNull();
+        expect([...host.querySelectorAll("button")].filter(b =>
+            b.textContent?.includes("Preview albums"))).toHaveLength(1);
+    });
+
+    it("hides delayed album previews when the account or seed changes", async () => {
+        let resolve!: (value: unknown) => void;
+        fake.albums.mockImplementationOnce(() => new Promise(res => { resolve = res; }));
+        await mount();
+        await clickDiscover();
+        const preview = [...host.querySelectorAll("button")].find(b => b.textContent?.includes("Preview albums"));
+        await act(async () => { preview!.click(); });
+        await mount("other-account", "track-1");
+        await act(async () => {
+            resolve({ albums: [{ id: "album", title: "Private Album", type: "Album", year: 2020 }] });
+            await Promise.resolve();
+        });
+        expect(host.textContent).not.toContain("Private Album");
+    });
+
+    it("reports unavailable album sources without fabricating catalog entries", async () => {
+        fake.albums.mockResolvedValueOnce({
+            artistMbid: "550e8400-e29b-41d4-a716-446655440000",
+            albums: [], sourceFailed: true, readOnly: true,
+        });
+        await mount();
+        await clickDiscover();
+        const preview = [...host.querySelectorAll("button")].find(b => b.textContent?.includes("Preview albums"));
+        await act(async () => { preview!.click(); await Promise.resolve(); });
+        expect(host.textContent).toContain("Album information is unavailable");
+        expect(host.querySelectorAll('a[href^="/album/"]')).toHaveLength(0);
     });
 
     it("does not leak recommendations to a different user after switching accounts", async () => {

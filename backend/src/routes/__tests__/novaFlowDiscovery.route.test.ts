@@ -2,6 +2,7 @@ import express from "express";
 import request from "supertest";
 
 const discover = jest.fn();
+const spotlight = jest.fn();
 
 jest.mock("../../middleware/auth", () => ({
     requireAuth: (req: any, res: any, next: any) => {
@@ -13,6 +14,7 @@ jest.mock("../../middleware/auth", () => ({
 }));
 jest.mock("../../services/novaFlowDiscovery", () => ({
     buildNovaDiscovery: (...args: unknown[]) => discover(...args),
+    buildNovaAlbumSpotlight: (...args: unknown[]) => spotlight(...args),
 }));
 jest.mock("../../services/novaFlow", () => ({ buildNovaFlow: jest.fn() }));
 jest.mock("../../services/novaFlowFeedback", () => ({
@@ -28,6 +30,11 @@ app.use("/api/vibe", vibeRouter);
 
 beforeEach(() => {
     jest.clearAllMocks();
+    spotlight.mockResolvedValue({
+        artistMbid: "550e8400-e29b-41d4-a716-446655440000",
+        albums: [{ id: "550e8400-e29b-41d4-a716-446655440001", title: "Example album", type: "Album", year: 2020 }],
+        sourceFailed: false, readOnly: true,
+    });
     discover.mockResolvedValue({
         unavailableSeed: false, seedArtist: "Example",
         artists: [{ name: "Another", mbid: null, match: 0.9 }],
@@ -82,5 +89,49 @@ describe("NOVA Discovery Radar read-only endpoint", () => {
         discover.mockRejectedValueOnce(new Error("external service down"));
         await request(app).get("/api/vibe/flow/discover?seedTrackId=t1")
             .set("x-test-user", "alice").expect(503);
+    });
+});
+
+
+describe("NOVA Album Spotlight authenticated read-only endpoint", () => {
+    const artistMbid = "550e8400-e29b-41d4-a716-446655440000";
+    const route = "/api/vibe/flow/discover/albums";
+
+    it("never fetches albums for anonymous requests", async () => {
+        await request(app).get(route + "?artistMbid=" + artistMbid).expect(401);
+        expect(spotlight).not.toHaveBeenCalled();
+    });
+
+    it("rejects unknown parameters and missing or malformed MBIDs", async () => {
+        const invalid = [
+            "", "?artistMbid=invalid", "?artistMbid=" + artistMbid + "&limit=0",
+            "?artistMbid=" + artistMbid + "&limit=5",
+            "?artistMbid=" + artistMbid + "&limit=2.3",
+            "?artistMbid=" + artistMbid + "&userId=other",
+            "?artistMbid=" + artistMbid + "&artistMbid=" + artistMbid,
+        ];
+        for (const query of invalid) {
+            await request(app).get(route + query).set("x-test-user", "alice").expect(400);
+        }
+        expect(spotlight).not.toHaveBeenCalled();
+    });
+
+    it("serves bounded album evidence without download or state changes", async () => {
+        const res = await request(app).get(route + "?artistMbid=" + artistMbid + "&limit=2")
+            .set("x-test-user", "alice").expect(200);
+        expect(res.headers["cache-control"]).toBe("private, no-store");
+        expect(spotlight).toHaveBeenCalledWith(artistMbid, 2);
+        expect(res.body).toEqual({
+            artistMbid,
+            albums: [{ id: "550e8400-e29b-41d4-a716-446655440001", title: "Example album", type: "Album", year: 2020 }],
+            sourceFailed: false, readOnly: true,
+        });
+    });
+
+    it("signals a provider failure rather than making up albums", async () => {
+        spotlight.mockRejectedValueOnce(new Error("provider offline"));
+        const res = await request(app).get(route + "?artistMbid=" + artistMbid)
+            .set("x-test-user", "alice").expect(503);
+        expect(res.body.error).toMatch(/unavailable/);
     });
 });

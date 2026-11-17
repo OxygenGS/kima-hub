@@ -6,8 +6,8 @@ database-only album reassignment for qualifying own Soulseek downloads.
 **The Library Doctor reports and the new Library Guardian duplicate audit
 never change any indexed track or media file.**
 
-**Development status:** the phase-5 Library Guardian duplicate view is
-proposed on an unreleased branch, not included in published v1.25.0.
+**Development status:** the phase-5 Library Guardian duplicate view was
+merged in PR #267 but is not included in published v1.25.0.
 
 ## Usage
 
@@ -178,4 +178,5 @@ identification and should be reviewed separately.
 
 As with every new migration, deploy only after a restorable database backup,
 successful migration smoke checks, and full green CI on the exact PR head.
-This development branch is not yet an installed release.
+The Library Guardian feature is merged to the development branch but is not
+included in the published v1.25.0 release.

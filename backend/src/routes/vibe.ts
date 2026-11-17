@@ -8,7 +8,7 @@ import { requireAuth } from "../middleware/auth";
 import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
 import { buildNovaFlow } from "../services/novaFlow";
-import { buildNovaDiscovery } from "../services/novaFlowDiscovery";
+import { buildNovaAlbumSpotlight, buildNovaDiscovery } from "../services/novaFlowDiscovery";
 import { clearNovaFlowFeedback, setNovaFlowFeedback } from "../services/novaFlowFeedback";
 import { getVibeMap, type MapResponse } from "../services/vibeMap";
 import { currentMoodSnapshot, moodOutput } from "../services/moodBucketService";
@@ -103,6 +103,31 @@ router.get("/flow/discover", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Generate NOVA Discovery Radar failed:", error);
         return res.status(503).json({ error: "Discovery sources are unavailable" });
+    }
+});
+
+const novaAlbumSpotlightInput = z.object({
+    artistMbid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+    limit: z.string().regex(/^[1-4]$/).optional(),
+}).strict();
+
+/**
+ * GET /api/vibe/flow/discover/albums — explicitly requested Album Spotlight.
+ * Read-only public MusicBrainz release-group samples for one suggested artist.
+ * No request/download endpoint or queue mutation is invoked.
+ */
+router.get("/flow/discover/albums", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const parsed = novaAlbumSpotlightInput.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid Album Spotlight request" });
+    try {
+        return res.json(await buildNovaAlbumSpotlight(
+            parsed.data.artistMbid,
+            parsed.data.limit ? Number(parsed.data.limit) : 3,
+        ));
+    } catch (error) {
+        logger.error("Generate NOVA Album Spotlight failed:", error);
+        return res.status(503).json({ error: "Album information is unavailable" });
     }
 });
 

@@ -43,7 +43,7 @@ Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
 **Surprise me**, then adjust energy and discovery. Flow prepares a
 personalized, playable queue using only indexed tracks in your local library.
 
-**Phases 1–4 (#263–#266 merged into main, not yet published):**
+**Phases 1–5 (#263–#267 merged into main, not yet published):**
 Guided Flow starts a locally playable mix; Continuous Flow extends the
 queue without interrupting a song or overriding manual edits. Music DNA
 stores reversible, private **More like this / Less like this** preferences.
@@ -51,13 +51,19 @@ Discovery Radar finds externally suggested similar artists missing from
 your playable library **only after you request it**, and opens their normal
 artist/discography page. No automatic downloads.
 
-**Phase 5 (development PR): Library Guardian** extends the existing admin
+**Phase 5: Library Guardian** extends the existing admin
 Library Doctor with an optional **potential duplicate recordings** review.
 Using indexed MusicBrainz recording IDs, track duration and acoustic
 fingerprint evidence, it shows a limited list of pairs/groups for manual
 comparison, with direct album links. It **never deletes, moves, merges,
 renames or retags audio files**, and doesn't claim that repeated recordings
 are unwanted copies. See [Library Doctor](docs/library-doctor.md).
+
+**Phase 6 (in development): Album Spotlight** adds an explicit **Preview albums**
+button to Discovery Radar artist cards when MusicBrainz identifies the artist.
+It shows up to three unranked, source-backed album/EP catalog entries and
+links to existing album detail pages. Nothing is fetched until clicked;
+there are no automatic requests, downloads, scans or playback changes.
 
 Flow still preserves the original 3D Vibe map and requires its originating
 browser for automatic queue continuation.
