@@ -82,7 +82,8 @@ describe("Library Guardian duplicate evidence", () => {
         expect(sql).toContain('t."missingSince" IS NULL');
         expect(sql).toContain('t.corrupt = false');
         expect(sql).toContain('HAVING COUNT(*) > 1');
-        expect(sql).toContain("CROSS JOIN LATERAL");
+        expect(sql).toContain("ROW_NUMBER() OVER");
+        expect(sql).not.toContain("CROSS JOIN LATERAL");
         expect(args.slice(1)).toEqual([13, 4]);
         expect(sql).not.toMatch(/\b(delete|update|insert|truncate|drop)\s+(from|into|table)/i);
     });
