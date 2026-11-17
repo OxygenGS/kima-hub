@@ -18,6 +18,9 @@ jest.mock("../../../services/smartDownloadInbox", () => ({
 jest.mock("../../../services/libraryDoctor", () => ({
     getLibraryDoctorReport: jest.fn(),
 }));
+jest.mock("../../../services/libraryGuardianDuplicates", () => ({
+    getLibraryGuardianDuplicates: jest.fn(),
+}));
 jest.mock("../../../utils/logger", () => ({
     logger: { error: jest.fn() },
 }));
