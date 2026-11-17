@@ -83,7 +83,7 @@ export function LibraryGuardianDuplicatesSection() {
     }, [ownerId]);
 
     const report = snapshot?.ownerId === ownerId ? snapshot.data : null;
-    const loading = !!ownerId && pending?.ownerId === ownerId && !pending.controller.signal.aborted;
+    const loading = !!ownerId && !!pending && pending.ownerId === ownerId && !pending.controller.signal.aborted;
     const failed = !!ownerId && failedOwner === ownerId;
 
     const inspect = async () => {
