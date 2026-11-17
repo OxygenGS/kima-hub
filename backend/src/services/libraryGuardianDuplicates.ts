@@ -123,9 +123,9 @@ export async function getLibraryGuardianDuplicates(
         ? Math.max(1, Math.min(MAX_GROUPS, requestedLimit))
         : DEFAULT_GROUPS;
 
-    // PostgreSQL picks only the strongest repeated MusicBrainz recording
-    // groups, then LATERAL limits the evidence per group. This is NOT a
-    // library-wide exact-byte duplicate scan and makes no cleanup claims.
+    // A single PostgreSQL query ranks repeated recording IDs, then samples
+    // their rows using ROW_NUMBER in one pass. Avoid an unindexed lateral
+    // lookup for each group on large collections. No file bytes are read.
     const rows = await prisma.$queryRaw<DuplicateQueryRow[]>`
         WITH repeated AS (
             SELECT t."recordingMbid" AS recording_id, COUNT(*)::integer AS copies
@@ -139,36 +139,36 @@ export async function getLibraryGuardianDuplicates(
             HAVING COUNT(*) > 1
             ORDER BY copies DESC, recording_id
             LIMIT ${limit + 1}
+        ), ranked AS (
+            SELECT
+                r.recording_id AS "recordingMbid",
+                r.copies,
+                t.id AS "trackId",
+                t.title,
+                t.duration,
+                t."filePath",
+                a.id AS "albumId",
+                a.title AS "albumTitle",
+                ar.name AS "artistName",
+                CASE WHEN t."acoustidFingerprint" IS NULL THEN NULL
+                    ELSE MD5(t."acoustidFingerprint") END AS "fingerprintDigest",
+                ROW_NUMBER() OVER (PARTITION BY r.recording_id
+                    ORDER BY t."filePath", t.id) AS rownum
+            FROM "Track" t
+            INNER JOIN repeated r ON r.recording_id = t."recordingMbid"
+            INNER JOIN "Album" a ON a.id = t."albumId"
+            INNER JOIN "Artist" ar ON ar.id = a."artistId"
+            WHERE a.location = 'LIBRARY'
+              AND t."missingSince" IS NULL
+              AND t.corrupt = false
         )
-        SELECT
-            r.recording_id AS "recordingMbid",
-            r.copies,
-            t.id AS "trackId",
-            t.title,
-            t.duration,
-            t."filePath",
-            a.id AS "albumId",
-            a.title AS "albumTitle",
-            ar.name AS "artistName",
-            CASE WHEN t."acoustidFingerprint" IS NULL THEN NULL
-                ELSE MD5(t."acoustidFingerprint") END AS "fingerprintDigest"
-        FROM repeated r
-        CROSS JOIN LATERAL (
-            SELECT t2.*
-            FROM "Track" t2
-            INNER JOIN "Album" a2 ON a2.id = t2."albumId"
-            WHERE t2."recordingMbid" = r.recording_id
-              AND a2.location = 'LIBRARY'
-              AND t2."missingSince" IS NULL
-              AND t2.corrupt = false
-            ORDER BY t2."filePath", t2.id
-            LIMIT ${MAX_TRACKS_PER_GROUP}
-        ) t
-        INNER JOIN "Album" a ON a.id = t."albumId"
-        INNER JOIN "Artist" ar ON ar.id = a."artistId"
-        ORDER BY r.copies DESC, r.recording_id, t."filePath", t.id
+        SELECT "recordingMbid", copies, "trackId", title, duration,
+               "filePath", "albumId", "albumTitle", "artistName",
+               "fingerprintDigest"
+        FROM ranked
+        WHERE rownum <= ${MAX_TRACKS_PER_GROUP}
+        ORDER BY copies DESC, "recordingMbid", "filePath", "trackId"
     `;
-
     const { candidates, hasMore } = groupGuardianCandidates(rows, limit);
     return {
         generatedAt: new Date().toISOString(),
