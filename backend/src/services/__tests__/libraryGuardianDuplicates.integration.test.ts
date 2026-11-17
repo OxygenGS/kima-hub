@@ -34,6 +34,7 @@ beforeAll(async () => {
         await prisma.album.create({
             data: {
                 id, artistId, rgMbid: "rg-guardian-" + id,
+                identityKey: "guardian-album-" + id,
                 title: "Album " + id, primaryType: "Album", location: kind,
             },
         });
