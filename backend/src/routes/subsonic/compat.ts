@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../../utils/db";
 import { subsonicError, subsonicOk, SubsonicError } from "../../utils/subsonicResponse";
-import { parseRepeatedQueryParam, wrap } from "./mappers";
+import { canDirectPlayRequestedFormat, parseRepeatedQueryParam, wrap } from "./mappers";
 import {
     createShareLink,
     deleteShareLink,
@@ -261,7 +261,7 @@ compatRouter.all("/getTranscodeDecision.view", wrap(async (req: Request, res: Re
     // What the client asked to be given, if it said.
     const wanted = (req.query.format as string | undefined)?.toLowerCase();
     const source = (track.mime || "").toLowerCase();
-    const canDirectPlay = !wanted || wanted === "raw" || wanted === source;
+    const canDirectPlay = canDirectPlayRequestedFormat(track.mime, wanted);
 
     return subsonicOk(req, res, {
         transcodeDecision: {
