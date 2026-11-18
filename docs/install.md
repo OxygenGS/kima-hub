@@ -1,6 +1,6 @@
 # Install OxygenGS Kima Hub
 
-**Current stable version:** [v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) — published 18 November 2026. This release adds Kima Flow, private Music DNA feedback, on-demand artist/album discovery and an administrator-only Library Guardian review. The v1.26.0 Kima Connect features remain available.
+**Current stable version:** [v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) — published 18 November 2026. This release adds Kima Flow, private Music DNA feedback, on-demand artist/album discovery and an administrator-only Library Guardian review. The Kima Connect features introduced in v1.25.0 remain available.
 
 The published all-in-one image is `ghcr.io/oxygengs/kima-hub:v1.26.0` for **linux/amd64** and **linux/arm64**. The [exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369), [explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [native Docker publisher](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. Publication does not upgrade running installations automatically, and `:latest` is not automatically promoted.
 
