@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioPlayback, useAudioControls, Track as AudioTrack } from "@/lib/audio-context";
 import { cn } from "@/lib/cn";
@@ -139,6 +140,9 @@ export default function PlaylistDetailPage() {
     const [shareCopied, setShareCopied] = useState(false);
     const [showSharePopover, setShowSharePopover] = useState(false);
     const [isDuplicating, setIsDuplicating] = useState(false);
+    const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+    const [duplicateName, setDuplicateName] = useState("");
+    const [duplicateError, setDuplicateError] = useState<string | null>(null);
     const preview = usePreview();
     const listRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -292,23 +296,42 @@ export default function PlaylistDetailPage() {
         }
     };
 
+    const openDuplicateDialog = () => {
+        if (!playlist) return;
+        setDuplicateName(playlist.name.slice(0, 193) + " (copy)");
+        setDuplicateError(null);
+        setShowDuplicateDialog(true);
+    };
+
+    const closeDuplicateDialog = () => {
+        if (!isDuplicating) setShowDuplicateDialog(false);
+    };
+
     const handleDuplicatePlaylist = async () => {
-        if (!playlist || isDuplicating) return;
+        const name = duplicateName.trim();
+        if (!playlist || isDuplicating || !name || name.length > 200) return;
         setIsDuplicating(true);
+        setDuplicateError(null);
         try {
-            const result = await api.duplicatePlaylist(playlistId);
+            const result = await api.duplicatePlaylist(playlistId, name);
             await queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            const href = "/playlist/" + encodeURIComponent(result.id);
             window.dispatchEvent(new CustomEvent("playlist-updated", {
                 detail: { playlistId: result.id },
             }));
+            const skipped = result.skippedTrackCount + result.skippedPendingCount;
             notify.info(t("Playlist copied"), {
-                message: result.skippedTrackCount + result.skippedPendingCount > 0
-                    ? t("Unavailable or pending tracks were skipped")
-                    : undefined,
+                message: String(result.copiedTrackCount) + " " + t("Tracks copied") +
+                    (skipped > 0
+                        ? ". " + t("Unavailable skipped") + ": " + result.skippedTrackCount +
+                            "; " + t("Pending skipped") + ": " + result.skippedPendingCount
+                        : ""),
+                href,
             });
-            router.push(`/playlist/${encodeURIComponent(result.id)}`);
+            setShowDuplicateDialog(false);
+            router.push(href);
         } catch {
-            notify.error(t("Failed to duplicate playlist"));
+            setDuplicateError(t("Failed to duplicate playlist"));
         } finally {
             setIsDuplicating(false);
         }
@@ -1004,7 +1027,7 @@ export default function PlaylistDetailPage() {
 
                     <button
                         type="button"
-                        onClick={() => { void handleDuplicatePlaylist(); }}
+                        onClick={openDuplicateDialog}
                         disabled={isDuplicating}
                         aria-label={t("Duplicate playlist")}
                         title={t("Duplicate playlist")}
@@ -1233,6 +1256,63 @@ export default function PlaylistDetailPage() {
                     )}
                 </div>
             </div>
+
+            <Modal
+                isOpen={showDuplicateDialog}
+                onClose={closeDuplicateDialog}
+                title={t("Duplicate playlist")}
+            >
+                <form
+                    onSubmit={(event) => { event.preventDefault(); void handleDuplicatePlaylist(); }}
+                    className="space-y-4"
+                >
+                    <div>
+                        <label
+                            htmlFor="duplicate-playlist-name"
+                            className="mb-2 block text-sm font-medium text-[var(--text-secondary)]"
+                        >
+                            {t("Name for copied playlist")}
+                        </label>
+                        <input
+                            id="duplicate-playlist-name"
+                            type="text"
+                            autoFocus
+                            required
+                            maxLength={200}
+                            value={duplicateName}
+                            onChange={(event) => {
+                                setDuplicateName(event.target.value);
+                                setDuplicateError(null);
+                            }}
+                            disabled={isDuplicating}
+                            aria-describedby="duplicate-playlist-help"
+                            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                        />
+                    </div>
+                    <p
+                        id="duplicate-playlist-help"
+                        className="text-xs leading-relaxed text-[var(--text-muted)]"
+                    >
+                        {t("Copy includes playable local tracks only. It is private and does not change the original playlist.")}
+                    </p>
+                    {duplicateError && (
+                        <p role="alert" className="text-xs text-danger-light">{duplicateError}</p>
+                    )}
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button type="button" variant="secondary" onClick={closeDuplicateDialog} disabled={isDuplicating}>
+                            {t("Cancel")}
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            isLoading={isDuplicating}
+                            disabled={!duplicateName.trim() || duplicateName.trim().length > 200}
+                        >
+                            {t("Create private copy")}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
 
             <ConfirmDialog
                 isOpen={showDeleteConfirm}
