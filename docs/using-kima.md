@@ -175,3 +175,23 @@ chapter or its playback engine recovers. Ordinary music and podcasts remain
 at 1×, and progress is still saved in the original audiobook timeline.
 This feature is part of an unreleased v1.27.0 development PR, not the
 published v1.26.0 image.
+
+## Find and organize playlists (v1.28.0 development — not yet released)
+
+The **Playlists** workspace has server-side name search and filters for **All
+owners**, **My playlists** and **Shared with me**. Sort by newest, oldest or
+name, and move between pages of 24 playlists. Searches cover your complete
+accessible collection, not just the first 50 returned by the legacy list API.
+Visible and hidden playlist counts are calculated for the current search and
+owner filters; the Hidden view keeps the same controls.
+
+This is read-only browsing: it does not change the music files, playlist
+contents, or visibility. Owners retain their existing edit rights. All search
+queries are limited to 120 characters, pagination is capped at 60 records per
+request, and the backend always applies access permissions before filters.
+Existing playlist integrations continue to use the unchanged
+`GET /api/playlists` response. No database migration is required.
+
+**Unreleased development:** this functionality is not included in the
+published v1.26.0 image. Do not deploy until the separate review/release gates
+are completed.
