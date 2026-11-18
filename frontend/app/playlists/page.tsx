@@ -706,6 +706,55 @@ export default function PlaylistsPage() {
             </PageHeader>
 
             <div className="relative page-shell pb-24 animate-rise">
+                <div className="mb-6 flex flex-wrap items-center gap-3" role="search">
+                    <div className="relative min-w-[200px] flex-1 max-w-lg">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none" />
+                        <input
+                            type="search"
+                            value={searchInput}
+                            onChange={(event) => setSearchInput(event.target.value)}
+                            maxLength={120}
+                            autoComplete="off"
+                            aria-label={t("Search playlists by name")}
+                            placeholder={t("Search playlists by name")}
+                            className="w-full rounded-lg bg-white/5 border border-white/10 py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-[var(--text-muted)] outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                        />
+                    </div>
+                    <label className="sr-only" htmlFor="playlist-owner-filter">{t("Playlist ownership")}</label>
+                    <select
+                        id="playlist-owner-filter"
+                        aria-label={t("Playlist ownership")}
+                        value={ownerFilter}
+                        onChange={(event) => {
+                            setOwnerFilter(event.target.value as typeof ownerFilter);
+                            setPage(1);
+                        }}
+                        className="rounded-lg bg-[#1a1a1a] border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                    >
+                        <option value="all">{t("All owners")}</option>
+                        <option value="mine">{t("My playlists")}</option>
+                        <option value="shared">{t("Shared with me")}</option>
+                    </select>
+                    <label className="sr-only" htmlFor="playlist-sort-order">{t("Sort playlists")}</label>
+                    <select
+                        id="playlist-sort-order"
+                        aria-label={t("Sort playlists")}
+                        value={sortOrder}
+                        onChange={(event) => {
+                            setSortOrder(event.target.value as typeof sortOrder);
+                            setPage(1);
+                        }}
+                        className="rounded-lg bg-[#1a1a1a] border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                    >
+                        <option value="recent">{t("Newest first")}</option>
+                        <option value="oldest">{t("Oldest first")}</option>
+                        <option value="name-asc">{t("Name A to Z")}</option>
+                        <option value="name-desc">{t("Name Z to A")}</option>
+                    </select>
+                </div>
+                <p role="status" aria-live="polite" className="mb-4 text-xs text-[var(--text-muted)]">
+                    {isFetching ? t("Searching playlists") : `${resultCount} ${t(resultCount === 1 ? "playlist" : "playlists")}`}
+                </p>
                 {showHiddenTab && (
                     <div className="mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10">
                         <p className="text-xs text-[var(--text-muted)]">
@@ -735,9 +784,40 @@ export default function PlaylistsPage() {
                                 )
                             )}
                         </div>
+                        {studio && studio.pages > 1 && (
+                            <nav aria-label={t("Playlist pages")} className="mt-8 flex items-center justify-center gap-4">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={page <= 1 || isPlaceholderData}
+                                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    {t("Previous page")}
+                                </Button>
+                                <span className="text-xs tabular-nums text-[var(--text-secondary)]">
+                                    {t("Page")} {page} {t("of")} {studio.pages}
+                                </span>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={page >= studio.pages || isPlaceholderData}
+                                    onClick={() => setPage((current) => current + 1)}
+                                >
+                                    {t("Next page")}
+                                    <ArrowRight className="h-4 w-4" />
+                                </Button>
+                            </nav>
+                        )}
                     </div>
                 ) : (
-                    showHiddenTab ? (
+                    (searchQuery || searchInput.trim() || ownerFilter !== "all" || isError) ? (
+                        <EmptyState
+                            icon={<Search className="w-12 h-12" />}
+                            title={t(isError ? "Could not search playlists" : "No matching playlists")}
+                            description={t(isError ? "Check the connection and try again" : "Try a different search or filter")}
+                        />
+                    ) : showHiddenTab ? (
                         <EmptyState
                             icon={<ListMusic className="w-12 h-12" />}
                             title={t("No hidden playlists")}
