@@ -41,7 +41,7 @@ interface PlaylistItem {
     id: string;
     track: {
         album?: {
-            coverUrl?: string;
+            coverUrl?: string | null;
         };
     };
 }
