@@ -41,6 +41,8 @@ import {
     GripVertical,
     ChevronUp,
     ChevronDown,
+    ImagePlus,
+    ImageOff,
 } from "lucide-react";
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
@@ -139,6 +141,9 @@ export default function PlaylistDetailPage() {
     const [shareCopied, setShareCopied] = useState(false);
     const [showSharePopover, setShowSharePopover] = useState(false);
     const preview = usePreview();
+    const coverFileRef = useRef<HTMLInputElement>(null);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+    const [isRemovingCover, setIsRemovingCover] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLElement | null>(null);
     const [scrollMargin, setScrollMargin] = useState(0);
@@ -274,6 +279,43 @@ export default function PlaylistDetailPage() {
             });
         } catch {
             notify.error(t("Failed to update playlist visibility"));
+        }
+    };
+
+    const handlePlaylistCoverSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = ""; // Selecting the same file again should retry.
+        if (!file || !playlist?.isOwner || isUploadingCover) return;
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+            !file.size || file.size > 3 * 1024 * 1024) {
+            notify.error(t("Playlist cover must be JPEG, PNG or WebP under 3 MB"));
+            return;
+        }
+        setIsUploadingCover(true);
+        try {
+            await api.uploadPlaylistCover(playlistId, file);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            notify.info(t("Playlist cover updated"));
+        } catch {
+            notify.error(t("Failed to update playlist cover"));
+        } finally {
+            setIsUploadingCover(false);
+        }
+    };
+
+    const handleRemovePlaylistCover = async () => {
+        if (!playlist?.isOwner || isRemovingCover) return;
+        setIsRemovingCover(true);
+        try {
+            await api.removePlaylistCover(playlistId);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            notify.info(t("Playlist cover removed"));
+        } catch {
+            notify.error(t("Failed to remove playlist cover"));
+        } finally {
+            setIsRemovingCover(false);
         }
     };
 
@@ -795,7 +837,11 @@ export default function PlaylistDetailPage() {
         );
     }
 
-    const heroImage = coverUrls.length > 0 ? api.getCoverArtUrl(coverUrls[0] as string, 500) : null;
+    const customCoverUrl = playlist.coverUpdatedAt
+        ? api.getPlaylistCoverUrl(playlistId, playlist.coverUpdatedAt)
+        : null;
+    const heroImage = customCoverUrl || (coverUrls.length > 0
+        ? api.getCoverArtUrl(coverUrls[0] as string, 500) : null);
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
@@ -835,7 +881,15 @@ export default function PlaylistDetailPage() {
 
                         <div className="flex items-end gap-6">
                             <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-[var(--bg-primary)] rounded-lg shrink-0 overflow-hidden relative border-2 border-white/10">
-                                {coverUrls.length === 1 ? (
+                                {customCoverUrl ? (
+                                    <CachedImage
+                                        src={customCoverUrl}
+                                        alt={playlist.name}
+                                        fill
+                                        className="object-cover"
+                                        sizes="192px"
+                                    />
+                                ) : coverUrls.length === 1 ? (
                                     <CachedImage
                                         src={api.getCoverArtUrl(coverUrls[0], 400)}
                                         alt=""
@@ -864,6 +918,31 @@ export default function PlaylistDetailPage() {
                                     <div className="w-full h-full flex items-center justify-center">
                                         <ListMusic className="w-16 h-16 text-white/10" />
                                     </div>
+                                )}
+                                {playlist.isOwner && (
+                                    <>
+                                        <input
+                                            ref={coverFileRef}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            className="sr-only"
+                                            aria-label={t("Change playlist cover")}
+                                            onChange={(event) => { void handlePlaylistCoverSelected(event); }}
+                                            disabled={isUploadingCover}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => coverFileRef.current?.click()}
+                                            disabled={isUploadingCover}
+                                            title={t("Change playlist cover")}
+                                            aria-label={t("Change playlist cover")}
+                                            className="absolute bottom-2 right-2 z-10 h-10 w-10 rounded-lg border border-white/20 bg-black/80 flex items-center justify-center text-white hover:bg-black/95 focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50"
+                                        >
+                                            {isUploadingCover
+                                                ? <GradientSpinner size="sm" />
+                                                : <ImagePlus className="h-5 w-5" />}
+                                        </button>
+                                    </>
                                 )}
                             </div>
 
@@ -978,6 +1057,21 @@ export default function PlaylistDetailPage() {
                     )}
 
                     <div className="flex-1" />
+
+                    {playlist.isOwner && playlist.coverUpdatedAt && (
+                        <button
+                            type="button"
+                            onClick={() => { void handleRemovePlaylistCover(); }}
+                            disabled={isRemovingCover}
+                            title={t("Remove playlist cover")}
+                            aria-label={t("Remove playlist cover")}
+                            className="h-10 min-w-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50"
+                        >
+                            {isRemovingCover
+                                ? <GradientSpinner size="sm" />
+                                : <ImageOff className="h-5 w-5" />}
+                        </button>
+                    )}
 
                     {playlist.isOwner && (
                         <div className="relative" data-share-popover>
