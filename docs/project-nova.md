@@ -1,7 +1,6 @@
 # Project NOVA — Kima Flow
 
-**Status: phases 1–6 are merged; v1.26.0 is an unpublished release candidate,
-not part of published v1.25.0.** Project NOVA is a
+**Status: phases 1–6 shipped in published v1.26.0 on 18 November 2026.** Project NOVA is a
 general-purpose improvement to the independent Kima Hub fork. It is designed
 for any self-hosted deployment, with no special LAN, NAS, mount or provider.
 
@@ -200,8 +199,7 @@ and requesting artist matches alone never fetch album release groups.
 - EN/NL UI, opt-in fetch, abort and account/seed result isolation; no schema
   migration, background job, data writes, port or new external provider.
 
-**Status:** phase 6 is merged into main but remains unpublished pending
-v1.26.0 release checks and explicit approval.
+**Status:** phase 6 is included in published v1.26.0 with on-demand lookups.
 
 ## Planned phases
 
@@ -220,12 +218,12 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-The v1.26.0 release-candidate PR does not create or publish a Docker tag or
-update a running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
+v1.26.0 is published for AMD64 and ARM64; publication alone does not update
+a running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
 remain unchanged. Music DNA adds one database migration; protect the full
 `/data` volume with a separately verified cold backup before upgrading.
-Require backend/frontend tests, EN/NL UI, database upgrade/restore,
-privacy/security checks and native AMD64/ARM64 AIO builds before merging
-this candidate. A separate exact-main native preflight and explicit security
-approval are required before publishing a stable tag or image.
+The v1.26.0 source checks and exact-main native AMD64/ARM64 preflight
+succeeded, followed by reviewed stable publication. Before a live upgrade,
+preserve existing mounts and verify a separately restorable cold `/data`
+backup. Review residual vulnerabilities in the image-security report.

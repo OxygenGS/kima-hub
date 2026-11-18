@@ -17,7 +17,7 @@ The home page shows the sections that have something to show:
 - **Popular Artists** (from ListenBrainz) and **Featured Playlists** (from Deezer).
 - **Popular Podcasts** and **Audiobooks.**
 
-## Kima Flow (merged in v1.26.0 candidate; not in stable v1.25.0)
+## Kima Flow (v1.26.0)
 
 The **Flow** navigation item offers a simple way to listen
 without learning the 3D Vibe controls. It reuses Vibe audio matching but presents
@@ -31,21 +31,21 @@ the song going and changes only the upcoming queue. The preview does not
 download, relocate or change any music. Click **Explore the Vibe map** to use
 the full 3D view.
 
-Phases 1 and 2 were merged into main (#263–#264). **Continuous Flow**: while a Flow session is playing, Kima prepares
+**Continuous Flow (v1.26.0):** while a Flow session is playing, Kima prepares
 more eligible library songs as the current queue nears its end. A rolling
 queue retains the most recent previously heard songs. Editing the queue
 manually or selecting a different mode automatically stops continuation
 without pausing music. Choose **Stop automatic Flow** on the Flow or Queue
 screen to stop adding new songs while keeping what is already queued.
 
-**Music DNA (phase 3 merged, unreleased):** click **More like this** or
+**Music DNA (v1.26.0):** click **More like this** or
 **Less like this** next to a proposed Flow song. These personal preferences
 influence future Flow suggestions and are independent from global Favorites.
 Tap a selected preference again to undo it. Each signed-in Kima account
 has its own saved signals, and no external service receives these choices.
 The current audio session and manually edited queue are never interrupted.
 
-**Discovery Radar (phase 4 merged, unreleased):** while on Flow, click
+**Discovery Radar (v1.26.0):** while on Flow, click
 **Find new artists** under **Beyond your library**. This on-demand search
 compares the current playable song's artist with public similar-artist
 sources. Suggestions exclude artists with playable tracks already in your
@@ -54,7 +54,7 @@ discography, where album requests are optional and governed by the
 existing user's music permissions. Radar never starts a Lidarr or Soulseek
 download on its own. It never changes the current playback or queue.
 
-**Album Spotlight (phase 6 merged, unreleased):** for a MusicBrainz-identified
+**Album Spotlight (v1.26.0):** for a MusicBrainz-identified
 new artist, choose **Preview albums** within its Discovery Radar card to see
 up to three album/EP entries. These are unranked MusicBrainz source results,
 not locally playable songs or guaranteed missing releases. Choose **Album
@@ -68,14 +68,14 @@ and the library must contain suitable songs; a small, fully used library
 ends naturally.
 
 **Upgrade safety:** Music DNA introduces a new database table. Before moving
-from stable v1.25.0 to a published v1.26.0 image, stop all `/data` writers,
+from an earlier version to v1.26.0, stop all `/data` writers,
 make a complete cold backup of the AIO volume, and verify that it restores
 into a separate volume. Reverting only the image does not undo a migration.
 See [safe AIO updates](safe-aio-updates.md).
 
-[Project NOVA design](project-nova.md).
+[Flow technical documentation](project-nova.md).
 
-## Library Guardian (phase 5 merged, unreleased)
+## Library Guardian (v1.26.0)
 
 Administrators can open **Settings → Library Doctor → Inspect possible
 duplicates**. The new on-demand report groups files sharing the same
