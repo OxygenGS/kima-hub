@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { LanguageProvider } from "@/lib/i18n/language-context";
+import { UiPreferencesBridge } from "@/components/providers/UiPreferencesBridge";
 import { BrandingProvider } from "@/lib/branding-context";
 import { getServerBranding } from "@/lib/branding-server";
 import { FeaturesProvider } from "@/lib/features-context";
@@ -72,6 +73,7 @@ export default function RootLayout({
         <html lang="en">
             <body className={`${montserrat.variable} antialiased`}>
                 <LanguageProvider>
+                <UiPreferencesBridge />
                 <GlobalErrorBoundary>
                     <BrandingProvider>
                     <ServiceWorkerRegistration />

@@ -50,6 +50,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
 export const SETTINGS_ITEMS: SettingsItem[] = [
     { id: "account", label: "Account", group: "personal", icon: UserRound },
     { id: "language", label: "Language", group: "personal", icon: Languages },
+    { id: "appearance", label: "Appearance", group: "appearance", icon: Brush },
     { id: "subsonic", label: "Native Apps", group: "personal", icon: Headphones },
     { id: "playback", label: "Playback", group: "personal", icon: MonitorPlay },
     { id: "scrobbling", label: "Scrobbling", group: "personal", icon: Radio },

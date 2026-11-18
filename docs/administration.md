@@ -62,3 +62,12 @@ Keep the copy of `/data/secrets` with the database. Without the encryption key, 
 ## Updating
 
 See [install.md](install.md#updating-an-existing-installation) and [safe updates](safe-aio-updates.md) for the current published version and rollback requirements.
+
+
+## Redis startup after a full disk (v1.27 development)
+
+A login failure after an out-of-space event can mean the embedded Redis AOF
+cannot be loaded. Kima's AIO startup checks now print a read-only diagnosis
+and a documented recovery path, without truncating Redis queues or deleting
+cache data. Stop writers and verify a full, independently restorable cold
+`/data` backup before attempting recovery. See [Redis recovery](redis-recovery.md).

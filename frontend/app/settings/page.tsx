@@ -17,6 +17,7 @@ import { SETTINGS_ITEMS, resolveSettingsHash } from "@/features/settings/compone
 
 import { AccountSection } from "@/features/settings/components/sections/AccountSection";
 import { LanguageSection } from "@/features/settings/components/sections/LanguageSection";
+import { AppearanceSection } from "@/features/settings/components/sections/AppearanceSection";
 import { BrandingSection } from "@/features/settings/components/sections/BrandingSection";
 import { SubsonicSection } from "@/features/settings/components/sections/SubsonicSection";
 import { PlaybackSection } from "@/features/settings/components/sections/PlaybackSection";
@@ -226,6 +227,7 @@ export default function SettingsPage() {
             <div className="min-w-0">
                 <div hidden={activeSection !== "account"}><AccountSection /></div>
                 <div hidden={activeSection !== "language"}><LanguageSection /></div>
+                <div hidden={activeSection !== "appearance"}><AppearanceSection /></div>
                 {isAdmin && <div hidden={activeSection !== "branding"}><BrandingSection /></div>}
 
                 <div hidden={activeSection !== "subsonic"}><SubsonicSection /></div>

@@ -112,3 +112,57 @@ describe('compat router answers even when a dependency fails', () => {
         expect(res.text).not.toContain('error');
     });
 });
+
+
+describe('OpenSubsonic client format names match stored source audio types', () => {
+    const app = makeApp();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it.each([
+        ['audio/mpeg', 'mp3', true],
+        ['MPEG 1 Layer 3', 'MP3', true],
+        ['audio/flac', 'flac', true],
+        ['audio/x-flac', 'FLAC', true],
+        ['FLAC', 'audio/flac', true],
+        ['audio/mp4', 'm4a', true],
+        ['audio/aac', 'aac', true],
+        ['audio/ogg', 'ogg', true],
+        ['audio/mpeg', 'raw', true],
+        ['audio/flac', 'mp3', false],
+        ['application/octet-stream', 'mp3', false],
+    ])('%s requested as %s is direct playable: %s', async (mime, format, expected) => {
+        (prisma.track.findUnique as jest.Mock).mockResolvedValue({ mime });
+        const res = await request(app)
+            .get('/rest/getTranscodeDecision.view')
+            .query({ mediaId: 'song-1', mediaType: 'music', format, f: 'json' });
+        const envelope = res.body['subsonic-response'];
+        expect(res.status).toBe(200);
+        expect(envelope.status).toBe('ok');
+        expect(envelope.transcodeDecision.canDirectPlay).toBe(expected);
+        expect(envelope.transcodeDecision.canTranscode).toBe(true);
+        expect(envelope.transcodeDecision.transcodeParams)
+            .toBe(expected ? '' : 'format=' + format.toLowerCase());
+    });
+
+    it('returns a protocol error for an unknown song rather than claiming playback', async () => {
+        (prisma.track.findUnique as jest.Mock).mockResolvedValue(null);
+        const res = await request(app).get('/rest/getTranscodeDecision.view')
+            .query({ mediaId: 'missing', mediaType: 'music', format: 'mp3', f: 'json' });
+        expect(res.status).toBe(200);
+        expect(res.body['subsonic-response'].status).toBe('failed');
+        expect(res.body['subsonic-response'].error.code).toBe(70);
+    });
+
+    it('handles codec aliasing in the XML response as well as JSON', async () => {
+        (prisma.track.findUnique as jest.Mock).mockResolvedValue({ mime: 'audio/mpeg' });
+        const res = await request(app).get('/rest/getTranscodeDecision.view')
+            .query({ mediaId: 'song-1', mediaType: 'music', format: 'mp3' });
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('xml');
+        expect(res.text).toContain('<canDirectPlay>true</canDirectPlay>');
+        expect(res.text).toContain('status="ok"');
+    });
+});

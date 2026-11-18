@@ -95,3 +95,12 @@ Review docker compose config to confirm that the /data mount resolves to the res
 GitHub CI successfully (commit 7129428) took a cold full-volume snapshot of a **synthetic pre-fork PostgreSQL** /data directory, upgraded a copy to the new AIO container, then restored the untouched snapshot into an independent PostgreSQL 16 container. Accounts, settings, library, playback state and an ordinary file outside the database survived the restore.
 
 This is not yet proof of rollback using the *original monolithic Kima AIO image*, historical encrypted secrets, a real library or external services. Before a production upgrade, rehearse the complete old-image → candidate-image and independent old-image rollback process on disposable copies.
+
+
+## Login failure after disk exhaustion
+
+When Redis stops loading its append-only file, **do not** delete `/data/redis`
+or use a broad Redis flush merely to make login succeed. PostgreSQL may still
+contain pending work, and overwriting Redis can create inconsistent import
+and download queues. Read [Redis AOF diagnosis and recovery](redis-recovery.md)
+first; all recovery requires an independently verified full `/data` backup.

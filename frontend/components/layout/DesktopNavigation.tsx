@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BarChart3, BookOpen, CalendarDays, Compass, Download, Home, Library, ListMusic, Podcast, Radio, Search, Sparkles } from "lucide-react";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { useUiPreferences } from "@/lib/ui-preferences";
 import styles from "./DesktopNavigation.module.css";
 
 const navigation = [
@@ -38,6 +39,7 @@ export function DesktopNavigation({
     audiobookshelfEnabled: boolean;
 }) {
     const { t, locale } = useLanguage();
+    const { hideBrowse } = useUiPreferences();
     const groups = [
         { id: "library", label: locale === "nl" ? "Jouw muziek" : "Your music" },
         { id: "explore", label: locale === "nl" ? "Verkennen" : "Explore" },
@@ -49,7 +51,8 @@ export function DesktopNavigation({
                 <div className={styles.group} key={group.id}>
                     <p className={styles.label}>{group.label}</p>
                     {navigation.filter((item) => item.group === group.id &&
-                        (item.href !== "/audiobooks" || audiobookshelfEnabled)).map(({ label, href, Icon }) => (
+                        (item.href !== "/audiobooks" || audiobookshelfEnabled) &&
+                        (item.href !== "/browse/playlists" || !hideBrowse)).map(({ label, href, Icon }) => (
                         <Link
                             key={href}
                             href={href}
