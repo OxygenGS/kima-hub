@@ -565,7 +565,7 @@ export default function PlaylistsPage() {
     });
     const visibleCount = studio?.counts.visible ?? 0;
     const hiddenCount = studio?.counts.hidden ?? 0;
-    const displayedPlaylists = studio?.items ?? [];
+    const displayedPlaylists = isPlaceholderData ? [] : (studio?.items ?? []);
     const resultCount = studio?.total ?? 0;
 
     useEffect(() => {
@@ -634,8 +634,8 @@ export default function PlaylistsPage() {
         return <LoadingScreen />;
     }
 
-    const emptyStateHasForms = visibleCount === 0 && !showHiddenTab &&
-        !searchInput.trim() && ownerFilter === "all" && !isPlaceholderData;
+    const emptyStateHasForms = Boolean(studio) && visibleCount === 0 && !showHiddenTab &&
+        !searchInput.trim() && ownerFilter === "all" && !isPlaceholderData && !isError;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
@@ -763,7 +763,11 @@ export default function PlaylistsPage() {
                     </div>
                 )}
 
-                {displayedPlaylists.length > 0 ? (
+                {isPlaceholderData ? (
+                    <div aria-live="polite" className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-sm text-[var(--text-muted)]">
+                        {t("Searching playlists")}
+                    </div>
+                ) : displayedPlaylists.length > 0 ? (
                     <div>
                         <SectionHeader type="track" title={t(showHiddenTab ? "Hidden" : "All Playlists")} count={resultCount} />
 
