@@ -105,7 +105,7 @@ function PlaylistCard({
             className={cn(isHiddenView && "opacity-60 hover:opacity-100")}
             action={{ icon: Play, label: t("Play"), onClick: () => onPlay(playlist.id) }}
             corner={
-                isShared && (
+                (isHiddenView || isShared) && (
                     <button
                         type="button"
                         onClick={handleToggleHide}
