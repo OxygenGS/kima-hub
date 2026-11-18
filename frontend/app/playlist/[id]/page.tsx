@@ -138,6 +138,7 @@ export default function PlaylistDetailPage() {
     const [shareLoading, setShareLoading] = useState(false);
     const [shareCopied, setShareCopied] = useState(false);
     const [showSharePopover, setShowSharePopover] = useState(false);
+    const [isDuplicating, setIsDuplicating] = useState(false);
     const preview = usePreview();
     const listRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -288,6 +289,28 @@ export default function PlaylistDetailPage() {
         } catch (error) {
             console.error("Failed to remove track:", error);
             notify.error(t("Failed to remove track"));
+        }
+    };
+
+    const handleDuplicatePlaylist = async () => {
+        if (!playlist || isDuplicating) return;
+        setIsDuplicating(true);
+        try {
+            const result = await api.duplicatePlaylist(playlistId);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            window.dispatchEvent(new CustomEvent("playlist-updated", {
+                detail: { playlistId: result.id },
+            }));
+            notify.success(t("Playlist copied"), {
+                message: result.skippedTrackCount + result.skippedPendingCount > 0
+                    ? t("Unavailable or pending tracks were skipped")
+                    : undefined,
+            });
+            router.push(`/playlist/${encodeURIComponent(result.id)}`);
+        } catch {
+            notify.error(t("Failed to duplicate playlist"));
+        } finally {
+            setIsDuplicating(false);
         }
     };
 
@@ -978,6 +1001,17 @@ export default function PlaylistDetailPage() {
                     )}
 
                     <div className="flex-1" />
+
+                    <button
+                        type="button"
+                        onClick={() => { void handleDuplicatePlaylist(); }}
+                        disabled={isDuplicating}
+                        aria-label={t("Duplicate playlist")}
+                        title={t("Duplicate playlist")}
+                        className="h-10 min-w-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
+                    >
+                        {isDuplicating ? <GradientSpinner size="sm" /> : <Copy className="w-5 h-5" />}
+                    </button>
 
                     {playlist.isOwner && (
                         <div className="relative" data-share-popover>
