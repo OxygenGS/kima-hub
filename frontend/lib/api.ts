@@ -1131,6 +1131,36 @@ class ApiClient {
         return this.request<ApiData[]>("/playlists");
     }
 
+    /** Browse the entire authorized playlist collection with server-side paging. */
+    async getPlaylistStudio(params: {
+        q: string;
+        scope: "visible" | "hidden";
+        owner: "all" | "mine" | "shared";
+        sort: "recent" | "oldest" | "name-asc" | "name-desc";
+        page: number;
+        limit: number;
+    }): Promise<{
+        items: Array<{
+            id: string; name: string; isPublic: boolean; isOwner: boolean;
+            isHidden: boolean; trackCount: number;
+            createdAt: string; updatedAt: string;
+            user: { username: string };
+            items: Array<{ id: string; track: { album: { coverUrl: string | null } } }>;
+        }>;
+        page: number; limit: number; pages: number; total: number;
+        counts: { visible: number; hidden: number };
+    }> {
+        const query = new URLSearchParams({
+            q: params.q,
+            scope: params.scope,
+            owner: params.owner,
+            sort: params.sort,
+            page: String(params.page),
+            limit: String(params.limit),
+        });
+        return this.request(`/playlists/studio?${query.toString()}`);
+    }
+
     async getPlaylist(id: string) {
         return this.request<ApiData>(`/playlists/${id}`);
     }
