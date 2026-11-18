@@ -176,6 +176,43 @@ at 1×, and progress is still saved in the original audiobook timeline.
 This feature is part of an unreleased v1.27.0 development PR, not the
 published v1.26.0 image.
 
+## Duplicate a playlist (v1.28.0 development — not yet released)
+
+Open one of your playlists or a public playlist shared by another Kima user,
+then select **Duplicate playlist**. Review or edit the proposed copy name (up
+to 200 characters) in the dialog, then choose **Create private copy**. A new
+playlist is created under your account with **private visibility**,
+independently of the original. The copy opens automatically; an account
+notification records how many tracks were copied or skipped.
+
+- Copies up to 2,000 currently playable library tracks, retaining their order.
+- Unavailable, corrupt, missing or discovery-only tracks and all pending
+  download placeholders are not copied. The result reports skipped items.
+- No download, import, scanner or external service request is started.
+- The original playlist, ownership, sharing and media files are unchanged.
+- Large playlists above the limit are rejected before creating a partial copy.
+
+This is unreleased v1.28.0 development; the stable image remains v1.26.0
+until the separately approved release process is completed.
+
+## Custom playlist cover art (v1.28.0 development — not yet released)
+
+Open a playlist you own and select the image-upload icon on its cover to
+choose a **JPEG, PNG or WebP**, up to **3 MB**. Kima checks the decoded raster,
+rejects invalid or oversized images, strips metadata and stores a square WebP
+copy at 512 × 512 pixels. Other accounts can view the artwork only when they
+already have access to the playlist. They cannot replace or delete your image.
+
+Select **Remove custom playlist cover** to restore the automatic album-art
+mosaic. Removing artwork does not delete or alter the playlist or its tracks.
+Deleting the playlist permanently removes its associated artwork.
+
+The cover is stored as an isolated table in Kima's database, not in the
+mounted music directory. The migration is additive but requires a backup of
+the stopped /data volume and a verified restore before production upgrades.
+There is no new external dependency or change to media mounts. This feature is
+**unreleased v1.28.0 development**, not part of published stable v1.26.0.
+
 ## Find and organize playlists (v1.28.0 development — not yet released)
 
 The **Playlists** workspace has server-side name search and filters for **All
