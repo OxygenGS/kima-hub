@@ -8,73 +8,42 @@
 
 A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
 
-[![Stable release](https://img.shields.io/badge/stable-v1.25.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0)
+[![Stable release](https://img.shields.io/badge/stable-v1.26.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![Platforms](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-41434f?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0-555?style=flat-square)](LICENSE)
 
-**[What's new](#whats-new-in-v1250--kima-connect) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
+**[What's new](#whats-new-in-v1260) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
 
 </div>
 
 ---
 
-## What's new in v1.25.0 — Kima Connect
+## What's new in v1.26.0
 
-**Your music, between your Kima browsers.** [v1.25.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) brings Project ONE / **Kima Connect** to the stable OxygenGS fork. Control an active Kima browser from another signed-in browser on the **same account**, or offer your current music queue to it.
+**A simpler way to listen, discover and manage your own music.** [Kima Hub v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) was released on **18 November 2026** for Linux **AMD64 and ARM64**.
 
-| Find your players | Transfer with consent | Clear command feedback |
-| :--- | :--- | :--- |
-| See up to **12 recently active browser tabs** (desktop, mobile, tablet or TV). Devices are private to your account. | Send a **local-library queue of up to 50 tracks** and the current play position. The receiver must choose **Play here**. | Send **Pause, Previous or Next** and see **queued**, **handled**, **ignored** or **unconfirmed**, instead of assuming an action worked. |
-| No separate pairing service or new port. | The source pauses only after confirmed receiver playback and a source continuity check. | Existing authenticated SSE wake hints improve responsiveness; Redis polling remains the fallback. |
+| New in v1.26.0 | What it does |
+| :--- | :--- |
+| **Kima Flow** | Choose **My favorites**, **A bit of both** or **Surprise me**; adjust Energy and Discovery and preview a mix of playable songs from your own library. Playback starts only when you click **Start Flow**. |
+| **Continuous Flow** | Keep a Flow session going by adding local songs as the queue runs low. Editing the queue manually or changing listening mode stops automatic continuation without interrupting playback. |
+| **Music DNA** | Give songs **More like this** or **Less like this** feedback. Private, account-specific preferences influence future Flow mixes and can be undone. |
+| **Discovery Radar** | Click **Find new artists** to discover similar artists outside your playable library. No external discovery search runs until you request it. |
+| **Album Spotlight** | Click **Preview albums** for a discovered artist to see up to three MusicBrainz album/EP entries. Continue on the normal album detail page. |
+| **Library Guardian** | Administrators can inspect **possible duplicate recordings** using indexed recording IDs, durations and acoustic evidence—without deleting or modifying files. |
 
-**Playback handoff:** Start playing a track, open Kima Connect from the player, choose another active Kima browser, then confirm **Play here** on that browser. A failed or expired transfer leaves the original player running.
+**Start listening:** Open **Flow** from the navigation, choose a style and preview the suggested tracks. The original **3D Vibe Map** remains available for advanced exploration. Continuous Flow needs the originating browser session to remain open; it is not server-side background playback.
 
-**Scope:** Kima Connect works between logged-in *Kima web players*. It does not remotely control Symfonium, Feishin or arbitrary smart speakers, does not bypass browser autoplay requirements, and does not provide synchronized multiroom or guaranteed gapless cross-device audio. A browser reporting **handled** does not guarantee audible output.
+**Safe by design:** Discovery Radar and Album Spotlight never start downloads, and Library Guardian never removes music automatically. Music DNA introduces an additive database migration. Before upgrading an existing installation, back up the complete **stopped `/data` volume**, verify a separate restore, and preserve Compose/Dockge project identity and media mounts.
 
-[Full v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect technical guide](docs/project-one.md) · [Changelog](CHANGELOG.md)
+[Full v1.26.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) · [Using Flow](docs/using-kima.md#kima-flow-v1260) · [Library Doctor](docs/library-doctor.md) · [Safe upgrade and rollback](docs/safe-aio-updates.md)
 
-## Project NOVA — v1.26.0 release candidate
+### Previously in v1.25.0 — Kima Connect
 
-**Unpublished release candidate:** [v1.26.0](https://github.com/OxygenGS/kima-hub/pull/269) — six NOVA stages are merged into source, but no v1.26.0 container is published. Stable remains **v1.25.0**.
+Kima Connect introduced private browser-player discovery, remote Pause / Previous / Next and **consent-based queue handoff** between Kima browsers signed into the same account. The receiver must choose **Play here**. This does not control third-party OpenSubsonic apps or provide synchronized multiroom playback.
 
-Project NOVA starts with **Kima Flow**, a simpler listening interface built on the existing
-Vibe music-analysis engine. Choose **My favorites**, **A bit of both**, or
-**Surprise me**, then adjust energy and discovery. Flow prepares a
-personalized, playable queue using only indexed tracks in your local library.
-
-**Phases 1–6 (#263–#268 merged into main, not yet published):**
-Guided Flow starts a locally playable mix; Continuous Flow extends the
-queue without interrupting a song or overriding manual edits. Music DNA
-stores reversible, private **More like this / Less like this** preferences.
-Discovery Radar finds externally suggested similar artists missing from
-your playable library **only after you request it**, and opens their normal
-artist/discography page. No automatic downloads.
-
-**Phase 5: Library Guardian** extends the existing admin
-Library Doctor with an optional **potential duplicate recordings** review.
-Using indexed MusicBrainz recording IDs, track duration and acoustic
-fingerprint evidence, it shows a limited list of pairs/groups for manual
-comparison, with direct album links. It **never deletes, moves, merges,
-renames or retags audio files**, and doesn't claim that repeated recordings
-are unwanted copies. See [Library Doctor](docs/library-doctor.md).
-
-**Phase 6: Album Spotlight** adds an explicit **Preview albums**
-button to Discovery Radar artist cards when MusicBrainz identifies the artist.
-It shows up to three unranked, source-backed album/EP catalog entries and
-links to existing album detail pages. Nothing is fetched until clicked;
-there are no automatic requests, downloads, scans or playback changes.
-
-**Upgrade safety:** Music DNA adds one Prisma table. An existing installation
-must have a complete cold, independently restorable `/data` backup before
-updating. Source CI is not a published image; publication also requires native
-AMD64/ARM64 security preflight and explicit approval.
-
-Flow still preserves the original 3D Vibe map and requires its originating
-browser for automatic queue continuation.
-
-[Project NOVA roadmap](docs/project-nova.md)
+[v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect guide](docs/project-one.md)
 
 ## The experience
 
@@ -119,7 +88,7 @@ One music space for your favorite albums, artists, playlists and discoveries. Bu
 
 ### Find your next favorite
 
-Go beyond artist and album lists. **Vibe Map** places analyzed tracks in an interactive music space; **Mood Mixer**, radio and discovery views help you build something new from what you already have.
+Start with **Kima Flow** for a guided local-library mix, or open **Vibe Map** for a 3D view of audio similarity. **Mood Mixer**, radio and discovery views offer more ways to explore your collection.
 
 <table>
 <tr>
@@ -151,6 +120,8 @@ Responsive desktop and mobile layouts, installable browser-based PWA support and
 | :--- | :--- |
 | **Music playback** — queue, shuffle, repeat, lyrics, playlists, radio and sleep timer. | **Local music library** — keep your own files and use your own storage paths. |
 | **Personal discovery** — Mood Mixer, Vibe Map, Similar, Song Path, Blend and listening stats. | **Library Doctor** — inspect missing tracks, album associations and library health. |
+| **Kima Flow** — guided, explainable local-library mixes with optional continuous queue refill. | **Music DNA** — private, reversible per-track taste feedback. |
+| **Discovery Radar & Album Spotlight** — opt-in discovery of similar artists and source-backed albums. | **Library Guardian** — admin-only, read-only evidence for possible duplicate recordings. |
 | **Playlists** — make, reorder, share and import from supported links or M3U. | **Artwork tools** — repair missing artist imagery and album covers without overwriting curated artwork. |
 | **Podcasts and audiobooks** — podcast subscriptions and optional Audiobookshelf playback. | **Downloads** — per-user Kima job history with optional Lidarr and Soulseek workflows. |
 | **Modern music clients** — compatible OpenSubsonic players, including Symfonium and Feishin. | **Server controls** — separate users and roles, 2FA, branding, language and audio quality settings. |
@@ -173,15 +144,13 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 ## Quick start
 
-**Current stable version:** [v1.25.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · **Image:** `ghcr.io/oxygengs/kima-hub:v1.25.0` · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable release:** [v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) (18 November 2026) · **Platforms:** `linux/amd64` and `linux/arm64`.
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.25.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.26.0`
 
-Kima Connect is included in this stable image. Existing Lidarr, Soulseek, Settings Studio, library artwork and modern OpenSubsonic integrations remain available. [What changed](#whats-new-in-v1250--kima-connect).
+The all-in-one image includes the web interface, API, PostgreSQL, Redis and audio-analysis services. Your music stays in a host-mounted directory; persistent application data lives in `/data`. Lidarr and Soulseek are optional integrations.
 
-The all-in-one image bundles the frontend, API, PostgreSQL, Redis and audio-analysis services. All you need is Docker, a real music directory and a persistent `/data` volume.
-
-### Docker — new installations only
+### Docker — new installations
 
 ```bash
 docker run -d \
@@ -190,32 +159,32 @@ docker run -d \
   -p 3030:3030 \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.25.0
+  ghcr.io/oxygengs/kima-hub:v1.26.0
 ```
 
-Replace `/absolute/path/to/music` with an **existing** host directory holding your music. Open **http://localhost:3030** from the Docker host and finish the first-run setup.
+Replace `/absolute/path/to/music` with the **existing, correctly mounted** host directory containing your music. Open `http://localhost:3030` on the Docker host to complete setup. Restrict external access unless appropriate security controls are in place.
 
-### Docker Compose / Dockge — new installations only
+### Docker Compose / Dockge — new installations
 
-The [production Compose file](docker-compose.prod.yml) defaults to the published, versioned v1.25.0 image and requires `MUSIC_PATH` to point to an existing music directory. Set `VERSION` explicitly to the version you have reviewed; do not replace an existing Dockge/Compose stack with this example.
+The [production Compose example](docker-compose.prod.yml) defaults to the published **v1.26.0** image when `VERSION` is unset, requires `MUSIC_PATH` and does not silently create a missing host music directory.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.25.0 \
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.26.0 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
-The [optional companion stack](docker-compose.server.yml) includes additional media services if you choose to run them. [Full installation guide](docs/install.md)
+The [optional companion stack](docker-compose.server.yml) includes additional download-management services. [Full installation instructions](docs/install.md)
 
 > [!IMPORTANT]
-> **Already running Kima? Do not replace your existing Compose/Dockge stack with these new-install examples.** Preserve the original project name, complete `/data` volume, and existing `/music` and `/downloads` mounts. Back up the **stopped** `/data` volume, verify a separate restore and only then change a pinned image version. Database migrations may make a rollback without the original data backup impossible. See [safe updates and recovery](docs/safe-aio-updates.md).
+> **Already running Kima? Do not replace your existing stack with these new-install examples.** Retain your Compose/Dockge project name, pinned image, complete `/data` volume, and existing `/music` and `/downloads` mounts. Before upgrading, stop data writers and verify a **separately restorable cold backup** of `/data`. v1.26.0 adds a Music DNA database table; reverting only the image does not reverse a database migration. See [safe updates and recovery](docs/safe-aio-updates.md).
 
 ## Security and release quality
 
-- [v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) and [published AMD64/ARM64 images](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307) passed the configured release gates. Publication does **not** automatically change any running installation or promote the `:latest` alias.
-- The v1.25.0 native preflight recorded **393 HIGH / 8 CRITICAL** advisories (AMD64) and **392 HIGH / 8 CRITICAL** (ARM64), with **no scanner-listed fixes**. The additional FFmpeg findings compared with v1.24.1 still require risk-aware operation; a green build is not a clean security scan.
-- Keep Kima behind appropriate network access controls, maintain host and proxy updates, and protect account credentials. Before upgrades, verify a **separately restorable, complete cold backup** of `/data`. Do not change existing media mounts or Compose project identity casually.
+- **v1.26.0 is published.** The [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. Publication does **not** automatically upgrade running installations or promote the `:latest` alias.
+- **Residual vulnerabilities remain.** The v1.26.0 Trivy preflight reported **393 HIGH / 8 CRITICAL** findings on AMD64 and **392 HIGH / 8 CRITICAL** on ARM64, with no scanner-listed fixed versions. A passing build or publication approval does not establish that affected code is unreachable or safe.
+- Restrict unnecessary internet exposure, update your host and reverse proxy, protect credentials and verify a **separately restorable cold `/data` backup** before upgrading.
 
-[Security policy](SECURITY.md) · [Image-security evidence](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
+[Security policy](SECURITY.md) · [Image-security report](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
 
 ## Documentation
 
