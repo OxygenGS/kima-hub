@@ -82,6 +82,27 @@ describe("GET /playlists/studio", () => {
         }));
     });
 
+    it("includes only custom-cover timestamps in search results, never image bytes", async () => {
+        const updatedAt = new Date("2026-11-18T18:00:00.000Z");
+        (prisma.playlist.findMany as jest.Mock).mockResolvedValue([{
+            id: "playlist-one", name: "My Rock", userId: USER_A, isPublic: false,
+            createdAt: updatedAt, updatedAt,
+            user: { username: "listener-a" },
+            _count: { items: 2 },
+            customCover: { updatedAt },
+            items: [{ id: "playlist-item", track: { album: { coverUrl: null } } }],
+        }]);
+        const response = await authed().expect(200);
+        expect(response.body.items[0].coverUpdatedAt).toBe(updatedAt.toISOString());
+        expect(response.body.items[0].customCover).toBeUndefined();
+        expect(response.body.items[0].imageData).toBeUndefined();
+        expect(prisma.playlist.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            select: expect.objectContaining({
+                customCover: { select: { updatedAt: true } },
+            }),
+        }));
+    });
+
     it("searches through all accessible playlists, not a loaded client slice", async () => {
         const response = await authed()
             .query({ q: "  ROAD  ", page: "3", limit: "10", sort: "name-asc" })
