@@ -55,8 +55,8 @@ beforeEach(() => {
         name: "Original",
         _count: { items: 3, pendingTracks: 2 },
         items: [
-            { trackId: "track-1", sort: 0, rank: "a" },
-            { trackId: "track-2", sort: 2, rank: "c" },
+            { trackId: "track-1", sort: 9, rank: "a" },
+            { trackId: "track-2", sort: 1, rank: "c" },
         ],
     });
     tx.playlist.create.mockResolvedValue({ id: "copied-id", name: "Original (copy)" });
