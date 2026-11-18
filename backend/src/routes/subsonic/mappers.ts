@@ -145,6 +145,35 @@ function mimeToSuffix(mime: string | null): string {
     return map[m] || "mp3";
 }
 
+/**
+ * Subsonic clients send format=mp3/flac/m4a, while the music scanner may store
+ * MIME (audio/mpeg, audio/flac) or codec labels (MPEG 1 Layer 3, FLAC).
+ * Comparing strings directly falsely requests a transcode of an identical
+ * source format. Only recognize known audio types; never assume an unknown
+ * MIME is MP3 because mimeToSuffix's presentation fallback says "mp3".
+ */
+export function canDirectPlayRequestedFormat(
+    sourceMime: string | null,
+    requestedFormat: string | undefined,
+): boolean {
+    const wanted = (requestedFormat ?? "").trim().toLowerCase();
+    if (!wanted || wanted === "raw") return true;
+
+    const source = normalizeMime(sourceMime)?.split(";", 1)[0].trim().toLowerCase();
+    if (!source) return false;
+
+    const requestedMime = normalizeMime(wanted)?.split(";", 1)[0].trim().toLowerCase();
+    if (wanted === source || requestedMime === source) return true;
+
+    // Only use a file suffix after confirming the MIME was recognized.
+    const knownAudioMime = new Set([
+        "audio/mpeg", "audio/mp3", "audio/flac", "audio/x-flac",
+        "audio/aac", "audio/ogg", "audio/vorbis", "audio/opus",
+        "audio/wav", "audio/x-wav", "audio/mp4",
+    ]);
+    return knownAudioMime.has(source) && wanted === mimeToSuffix(source);
+}
+
 export function bitrateToQuality(
     maxBitRate: string | undefined
 ): "original" | "high" | "medium" | "low" {
