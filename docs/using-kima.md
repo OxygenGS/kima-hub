@@ -179,8 +179,11 @@ published v1.26.0 image.
 ## Duplicate a playlist (v1.28.0 development — not yet released)
 
 Open one of your playlists or a public playlist shared by another Kima user,
-then select **Duplicate playlist**. A new playlist is created under your
-account with **private visibility**, independently of the original.
+then select **Duplicate playlist**. Review or edit the proposed copy name (up
+to 200 characters) in the dialog, then choose **Create private copy**. A new
+playlist is created under your account with **private visibility**,
+independently of the original. The copy opens automatically; an account
+notification records how many tracks were copied or skipped.
 
 - Copies up to 2,000 currently playable library tracks, retaining their order.
 - Unavailable, corrupt, missing or discovery-only tracks and all pending
