@@ -69,6 +69,7 @@ function fakeController(): AudioController {
         pause,
         seek: vi.fn(),
         setVolume: vi.fn(),
+        setPlaybackRate: vi.fn(),
         setMuted: vi.fn(),
         notifyForeground: vi.fn(),
         clearExpectedNext: vi.fn(),

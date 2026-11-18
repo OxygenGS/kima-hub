@@ -164,3 +164,14 @@ the Browse shortcut in the desktop navigation. Both choices are stored locally
 per browser and update immediately without changing metadata, permissions or
 media files. Hidden links remain accessible through their URL. Published stable
 remains v1.26.0 until a separate approved release.
+
+
+## Audiobook listening speed (v1.27.0 development — not yet released)
+
+Choose 0.75×, 1×, 1.25×, 1.5×, 1.75× or 2× on an audiobook page, in
+the full player, or in the mobile player options. Kima remembers your speed
+in the current browser. The same speed applies when an audiobook changes
+chapter or its playback engine recovers. Ordinary music and podcasts remain
+at 1×, and progress is still saved in the original audiobook timeline.
+This feature is part of an unreleased v1.27.0 development PR, not the
+published v1.26.0 image.
