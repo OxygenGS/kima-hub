@@ -298,7 +298,8 @@ export default function PlaylistDetailPage() {
 
     const openDuplicateDialog = () => {
         if (!playlist) return;
-        setDuplicateName(playlist.name.slice(0, 193) + " (copy)");
+        const suffix = t("Playlist copy suffix");
+        setDuplicateName(playlist.name.slice(0, 200 - suffix.length) + suffix);
         setDuplicateError(null);
         setShowDuplicateDialog(true);
     };
@@ -1033,9 +1034,10 @@ export default function PlaylistDetailPage() {
                         disabled={isDuplicating}
                         aria-label={t("Duplicate playlist")}
                         title={t("Duplicate playlist")}
-                        className="h-10 min-w-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
+                        className="h-10 min-w-10 rounded-lg px-2 flex items-center justify-center gap-2 text-[var(--text-muted)] hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-brand transition-all disabled:opacity-50"
                     >
                         {isDuplicating ? <GradientSpinner size="sm" /> : <Copy className="w-5 h-5" />}
+                        <span className="hidden lg:inline text-xs font-medium">{t("Duplicate playlist")}</span>
                     </button>
 
                     {playlist.isOwner && (
