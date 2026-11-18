@@ -736,7 +736,7 @@ export default function PlaylistsPage() {
                     >
                         <option value="all">{t("All owners")}</option>
                         <option value="mine">{t("My playlists")}</option>
-                        <option value="shared">{t("Shared with me")}</option>
+                        <option value="shared">{t("Public playlists by others")}</option>
                     </select>
                     <label className="sr-only" htmlFor="playlist-sort-order">{t("Sort playlists")}</label>
                     <select
