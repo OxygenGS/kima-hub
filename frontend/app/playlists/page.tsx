@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { usePlaylistsQuery } from "@/hooks/useQueries";
+import { usePlaylistStudioQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { useAudioControls } from "@/lib/audio-context";
@@ -19,6 +19,9 @@ import {
     Compass,
     X,
     Check,
+    Search,
+    ArrowLeft,
+    ArrowRight,
 } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { api } from "@/lib/api";
@@ -537,23 +540,37 @@ export default function PlaylistsPage() {
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
     const [activeAction, setActiveAction] = useState<ActionPanel>(null);
+    const [searchInput, setSearchInput] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "shared">("all");
+    const [sortOrder, setSortOrder] = useState<"recent" | "oldest" | "name-asc" | "name-desc">("recent");
+    const [page, setPage] = useState(1);
+    const pageSize = 24;
 
-    const { data: playlists = [], isLoading } = usePlaylistsQuery();
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            setSearchQuery(searchInput.trim());
+            setPage(1);
+        }, 250);
+        return () => window.clearTimeout(timer);
+    }, [searchInput]);
 
-    const { visiblePlaylists, hiddenPlaylists } = useMemo(() => {
-        const visible: Playlist[] = [];
-        const hidden: Playlist[] = [];
+    const { data: studio, isLoading, isFetching, isError, isPlaceholderData } = usePlaylistStudioQuery({
+        q: searchQuery,
+        scope: showHiddenTab ? "hidden" : "visible",
+        owner: ownerFilter,
+        sort: sortOrder,
+        page,
+        limit: pageSize,
+    });
+    const visibleCount = studio?.counts.visible ?? 0;
+    const hiddenCount = studio?.counts.hidden ?? 0;
+    const displayedPlaylists = studio?.items ?? [];
+    const resultCount = studio?.total ?? 0;
 
-        playlists.forEach((p: Playlist) => {
-            if (p.isHidden) {
-                hidden.push(p);
-            } else {
-                visible.push(p);
-            }
-        });
-
-        return { visiblePlaylists: visible, hiddenPlaylists: hidden };
-    }, [playlists]);
+    useEffect(() => {
+        if (!isPlaceholderData && studio && page > studio.pages) setPage(studio.pages);
+    }, [isPlaceholderData, studio, page]);
 
     useEffect(() => {
         const handlePlaylistEvent = () => {
@@ -617,10 +634,8 @@ export default function PlaylistsPage() {
         return <LoadingScreen />;
     }
 
-    const displayedPlaylists = showHiddenTab
-        ? hiddenPlaylists
-        : visiblePlaylists;
-    const emptyStateHasForms = displayedPlaylists.length === 0 && !showHiddenTab;
+    const emptyStateHasForms = visibleCount === 0 && !showHiddenTab &&
+        !searchInput.trim() && ownerFilter === "all" && !isPlaceholderData;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
@@ -628,18 +643,18 @@ export default function PlaylistsPage() {
                 eyebrow={t("Your library")}
                 title={t("Playlists")}
                 description={
-                    `${visiblePlaylists.length} ${t(visiblePlaylists.length === 1 ? "playlist" : "playlists")}` +
-                    (hiddenPlaylists.length > 0 ? ` · ${hiddenPlaylists.length} ${t("hidden")}` : "")
+                    `${visibleCount} ${t(visibleCount === 1 ? "playlist" : "playlists")}` +
+                    (hiddenCount > 0 ? ` · ${hiddenCount} ${t("hidden")}` : "")
                 }
                 actions={
-                    hiddenPlaylists.length > 0 && (
+                    (hiddenCount > 0 || showHiddenTab) && (
                         <Button
                             variant="secondary"
                             size="sm"
                             aria-pressed={showHiddenTab}
-                            onClick={() => setShowHiddenTab(!showHiddenTab)}
+                            onClick={() => { setShowHiddenTab(!showHiddenTab); setPage(1); }}
                         >
-                            {showHiddenTab ? t("Show all") : `${t("Hidden")} (${hiddenPlaylists.length})`}
+                            {showHiddenTab ? t("Show all") : `${t("Hidden")} (${hiddenCount})`}
                         </Button>
                     )
                 }
@@ -701,7 +716,7 @@ export default function PlaylistsPage() {
 
                 {displayedPlaylists.length > 0 ? (
                     <div>
-                        <SectionHeader type="track" title={t(showHiddenTab ? "Hidden" : "All Playlists")} count={displayedPlaylists.length} />
+                        <SectionHeader type="track" title={t(showHiddenTab ? "Hidden" : "All Playlists")} count={resultCount} />
 
                         <div
                             data-tv-section="playlists"
