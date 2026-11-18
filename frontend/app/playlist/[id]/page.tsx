@@ -321,7 +321,7 @@ export default function PlaylistDetailPage() {
             }));
             const skipped = result.skippedTrackCount + result.skippedPendingCount;
             notify.info(t("Playlist copied"), {
-                message: String(result.copiedTrackCount) + " " + t("Tracks copied") +
+                message: String(result.copiedTrackCount) + " " + t("tracks copied") +
                     (skipped > 0
                         ? ". " + t("Unavailable skipped") + ": " + result.skippedTrackCount +
                             "; " + t("Pending skipped") + ": " + result.skippedPendingCount
