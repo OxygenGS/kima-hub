@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, raw } from "express";
+import sharp from "sharp";
 import { logger } from "../utils/logger";
 import { z } from "zod";
 import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
@@ -114,6 +115,7 @@ router.get("/", async (req, res) => {
                 _count: {
                     select: { items: true },
                 },
+                customCover: { select: { updatedAt: true } },
                 items: {
                     take: 4,
                     select: {
@@ -131,8 +133,9 @@ router.get("/", async (req, res) => {
             },
         });
 
-        const playlistsWithCounts = playlists.map((playlist) => ({
+        const playlistsWithCounts = playlists.map(({ customCover, ...playlist }) => ({
             ...playlist,
+            coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
             trackCount: playlist._count.items,
             isOwner: playlist.userId === userId,
             isHidden: hiddenPlaylistIds.has(playlist.id),
@@ -174,6 +177,92 @@ router.post("/", async (req, res) => {
     }
 });
 
+// Playlist Studio: upload only raster images. The API receives raw bytes, not
+// data URLs or paths. Re-encoding strips metadata and prevents SVG/polyglot
+// content being served as an image. Auth checks run before parsing the upload.
+const MAX_COVER_INPUT_BYTES = 3 * 1024 * 1024;
+const MAX_COVER_OUTPUT_BYTES = 256 * 1024;
+const parseCoverUpload = raw({
+    type: ["image/jpeg", "image/png", "image/webp"],
+    limit: MAX_COVER_INPUT_BYTES,
+});
+
+router.post("/:id/cover", requirePlaylistOwner, (req, res, next) => {
+    parseCoverUpload(req, res, (error) => {
+        if (error) {
+            const tooLarge = (error as { type?: string }).type === "entity.too.large";
+            return res.status(tooLarge ? 413 : 400).json({
+                error: tooLarge ? "Playlist cover exceeds 3 MB" : "Invalid playlist cover upload",
+            });
+        }
+        next();
+    });
+}, async (req, res) => {
+    const bytes: unknown = req.body;
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+        return res.status(400).json({ error: "Supply a JPEG, PNG or WebP image" });
+    }
+    let imageData: Buffer;
+    try {
+        const image = sharp(bytes, { limitInputPixels: 16_000_000, failOn: "error", animated: false });
+        const metadata = await image.metadata();
+        if (!["jpeg", "png", "webp"].includes(metadata.format ?? "")) {
+            return res.status(415).json({ error: "Unsupported playlist cover image" });
+        }
+        imageData = await sharp(bytes, {
+            limitInputPixels: 16_000_000, failOn: "error", animated: false,
+        }).rotate().resize(512, 512, { fit: "cover" }).webp({ quality: 80, effort: 4 }).toBuffer();
+        if (imageData.length > MAX_COVER_OUTPUT_BYTES) {
+            return res.status(413).json({ error: "Playlist cover cannot be compressed safely" });
+        }
+    } catch {
+        return res.status(400).json({ error: "Invalid or oversized playlist cover image" });
+    }
+    try {
+        const cover = await prisma.playlistCustomCover.upsert({
+            where: { playlistId: req.params.id },
+            create: { playlistId: req.params.id, imageData },
+            update: { imageData },
+            select: { updatedAt: true },
+        });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({ coverUpdatedAt: cover.updatedAt.toISOString() });
+    } catch (error) {
+        logger.error("Update playlist cover error:", error);
+        return res.status(500).json({ error: "Failed to update playlist cover" });
+    }
+});
+
+router.get("/:id/cover", requirePlaylistReader, async (req, res) => {
+    try {
+        const cover = await prisma.playlistCustomCover.findUnique({
+            where: { playlistId: req.params.id },
+            select: { imageData: true },
+        });
+        if (!cover) return res.status(404).end();
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.send(Buffer.from(cover.imageData));
+    } catch (error) {
+        logger.error("Get playlist cover error:", error);
+        return res.status(500).end();
+    }
+});
+
+router.delete("/:id/cover", requirePlaylistOwner, async (req, res) => {
+    try {
+        await prisma.playlistCustomCover.deleteMany({
+            where: { playlistId: req.params.id },
+        });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({ coverUpdatedAt: null });
+    } catch (error) {
+        logger.error("Remove playlist cover error:", error);
+        return res.status(500).json({ error: "Failed to remove playlist cover" });
+    }
+});
+
 // GET /playlists/:id
 router.get("/:id", requirePlaylistReader, async (req, res) => {
     try {
@@ -190,6 +279,7 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
                         username: true,
                     },
                 },
+                customCover: { select: { updatedAt: true } },
                 hiddenByUsers: {
                     where: { userId },
                     select: { id: true },
@@ -261,8 +351,10 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
             // Items and pending tracks share one rank space, so a string compare orders them.
         ].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
 
+        const { customCover, ...playlistFields } = playlist;
         res.json({
-            ...playlist,
+            ...playlistFields,
+            coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
             isOwner: playlist.userId === userId,
             isHidden: playlist.hiddenByUsers.length > 0,
             trackCount: playlist.items.length,
