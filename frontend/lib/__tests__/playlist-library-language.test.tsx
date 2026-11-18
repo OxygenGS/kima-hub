@@ -12,7 +12,23 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("@/hooks/useQueries", () => ({
     queryKeys: { playlists: () => ["playlists"] },
-    usePlaylistsQuery: () => ({ data: state.playlists, isLoading: false }),
+    usePlaylistStudioQuery: () => ({
+        data: {
+            items: state.playlists,
+            total: state.playlists.length,
+            pages: 1,
+            page: 1,
+            limit: 24,
+            counts: {
+                visible: state.playlists.filter((playlist) => !playlist.isHidden).length,
+                hidden: state.playlists.filter((playlist) => playlist.isHidden).length,
+            },
+        },
+        isLoading: false,
+        isFetching: false,
+        isError: false,
+        isPlaceholderData: false,
+    }),
 }));
 vi.mock("@tanstack/react-query", () => ({
     useQueryClient: () => ({ invalidateQueries: vi.fn() }),
