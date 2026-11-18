@@ -1142,6 +1142,17 @@ class ApiClient {
         });
     }
 
+    /** Copies only currently playable local tracks into a private playlist. */
+    async duplicatePlaylist(id: string, name?: string) {
+        return this.request<{
+            id: string; name: string; isPublic: false;
+            copiedTrackCount: number; skippedTrackCount: number;
+            skippedPendingCount: number;
+        }>(`/playlists/${encodeURIComponent(id)}/duplicate`, {
+            method: "POST",
+            body: JSON.stringify(name ? { name } : {}),
+        });
+    }
     async updatePlaylist(id: string, data: { name?: string; isPublic?: boolean }) {
         return this.request<ApiData>(`/playlists/${id}`, {
             method: "PUT",
