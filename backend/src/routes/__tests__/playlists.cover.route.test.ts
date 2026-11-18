@@ -3,7 +3,7 @@ jest.mock("../../utils/db", () => ({
     prisma: {
         playlist: { findUnique: jest.fn() },
         playlistCustomCover: {
-            upsert: jest.fn(), findUnique: jest.fn(), deleteMany: jest.fn(),
+            upsert: jest.fn(), findFirst: jest.fn(), deleteMany: jest.fn(),
         },
         apiKey: { findUnique: jest.fn(), update: jest.fn() },
         user: { findUnique: jest.fn() },
@@ -70,7 +70,7 @@ describe("playlist custom cover", () => {
         (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
             id: PLAYLIST_ID, userId: OWNER, name: "Roadtrip", isPublic: true,
         });
-        (prisma.playlistCustomCover.findUnique as jest.Mock).mockResolvedValue({
+        (prisma.playlistCustomCover.findFirst as jest.Mock).mockResolvedValue({
             imageData: Buffer.from("RIFFxxxxxxxxWEBP", "utf8"),
         });
         await request(app).get(endpoint)
@@ -78,6 +78,23 @@ describe("playlist custom cover", () => {
             .expect(200).expect("Content-Type", /image\/webp/);
         await request(app).delete(endpoint)
             .set("Authorization", "Bearer " + token(STRANGER)).expect(403);
+    });
+
+    it("rechecks shared playlist visibility when reading artwork", async () => {
+        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
+            id: PLAYLIST_ID, userId: OWNER, name: "Shared", isPublic: true,
+        });
+        // Public access revoked between the guard and the cover lookup:
+        (prisma.playlistCustomCover.findFirst as jest.Mock).mockResolvedValue(null);
+        await request(app).get(endpoint)
+            .set("Authorization", "Bearer " + token(STRANGER)).expect(404);
+        expect(prisma.playlistCustomCover.findFirst).toHaveBeenCalledWith({
+            where: {
+                playlistId: PLAYLIST_ID,
+                playlist: { is: { OR: [{ userId: STRANGER }, { isPublic: true }] } },
+            },
+            select: { imageData: true },
+        });
     });
 
     it("re-encodes valid raster input as a 512px WebP without copying image metadata", async () => {
@@ -125,7 +142,7 @@ describe("playlist custom cover", () => {
     });
 
     it("serves no cover for a playlist with no custom artwork", async () => {
-        (prisma.playlistCustomCover.findUnique as jest.Mock).mockResolvedValue(null);
+        (prisma.playlistCustomCover.findFirst as jest.Mock).mockResolvedValue(null);
         await request(app).get(endpoint)
             .set("Authorization", "Bearer " + token(OWNER)).expect(404);
     });
