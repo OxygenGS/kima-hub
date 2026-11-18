@@ -101,7 +101,7 @@ describe("POST /playlists/:id/duplicate", () => {
         expect(tx.playlistItem.createMany).toHaveBeenCalledWith({
             data: [
                 { playlistId: "copied-id", trackId: "track-1", sort: 0, rank: "a" },
-                { playlistId: "copied-id", trackId: "track-2", sort: 2, rank: "c" },
+                { playlistId: "copied-id", trackId: "track-2", sort: 1, rank: "c" },
             ],
         });
     });
