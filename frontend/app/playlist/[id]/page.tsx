@@ -301,7 +301,7 @@ export default function PlaylistDetailPage() {
             window.dispatchEvent(new CustomEvent("playlist-updated", {
                 detail: { playlistId: result.id },
             }));
-            notify.success(t("Playlist copied"), {
+            notify.info(t("Playlist copied"), {
                 message: result.skippedTrackCount + result.skippedPendingCount > 0
                     ? t("Unavailable or pending tracks were skipped")
                     : undefined,
