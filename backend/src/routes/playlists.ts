@@ -222,10 +222,12 @@ router.post("/:id/duplicate", requirePlaylistReader, async (req, res) => {
             });
             if (source.items.length > 0) {
                 await tx.playlistItem.createMany({
-                    data: source.items.map(item => ({
+                    data: source.items.map((item, index) => ({
                         playlistId: target.id,
                         trackId: item.trackId,
-                        sort: item.sort,
+                        // rank is canonical. Source sort can be stale after
+                        // drag-reorder; normalize it for legacy sort readers.
+                        sort: index,
                         rank: item.rank,
                     })),
                 });
