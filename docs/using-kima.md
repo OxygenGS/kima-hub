@@ -175,3 +175,21 @@ chapter or its playback engine recovers. Ordinary music and podcasts remain
 at 1×, and progress is still saved in the original audiobook timeline.
 This feature is part of an unreleased v1.27.0 development PR, not the
 published v1.26.0 image.
+
+## Custom playlist cover art (v1.28.0 development — not yet released)
+
+Open a playlist you own and select the image-upload icon on its cover to
+choose a **JPEG, PNG or WebP**, up to **3 MB**. Kima checks the decoded raster,
+rejects invalid or oversized images, strips metadata and stores a square WebP
+copy at 512 × 512 pixels. Other accounts can view the artwork only when they
+already have access to the playlist. They cannot replace or delete your image.
+
+Select **Remove custom playlist cover** to restore the automatic album-art
+mosaic. Removing artwork does not delete or alter the playlist or its tracks.
+Deleting the playlist permanently removes its associated artwork.
+
+The cover is stored as an isolated table in Kima's database, not in the
+mounted music directory. The migration is additive but requires a backup of
+the stopped /data volume and a verified restore before production upgrades.
+There is no new external dependency or change to media mounts. This feature is
+**unreleased v1.28.0 development**, not part of published stable v1.26.0.
