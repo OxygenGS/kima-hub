@@ -2,9 +2,27 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.25.0 — current published release (16 November 2026)
+## v1.26.0 — current published release (18 November 2026)
 
-The [exact-main v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) verified `main` source `0bda03e90ac12260b0f9307c799f2fc3a96a44a2`, built separate AMD64/ARM64 images, confirmed their architecture and revision labels, and passed configured secret and fixable-vulnerability checks without publishing. [Explicit approved stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307). The current published image is `ghcr.io/oxygengs/kima-hub:v1.25.0`.
+The [v1.26.0 exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369) verified commit `3a1e0d84c12ed1e0e429bba4e7bb4bc3f4c0f4a7`, built native AMD64/ARM64 images and passed the configured architecture, source, vulnerability-policy and secret checks. [Explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. The published image is `ghcr.io/oxygengs/kima-hub:v1.26.0`.
+
+| Native v1.26.0 preflight | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | **393** | **8** | **0** |
+| linux/arm64 | **392** | **8** | **0** |
+
+These are the same counts and eight CRITICAL advisory identifiers as v1.25.0. **They remain unresolved**: neither a missing scanner-listed patch nor a green release workflow proves a risk is not exploitable. Kima processes media and can be exposed to untrusted inputs; review network/media exposure and maintain a separately restorable cold `/data` backup before upgrading.
+
+- [AMD64 Trivy evidence](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369/artifacts/14405189464)
+- [ARM64 Trivy evidence](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369/artifacts/14405993333)
+- [Recorded residual findings](https://github.com/OxygenGS/kima-hub/pull/269#issuecomment-6971795290) (not an acceptance statement)
+- [Published v1.26.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0)
+
+These values reflect the *preflight build and its scanner database*, not an independently scanned live deployment.
+
+## Historical: v1.25.0 — published 16 November 2026
+
+The [exact-main v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) verified `main` source `0bda03e90ac12260b0f9307c799f2fc3a96a44a2`, built separate AMD64/ARM64 images, confirmed their architecture and revision labels, and passed configured secret and fixable-vulnerability checks without publishing. [Explicit approved stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307). The previously published v1.25.0 image is `ghcr.io/oxygengs/kima-hub:v1.25.0`.
 
 | Native v1.25.0 preflight image | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed patched versions |
 | :--- | ---: | ---: | ---: |

@@ -1,4 +1,4 @@
-# Library Doctor and Project NOVA Library Guardian
+# Library Doctor and Library Guardian
 
 Library Doctor provides admin-only, on-demand diagnostics of indexed music.
 The existing Smart Download Inbox separately offers explicit, reversible
@@ -6,8 +6,8 @@ database-only album reassignment for qualifying own Soulseek downloads.
 **The Library Doctor reports and the new Library Guardian duplicate audit
 never change any indexed track or media file.**
 
-**Development status:** the phase-5 Library Guardian duplicate view was
-merged in PR #267 but is not included in published v1.25.0.
+**Available since v1.26.0:** Library Guardian's duplicate-recording review is
+included in the published release and remains administrator-only and read-only.
 
 ## Usage
 
@@ -35,7 +35,7 @@ category. The API is authenticated and separately enforces admin privileges
 and sends private, non-cacheable responses. No absolute server mount paths
 or credentials are included in the source.
 
-## Library Guardian — potential duplicate recordings (NOVA phase 5)
+## Library Guardian — potential duplicate recordings (v1.26.0)
 
 In **Settings → Library Doctor**, an administrator may separately select
 **Inspect possible duplicates**. Nothing is queried when opening Settings
@@ -80,8 +80,7 @@ duplicate will be found.
 - More metadata source integration; no automatic file moves or edits.
 
 Existing Smart Download Inbox's confirmed database-only fixes are separate
-from Library Guardian's entirely read-only duplicate evidence. No NOVA
-development PR publishes an image or changes a live installation.
+from Library Guardian's entirely read-only duplicate evidence. Publishing v1.26.0 does not upgrade existing installations automatically.
 
 
 ## Smart Download Inbox (first read-only slice)
@@ -178,5 +177,5 @@ identification and should be reviewed separately.
 
 As with every new migration, deploy only after a restorable database backup,
 successful migration smoke checks, and full green CI on the exact PR head.
-The Library Guardian feature is merged to the development branch but is not
-included in the published v1.25.0 release.
+Library Guardian is included in the published v1.26.0 release. Existing
+installations require an explicit, backup-verified image update.

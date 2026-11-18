@@ -1,8 +1,8 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.26.0 — release preparation (unpublished)
+## OxygenGS fork v1.26.0 — released 2026-11-18
 
-Project NOVA bundles six previously merged development stages into the OxygenGS fork. **This is source preparation only, not a published v1.26.0 image.** Published stable remains v1.25.0 until an exact-main native release preflight and explicit reviewed publication succeed.
+Kima Hub v1.26.0 adds guided local-library Flow mixes, private listening feedback, opt-in artist and album discovery, and administrator-only duplicate-recording evidence. The published stable image is `ghcr.io/oxygengs/kima-hub:v1.26.0` for native AMD64 and ARM64.
 
 ### Kima Flow and safe continuation
 - PR #263 adds a guided, explainable, local-library-only Flow experience over the existing Vibe matching engine. The original advanced 3D Vibe view remains available; preparing a preview does not start playback.
@@ -16,10 +16,10 @@ Project NOVA bundles six previously merged development stages into the OxygenGS 
 ### Read-only library evidence
 - PR #267 adds the admin-only Library Guardian potential-duplicate-recordings report. It uses existing indexed MusicBrainz IDs and conservative duration/acoustic evidence. Matching fingerprints do not prove byte-identical files; no automatic deletion, moving, retagging, repair or other mutation occurs.
 
-### Upgrade and publication gates
+### Upgrade safety and release verification
 - Preserve existing Compose/Dockge project identity, /data volume, /music and /downloads mounts, accounts, integrations, Lidarr/Soulseek and OpenSubsonic clients. Do not run an old image against a newly migrated database; restore a verified pre-upgrade snapshot into an independent volume for rollback.
-- Individual feature PRs #263–#268 passed their backend/frontend tests and native AIO build workflows. That does **not** replace release-candidate CI, native AMD64/ARM64 image scanning on the exact main commit, a documented vulnerability review, or explicit approval to create tags and publish images.
-- Existing published images have unresolved HIGH and CRITICAL scanner advisories documented in docs/image-security.md. No claim is made that a new image is vulnerability-free. The v1.26.0 tag and image are **not yet published**.
+- Feature PRs #263–#268 and release-metadata PR #269 passed source, language, security, database upgrade/restore and native build checks. The exact-main [v1.26.0 native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369), [explicit stable release approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [multi-architecture Docker publisher](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. Publication did not update existing live installations automatically.
+- The native v1.26.0 scans reported **393 HIGH / 8 CRITICAL** (AMD64) and **392 HIGH / 8 CRITICAL** (ARM64), with no scanner-listed patched version. Publication approval does not establish that these issues are safe or unreachable. See [image-security evidence](docs/image-security.md).
 
 ## OxygenGS fork v1.25.0 — released 2026-11-16
 
