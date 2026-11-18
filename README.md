@@ -47,6 +47,8 @@ Kima Connect introduced private browser-player discovery, remote Pause / Previou
 
 ### Coming in v1.27.0 — source candidate, not published
 
+**Unpublished release candidate:** [v1.27.0](https://github.com/OxygenGS/kima-hub/pull/277) — reviewed source preparation only, not an available Docker image.
+
 **Current stable remains v1.26.0.** The next update is undergoing release checks and is not yet available as a v1.27.0 Docker image.
 
 - **Personal Appearance:** original text capitalization and optional Browse shortcut visibility per browser.
