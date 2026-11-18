@@ -198,11 +198,14 @@ jobs:
               shell: bash
               run: |
                   set -euo pipefail
+                  # Never let a runner's apt lock/network hang block the release gates.
                   if ! test -x /usr/bin/ffmpeg; then
-                    sudo apt-get update -qq
-                    sudo apt-get install -y --no-install-recommends ffmpeg
+                    echo "::notice::FFmpeg missing from runner; bounded installation"
+                    sudo timeout -k 10s 180s apt-get update -qq
+                    sudo timeout -k 10s 180s env DEBIAN_FRONTEND=noninteractive \
+                      apt-get -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg
                   fi
-                  /usr/bin/ffmpeg -hide_banner -version | head -n 1
+                  timeout -k 5s 15s /usr/bin/ffmpeg -hide_banner -version | head -n 1
 
             - name: Apply database migrations
               working-directory: backend
