@@ -53,6 +53,7 @@ interface Playlist {
     items?: PlaylistItem[];
     isOwner?: boolean;
     isHidden?: boolean;
+    coverUpdatedAt?: string | null;
     user?: {
         username: string;
     };
@@ -98,7 +99,9 @@ function PlaylistCard({
             href={`/playlist/${playlist.id}`}
             title={playlist.name}
             subtitle={`${isShared && playlist.user?.username ? `${playlist.user.username} · ` : ""}${playlist.trackCount || 0} ${t((playlist.trackCount || 0) === 1 ? "song" : "songs")}`}
-            imageUrl={imageUrl}
+            imageUrl={playlist.coverUpdatedAt
+                ? api.getPlaylistCoverUrl(playlist.id, playlist.coverUpdatedAt)
+                : imageUrl}
             fallbackIcon={Music}
             type="track"
             index={index}
