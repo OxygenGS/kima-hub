@@ -235,8 +235,15 @@ router.post("/:id/cover", requirePlaylistOwner, (req, res, next) => {
 
 router.get("/:id/cover", requirePlaylistReader, async (req, res) => {
     try {
-        const cover = await prisma.playlistCustomCover.findUnique({
-            where: { playlistId: req.params.id },
+        // Verify read rights again with the image read: a public playlist may
+        // become private after requirePlaylistReader's initial authorization.
+        const cover = await prisma.playlistCustomCover.findFirst({
+            where: {
+                playlistId: req.params.id,
+                playlist: {
+                    is: { OR: [{ userId: req.user!.id }, { isPublic: true }] },
+                },
+            },
             select: { imageData: true },
         });
         if (!cover) return res.status(404).end();
