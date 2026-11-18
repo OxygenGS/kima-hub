@@ -119,6 +119,43 @@ describe("POST /playlists/:id/duplicate", () => {
             select: { id: true, name: true },
         });
     });
+    it("trims a custom name before creating a private copy", async () => {
+        tx.playlist.create.mockResolvedValueOnce({ id: "copy-named", name: "Road trip" });
+        const response = await request(app).post(endpoint)
+            .set("Authorization", "Bearer " + token(USER_A))
+            .send({ name: "  Road trip  " }).expect(201);
+        expect(response.body.name).toBe("Road trip");
+        expect(tx.playlist.create).toHaveBeenCalledWith({
+            data: { userId: USER_A, name: "Road trip", isPublic: false },
+            select: { id: true, name: true },
+        });
+    });
+    it("creates an empty private copy without adding pending downloads", async () => {
+        tx.playlist.findFirst.mockResolvedValueOnce({
+            name: "Pending only", _count: { items: 0, pendingTracks: 3 }, items: [],
+        });
+        tx.playlist.create.mockResolvedValueOnce({ id: "copy-empty", name: "Pending only (copy)" });
+        const response = await request(app).post(endpoint)
+            .set("Authorization", "Bearer " + token(USER_A))
+            .send({}).expect(201);
+        expect(response.body).toEqual({
+            id: "copy-empty", name: "Pending only (copy)", isPublic: false,
+            copiedTrackCount: 0, skippedTrackCount: 0, skippedPendingCount: 3,
+        });
+        expect(tx.playlistItem.createMany).not.toHaveBeenCalled();
+    });
+    it("fits a default copy name into the 200-character playlist limit", async () => {
+        tx.playlist.findFirst.mockResolvedValueOnce({
+            name: "A".repeat(200), _count: { items: 0, pendingTracks: 0 }, items: [],
+        });
+        await request(app).post(endpoint)
+            .set("Authorization", "Bearer " + token(USER_A))
+            .send({}).expect(201);
+        expect(tx.playlist.create).toHaveBeenCalledWith({
+            data: { userId: USER_A, name: "A".repeat(193) + " (copy)", isPublic: false },
+            select: { id: true, name: true },
+        });
+    });
     it("rechecks visibility inside transaction to prevent a public-to-private race", async () => {
         (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
             id: PLAYLIST, userId: USER_A, name: "Shared", isPublic: true,
