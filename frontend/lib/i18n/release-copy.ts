@@ -49,6 +49,37 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.27.0
+    "1.27.0": {
+        "titles": {
+            "Kima Hub 1.27.0": "Kima Hub 1.27.0"
+        },
+        "summaries": {
+            "Customize text and navigation, choose audiobook speed, safely diagnose Redis startup failures, and improve OpenSubsonic direct-play decisions.": "Kies je eigen tekst- en menuweergave, stel de snelheid van luisterboeken in, controleer Redis-startproblemen veilig en verbeter de direct-play-herkenning voor OpenSubsonic."
+        },
+        "items": {
+            "fork.127.appearance": {
+                "title": "Pas de weergave aan",
+                "summary": "Toon originele hoofdletters en kies of Bladeren in het menu staat.",
+                "body": "Instellingen \u2192 Weergave bevat voor elke ingelogde gebruiker een hoofdletterkeuze en schakelaar voor de snelkoppeling Bladeren op de desktop. De bestaande stijl met kleine letters blijft standaard. Deze keuzes wijzigen geen opgeslagen artiesten-, album- of nummernamen en schakelen geen routes, bladwijzers of rechten uit. De voorkeuren worden per browser bewaard en direct tussen tabbladen gesynchroniseerd."
+            },
+            "fork.127.audiobook": {
+                "title": "Luisterboeken op jouw snelheid",
+                "summary": "Kies 0,75\u00d7, 1\u00d7, 1,25\u00d7, 1,5\u00d7, 1,75\u00d7 of 2\u00d7 voor luisterboeken.",
+                "body": "Kies de afspeelsnelheid op de luisterboekpagina, in de desktopspeler of via de mobiele speleropties. De snelheid blijft gelijk bij hoofdstukwissels en herstel van de speler met twee audio-elementen. De browser onthoudt je keuze; muziek en podcasts blijven op 1\u00d7, terwijl de voortgang de originele tijdpositie van het luisterboek gebruikt."
+            },
+            "fork.127.redis": {
+                "title": "Onderzoek Redis-opstartproblemen veilig",
+                "summary": "Controleer mogelijk beschadigde AOF-bestanden zonder gegevens te veranderen.",
+                "body": "Als Redis in de alles-in-\u00e9\u00e9n-container niet beschikbaar wordt, noemt de startlog mogelijke oorzaken zoals volle opslag, onleesbare bestanden of AOF-schade. Een begrensde alleen-lezen controle en herstelhandleiding ondersteunen de diagnose. Kima verwijdert, repareert of verkort nooit automatisch een Redis-bestand. Stop schrijvende processen en controleer de fysieke opslag en een afzonderlijk herstelbare koude back-up van het volledige /data-volume v\u00f3\u00f3r handmatig herstel."
+            },
+            "fork.127.subsonic": {
+                "title": "Nauwkeurigere OpenSubsonic direct-play-informatie",
+                "summary": "Herken MP3, FLAC en vergelijkbare codecbenamingen zonder onnodige transcode-adviezen.",
+                "body": "OpenSubsonic getTranscodeDecision herkent nu bekende overeenkomsten zoals mp3 en audio/mpeg, of flac en audio/flac. Onbekende audioformaten worden nooit automatisch als MP3 beschouwd. De verbetering corrigeert alleen de formaatmelding aan ondersteunde muziekclients; muziekbestanden, streamingroutes en toegangsrechten blijven ongewijzigd."
+            }
+        }
+    },
     // release-candidate:1.26.0
     "1.26.0": {
         "titles": {

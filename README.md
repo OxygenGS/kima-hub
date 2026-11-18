@@ -45,6 +45,17 @@ Kima Connect introduced private browser-player discovery, remote Pause / Previou
 
 [v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect guide](docs/project-one.md)
 
+### Coming in v1.27.0 — source candidate, not published
+
+**Current stable remains v1.26.0.** The next update is undergoing release checks and is not yet available as a v1.27.0 Docker image.
+
+- **Personal Appearance:** original text capitalization and optional Browse shortcut visibility per browser.
+- **Audiobook playback speed:** 0.75×–2× for books, while music and podcasts remain at 1×.
+- **Redis diagnostics:** bounded, read-only AOF checks with a recovery guide; no automatic repair or file deletion.
+- **OpenSubsonic compatibility:** recognize codec/MIME aliases in direct-play reporting, without changing audio files or streams.
+
+The release still requires combined CI, native AMD64/ARM64 security preflight and explicit publication approval. Keep the existing project name, storage mounts and complete `/data` backup when planning upgrades.
+
 ## The experience
 
 One music space for your favorite albums, artists, playlists and discoveries. Built for a personal library rather than a subscription catalog.
