@@ -314,7 +314,8 @@ export default function PlaylistDetailPage() {
         setDuplicateError(null);
         try {
             const result = await api.duplicatePlaylist(playlistId, name);
-            await queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            // The copy is committed; never report failure because a cache refresh fails.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
             const href = "/playlist/" + encodeURIComponent(result.id);
             window.dispatchEvent(new CustomEvent("playlist-updated", {
                 detail: { playlistId: result.id },
@@ -330,8 +331,9 @@ export default function PlaylistDetailPage() {
             });
             setShowDuplicateDialog(false);
             router.push(href);
-        } catch {
-            setDuplicateError(t("Failed to duplicate playlist"));
+        } catch (error) {
+            const tooLarge = error instanceof Error && "status" in error && error.status === 413;
+            setDuplicateError(t(tooLarge ? "Playlist copy is limited to 2,000 tracks" : "Failed to duplicate playlist"));
         } finally {
             setIsDuplicating(false);
         }
