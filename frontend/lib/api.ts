@@ -1142,7 +1142,7 @@ class ApiClient {
     }): Promise<{
         items: Array<{
             id: string; name: string; isPublic: boolean; isOwner: boolean;
-            isHidden: boolean; trackCount: number;
+            isHidden: boolean; trackCount: number; coverUpdatedAt: string | null;
             createdAt: string; updatedAt: string;
             user: { username: string };
             items: Array<{ id: string; track: { album: { coverUrl: string | null } } }>;
@@ -1165,6 +1165,28 @@ class ApiClient {
         return this.request<ApiData>(`/playlists/${id}`);
     }
 
+    /** Authenticated, owner-managed and versioned artwork for a playlist. */
+    getPlaylistCoverUrl(id: string, updatedAt: string): string {
+        const url = this.tokenizedUrl(`/api/playlists/${encodeURIComponent(id)}/cover`);
+        return url + (url.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(updatedAt);
+    }
+
+    async uploadPlaylistCover(id: string, file: File): Promise<{ coverUpdatedAt: string }> {
+        return this.request<{ coverUpdatedAt: string }>(
+            `/playlists/${encodeURIComponent(id)}/cover`, {
+                method: "POST",
+                headers: { "Content-Type": file.type },
+                body: file,
+            }
+        );
+    }
+
+    async removePlaylistCover(id: string): Promise<{ coverUpdatedAt: null }> {
+        return this.request<{ coverUpdatedAt: null }>(
+            `/playlists/${encodeURIComponent(id)}/cover`, { method: "DELETE" }
+        );
+    }
+
     async createPlaylist(name: string, isPublic = false) {
         return this.request<ApiData>("/playlists", {
             method: "POST",
@@ -1172,6 +1194,17 @@ class ApiClient {
         });
     }
 
+    /** Copies only currently playable local tracks into a private playlist. */
+    async duplicatePlaylist(id: string, name?: string) {
+        return this.request<{
+            id: string; name: string; isPublic: false;
+            copiedTrackCount: number; skippedTrackCount: number;
+            skippedPendingCount: number;
+        }>(`/playlists/${encodeURIComponent(id)}/duplicate`, {
+            method: "POST",
+            body: JSON.stringify(name ? { name } : {}),
+        });
+    }
     async updatePlaylist(id: string, data: { name?: string; isPublic?: boolean }) {
         return this.request<ApiData>(`/playlists/${id}`, {
             method: "PUT",
