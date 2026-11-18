@@ -165,6 +165,8 @@ describe("playlist library presentation translations", () => {
         const sort = host.querySelector<HTMLSelectElement>("#playlist-sort-order");
         expect(owner).not.toBeNull();
         expect(sort).not.toBeNull();
+        expect(owner!.querySelector('option[value="shared"]')?.textContent)
+            .toBe("Public playlists by others");
 
         await act(async () => {
             owner!.value = "mine";
