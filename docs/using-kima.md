@@ -216,7 +216,9 @@ There is no new external dependency or change to media mounts. This feature is
 ## Find and organize playlists (v1.28.0 development — not yet released)
 
 The **Playlists** workspace has server-side name search and filters for **All
-owners**, **My playlists** and **Shared with me**. Sort by newest, oldest or
+owners**, **My playlists** and **Public playlists by others**. The latter means
+public playlists from other accounts, not only playlists shared via a direct
+link. Sort by newest, oldest or
 name, and move between pages of 24 playlists. Searches cover your complete
 accessible collection, not just the first 50 returned by the legacy list API.
 Visible and hidden playlist counts are calculated for the current search and
