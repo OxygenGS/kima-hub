@@ -16,6 +16,7 @@ function createFakeAudioElement() {
         ended: false,
         volume: 1,
         muted: false,
+        playbackRate: 1,
         readyState: 0,
         error: null as { code?: number; message?: string } | null,
         style: {} as Record<string, string>,
@@ -186,6 +187,26 @@ describe("AudioController -- gapless swap: eligible", () => {
         expect(gaplessCb).toHaveBeenCalledTimes(1);
         expect(gaplessCb).toHaveBeenCalledWith({ durationS: 210, trackId: "track-2" });
         expect(endedCb).not.toHaveBeenCalled();
+    });
+
+    it("applies audiobook speed to both elements and resets invalid rates safely", async () => {
+        const { controller, audio, audioNext } = newController();
+        controller.setPlaybackRate(1.5);
+        expect(audio.playbackRate).toBe(1.5);
+        expect(audioNext.playbackRate).toBe(1.5);
+        expect(controller.getPlaybackRate()).toBe(1.5);
+
+        makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 100);
+        audio.playbackRate = 1;
+        audio.__fire("ended");
+        await flushMicrotasks();
+        // The old active element was recycled as idle, but keeps the speed.
+        expect(audio.playbackRate).toBe(1.5);
+        expect(audioNext.playbackRate).toBe(1.5);
+        controller.setPlaybackRate(Number.NaN);
+        expect(controller.getPlaybackRate()).toBe(1);
+        expect(audio.playbackRate).toBe(1);
+        expect(audioNext.playbackRate).toBe(1);
     });
 
     it("carries the current volume/mute onto the reused idle element", async () => {
