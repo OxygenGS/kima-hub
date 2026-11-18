@@ -9,10 +9,13 @@ const state = vi.hoisted(() => ({
     playlists: [] as Array<{id:string;name:string;trackCount:number;isOwner:boolean;isHidden:boolean}>,
     create: vi.fn(),
     post: vi.fn(),
+    studioFilters: null as null | { owner: string; sort: string; scope: string; page: number; q: string },
 }));
 vi.mock("@/hooks/useQueries", () => ({
     queryKeys: { playlists: () => ["playlists"] },
-    usePlaylistStudioQuery: () => ({
+    usePlaylistStudioQuery: (filters: { owner: string; sort: string; scope: string; page: number; q: string }) => {
+        state.studioFilters = filters;
+        return {
         data: {
             items: state.playlists,
             total: state.playlists.length,
@@ -28,7 +31,8 @@ vi.mock("@/hooks/useQueries", () => ({
         isFetching: false,
         isError: false,
         isPlaceholderData: false,
-    }),
+        };
+    },
 }));
 vi.mock("@tanstack/react-query", () => ({
     useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -80,6 +84,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem("kima-hub-language");
     state.playlists = [];
+    state.studioFilters = null;
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -110,6 +115,34 @@ describe("playlist library presentation translations", () => {
         expect(host.textContent).toContain("Getting Started");
         expect(state.create).not.toHaveBeenCalled();
         expect(state.post).not.toHaveBeenCalled();
+    });
+
+    it("passes user-selected owner and sort filters to the server query", async () => {
+        state.playlists = [{
+            id: "playlist-a", name: "Road trip", trackCount: 4,
+            isOwner: true, isHidden: false,
+        }];
+        await render();
+        expect(state.studioFilters).toMatchObject({
+            owner: "all", sort: "recent", scope: "visible", page: 1, q: "",
+        });
+
+        const owner = host.querySelector<HTMLSelectElement>("#playlist-owner-filter");
+        const sort = host.querySelector<HTMLSelectElement>("#playlist-sort-order");
+        expect(owner).not.toBeNull();
+        expect(sort).not.toBeNull();
+
+        await act(async () => {
+            owner!.value = "mine";
+            owner!.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(state.studioFilters).toMatchObject({ owner: "mine", page: 1 });
+
+        await act(async () => {
+            sort!.value = "name-asc";
+            sort!.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(state.studioFilters).toMatchObject({ owner: "mine", sort: "name-asc", page: 1 });
     });
 
     it("does not translate stored playlist names when the locale changes", async () => {
