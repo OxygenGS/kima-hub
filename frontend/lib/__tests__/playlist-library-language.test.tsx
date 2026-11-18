@@ -6,7 +6,11 @@ import { LanguageProvider } from "@/lib/i18n/language-context";
 import PlaylistsPage from "@/app/playlists/page";
 
 const state = vi.hoisted(() => ({
-    playlists: [] as Array<{id:string;name:string;trackCount:number;isOwner:boolean;isHidden:boolean}>,
+    playlists: [] as Array<{
+        id: string; name: string; trackCount: number; isOwner: boolean; isHidden: boolean;
+        coverUpdatedAt?: string | null;
+        items?: Array<{ id: string; track: { album: { coverUrl: string | null } } }>;
+    }>,
     create: vi.fn(),
     post: vi.fn(),
     studioFilters: null as null | { owner: string; sort: string; scope: string; page: number; q: string },
@@ -48,6 +52,8 @@ vi.mock("@/lib/api", () => ({
         createPlaylist: (...args: unknown[]) => state.create(...args),
         post: (...args: unknown[]) => state.post(...args),
         getCoverArtUrl: (u: string) => u,
+        getPlaylistCoverUrl: (id: string, timestamp: string) =>
+            "/api/playlists/" + id + "/cover?v=" + encodeURIComponent(timestamp),
     },
 }));
 vi.mock("@/components/layout/PageHeader", () => ({
@@ -64,7 +70,13 @@ vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({title}:{title:string}) => <h2>{title}</h2>,
 }));
 vi.mock("@/components/cards/MediaCard", () => ({
-    MediaCard: ({title,subtitle}:{title:string;subtitle:string}) => <article><h2>{title}</h2><p>{subtitle}</p></article>,
+    MediaCard: ({title,subtitle,imageUrl}:{
+        title:string;subtitle:string;imageUrl?:string|string[];
+    }) => <article>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+        {imageUrl && <img alt="playlist-art" src={Array.isArray(imageUrl) ? imageUrl[0] : imageUrl} />}
+    </article>,
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,6 +127,28 @@ describe("playlist library presentation translations", () => {
         expect(host.textContent).toContain("Getting Started");
         expect(state.create).not.toHaveBeenCalled();
         expect(state.post).not.toHaveBeenCalled();
+    });
+
+    it("shows custom artwork in Studio cards, with mosaic fallback when no cover is set", async () => {
+        const stamp = "2026-11-18T18:00:00.000Z";
+        state.playlists = [
+            {
+                id: "playlist-a", name: "Custom image", trackCount: 1,
+                isOwner: true, isHidden: false, coverUpdatedAt: stamp,
+                items: [{ id: "item-a", track: { album: { coverUrl: "album-fallback" } } }],
+            },
+            {
+                id: "playlist-b", name: "Automatic mosaic", trackCount: 1,
+                isOwner: true, isHidden: false, coverUpdatedAt: null,
+                items: [{ id: "item-b", track: { album: { coverUrl: "album-art" } } }],
+            },
+        ];
+        await render();
+        const covers = [...host.querySelectorAll<HTMLImageElement>('img[alt="playlist-art"]')];
+        expect(covers).toHaveLength(2);
+        expect(covers[0].getAttribute("src"))
+            .toBe("/api/playlists/playlist-a/cover?v=" + encodeURIComponent(stamp));
+        expect(covers[1].getAttribute("src")).toBe("album-art");
     });
 
     it("passes user-selected owner and sort filters to the server query", async () => {
