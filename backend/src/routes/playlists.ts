@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { Router, raw } from "express";
+import sharp from "sharp";
 import { logger } from "../utils/logger";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -138,6 +139,7 @@ router.get("/studio", async (req, res) => {
                     id: true, name: true, userId: true, isPublic: true,
                     createdAt: true, updatedAt: true,
                     user: { select: { username: true } },
+                    customCover: { select: { updatedAt: true } },
                     _count: { select: { items: true } },
                     items: {
                         take: 4,
@@ -153,8 +155,9 @@ router.get("/studio", async (req, res) => {
         const total = scope === "hidden" ? hidden : visible;
         res.setHeader("Cache-Control", "private, no-store");
         return res.json({
-            items: playlists.map(({ _count, ...playlist }) => ({
+            items: playlists.map(({ _count, customCover, ...playlist }) => ({
                 ...playlist,
+                coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
                 trackCount: _count.items,
                 isOwner: playlist.userId === userId,
                 isHidden: scope === "hidden",
@@ -207,6 +210,7 @@ router.get("/", async (req, res) => {
                 _count: {
                     select: { items: true },
                 },
+                customCover: { select: { updatedAt: true } },
                 items: {
                     take: 4,
                     select: {
@@ -224,8 +228,9 @@ router.get("/", async (req, res) => {
             },
         });
 
-        const playlistsWithCounts = playlists.map((playlist) => ({
+        const playlistsWithCounts = playlists.map(({ customCover, ...playlist }) => ({
             ...playlist,
+            coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
             trackCount: playlist._count.items,
             isOwner: playlist.userId === userId,
             isHidden: hiddenPlaylistIds.has(playlist.id),
@@ -267,6 +272,183 @@ router.post("/", async (req, res) => {
     }
 });
 
+// Playlist Studio: upload only raster images. The API receives raw bytes, not
+// data URLs or paths. Re-encoding strips metadata and prevents SVG/polyglot
+// content being served as an image. Auth checks run before parsing the upload.
+const MAX_COVER_INPUT_BYTES = 3 * 1024 * 1024;
+const MAX_COVER_OUTPUT_BYTES = 256 * 1024;
+const parseCoverUpload = raw({
+    type: ["image/jpeg", "image/png", "image/webp"],
+    limit: MAX_COVER_INPUT_BYTES,
+});
+
+router.post("/:id/cover", requirePlaylistOwner, (req, res, next) => {
+    parseCoverUpload(req, res, (error) => {
+        if (error) {
+            const tooLarge = (error as { type?: string }).type === "entity.too.large";
+            return res.status(tooLarge ? 413 : 400).json({
+                error: tooLarge ? "Playlist cover exceeds 3 MB" : "Invalid playlist cover upload",
+            });
+        }
+        next();
+    });
+}, async (req, res) => {
+    const bytes: unknown = req.body;
+    if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
+        return res.status(400).json({ error: "Supply a JPEG, PNG or WebP image" });
+    }
+    let imageData: Buffer;
+    try {
+        const image = sharp(bytes, { limitInputPixels: 16_000_000, failOn: "error", animated: false });
+        const metadata = await image.metadata();
+        if (!["jpeg", "png", "webp"].includes(metadata.format ?? "")) {
+            return res.status(415).json({ error: "Unsupported playlist cover image" });
+        }
+        imageData = await sharp(bytes, {
+            limitInputPixels: 16_000_000, failOn: "error", animated: false,
+        }).rotate().resize(512, 512, { fit: "cover" }).webp({ quality: 80, effort: 4 }).toBuffer();
+        if (imageData.length > MAX_COVER_OUTPUT_BYTES) {
+            return res.status(413).json({ error: "Playlist cover cannot be compressed safely" });
+        }
+    } catch {
+        return res.status(400).json({ error: "Invalid or oversized playlist cover image" });
+    }
+    try {
+        const cover = await prisma.playlistCustomCover.upsert({
+            where: { playlistId: req.params.id },
+            create: { playlistId: req.params.id, imageData },
+            update: { imageData },
+            select: { updatedAt: true },
+        });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({ coverUpdatedAt: cover.updatedAt.toISOString() });
+    } catch (error) {
+        logger.error("Update playlist cover error:", error);
+        return res.status(500).json({ error: "Failed to update playlist cover" });
+    }
+});
+
+router.get("/:id/cover", requirePlaylistReader, async (req, res) => {
+    try {
+        // Verify read rights again with the image read: a public playlist may
+        // become private after requirePlaylistReader's initial authorization.
+        const cover = await prisma.playlistCustomCover.findFirst({
+            where: {
+                playlistId: req.params.id,
+                playlist: {
+                    is: { OR: [{ userId: req.user!.id }, { isPublic: true }] },
+                },
+            },
+            select: { imageData: true },
+        });
+        if (!cover) return res.status(404).end();
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.send(Buffer.from(cover.imageData));
+    } catch (error) {
+        logger.error("Get playlist cover error:", error);
+        return res.status(500).end();
+    }
+});
+
+router.delete("/:id/cover", requirePlaylistOwner, async (req, res) => {
+    try {
+        await prisma.playlistCustomCover.deleteMany({
+            where: { playlistId: req.params.id },
+        });
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({ coverUpdatedAt: null });
+    } catch (error) {
+        logger.error("Remove playlist cover error:", error);
+        return res.status(500).json({ error: "Failed to remove playlist cover" });
+    }
+});
+
+// POST /playlists/:id/duplicate
+// Copy only playable local tracks into a NEW PRIVATE playlist. No pending
+// downloads, Spotify links or background jobs are copied or started.
+const duplicatePlaylistSchema = z.object({
+    name: z.string().trim().min(1).max(200).optional(),
+}).strict();
+const MAX_DUPLICATE_TRACKS = 2000;
+
+router.post("/:id/duplicate", requirePlaylistReader, async (req, res) => {
+    const parsed = duplicatePlaylistSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Invalid playlist copy name" });
+    const userId = req.user!.id;
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            // Recheck read access INSIDE the transaction. Public access can be
+            // revoked between the middleware lookup and this query.
+            const source = await tx.playlist.findFirst({
+                where: { id: req.params.id, OR: [{ userId }, { isPublic: true }] },
+                select: {
+                    name: true,
+                    _count: { select: { items: true, pendingTracks: true } },
+                    items: {
+                        where: {
+                            track: {
+                                missingSince: null,
+                                corrupt: false,
+                                album: { location: "LIBRARY" },
+                            },
+                        },
+                        orderBy: [{ rank: "asc" }, { id: "asc" }],
+                        take: MAX_DUPLICATE_TRACKS,
+                        select: { trackId: true, sort: true, rank: true },
+                    },
+                },
+            });
+            if (!source) return { error: "not_found" as const };
+            if (source._count.items > MAX_DUPLICATE_TRACKS) {
+                return { error: "too_large" as const };
+            }
+            const name = parsed.data.name ?? `${source.name.slice(0, 193)} (copy)`;
+            // An independent playlist: never inherit public access, Spotify
+            // connection, mix identity, pending tracks, or hidden-by users.
+            const target = await tx.playlist.create({
+                data: { userId, name, isPublic: false },
+                select: { id: true, name: true },
+            });
+            if (source.items.length > 0) {
+                await tx.playlistItem.createMany({
+                    data: source.items.map((item, index) => ({
+                        playlistId: target.id,
+                        trackId: item.trackId,
+                        // rank is canonical. Source sort can be stale after
+                        // drag-reorder; normalize it for legacy sort readers.
+                        sort: index,
+                        rank: item.rank,
+                    })),
+                });
+            }
+            return {
+                target,
+                copiedTrackCount: source.items.length,
+                skippedTrackCount: source._count.items - source.items.length,
+                skippedPendingCount: source._count.pendingTracks,
+            };
+        });
+        if ("error" in result) {
+            return result.error === "too_large"
+                ? res.status(413).json({ error: "Playlist is too large to duplicate" })
+                : res.status(404).json({ error: "Playlist not found" });
+        }
+        return res.status(201).json({
+            id: result.target.id,
+            name: result.target.name,
+            copiedTrackCount: result.copiedTrackCount,
+            skippedTrackCount: result.skippedTrackCount,
+            skippedPendingCount: result.skippedPendingCount,
+            isPublic: false,
+        });
+    } catch (error) {
+        logger.error("Duplicate playlist error:", error);
+        return res.status(500).json({ error: "Failed to duplicate playlist" });
+    }
+});
+
 // GET /playlists/:id
 router.get("/:id", requirePlaylistReader, async (req, res) => {
     try {
@@ -283,6 +465,7 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
                         username: true,
                     },
                 },
+                customCover: { select: { updatedAt: true } },
                 hiddenByUsers: {
                     where: { userId },
                     select: { id: true },
@@ -354,8 +537,10 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
             // Items and pending tracks share one rank space, so a string compare orders them.
         ].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
 
+        const { customCover, ...playlistFields } = playlist;
         res.json({
-            ...playlist,
+            ...playlistFields,
+            coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
             isOwner: playlist.userId === userId,
             isHidden: playlist.hiddenByUsers.length > 0,
             trackCount: playlist.items.length,
