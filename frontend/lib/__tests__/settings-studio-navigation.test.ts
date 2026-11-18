@@ -13,7 +13,7 @@ describe("Settings Studio navigation contract", () => {
         const ids = SETTINGS_ITEMS.map(item => item.id);
         expect(new Set(ids).size).toBe(ids.length);
         expect(ids).toEqual([
-            "account", "language", "subsonic", "playback", "scrobbling",
+            "account", "language", "appearance", "subsonic", "playback", "scrobbling",
             "branding", "download-preferences", "lidarr", "audiobookshelf",
             "soulseek", "artwork", "storage", "cache", "library-doctor",
             "smart-download-inbox", "corrupt-tracks", "users",
@@ -26,12 +26,13 @@ describe("Settings Studio navigation contract", () => {
     it("never exposes administrator navigation to a member", () => {
         const member = visibleSettingsItems(false);
         const admin = visibleSettingsItems(true);
-        expect(member).toHaveLength(5);
-        expect(admin).toHaveLength(17);
+        expect(member).toHaveLength(6);
+        expect(admin).toHaveLength(18);
         expect(member.every(item => !item.adminOnly)).toBe(true);
         expect(member.map(item => item.id)).not.toContain("users");
         expect(member.map(item => item.id)).not.toContain("lidarr");
         expect(resolveSettingsHash("#users", false)).toBe("overview");
+        expect(resolveSettingsHash("#appearance", false)).toBe("appearance");
         expect(resolveSettingsHash("#users", true)).toBe("users");
         expect(resolveSettingsHash("#enrichment-failures", false)).toBe("overview");
         expect(resolveSettingsHash("#enrichment-failures", true)).toBe("cache");
