@@ -1135,6 +1135,28 @@ class ApiClient {
         return this.request<ApiData>(`/playlists/${id}`);
     }
 
+    /** Authenticated, owner-managed and versioned artwork for a playlist. */
+    getPlaylistCoverUrl(id: string, updatedAt: string): string {
+        const url = this.tokenizedUrl(`/api/playlists/${encodeURIComponent(id)}/cover`);
+        return url + (url.includes("?") ? "&" : "?") + "v=" + encodeURIComponent(updatedAt);
+    }
+
+    async uploadPlaylistCover(id: string, file: File): Promise<{ coverUpdatedAt: string }> {
+        return this.request<{ coverUpdatedAt: string }>(
+            `/playlists/${encodeURIComponent(id)}/cover`, {
+                method: "POST",
+                headers: { "Content-Type": file.type },
+                body: file,
+            }
+        );
+    }
+
+    async removePlaylistCover(id: string): Promise<{ coverUpdatedAt: null }> {
+        return this.request<{ coverUpdatedAt: null }>(
+            `/playlists/${encodeURIComponent(id)}/cover`, { method: "DELETE" }
+        );
+    }
+
     async createPlaylist(name: string, isPublic = false) {
         return this.request<ApiData>("/playlists", {
             method: "POST",
