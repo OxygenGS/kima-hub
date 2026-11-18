@@ -315,6 +315,14 @@ done
 
 if [ $REDIS_COUNTER -ge $TIMEOUT ]; then
     echo "[wait-for-db] ERROR: Redis not ready after ${TIMEOUT}s"
+    echo "[wait-for-db] Possible causes include disk full, unreadable /data/redis, or corrupt AOF."
+    echo "[wait-for-db] Read-only AOF diagnostic (never modifies persistent files):"
+    if [ "$(id -u)" -eq 0 ]; then
+        gosu redis /bin/sh /app/redis-aof-diagnostics.sh || true
+    else
+        /bin/sh /app/redis-aof-diagnostics.sh || true
+    fi
+    echo "[wait-for-db] Check Redis logs and docs/redis-recovery.md; never auto-repair AOF."
     exit 1
 fi
 
@@ -343,6 +351,8 @@ PGPASSWORD="$(cat /data/secrets/database_password)" psql -h localhost -U kima -d
 exit 1
 EOF
 
+COPY backend/redis-aof-diagnostics.sh /app/redis-aof-diagnostics.sh
+RUN chmod 755 /app/redis-aof-diagnostics.sh
 RUN chmod +x /app/wait-for-db.sh && \
     sed -i 's/\r$//' /app/wait-for-db.sh
 
