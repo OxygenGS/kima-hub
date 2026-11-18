@@ -1,6 +1,7 @@
 # Project NOVA — Kima Flow
 
-**Status: development, not part of published v1.25.0.** Project NOVA is a
+**Status: phases 1–6 are merged; v1.26.0 is an unpublished release candidate,
+not part of published v1.25.0.** Project NOVA is a
 general-purpose improvement to the independent Kima Hub fork. It is designed
 for any self-hosted deployment, with no special LAN, NAS, mount or provider.
 
@@ -175,7 +176,7 @@ view only and is independent of all Flow playback/queue processing.
 The implementation and review policy are documented in
 [Library Doctor](library-doctor.md).
 
-## Phase 6 — Album Spotlight (in development)
+## Phase 6 — Album Spotlight (merged in PR #268)
 
 When Discovery Radar has identified a similar artist with a validated
 MusicBrainz artist ID, a separate **Preview albums** button can request a
@@ -199,8 +200,8 @@ and requesting artist matches alone never fetch album release groups.
 - EN/NL UI, opt-in fetch, abort and account/seed result isolation; no schema
   migration, background job, data writes, port or new external provider.
 
-**Status:** phase 6 is being reviewed and is not part of v1.25.0 or the
-merged phase-5 code in main.
+**Status:** phase 6 is merged into main but remains unpublished pending
+v1.26.0 release checks and explicit approval.
 
 ## Planned phases
 
@@ -219,8 +220,12 @@ Preferences have strict bounded schemas, the response is `private, no-store`
 and candidates are constrained to actually indexed local library tracks.
 Preview generation performs no writes.
 
-The phase-6 development PR does not create or publish a Docker tag or update a
-running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
+The v1.26.0 release-candidate PR does not create or publish a Docker tag or
+update a running installation. Existing OpenSubsonic, Symfonium, Feishin, playlist,
 Lidarr, Soulseek, backup, audio-analysis and Kima Connect behavior should
-remain unchanged. Require backend/frontend tests, EN/NL UI, database upgrade,
-privacy/security checks and native AMD64/ARM64 AIO builds before merging.
+remain unchanged. Music DNA adds one database migration; protect the full
+`/data` volume with a separately verified cold backup before upgrading.
+Require backend/frontend tests, EN/NL UI, database upgrade/restore,
+privacy/security checks and native AMD64/ARM64 AIO builds before merging
+this candidate. A separate exact-main native preflight and explicit security
+approval are required before publishing a stable tag or image.

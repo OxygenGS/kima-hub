@@ -4,6 +4,14 @@
 
 The published multi-architecture image is `ghcr.io/oxygengs/kima-hub:v1.25.0` for **linux/amd64** and **linux/arm64**, verified by the [approved stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) and [native Docker publisher](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307). Before upgrading an existing installation, independently verify a complete `/data` backup and restore. Publication does not automatically change a running installation.
 
+**Unpublished v1.26.0 candidate:** Project NOVA adds guided Flow, private
+Music DNA feedback, opt-in artist/album discovery and a read-only Library
+Guardian duplicate review. The candidate is not a Docker release. Do not
+pull a `v1.26.0` image until a native-architecture release preflight and
+explicit publication approval succeed. Music DNA introduces a Prisma
+database table; upgrading requires a complete restorable cold backup of
+`/data` and a tested independent rollback. See [safe AIO updates](safe-aio-updates.md).
+
 **Upgrading an existing installation:** Preserve the original Compose/Dockge project, music and download mounts, accounts and persistent `/data` data. Stop application writes, back up the **complete** `/data` volume and verify an independent restore before changing the image tag. Historical PostgreSQL migrations can make image-only rollback unsafe: restore the original pre-upgrade `/data` backup if rolling back. The experimental Downtify connector was retired in v1.21.0; older migration records may remain, but that connector is not part of v1.25.0.
 
 Kima runs the web app, API, PostgreSQL, Redis and bundled analysis services in one container. Your music and persistent application data remain on volumes you control.

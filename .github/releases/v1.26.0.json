@@ -1,0 +1,129 @@
+{
+  "release": {
+    "version": "1.26.0",
+    "title": "Kima Hub 1.26.0 — Project NOVA",
+    "summary": "Listen with guided Flow, continuous local queues and private Music DNA feedback; explore new artists and albums on demand, and review possible duplicate recordings safely.",
+    "date": "2026-11-17",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.126.flow",
+        "title": "Start listening with Kima Flow",
+        "summary": "Choose a listening style, energy and discovery level without navigating the 3D map.",
+        "body": "Kima Flow uses the existing Vibe analysis to prepare a playable queue from music in your own library. Choose My favorites, A bit of both or Surprise me and adjust Energy and Discovery. A preview explains why tracks fit; playback begins only when you choose Start Flow. The advanced 3D Vibe map remains available.",
+        "links": [
+          {
+            "label": "Open Flow",
+            "href": "/flow"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.126.continuous",
+        "title": "Keep your Flow going",
+        "summary": "Continue the upcoming local queue without replacing your current song or manual edits.",
+        "body": "When you explicitly start Flow, the open browser can replenish its own local-library queue as songs run low. It checks account, playback session and queue continuity; manual queue edits or changing listening mode stop automatic continuation without pausing audio. Stop automatic Flow is always available. This is not server-side background playback or an infinite external catalog.",
+        "links": [
+          {
+            "label": "Open Flow",
+            "href": "/flow"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.126.dna",
+        "title": "Teach Flow your taste with Music DNA",
+        "summary": "Give More like this or Less like this feedback and undo it whenever you choose.",
+        "body": "Your explicit per-track choices are private to your signed-in Kima account, separate from Favorites, and influence subsequent Flow suggestions. Tap a selected choice again to undo it. Preferences do not interrupt the current queue and are not sent to third-party services. Music DNA adds a database table: back up the complete /data volume before upgrading an existing installation.",
+        "links": [
+          {
+            "label": "Open Flow",
+            "href": "/flow"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.126.radar",
+        "title": "Discover artists beyond your library",
+        "summary": "Ask Discovery Radar to find similar artists you do not have playable local music from.",
+        "body": "The separate Find new artists action uses existing external matching sources, then checks the playable local library before presenting results. Suggestions link to ordinary artist pages. Opening Flow or extending a queue does not run external discovery; Radar neither changes playback nor creates a download request. Unavailable sources are disclosed rather than replaced by invented suggestions.",
+        "links": [
+          {
+            "label": "Open Flow",
+            "href": "/flow"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.126.guardian",
+        "title": "Review possible duplicate recordings safely",
+        "summary": "Use the admin-only Library Guardian report to compare repeated MusicBrainz recordings.",
+        "body": "Under Settings and Library Doctor, an administrator can explicitly inspect a limited, read-only list of available local tracks sharing a MusicBrainz recording ID. Duration and indexed acoustic signatures provide cautious evidence for manual comparison; equal fingerprints do not prove the audio files are identical. No track is moved, retagged, merged or deleted.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.126.albums",
+        "title": "Preview albums for discovered artists",
+        "summary": "Open a small MusicBrainz album preview inside Discovery Radar before navigating away.",
+        "body": "For suggested artists with a validated MusicBrainz ID, Preview albums retrieves up to three unranked release groups on demand. Album and EP entries link to the existing album details page. The preview does not prove music is absent from disk and cannot download, request, rescan or play anything automatically.",
+        "links": [
+          {
+            "label": "Open Flow",
+            "href": "/flow"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.26.0 — Project NOVA": "Kima Hub 1.26.0 — Project NOVA"
+    },
+    "summaries": {
+      "Listen with guided Flow, continuous local queues and private Music DNA feedback; explore new artists and albums on demand, and review possible duplicate recordings safely.": "Luister met de vernieuwde Kima Flow, automatisch aangevulde lokale wachtrijen en persoonlijke Music DNA-voorkeuren. Ontdek artiesten en albums op aanvraag en controleer mogelijke dubbele opnamen veilig."
+    },
+    "items": {
+      "fork.126.flow": {
+        "title": "Luister direct met Kima Flow",
+        "summary": "Kies een luisterstijl, energie en ontdekniveau zonder de 3D-kaart te bedienen.",
+        "body": "Kima Flow gebruikt de bestaande Vibe-analyse om een afspeelbare wachtrij met muziek uit je eigen bibliotheek samen te stellen. Kies Mijn favorieten, Van allebei wat of Verras me en stel Energie en Ontdekken in. Je ziet waarom nummers passen. Afspelen begint pas na een klik op Start Flow. De uitgebreide 3D Vibe-kaart blijft beschikbaar."
+      },
+      "fork.126.continuous": {
+        "title": "Laat je Flow doorgaan",
+        "summary": "Vul je lokale wachtrij aan zonder het huidige nummer of handmatige wijzigingen te overschrijven.",
+        "body": "Nadat je Flow zelf start, kan de geopende browser de wachtrij vanuit je lokale bibliotheek aanvullen. Kima controleert het account, de afspeelsessie en de actuele wachtrij. Handmatige wijzigingen of het kiezen van een andere luistermodus stoppen het automatisch aanvullen zonder muziek te pauzeren. Automatisch aanvullen stoppen is altijd beschikbaar. Dit is geen achtergrondspeler op de server of onbeperkte externe muziekdienst."
+      },
+      "fork.126.dna": {
+        "title": "Leer Flow je muzieksmaak met Music DNA",
+        "summary": "Geef Meer zoals dit of Minder zoals dit aan en maak die keuze weer ongedaan.",
+        "body": "Je expliciete voorkeuren worden alleen voor je eigen Kima-account bewaard en staan los van Favorieten. Ze beïnvloeden toekomstige Flow-voorstellen en kunnen met een tweede klik worden teruggedraaid. De huidige wachtrij blijft ongemoeid en de voorkeuren worden niet met externe diensten gedeeld. Music DNA voegt een databasetabel toe: maak voor het bijwerken een volledig herstelbare back-up van het /data-volume."
+      },
+      "fork.126.radar": {
+        "title": "Ontdek artiesten buiten je bibliotheek",
+        "summary": "Zoek via Discovery Radar vergelijkbare artiesten zonder afspeelbare lokale nummers.",
+        "body": "Met Ontdek nieuwe artiesten vraag je bewust aanbevelingen op via de bestaande externe vergelijkingsbronnen. Kima controleert daarna welke artiesten al afspeelbare nummers in je bibliotheek hebben. Suggesties openen de normale artiestenpagina. Flow openen of de wachtrij aanvullen start deze externe zoekactie niet. Radar wijzigt de speler niet en begint geen download. Tijdelijk onbereikbare bronnen worden duidelijk vermeld."
+      },
+      "fork.126.guardian": {
+        "title": "Controleer mogelijk dubbele opnamen veilig",
+        "summary": "Vergelijk als beheerder mogelijke dubbele MusicBrainz-opnamen in Library Guardian.",
+        "body": "Onder Instellingen en Library Doctor kun je als beheerder een beperkte lijst met mogelijk dubbele lokale opnamen laten zien. Gedeelde MusicBrainz-opname-ID's, speelduur en geïndexeerde akoestische kenmerken helpen bij handmatige controle. Een overeenkomst bewijst niet dat audiobestanden exact gelijk zijn. Guardian verplaatst, hernoemt, verwijdert of bewerkt geen muziekbestanden."
+      },
+      "fork.126.albums": {
+        "title": "Bekijk albums van ontdekte artiesten",
+        "summary": "Open vanuit Discovery Radar een klein MusicBrainz-albumoverzicht.",
+        "body": "Bij voorgestelde artiesten met een geldige MusicBrainz-ID haalt Toon albums pas na je klik maximaal drie ongerangschikte album- of EP-vermeldingen op. Elk resultaat leidt naar de bestaande albumdetailpagina. Deze catalogusgegevens bewijzen niet dat muziek fysiek ontbreekt en starten nooit automatisch afspelen, aanvragen, downloaden of scannen."
+      }
+    }
+  },
+  "changelog": "Project NOVA bundles six previously merged development stages into the OxygenGS fork. **This is source preparation only, not a published v1.26.0 image.** Published stable remains v1.25.0 until an exact-main native release preflight and explicit reviewed publication succeed.\n\n### Kima Flow and safe continuation\n- PR #263 adds a guided, explainable, local-library-only Flow experience over the existing Vibe matching engine. The original advanced 3D Vibe view remains available; preparing a preview does not start playback.\n- PR #264 extends a user-started Flow queue in the originating open browser, without replacing the currently playing song. Owner/session and manual-edit guards prevent stale refills; it stops cleanly when the eligible local library is exhausted.\n\n### Music DNA and opt-in discovery\n- PR #265 introduces private, reversible More like this / Less like this signals per track and Kima account. It adds one additive NovaFlowFeedback Prisma migration: upgrades require a complete, separately restorable cold backup of /data including the embedded database and secrets.\n- PR #266 adds user-requested Discovery Radar for related artists absent from the playable local library. External matching sources are contacted only after an explicit click; there is no automatic acquisition or playback modification.\n- PR #268 adds a separately clicked, bounded MusicBrainz Album Spotlight sample for identified artists. The preview shows source-backed album and EP entries, not inferred streaming availability, and navigates to existing album pages for separate user actions.\n\n### Read-only library evidence\n- PR #267 adds the admin-only Library Guardian potential-duplicate-recordings report. It uses existing indexed MusicBrainz IDs and conservative duration/acoustic evidence. Matching fingerprints do not prove byte-identical files; no automatic deletion, moving, retagging, repair or other mutation occurs.\n\n### Upgrade and publication gates\n- Preserve existing Compose/Dockge project identity, /data volume, /music and /downloads mounts, accounts, integrations, Lidarr/Soulseek and OpenSubsonic clients. Do not run an old image against a newly migrated database; restore a verified pre-upgrade snapshot into an independent volume for rollback.\n- Individual feature PRs #263–#268 passed their backend/frontend tests and native AIO build workflows. That does **not** replace release-candidate CI, native AMD64/ARM64 image scanning on the exact main commit, a documented vulnerability review, or explicit approval to create tags and publish images.\n- Existing published images have unresolved HIGH and CRITICAL scanner advisories documented in docs/image-security.md. No claim is made that a new image is vulnerability-free. The v1.26.0 tag and image are **not yet published**."
+}

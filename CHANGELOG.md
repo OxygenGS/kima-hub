@@ -1,5 +1,26 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.26.0 — release preparation (unpublished)
+
+Project NOVA bundles six previously merged development stages into the OxygenGS fork. **This is source preparation only, not a published v1.26.0 image.** Published stable remains v1.25.0 until an exact-main native release preflight and explicit reviewed publication succeed.
+
+### Kima Flow and safe continuation
+- PR #263 adds a guided, explainable, local-library-only Flow experience over the existing Vibe matching engine. The original advanced 3D Vibe view remains available; preparing a preview does not start playback.
+- PR #264 extends a user-started Flow queue in the originating open browser, without replacing the currently playing song. Owner/session and manual-edit guards prevent stale refills; it stops cleanly when the eligible local library is exhausted.
+
+### Music DNA and opt-in discovery
+- PR #265 introduces private, reversible More like this / Less like this signals per track and Kima account. It adds one additive NovaFlowFeedback Prisma migration: upgrades require a complete, separately restorable cold backup of /data including the embedded database and secrets.
+- PR #266 adds user-requested Discovery Radar for related artists absent from the playable local library. External matching sources are contacted only after an explicit click; there is no automatic acquisition or playback modification.
+- PR #268 adds a separately clicked, bounded MusicBrainz Album Spotlight sample for identified artists. The preview shows source-backed album and EP entries, not inferred streaming availability, and navigates to existing album pages for separate user actions.
+
+### Read-only library evidence
+- PR #267 adds the admin-only Library Guardian potential-duplicate-recordings report. It uses existing indexed MusicBrainz IDs and conservative duration/acoustic evidence. Matching fingerprints do not prove byte-identical files; no automatic deletion, moving, retagging, repair or other mutation occurs.
+
+### Upgrade and publication gates
+- Preserve existing Compose/Dockge project identity, /data volume, /music and /downloads mounts, accounts, integrations, Lidarr/Soulseek and OpenSubsonic clients. Do not run an old image against a newly migrated database; restore a verified pre-upgrade snapshot into an independent volume for rollback.
+- Individual feature PRs #263–#268 passed their backend/frontend tests and native AIO build workflows. That does **not** replace release-candidate CI, native AMD64/ARM64 image scanning on the exact main commit, a documented vulnerability review, or explicit approval to create tags and publish images.
+- Existing published images have unresolved HIGH and CRITICAL scanner advisories documented in docs/image-security.md. No claim is made that a new image is vulnerability-free. The v1.26.0 tag and image are **not yet published**.
+
 ## OxygenGS fork v1.25.0 — released 2026-11-16
 
 The published [v1.25.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) introduces **Project ONE / Kima Connect** to the independent OxygenGS fork. The stable Docker image is `ghcr.io/oxygengs/kima-hub:v1.25.0` on native AMD64 and ARM64; the `:latest` alias is not automatically promoted.

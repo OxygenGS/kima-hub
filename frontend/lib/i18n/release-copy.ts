@@ -49,6 +49,47 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.26.0
+    "1.26.0": {
+        "titles": {
+            "Kima Hub 1.26.0 \u2014 Project NOVA": "Kima Hub 1.26.0 \u2014 Project NOVA"
+        },
+        "summaries": {
+            "Listen with guided Flow, continuous local queues and private Music DNA feedback; explore new artists and albums on demand, and review possible duplicate recordings safely.": "Luister met de vernieuwde Kima Flow, automatisch aangevulde lokale wachtrijen en persoonlijke Music DNA-voorkeuren. Ontdek artiesten en albums op aanvraag en controleer mogelijke dubbele opnamen veilig."
+        },
+        "items": {
+            "fork.126.flow": {
+                "title": "Luister direct met Kima Flow",
+                "summary": "Kies een luisterstijl, energie en ontdekniveau zonder de 3D-kaart te bedienen.",
+                "body": "Kima Flow gebruikt de bestaande Vibe-analyse om een afspeelbare wachtrij met muziek uit je eigen bibliotheek samen te stellen. Kies Mijn favorieten, Van allebei wat of Verras me en stel Energie en Ontdekken in. Je ziet waarom nummers passen. Afspelen begint pas na een klik op Start Flow. De uitgebreide 3D Vibe-kaart blijft beschikbaar."
+            },
+            "fork.126.continuous": {
+                "title": "Laat je Flow doorgaan",
+                "summary": "Vul je lokale wachtrij aan zonder het huidige nummer of handmatige wijzigingen te overschrijven.",
+                "body": "Nadat je Flow zelf start, kan de geopende browser de wachtrij vanuit je lokale bibliotheek aanvullen. Kima controleert het account, de afspeelsessie en de actuele wachtrij. Handmatige wijzigingen of het kiezen van een andere luistermodus stoppen het automatisch aanvullen zonder muziek te pauzeren. Automatisch aanvullen stoppen is altijd beschikbaar. Dit is geen achtergrondspeler op de server of onbeperkte externe muziekdienst."
+            },
+            "fork.126.dna": {
+                "title": "Leer Flow je muzieksmaak met Music DNA",
+                "summary": "Geef Meer zoals dit of Minder zoals dit aan en maak die keuze weer ongedaan.",
+                "body": "Je expliciete voorkeuren worden alleen voor je eigen Kima-account bewaard en staan los van Favorieten. Ze be\u00efnvloeden toekomstige Flow-voorstellen en kunnen met een tweede klik worden teruggedraaid. De huidige wachtrij blijft ongemoeid en de voorkeuren worden niet met externe diensten gedeeld. Music DNA voegt een databasetabel toe: maak voor het bijwerken een volledig herstelbare back-up van het /data-volume."
+            },
+            "fork.126.radar": {
+                "title": "Ontdek artiesten buiten je bibliotheek",
+                "summary": "Zoek via Discovery Radar vergelijkbare artiesten zonder afspeelbare lokale nummers.",
+                "body": "Met Ontdek nieuwe artiesten vraag je bewust aanbevelingen op via de bestaande externe vergelijkingsbronnen. Kima controleert daarna welke artiesten al afspeelbare nummers in je bibliotheek hebben. Suggesties openen de normale artiestenpagina. Flow openen of de wachtrij aanvullen start deze externe zoekactie niet. Radar wijzigt de speler niet en begint geen download. Tijdelijk onbereikbare bronnen worden duidelijk vermeld."
+            },
+            "fork.126.guardian": {
+                "title": "Controleer mogelijk dubbele opnamen veilig",
+                "summary": "Vergelijk als beheerder mogelijke dubbele MusicBrainz-opnamen in Library Guardian.",
+                "body": "Onder Instellingen en Library Doctor kun je als beheerder een beperkte lijst met mogelijk dubbele lokale opnamen laten zien. Gedeelde MusicBrainz-opname-ID's, speelduur en ge\u00efndexeerde akoestische kenmerken helpen bij handmatige controle. Een overeenkomst bewijst niet dat audiobestanden exact gelijk zijn. Guardian verplaatst, hernoemt, verwijdert of bewerkt geen muziekbestanden."
+            },
+            "fork.126.albums": {
+                "title": "Bekijk albums van ontdekte artiesten",
+                "summary": "Open vanuit Discovery Radar een klein MusicBrainz-albumoverzicht.",
+                "body": "Bij voorgestelde artiesten met een geldige MusicBrainz-ID haalt Toon albums pas na je klik maximaal drie ongerangschikte album- of EP-vermeldingen op. Elk resultaat leidt naar de bestaande albumdetailpagina. Deze catalogusgegevens bewijzen niet dat muziek fysiek ontbreekt en starten nooit automatisch afspelen, aanvragen, downloaden of scannen."
+            }
+        }
+    },
     // release-candidate:1.25.0
     "1.25.0": {
         "titles": {
