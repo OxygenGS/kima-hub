@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { logger } from "../utils/logger";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { requireAuthOrToken, requireMusicPermission } from "../middleware/auth";
 import { prisma } from "../utils/db";
 import { sessionLog } from "../utils/playlistLogger";
@@ -76,6 +77,98 @@ const removeTracksSchema = z.object({
 
 const moveItemSchema = z.object({
     afterItemId: z.string().nullable().optional(),
+});
+
+// GET /playlists/studio
+// Dedicated, bounded server-side browsing for the playlist workspace.
+// The original GET /playlists array contract remains unchanged for existing consumers.
+const playlistStudioQuerySchema = z.object({
+    q: z.string().trim().max(120).default(""),
+    scope: z.enum(["visible", "hidden"]).default("visible"),
+    owner: z.enum(["all", "mine", "shared"]).default("all"),
+    sort: z.enum(["recent", "oldest", "name-asc", "name-desc"]).default("recent"),
+    page: z.coerce.number().int().min(1).max(10000).default(1),
+    limit: z.coerce.number().int().min(1).max(60).default(24),
+}).strict();
+
+router.get("/studio", async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+    const parsed = playlistStudioQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid playlist search parameters" });
+    }
+    const { q, scope, owner, sort, page, limit } = parsed.data;
+    const userId = req.user.id;
+    // Start from read permissions. A filter must NEVER expand access rights.
+    const access: Prisma.PlaylistWhereInput = {
+        OR: [{ userId }, { isPublic: true }],
+    };
+    const search: Prisma.PlaylistWhereInput = q
+        ? { name: { contains: q, mode: "insensitive" } }
+        : {};
+    const ownership: Prisma.PlaylistWhereInput = owner === "mine"
+        ? { userId }
+        : owner === "shared"
+            ? { userId: { not: userId }, isPublic: true }
+            : {};
+    const base: Prisma.PlaylistWhereInput = { AND: [access, search, ownership] };
+    const withScope = (selected: "visible" | "hidden"): Prisma.PlaylistWhereInput => ({
+        AND: [
+            base,
+            { hiddenByUsers: selected === "hidden" ? { some: { userId } } : { none: { userId } } },
+        ],
+    });
+
+    const orderBy: Prisma.PlaylistOrderByWithRelationInput[] =
+        sort === "name-asc" ? [{ name: "asc" }, { id: "asc" }] :
+        sort === "name-desc" ? [{ name: "desc" }, { id: "asc" }] :
+        sort === "oldest" ? [{ createdAt: "asc" }, { id: "asc" }] :
+        [{ createdAt: "desc" }, { id: "desc" }];
+
+    try {
+        const [visible, hidden, playlists] = await Promise.all([
+            prisma.playlist.count({ where: withScope("visible") }),
+            prisma.playlist.count({ where: withScope("hidden") }),
+            prisma.playlist.findMany({
+                where: withScope(scope),
+                orderBy,
+                skip: (page - 1) * limit,
+                take: limit,
+                select: {
+                    id: true, name: true, userId: true, isPublic: true,
+                    createdAt: true, updatedAt: true,
+                    user: { select: { username: true } },
+                    _count: { select: { items: true } },
+                    items: {
+                        take: 4,
+                        orderBy: [{ rank: "asc" }, { id: "asc" }],
+                        select: {
+                            id: true,
+                            track: { select: { album: { select: { coverUrl: true } } } },
+                        },
+                    },
+                },
+            }),
+        ]);
+        const total = scope === "hidden" ? hidden : visible;
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.json({
+            items: playlists.map(({ _count, ...playlist }) => ({
+                ...playlist,
+                trackCount: _count.items,
+                isOwner: playlist.userId === userId,
+                isHidden: scope === "hidden",
+            })),
+            page,
+            limit,
+            total,
+            pages: Math.max(1, Math.ceil(total / limit)),
+            counts: { visible, hidden },
+        });
+    } catch (error) {
+        logger.error("Playlist Studio search error:", error);
+        return res.status(500).json({ error: "Could not search playlists" });
+    }
 });
 
 // GET /playlists
