@@ -174,6 +174,88 @@ router.post("/", async (req, res) => {
     }
 });
 
+// POST /playlists/:id/duplicate
+// Copy only playable local tracks into a NEW PRIVATE playlist. No pending
+// downloads, Spotify links or background jobs are copied or started.
+const duplicatePlaylistSchema = z.object({
+    name: z.string().trim().min(1).max(200).optional(),
+}).strict();
+const MAX_DUPLICATE_TRACKS = 2000;
+
+router.post("/:id/duplicate", requirePlaylistReader, async (req, res) => {
+    const parsed = duplicatePlaylistSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: "Invalid playlist copy name" });
+    const userId = req.user!.id;
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            // Recheck read access INSIDE the transaction. Public access can be
+            // revoked between the middleware lookup and this query.
+            const source = await tx.playlist.findFirst({
+                where: { id: req.params.id, OR: [{ userId }, { isPublic: true }] },
+                select: {
+                    name: true,
+                    _count: { select: { items: true, pendingTracks: true } },
+                    items: {
+                        where: {
+                            track: {
+                                missingSince: null,
+                                corrupt: false,
+                                album: { location: "LIBRARY" },
+                            },
+                        },
+                        orderBy: [{ rank: "asc" }, { id: "asc" }],
+                        take: MAX_DUPLICATE_TRACKS,
+                        select: { trackId: true, sort: true, rank: true },
+                    },
+                },
+            });
+            if (!source) return { error: "not_found" as const };
+            if (source._count.items > MAX_DUPLICATE_TRACKS) {
+                return { error: "too_large" as const };
+            }
+            const name = parsed.data.name ?? `${source.name.slice(0, 193)} (copy)`;
+            // An independent playlist: never inherit public access, Spotify
+            // connection, mix identity, pending tracks, or hidden-by users.
+            const target = await tx.playlist.create({
+                data: { userId, name, isPublic: false },
+                select: { id: true, name: true },
+            });
+            if (source.items.length > 0) {
+                await tx.playlistItem.createMany({
+                    data: source.items.map(item => ({
+                        playlistId: target.id,
+                        trackId: item.trackId,
+                        sort: item.sort,
+                        rank: item.rank,
+                    })),
+                });
+            }
+            return {
+                target,
+                copiedTrackCount: source.items.length,
+                skippedTrackCount: source._count.items - source.items.length,
+                skippedPendingCount: source._count.pendingTracks,
+            };
+        });
+        if ("error" in result) {
+            return result.error === "too_large"
+                ? res.status(413).json({ error: "Playlist is too large to duplicate" })
+                : res.status(404).json({ error: "Playlist not found" });
+        }
+        return res.status(201).json({
+            id: result.target.id,
+            name: result.target.name,
+            copiedTrackCount: result.copiedTrackCount,
+            skippedTrackCount: result.skippedTrackCount,
+            skippedPendingCount: result.skippedPendingCount,
+            isPublic: false,
+        });
+    } catch (error) {
+        logger.error("Duplicate playlist error:", error);
+        return res.status(500).json({ error: "Failed to duplicate playlist" });
+    }
+});
+
 // GET /playlists/:id
 router.get("/:id", requirePlaylistReader, async (req, res) => {
     try {
