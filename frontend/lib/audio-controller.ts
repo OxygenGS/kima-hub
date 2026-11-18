@@ -64,6 +64,7 @@ export class AudioController {
     // Volume / mute
     private volume = 1;
     private isMuted = false;
+    private playbackRate = 1;
 
     // iOS standalone PWAs lose the <audio> session in the background while
     // MediaSession still reports "playing" (WebKit #261858). Routing the element
@@ -117,6 +118,7 @@ export class AudioController {
         const el = document.createElement("audio");
         el.setAttribute("playsinline", "");
         el.preload = "auto";
+        el.playbackRate = this.playbackRate;
         el.crossOrigin = "anonymous";
         el.style.display = "none";
         el.setAttribute("data-kima-player", role);
@@ -532,6 +534,8 @@ export class AudioController {
         this.audio.muted = this.isMuted;
         this.audioNext.volume = this.isMuted ? 0 : this.volume;
         this.audioNext.muted = this.isMuted;
+        this.audio.playbackRate = this.playbackRate;
+        this.audioNext.playbackRate = this.playbackRate;
 
         // The fresh idle element has no buffer -- drop the stale preload
         // bookkeeping and re-issue the preload from the cached expected-next
@@ -737,6 +741,7 @@ export class AudioController {
         // swap carries no jump even if setVolume/setMuted fired in between.
         this.audioNext.volume = this.isMuted ? 0 : this.volume;
         this.audioNext.muted = this.isMuted;
+        this.audioNext.playbackRate = this.playbackRate;
 
         this.preloadedTrackId = null;
         this.idleReady = false;
@@ -982,6 +987,21 @@ export class AudioController {
         this.expectedNextUrl = null;
         this.expectedNextDurationS = null;
         this.preloadedTrackId = null;
+    }
+
+    /**
+     * A single rate for both audio elements prevents a jump at a gapless swap
+     * or a rebuilt iOS audio session. The React player resets this to 1x
+     * whenever the playback type is not an audiobook.
+     */
+    setPlaybackRate(rate: number): void {
+        this.playbackRate = Number.isFinite(rate) ? Math.max(0.75, Math.min(2, rate)) : 1;
+        this.audio.playbackRate = this.playbackRate;
+        this.audioNext.playbackRate = this.playbackRate;
+    }
+
+    getPlaybackRate(): number {
+        return this.playbackRate;
     }
 
     setVolume(volume: number): void {

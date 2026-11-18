@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Play, Pause, RotateCcw, CheckCircle } from "lucide-react";
 import type { Audiobook } from "../types";
 import { Button } from "@/components/ui/Button";
+import { AudiobookSpeedSelect } from "@/components/player/AudiobookSpeedSelect";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface AudiobookActionBarProps {
@@ -71,6 +72,7 @@ export function AudiobookActionBar({
             <div className="flex-1" />
 
             <div className="flex items-center gap-2">
+                <AudiobookSpeedSelect compact />
                 {hasProgress && !isFinished && (
                     <>
                         <button

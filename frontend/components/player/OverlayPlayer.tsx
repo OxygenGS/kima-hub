@@ -17,6 +17,7 @@ import { formatTime, formatMediaDuration } from "@/lib/format";
 import { shuffleState } from "@/lib/shuffle";
 import { SeekSlider } from "./SeekSlider";
 import { SleepTimer } from "./SleepTimer";
+import { AudiobookSpeedSelect } from "./AudiobookSpeedSelect";
 import { VibeToggleButton } from "./VibeToggleButton";
 import { usePlayerSwipe } from "./hooks/usePlayerSwipe";
 import { useOverlayFocus } from "./hooks/useOverlayFocus";
@@ -135,6 +136,7 @@ export function OverlayPlayer() {
                         </div>
                         <div className={styles.tools}>
                             <div className={styles.timer}><SleepTimer /></div>
+                            {playbackType === "audiobook" && <AudiobookSpeedSelect />}
                             <Control onClick={toggleShuffle} disabled={!shuffle.enabled} pressed={isShuffle}
                                 label={t("Shuffle")} title={translate(locale, shuffle.title)}><Shuffle size={20} aria-hidden="true" /></Control>
                             <Control onClick={toggleRepeat} disabled={!canSkip} pressed={repeatMode !== "off"}

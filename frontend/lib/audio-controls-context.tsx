@@ -23,6 +23,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useAudioPlayback } from "./audio-playback-context";
 import { api, getApiBaseUrl } from "@/lib/api";
 import { useAudioController } from "./audio-controller-context";
+import { readAudiobookSpeed, useAudiobookSpeed } from "./audiobook-speed";
 import { dispatchQueryEvent } from "@/lib/query-events";
 import { notify } from "@/lib/notify";
 import { BookSession, BookSessionUnavailableError } from "@/lib/book-session";
@@ -149,6 +150,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const playback = useAudioPlayback();
 
     const controller = useAudioController();
+    const { speed: audiobookSpeed } = useAudiobookSpeed();
     const controllerRef = useRef(controller);
     useEffect(() => { controllerRef.current = controller; }, [controller]);
 
@@ -310,6 +312,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
 
             const streamUrl = api.getStreamUrl(tracks[startIndex].id);
+            controllerRef.current?.setPlaybackRate(1);
             controllerRef.current?.load(streamUrl, { autoplay: true, seekTo, expectedDurationS: tracks[startIndex].duration });
         },
         [state, generateShuffleIndices]
@@ -345,6 +348,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             });
             setCurrentTimeRef.current(bookTime);
 
+            controllerRef.current?.setPlaybackRate(readAudiobookSpeed());
             controllerRef.current?.load(
                 api.getAudiobookStreamUrl(session.bookId, file.index),
                 { autoplay: true, seekTo: fileTime }
@@ -383,6 +387,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
 
             const [podcastId, episodeId] = podcast.id.split(":");
             const streamUrl = api.getPodcastEpisodeStreamUrl(podcastId, episodeId);
+            controllerRef.current?.setPlaybackRate(1);
             controllerRef.current?.load(streamUrl, { autoplay: true, seekTo: startTime });
         },
         [state]
@@ -1540,6 +1545,11 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             ctrl.off("ended", stop);
         };
     }, [controller]);
+
+    // -- Audio speed: audiobook preference only; music and podcasts remain 1x. --
+    useEffect(() => {
+        controller?.setPlaybackRate(state.playbackType === "audiobook" ? audiobookSpeed : 1);
+    }, [controller, state.playbackType, audiobookSpeed]);
 
     // -- Volume/mute sync --
     useEffect(() => { controllerRef.current?.setVolume(state.volume); }, [state.volume]);
