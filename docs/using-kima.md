@@ -164,3 +164,19 @@ the Browse shortcut in the desktop navigation. Both choices are stored locally
 per browser and update immediately without changing metadata, permissions or
 media files. Hidden links remain accessible through their URL. Published stable
 remains v1.26.0 until a separate approved release.
+
+## Duplicate a playlist (v1.28.0 development — not yet released)
+
+Open one of your playlists or a public playlist shared by another Kima user,
+then select **Duplicate playlist**. A new playlist is created under your
+account with **private visibility**, independently of the original.
+
+- Copies up to 2,000 currently playable library tracks, retaining their order.
+- Unavailable, corrupt, missing or discovery-only tracks and all pending
+  download placeholders are not copied. The result reports skipped items.
+- No download, import, scanner or external service request is started.
+- The original playlist, ownership, sharing and media files are unchanged.
+- Large playlists above the limit are rejected before creating a partial copy.
+
+This is unreleased v1.28.0 development; the stable image remains v1.26.0
+until the separately approved release process is completed.
