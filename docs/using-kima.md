@@ -154,3 +154,13 @@ The **Downloads** screen shows the current account's Kima download jobs from sup
 ## Other apps
 
 Apps that speak the Subsonic API can play from Kima. See [subsonic.md](subsonic.md).
+
+
+## Appearance preferences (v1.27.0 development, not yet released)
+
+In **Settings → Appearance** you can keep the original capitalization of artist,
+album and song names instead of the default lowercase display, and show or hide
+the Browse shortcut in the desktop navigation. Both choices are stored locally
+per browser and update immediately without changing metadata, permissions or
+media files. Hidden links remain accessible through their URL. Published stable
+remains v1.26.0 until a separate approved release.

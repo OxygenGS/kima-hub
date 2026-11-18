@@ -356,6 +356,11 @@ body {
     text-transform: lowercase;
 }
 
+/* Optional browser-only appearance preference. Original media metadata is preserved. */
+:root[data-text-case="original"] body {
+    text-transform: none;
+}
+
 /* Browsers set form controls to text-transform: none; these follow the page. */
 button, input, textarea, select, optgroup, option {
     text-transform: inherit;
