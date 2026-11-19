@@ -250,16 +250,7 @@ jobs:
           npx prisma migrate deploy
       - name: Ensure FFmpeg is available for real-audio canary
         shell: bash
-        run: |
-          set -euo pipefail
-          # Never let a runner's apt lock/network hang block the release gates.
-          if ! test -x /usr/bin/ffmpeg; then
-            echo "::notice::FFmpeg missing from runner; bounded installation"
-            sudo timeout -k 10s 180s apt-get update -qq
-            sudo timeout -k 10s 180s env DEBIAN_FRONTEND=noninteractive \
-              apt-get -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg
-          fi
-          timeout -k 5s 15s /usr/bin/ffmpeg -hide_banner -version | head -n 1
+        run: bash .github/ci/install-test-ffmpeg.sh
       - name: Run all backend Jest tests with upstream v1.11 code
         working-directory: backend
         run: npm test -- --passWithNoTests --testPathIgnorePatterns="webhookEventStore"
