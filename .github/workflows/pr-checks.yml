@@ -194,6 +194,11 @@ jobs:
               working-directory: backend
               run: npm ci
 
+            - name: Provide Python and pip for verified FFmpeg test binary
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
             - name: Ensure FFmpeg is available for real-audio canary
               shell: bash
               run: bash .github/ci/install-test-ffmpeg.sh
