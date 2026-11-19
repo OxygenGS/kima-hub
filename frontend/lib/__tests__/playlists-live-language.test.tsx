@@ -11,7 +11,20 @@ const mocks = vi.hoisted(() => ({
     invalidateQueries: vi.fn(),
 }));
 vi.mock("@/hooks/useQueries", () => ({
-    usePlaylistsQuery: () => ({ data: [], isLoading: false }),
+    usePlaylistStudioQuery: () => ({
+        data: {
+            items: [],
+            page: 1,
+            limit: 24,
+            pages: 1,
+            total: 0,
+            counts: { visible: 0, hidden: 0 },
+        },
+        isLoading: false,
+        isFetching: false,
+        isError: false,
+        isPlaceholderData: false,
+    }),
     queryKeys: { playlists: () => ["playlists"] },
 }));
 vi.mock("@tanstack/react-query", () => ({

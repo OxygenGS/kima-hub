@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from "react";
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { PlaylistPreview } from "@/features/home/types";
 
@@ -44,6 +44,11 @@ export const queryKeys = {
         ["search", "discover", "similar", artist, mbid] as const,
 
     playlists: () => ["playlists"] as const,
+    playlistStudio: (filters: {
+        q: string; scope: "visible" | "hidden"; owner: "all" | "mine" | "shared";
+        sort: "recent" | "oldest" | "name-asc" | "name-desc";
+        page: number; limit: number;
+    }) => ["playlists", "studio", filters] as const,
     playlist: (id: string) => ["playlist", id] as const,
 
     mixes: () => ["mixes"] as const,
@@ -226,6 +231,15 @@ export function usePlaylistsQuery() {
         queryKey: queryKeys.playlists(),
         queryFn: () => api.getPlaylists(),
         staleTime: 1 * 60 * 1000, // 1 minute
+    });
+}
+
+export function usePlaylistStudioQuery(filters: Parameters<typeof api.getPlaylistStudio>[0]) {
+    return useQuery({
+        queryKey: queryKeys.playlistStudio(filters),
+        queryFn: () => api.getPlaylistStudio(filters),
+        placeholderData: keepPreviousData,
+        staleTime: 30 * 1000,
     });
 }
 

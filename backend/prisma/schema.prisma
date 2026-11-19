@@ -526,11 +526,21 @@ model Playlist {
   user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   items              PlaylistItem[]
   pendingTracks      PlaylistPendingTrack[]
+  customCover        PlaylistCustomCover?
 
   @@unique([userId, mixId])
   @@index([isPublic])
   @@index([spotifyPlaylistId])
   @@index([userId])
+}
+
+// Sanitized WebP bytes are stored separately so list queries never fetch image
+// payloads. Deleting the playlist automatically deletes its custom cover.
+model PlaylistCustomCover {
+  playlistId String   @id
+  imageData  Bytes
+  updatedAt  DateTime @default(now()) @updatedAt
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
 }
 
 model PlaylistItem {
