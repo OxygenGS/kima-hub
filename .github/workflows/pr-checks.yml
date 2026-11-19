@@ -60,6 +60,8 @@ jobs:
               run: python3 .github/ci/check-portable-compose.py
             - name: Validate pinned multiarch vulnerability-scanner installer syntax
               run: bash -n .github/ci/install-trivy-verified.sh
+            - name: Validate FFmpeg test bootstrap shell syntax
+              run: bash -n .github/ci/install-test-ffmpeg.sh
 
     public-privacy-audit:
         name: Block local installation details in public source
