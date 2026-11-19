@@ -14,7 +14,7 @@ Four independently tested improvements from upstream issues are included in the 
 
 ### Safe upgrade and release gates
 - No new Prisma migration, service port, external dependency or required media mount is added by these four changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.
-- All individual feature PRs passed exact-head backend, frontend, permissions, EN/NL, database upgrade/restore, dependency/secret and native AMD64/ARM64 no-push checks. The *combined* v1.27.0 source still requires its own exact-head release CI, a separate exact-main native image/security preflight and explicit review of residual HIGH/CRITICAL findings.
+- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.
 - No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0.
 
 ## OxygenGS fork v1.26.0 — released 2026-11-18
