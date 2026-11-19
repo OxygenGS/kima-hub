@@ -77,6 +77,11 @@ const dutch: Record<string, VersionCopy> = {
                 "title": "Nauwkeurigere OpenSubsonic direct-play-informatie",
                 "summary": "Herken MP3, FLAC en vergelijkbare codecbenamingen zonder onnodige transcode-adviezen.",
                 "body": "OpenSubsonic getTranscodeDecision herkent nu bekende overeenkomsten zoals mp3 en audio/mpeg, of flac en audio/flac. Onbekende audioformaten worden nooit automatisch als MP3 beschouwd. De verbetering corrigeert alleen de formaatmelding aan ondersteunde muziekclients; muziekbestanden, streamingroutes en toegangsrechten blijven ongewijzigd."
+            },
+            "fork.127.artist-bio": {
+                "title": "Bestaande artiestbiografie\u00ebn blijven behouden",
+                "summary": "Ontbrekende brongegevens wissen geen opgeslagen artiestbeschrijving meer.",
+                "body": "Artiestverrijking slaat een nieuwe biografie alleen op wanneer er een bruikbare, niet-lege vervangende tekst is. Een lege reactie van Wikidata of tijdelijke problemen met MusicBrainz laten de bestaande biografie intact. Gegevens die aantoonbaar bij een verkeerde MusicBrainz-artiest horen, kunnen nog steeds bewust worden verwijderd. Deze correctie beschermt ook bestaande bibliotheken bij updates zonder muziekbestanden of afspeellijsten te wijzigen."
             }
         }
     },

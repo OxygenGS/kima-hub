@@ -55,6 +55,7 @@ Kima Connect introduced private browser-player discovery, remote Pause / Previou
 - **Audiobook playback speed:** 0.75×–2× for books, while music and podcasts remain at 1×.
 - **Redis diagnostics:** bounded, read-only AOF checks with a recovery guide; no automatic repair or file deletion.
 - **OpenSubsonic compatibility:** recognize codec/MIME aliases in direct-play reporting, without changing audio files or streams.
+- **Artist biographies:** preserve saved descriptions when enrichment has no valid replacement; never erase them on a missing-source response.
 
 The release still requires combined CI, native AMD64/ARM64 security preflight and explicit publication approval. Keep the existing project name, storage mounts and complete `/data` backup when planning upgrades.
 

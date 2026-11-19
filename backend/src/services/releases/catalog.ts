@@ -159,6 +159,19 @@ export const RELEASES: Release[] = [
                         "href": "/collection"
                     }
                 ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.127.artist-bio",
+                "title": "Keep existing artist biographies",
+                "summary": "An unavailable metadata source no longer erases a saved artist description.",
+                "body": "Artist enrichment now saves a new biography only when a usable, non-empty replacement exists. Empty Wikidata replies and temporary MusicBrainz failures leave the existing biography intact. Metadata confirmed to belong to the wrong MusicBrainz artist can still be cleared deliberately. This also protects existing libraries during upgrades without changing audio files or playlists.",
+                "links": [
+                    {
+                        "label": "Open your artists",
+                        "href": "/collection"
+                    }
+                ]
             }
         ]
     },

@@ -56,6 +56,19 @@
             "href": "/collection"
           }
         ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.127.artist-bio",
+        "title": "Keep existing artist biographies",
+        "summary": "An unavailable metadata source no longer erases a saved artist description.",
+        "body": "Artist enrichment now saves a new biography only when a usable, non-empty replacement exists. Empty Wikidata replies and temporary MusicBrainz failures leave the existing biography intact. Metadata confirmed to belong to the wrong MusicBrainz artist can still be cleared deliberately. This also protects existing libraries during upgrades without changing audio files or playlists.",
+        "links": [
+          {
+            "label": "Open your artists",
+            "href": "/collection"
+          }
+        ]
       }
     ]
   },
@@ -86,8 +99,13 @@
         "title": "Nauwkeurigere OpenSubsonic direct-play-informatie",
         "summary": "Herken MP3, FLAC en vergelijkbare codecbenamingen zonder onnodige transcode-adviezen.",
         "body": "OpenSubsonic getTranscodeDecision herkent nu bekende overeenkomsten zoals mp3 en audio/mpeg, of flac en audio/flac. Onbekende audioformaten worden nooit automatisch als MP3 beschouwd. De verbetering corrigeert alleen de formaatmelding aan ondersteunde muziekclients; muziekbestanden, streamingroutes en toegangsrechten blijven ongewijzigd."
+      },
+      "fork.127.artist-bio": {
+        "title": "Bestaande artiestbiografieën blijven behouden",
+        "summary": "Ontbrekende brongegevens wissen geen opgeslagen artiestbeschrijving meer.",
+        "body": "Artiestverrijking slaat een nieuwe biografie alleen op wanneer er een bruikbare, niet-lege vervangende tekst is. Een lege reactie van Wikidata of tijdelijke problemen met MusicBrainz laten de bestaande biografie intact. Gegevens die aantoonbaar bij een verkeerde MusicBrainz-artiest horen, kunnen nog steeds bewust worden verwijderd. Deze correctie beschermt ook bestaande bibliotheken bij updates zonder muziekbestanden of afspeellijsten te wijzigen."
       }
     }
   },
-  "changelog": "Four independently tested improvements from upstream issues are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.\n\n### Personal settings and audiobook playback\n- PR #271 adds Settings → Appearance for browser-local original capitalization and optional Browse shortcut visibility. The default lowercase appearance and all music metadata, routes and permissions remain unchanged.\n- PR #272 adds 0.75x–2x audiobook-only speed in the book page, desktop dock and mobile player. The preference survives chapter changes and audio element rebuilds; music and podcasts remain at 1x.\n\n### Reliability and client compatibility\n- PR #273 reports Redis AOF startup problems with bounded read-only diagnostics after disk exhaustion. It never repairs, truncates, deletes or flushes user data automatically. Recovery guidance requires a verified cold full-/data backup and explicit operator review.\n- PR #275 normalizes audio MIME/codec names for OpenSubsonic getTranscodeDecision, improving direct-play reporting without changing stream or download endpoints or touching media files.\n\n### Safe upgrade and release gates\n- No new Prisma migration, service port, external dependency or required media mount is added by these four changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.\n- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.\n- No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0."
+  "changelog": "Four upstream-requested improvements and a data-preserving artist biography fix are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.\n\n### Personal settings and audiobook playback\n- PR #271 adds Settings → Appearance for browser-local original capitalization and optional Browse shortcut visibility. The default lowercase appearance and all music metadata, routes and permissions remain unchanged.\n- PR #272 adds 0.75x–2x audiobook-only speed in the book page, desktop dock and mobile player. The preference survives chapter changes and audio element rebuilds; music and podcasts remain at 1x.\n\n### Reliability and client compatibility\n- PR #273 reports Redis AOF startup problems with bounded read-only diagnostics after disk exhaustion. It never repairs, truncates, deletes or flushes user data automatically. Recovery guidance requires a verified cold full-/data backup and explicit operator review.\n- PR #275 normalizes audio MIME/codec names for OpenSubsonic getTranscodeDecision, improving direct-play reporting without changing stream or download endpoints or touching media files.\n- Artist biography preservation keeps existing summaries when Wikidata has no replacement or MusicBrainz is temporarily unavailable, rather than writing null during startup enrichment. Verified incorrect artist identities can still have their mismatched metadata cleared.\n\n### Safe upgrade and release gates\n- No new Prisma migration, service port, external dependency or required media mount is added by these changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.\n- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.\n- No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0."
 }
