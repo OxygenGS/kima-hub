@@ -139,8 +139,22 @@ start_aio
 wait_aio
 
 curl -fsS --max-time 20 "$url/login" -o /dev/null
-docker exec -i -u postgres "$aio" psql -v ON_ERROR_STOP=1 -d kima \
-    < .github/ci/assert-upgrade.sql
+if ! docker exec -i -u postgres "$aio" psql -v ON_ERROR_STOP=1 -d kima \
+    < .github/ci/assert-upgrade.sql; then
+    # Only print the deliberately synthetic CI fixture rows. Never log user
+    # credentials or full database contents. Keep the strict assertion fatal:
+    # this is diagnostic evidence, not an exception for changed metadata.
+    echo "---- Synthetic upgrade fixture diagnostic (no credentials) ----" >&2
+    docker exec -u postgres "$aio" psql -X -P pager=off -d kima -c \
+        "SELECT id, name, \"identityKey\", summary FROM \"Artist\" WHERE id='upgrade-artist';" || true
+    docker exec -u postgres "$aio" psql -X -P pager=off -d kima -c \
+        "SELECT id, title, \"identityKey\", \"artistId\" FROM \"Album\" WHERE id='upgrade-album';" || true
+    docker exec -u postgres "$aio" psql -X -P pager=off -d kima -c \
+        "SELECT id, title, \"albumId\", \"filePath\" FROM \"Track\" WHERE id='upgrade-track';" || true
+    docker exec -u postgres "$aio" psql -X -P pager=off -d kima -c \
+        "SELECT id, \"autoSync\" FROM \"SystemSettings\" WHERE id='default';" || true
+    exit 1
+fi
 
 echo "---- Simulating customization after the upgrade ----"
 docker exec -i -u postgres "$aio" psql -v ON_ERROR_STOP=1 -d kima <<'SQL'
