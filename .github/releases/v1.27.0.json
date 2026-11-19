@@ -1,0 +1,111 @@
+{
+  "release": {
+    "version": "1.27.0",
+    "title": "Kima Hub 1.27.0",
+    "summary": "Customize text and navigation, choose audiobook speed, safely diagnose Redis startup failures, and improve OpenSubsonic direct-play decisions.",
+    "date": "2026-11-18",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.127.appearance",
+        "title": "Your own display preferences",
+        "summary": "Show original capitalization and choose whether Browse appears in the sidebar.",
+        "body": "Settings → Appearance now offers a per-browser text-capitalization option and a desktop Browse shortcut toggle for all signed-in users. The existing lowercase presentation remains the default. Changing these controls neither changes stored artist, album or track metadata nor disables routes, bookmarks or permissions. Preferences update immediately across tabs.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.127.audiobook",
+        "title": "Audiobook playback at your pace",
+        "summary": "Select 0.75x, 1x, 1.25x, 1.5x, 1.75x or 2x playback for books.",
+        "body": "Listen faster or slower from an audiobook detail page, the desktop player or the mobile player options. Speed stays synchronized across the dual audio elements, chapter transitions and player rebuilds. The preference is stored per browser; music and podcasts always use 1x, and audiobook progress is recorded in original media seconds.",
+        "links": [
+          {
+            "label": "Open audiobooks",
+            "href": "/audiobooks"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.127.redis",
+        "title": "Safer diagnosis after a Redis startup problem",
+        "summary": "Investigate possible AOF corruption without modifying user data.",
+        "body": "If the all-in-one Redis service fails to become ready, startup messages now identify possible causes such as full storage, unreadable files or AOF corruption. A bounded read-only AOF verifier and recovery guide help investigate. No Redis file is automatically deleted, repaired or truncated. Stop writers, verify the physical storage and a separately restorable complete cold /data backup before attempting any operator-led recovery.",
+        "links": [
+          {
+            "label": "Open settings",
+            "href": "/settings"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.127.subsonic",
+        "title": "More accurate OpenSubsonic direct-play decisions",
+        "summary": "Recognize MP3, FLAC and related file labels without needless transcode advice.",
+        "body": "OpenSubsonic getTranscodeDecision now recognizes known equivalents such as mp3 and audio/mpeg or flac and audio/flac. Unknown source formats are never assumed to be MP3. This corrects advisory format reporting to compatible clients; existing media files, stream endpoints and access controls are not modified.",
+        "links": [
+          {
+            "label": "Open your music",
+            "href": "/collection"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.127.artist-bio",
+        "title": "Keep existing artist biographies",
+        "summary": "An unavailable metadata source no longer erases a saved artist description.",
+        "body": "Artist enrichment now saves a new biography only when a usable, non-empty replacement exists. Empty Wikidata replies and temporary MusicBrainz failures leave the existing biography intact. Metadata confirmed to belong to the wrong MusicBrainz artist can still be cleared deliberately. This also protects existing libraries during upgrades without changing audio files or playlists.",
+        "links": [
+          {
+            "label": "Open your artists",
+            "href": "/collection"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.27.0": "Kima Hub 1.27.0"
+    },
+    "summaries": {
+      "Customize text and navigation, choose audiobook speed, safely diagnose Redis startup failures, and improve OpenSubsonic direct-play decisions.": "Kies je eigen tekst- en menuweergave, stel de snelheid van luisterboeken in, controleer Redis-startproblemen veilig en verbeter de direct-play-herkenning voor OpenSubsonic."
+    },
+    "items": {
+      "fork.127.appearance": {
+        "title": "Pas de weergave aan",
+        "summary": "Toon originele hoofdletters en kies of Bladeren in het menu staat.",
+        "body": "Instellingen → Weergave bevat voor elke ingelogde gebruiker een hoofdletterkeuze en schakelaar voor de snelkoppeling Bladeren op de desktop. De bestaande stijl met kleine letters blijft standaard. Deze keuzes wijzigen geen opgeslagen artiesten-, album- of nummernamen en schakelen geen routes, bladwijzers of rechten uit. De voorkeuren worden per browser bewaard en direct tussen tabbladen gesynchroniseerd."
+      },
+      "fork.127.audiobook": {
+        "title": "Luisterboeken op jouw snelheid",
+        "summary": "Kies 0,75×, 1×, 1,25×, 1,5×, 1,75× of 2× voor luisterboeken.",
+        "body": "Kies de afspeelsnelheid op de luisterboekpagina, in de desktopspeler of via de mobiele speleropties. De snelheid blijft gelijk bij hoofdstukwissels en herstel van de speler met twee audio-elementen. De browser onthoudt je keuze; muziek en podcasts blijven op 1×, terwijl de voortgang de originele tijdpositie van het luisterboek gebruikt."
+      },
+      "fork.127.redis": {
+        "title": "Onderzoek Redis-opstartproblemen veilig",
+        "summary": "Controleer mogelijk beschadigde AOF-bestanden zonder gegevens te veranderen.",
+        "body": "Als Redis in de alles-in-één-container niet beschikbaar wordt, noemt de startlog mogelijke oorzaken zoals volle opslag, onleesbare bestanden of AOF-schade. Een begrensde alleen-lezen controle en herstelhandleiding ondersteunen de diagnose. Kima verwijdert, repareert of verkort nooit automatisch een Redis-bestand. Stop schrijvende processen en controleer de fysieke opslag en een afzonderlijk herstelbare koude back-up van het volledige /data-volume vóór handmatig herstel."
+      },
+      "fork.127.subsonic": {
+        "title": "Nauwkeurigere OpenSubsonic direct-play-informatie",
+        "summary": "Herken MP3, FLAC en vergelijkbare codecbenamingen zonder onnodige transcode-adviezen.",
+        "body": "OpenSubsonic getTranscodeDecision herkent nu bekende overeenkomsten zoals mp3 en audio/mpeg, of flac en audio/flac. Onbekende audioformaten worden nooit automatisch als MP3 beschouwd. De verbetering corrigeert alleen de formaatmelding aan ondersteunde muziekclients; muziekbestanden, streamingroutes en toegangsrechten blijven ongewijzigd."
+      },
+      "fork.127.artist-bio": {
+        "title": "Bestaande artiestbiografieën blijven behouden",
+        "summary": "Ontbrekende brongegevens wissen geen opgeslagen artiestbeschrijving meer.",
+        "body": "Artiestverrijking slaat een nieuwe biografie alleen op wanneer er een bruikbare, niet-lege vervangende tekst is. Een lege reactie van Wikidata of tijdelijke problemen met MusicBrainz laten de bestaande biografie intact. Gegevens die aantoonbaar bij een verkeerde MusicBrainz-artiest horen, kunnen nog steeds bewust worden verwijderd. Deze correctie beschermt ook bestaande bibliotheken bij updates zonder muziekbestanden of afspeellijsten te wijzigen."
+      }
+    }
+  },
+  "changelog": "Four upstream-requested improvements and a data-preserving artist biography fix are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.\n\n### Personal settings and audiobook playback\n- PR #271 adds Settings → Appearance for browser-local original capitalization and optional Browse shortcut visibility. The default lowercase appearance and all music metadata, routes and permissions remain unchanged.\n- PR #272 adds 0.75x–2x audiobook-only speed in the book page, desktop dock and mobile player. The preference survives chapter changes and audio element rebuilds; music and podcasts remain at 1x.\n\n### Reliability and client compatibility\n- PR #273 reports Redis AOF startup problems with bounded read-only diagnostics after disk exhaustion. It never repairs, truncates, deletes or flushes user data automatically. Recovery guidance requires a verified cold full-/data backup and explicit operator review.\n- PR #275 normalizes audio MIME/codec names for OpenSubsonic getTranscodeDecision, improving direct-play reporting without changing stream or download endpoints or touching media files.\n- Artist biography preservation keeps existing summaries when Wikidata has no replacement or MusicBrainz is temporarily unavailable, rather than writing null during startup enrichment. Verified incorrect artist identities can still have their mismatched metadata cleared.\n\n### Safe upgrade and release gates\n- No new Prisma migration, service port, external dependency or required media mount is added by these changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.\n- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.\n- No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0."
+}
