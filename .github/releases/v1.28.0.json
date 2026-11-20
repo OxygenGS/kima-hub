@@ -1,0 +1,75 @@
+{
+  "release": {
+    "version": "1.28.0",
+    "title": "Kima Hub 1.28.0",
+    "summary": "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.",
+    "date": "2026-11-20",
+    "items": [
+      {
+        "kind": "note",
+        "key": "fork.128.duplicate",
+        "title": "Make a private copy of a playlist",
+        "summary": "Duplicate a readable playlist without changing the original or losing track order.",
+        "body": "Copy a playlist you can read into an independent, private playlist with a new name. Locally playable tracks preserve their order. Pending or unavailable entries are skipped and reported so your copy contains only playable tracks. The source playlist stays unchanged; bounded requests protect large libraries.",
+        "links": [
+          {
+            "label": "Open playlists",
+            "href": "/playlists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.128.cover",
+        "title": "Give playlists their own covers",
+        "summary": "Upload an image or restore the automatic album-art mosaic whenever you like.",
+        "body": "Playlist owners can upload a JPEG, PNG or WebP image. Kima validates and converts it into a bounded square WebP cover, stripping image metadata and storing the result with the playlist in the database. Owners can remove the custom cover to return to the album-art mosaic. Private playlist artwork follows reader permissions; music files and original album covers are untouched.",
+        "links": [
+          {
+            "label": "Open playlists",
+            "href": "/playlists"
+          }
+        ]
+      },
+      {
+        "kind": "note",
+        "key": "fork.128.studio",
+        "title": "Browse every playlist you can access",
+        "summary": "Server-side search, ownership filters, sorting and pagination beyond the old 50-item limit.",
+        "body": "Playlist Studio searches titles across the whole readable collection, not just the first 50 playlists. Filter your own lists and public playlists from other accounts, choose newest, oldest or alphabetical ordering, and navigate pages of results. The Hidden view keeps the same controls and owners can restore hidden playlists. Searching never expands permission to other people's private playlists.",
+        "links": [
+          {
+            "label": "Browse playlists",
+            "href": "/playlists"
+          }
+        ]
+      }
+    ]
+  },
+  "dutch": {
+    "titles": {
+      "Kima Hub 1.28.0": "Kima Hub 1.28.0"
+    },
+    "summaries": {
+      "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.": "Kopieer afspeellijsten veilig naar privé, kies eigen hoesafbeeldingen en doorzoek of sorteer alle toegankelijke afspeellijsten."
+    },
+    "items": {
+      "fork.128.duplicate": {
+        "title": "Maak een privékopie van een afspeellijst",
+        "summary": "Dupliceer een toegankelijke afspeellijst zonder het origineel of de nummervolgorde te wijzigen.",
+        "body": "Kopieer een afspeellijst waarvoor je leesrechten hebt naar een zelfstandige privéafspeellijst met een nieuwe naam. Lokaal afspeelbare nummers blijven in dezelfde volgorde staan. Wachtende of niet-beschikbare nummers worden overgeslagen en geteld, zodat de kopie alleen afspeelbare nummers bevat. Het origineel verandert niet; een veilige maximumomvang beschermt grote bibliotheken."
+      },
+      "fork.128.cover": {
+        "title": "Geef afspeellijsten een eigen hoes",
+        "summary": "Upload een afbeelding of herstel de automatische mozaïek met albumhoezen.",
+        "body": "Eigenaren kunnen een JPEG-, PNG- of WebP-afbeelding uploaden. Kima controleert de afbeelding, verwijdert metadata en slaat een begrensde vierkante WebP-versie bij de afspeellijst in de database op. Verwijder de eigen hoes om de automatische albumhoesmozaïek te herstellen. Afbeeldingen van privéafspeellijsten volgen dezelfde leesrechten. Muziekbestanden en bestaande albumhoezen blijven ongemoeid."
+      },
+      "fork.128.studio": {
+        "title": "Blader door alle toegankelijke afspeellijsten",
+        "summary": "Zoeken, eigenaarsfilters, sorteren en pagina's, ook voorbij de oude limiet van 50.",
+        "body": "Playlist Studio doorzoekt titels van de volledige toegankelijke collectie op de server. Filter op eigen lijsten of openbare lijsten van anderen, sorteer op datum of alfabet en blader door pagina's. De verborgen weergave gebruikt dezelfde bediening en eigenaren kunnen verborgen lijsten herstellen. Zoeken geeft nooit toegang tot privéafspeellijsten van anderen."
+      }
+    }
+  },
+  "changelog": "Playlist Studio v1.28.0 is an unpublished source candidate, not a Docker image. Published stable remains v1.26.0 while prerequisite v1.27.0 awaits independent review, native security preflight and manual publication. Do not merge or tag this candidate ahead of v1.27.0.\n\n### Playlist duplication\n- Create independent private copies with editable names, preserving the order of locally playable songs. Pending or unavailable items are skipped and counted; source playlists remain untouched.\n- Authorization and bounded requests prevent oversized or unauthorized writes.\n\n### Custom playlist artwork\n- Owners can upload JPEG, PNG or WebP, re-encoded as bounded square, metadata-stripped WebP, or remove their image to restore the automatic album-art mosaic.\n- Artwork is kept in a new optional PlaylistCustomCover database relation with cascade cleanup. Reader permissions protect private images. Music files and original album covers are never modified.\n\n### Search, filter and sort\n- Search the full accessible playlist collection on the server, filter by ownership or visibility, sort by date or name and navigate pages. The Hidden view has the same controls.\n- Existing GET /api/playlists consumers keep the same API response. The new Studio endpoint enforces private-playlist read permissions.\n\n### Upgrade and release gates\n- The single additive Prisma migration preserves existing playlists and /data identity. Music paths, Lidarr, Downtify, Soulseek and download imports are unchanged.\n- Regression tests cover duplicates, cover authorization and re-encoding, paginated browsing, EN/NL, database upgrade/restore and native AMD64/ARM64 builds without push.\n- SHA-256-verified FFmpeg test provisioning changes CI runners only, not production application dependencies.\n- Complete the independent v1.27.0 release first. Then revalidate v1.28.0 against exact main, review final-image vulnerabilities and approve its separate manual publication workflow. No tag, GHCR push or live deployment is authorized."
+}
