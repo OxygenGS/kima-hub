@@ -457,8 +457,14 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
         }
         const userId = req.user.id;
 
-        const playlist = await prisma.playlist.findUnique({
-            where: { id: req.params.id },
+        // Recheck read permission in the content query itself: a shared
+        // playlist may become private after requirePlaylistReader approved it.
+        // Do not return tracks or pending metadata on a stale middleware grant.
+        const playlist = await prisma.playlist.findFirst({
+            where: {
+                id: req.params.id,
+                OR: [{ userId }, { isPublic: true }],
+            },
             include: {
                 user: {
                     select: {
@@ -538,6 +544,7 @@ router.get("/:id", requirePlaylistReader, async (req, res) => {
         ].sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0));
 
         const { customCover, ...playlistFields } = playlist;
+        res.setHeader("Cache-Control", "private, no-store");
         res.json({
             ...playlistFields,
             coverUpdatedAt: customCover?.updatedAt.toISOString() ?? null,
