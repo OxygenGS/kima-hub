@@ -128,6 +128,24 @@ describe("UI translations", () => {
         expect(translate("en", "Find Your Sound")).toBe("Find Your Sound");
     });
 
+
+    it("localizes playlist detail controls and singular/plural failed downloads", () => {
+        expect(translate("nl", "Playlists")).toBe("Afspeellijsten");
+        expect(translate("nl", "Public Playlist")).toBe("Openbare afspeellijst");
+        expect(translate("nl", "Share Link")).toBe("Deellink");
+        expect(translate("nl", "Copy")).toBe("Kopiëren");
+        expect(translate("nl", "Copied")).toBe("Gekopieerd");
+        expect(translate("nl", "Revoke link")).toBe("Link intrekken");
+        expect(translate("nl", "track failed to download")).toBe("nummer kan niet worden gedownload");
+        expect(translate("nl", "tracks failed to download")).toBe("nummers kunnen niet worden gedownload");
+        expect(translate("nl", "Retry All")).toBe("Alles opnieuw proberen");
+        expect(translate("nl", "Empty Playlist")).toBe("Lege afspeellijst");
+        expect(translate("nl", "No tracks yet")).toBe("Nog geen nummers");
+        expect(translate("nl", "Add some tracks to get started")).toBe("Voeg een paar nummers toe om te beginnen");
+        expect(translate("en", "Public Playlist")).toBe("Public Playlist");
+        expect(translate("en", "Copied")).toBe("Copied");
+    });
+
     it("contains a Dutch translation for every English UI key", () => {
         expect(Object.keys(dutch).sort()).toEqual(Object.keys(english).sort());
         expect(Object.values(dutch).every(value => value.trim().length > 0)).toBe(true);

@@ -918,13 +918,13 @@ export default function PlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Playlists
+                            {t("Playlists")}
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                             <span className="t-eyebrow">
-                                {isShared ? "Public Playlist" : "Playlist"}
+                                {t(isShared ? "Public Playlist" : "Playlist")}
                             </span>
                         </div>
 
@@ -1160,10 +1160,12 @@ export default function PlaylistDetailPage() {
                                     <div className="flex items-center gap-2 mb-2">
                                         <LinkIcon className="w-3.5 h-3.5 text-brand" />
                                         <span className="text-xs text-[var(--text-secondary)]">
-                                            Share Link
+                                            {t("Share Link")}
                                         </span>
                                         <button
+                                            type="button"
                                             onClick={() => setShowSharePopover(false)}
+                                            aria-label={t("Close")}
                                             className="ml-auto text-[var(--text-muted)] hover:text-white/60"
                                         >
                                             <X className="w-3.5 h-3.5" />
@@ -1173,6 +1175,7 @@ export default function PlaylistDetailPage() {
                                         <input
                                             type="text"
                                             readOnly
+                                            aria-label={t("Share Link")}
                                             value={shareUrl}
                                             className="flex-1 bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-xs tabular-nums text-[var(--text-secondary)] outline-none select-all"
                                             onClick={(e) => (e.target as HTMLInputElement).select()}
@@ -1188,7 +1191,7 @@ export default function PlaylistDetailPage() {
                                             ) : (
                                                 <Copy className="w-3.5 h-3.5" />
                                             )}
-                                            {shareCopied ? "Copied" : "Copy"}
+                                            {t(shareCopied ? "Copied" : "Copy")}
                                         </Button>
                                     </div>
                                     <button
@@ -1205,7 +1208,7 @@ export default function PlaylistDetailPage() {
                                         }}
                                         className="text-micro text-[var(--text-muted)] hover:text-danger-light/70 transition-colors mt-1"
                                     >
-                                        Revoke link
+                                        {t("Revoke link")}
                                     </button>
                                 </div>
                             )}
@@ -1271,9 +1274,8 @@ export default function PlaylistDetailPage() {
                             <div className="flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4 text-danger-light" />
                                 <span className="text-xs tabular-nums text-danger-light">
-                                    {playlist.pendingCount} track
-                                    {playlist.pendingCount !== 1 ? "s" : ""} failed to
-                                    download
+                                    {playlist.pendingCount} {t(playlist.pendingCount === 1
+                                        ? "track failed to download" : "tracks failed to download")}
                                 </span>
                             </div>
                             <button
@@ -1282,7 +1284,7 @@ export default function PlaylistDetailPage() {
                                 className="flex items-center gap-1.5 px-3 py-1 text-xs tabular-nums text-danger-light hover:brightness-125 hover:bg-danger/20 rounded transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={cn("w-3 h-3", retryingAll && "animate-spin")} />
-                                Retry All
+                                {t("Retry All")}
                             </button>
                         </div>
                     )}
@@ -1334,7 +1336,7 @@ export default function PlaylistDetailPage() {
                                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                                     <div className="w-2 h-2 bg-brand" />
                                     <span className="text-xs text-[var(--text-secondary)]">
-                                        Empty Playlist
+                                        {t("Empty Playlist")}
                                     </span>
                                 </div>
 
@@ -1343,10 +1345,10 @@ export default function PlaylistDetailPage() {
                                         <ListMusic className="w-8 h-8 text-white/10" />
                                     </div>
                                     <h3 className="text-2xl font-bold tracking-tight text-white mb-2">
-                                        No tracks yet
+                                        {t("No tracks yet")}
                                     </h3>
                                     <p className="text-xs text-[var(--text-muted)]">
-                                        Add some tracks to get started
+                                        {t("Add some tracks to get started")}
                                     </p>
                                 </div>
                             </div>
