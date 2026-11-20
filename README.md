@@ -59,6 +59,18 @@ Kima Connect introduced private browser-player discovery, remote Pause / Previou
 
 The release still requires combined CI, native AMD64/ARM64 security preflight and explicit publication approval. Keep the existing project name, storage mounts and complete `/data` backup when planning upgrades.
 
+### Coming in v1.28.0 — source candidate, not published
+
+**Unpublished Playlist Studio candidate:** duplicate playlists into private copies, upload custom covers and browse all accessible playlists using search, filters, sorting and pagination. This is **not** an available Docker image.
+
+v1.28.0 depends on [v1.27.0](https://github.com/OxygenGS/kima-hub/pull/277), which must pass independent review and release first. **Current published stable remains v1.26.0.**
+
+- **Playlist duplication:** private copies with the original song order and skipped-item counts.
+- **Custom covers:** permission-controlled image uploads and reset to automatic album-art mosaics.
+- **Playlist Studio:** full-collection server-side search, ownership and visibility filters, sorting and pagination.
+
+This update adds one optional cover-data migration. Preserve the complete /data volume and media mounts; review backup and rollback procedures before upgrading after an approved release.
+
 ## The experience
 
 One music space for your favorite albums, artists, playlists and discoveries. Built for a personal library rather than a subscription catalog.

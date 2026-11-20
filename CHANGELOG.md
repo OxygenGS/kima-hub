@@ -1,5 +1,27 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.28.0 — release preparation (unpublished)
+
+Playlist Studio v1.28.0 is an unpublished source candidate, not a Docker image. Published stable remains v1.26.0 while prerequisite v1.27.0 awaits independent review, native security preflight and manual publication. Do not merge or tag this candidate ahead of v1.27.0.
+
+### Playlist duplication
+- Create independent private copies with editable names, preserving the order of locally playable songs. Pending or unavailable items are skipped and counted; source playlists remain untouched.
+- Authorization and bounded requests prevent oversized or unauthorized writes.
+
+### Custom playlist artwork
+- Owners can upload JPEG, PNG or WebP, re-encoded as bounded square, metadata-stripped WebP, or remove their image to restore the automatic album-art mosaic.
+- Artwork is kept in a new optional PlaylistCustomCover database relation with cascade cleanup. Reader permissions protect private images. Music files and original album covers are never modified.
+
+### Search, filter and sort
+- Search the full accessible playlist collection on the server, filter by ownership or visibility, sort by date or name and navigate pages. The Hidden view has the same controls.
+- Existing GET /api/playlists consumers keep the same API response. The new Studio endpoint enforces private-playlist read permissions.
+
+### Upgrade and release gates
+- The single additive Prisma migration preserves existing playlists and /data identity. Music paths, Lidarr, Downtify, Soulseek and download imports are unchanged.
+- Regression tests cover duplicates, cover authorization and re-encoding, paginated browsing, EN/NL, database upgrade/restore and native AMD64/ARM64 builds without push.
+- SHA-256-verified FFmpeg test provisioning changes CI runners only, not production application dependencies.
+- Complete the independent v1.27.0 release first. Then revalidate v1.28.0 against exact main, review final-image vulnerabilities and approve its separate manual publication workflow. No tag, GHCR push or live deployment is authorized.
+
 ## OxygenGS fork v1.27.0 — release preparation (unpublished)
 
 Four upstream-requested improvements and a data-preserving artist biography fix are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.
