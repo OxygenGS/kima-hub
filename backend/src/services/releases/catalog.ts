@@ -101,6 +101,128 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.28.0
+    {
+        "version": "1.28.0",
+        "title": "Kima Hub 1.28.0",
+        "summary": "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.",
+        "date": "2026-11-20",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.128.duplicate",
+                "title": "Make a private copy of a playlist",
+                "summary": "Duplicate a readable playlist without changing the original or losing track order.",
+                "body": "Copy a playlist you can read into an independent, private playlist with a new name. Locally playable tracks preserve their order. Pending or unavailable entries are skipped and reported so your copy contains only playable tracks. The source playlist stays unchanged; bounded requests protect large libraries.",
+                "links": [
+                    {
+                        "label": "Open playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.128.cover",
+                "title": "Give playlists their own covers",
+                "summary": "Upload an image or restore the automatic album-art mosaic whenever you like.",
+                "body": "Playlist owners can upload a JPEG, PNG or WebP image. Kima validates and converts it into a bounded square WebP cover, stripping image metadata and storing the result with the playlist in the database. Owners can remove the custom cover to return to the album-art mosaic. Private playlist artwork follows reader permissions; music files and original album covers are untouched.",
+                "links": [
+                    {
+                        "label": "Open playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.128.studio",
+                "title": "Browse every playlist you can access",
+                "summary": "Server-side search, ownership filters, sorting and pagination beyond the old 50-item limit.",
+                "body": "Playlist Studio searches titles across the whole readable collection, not just the first 50 playlists. Filter your own lists and public playlists from other accounts, choose newest, oldest or alphabetical ordering, and navigate pages of results. The Hidden view keeps the same controls and owners can restore hidden playlists. Searching never expands permission to other people's private playlists.",
+                "links": [
+                    {
+                        "label": "Browse playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            }
+        ]
+    },
+    // release-candidate:1.27.0
+    {
+        "version": "1.27.0",
+        "title": "Kima Hub 1.27.0",
+        "summary": "Customize text and navigation, choose audiobook speed, safely diagnose Redis startup failures, and improve OpenSubsonic direct-play decisions.",
+        "date": "2026-11-18",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.127.appearance",
+                "title": "Your own display preferences",
+                "summary": "Show original capitalization and choose whether Browse appears in the sidebar.",
+                "body": "Settings \u2192 Appearance now offers a per-browser text-capitalization option and a desktop Browse shortcut toggle for all signed-in users. The existing lowercase presentation remains the default. Changing these controls neither changes stored artist, album or track metadata nor disables routes, bookmarks or permissions. Preferences update immediately across tabs.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.127.audiobook",
+                "title": "Audiobook playback at your pace",
+                "summary": "Select 0.75x, 1x, 1.25x, 1.5x, 1.75x or 2x playback for books.",
+                "body": "Listen faster or slower from an audiobook detail page, the desktop player or the mobile player options. Speed stays synchronized across the dual audio elements, chapter transitions and player rebuilds. The preference is stored per browser; music and podcasts always use 1x, and audiobook progress is recorded in original media seconds.",
+                "links": [
+                    {
+                        "label": "Open audiobooks",
+                        "href": "/audiobooks"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.127.redis",
+                "title": "Safer diagnosis after a Redis startup problem",
+                "summary": "Investigate possible AOF corruption without modifying user data.",
+                "body": "If the all-in-one Redis service fails to become ready, startup messages now identify possible causes such as full storage, unreadable files or AOF corruption. A bounded read-only AOF verifier and recovery guide help investigate. No Redis file is automatically deleted, repaired or truncated. Stop writers, verify the physical storage and a separately restorable complete cold /data backup before attempting any operator-led recovery.",
+                "links": [
+                    {
+                        "label": "Open settings",
+                        "href": "/settings"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.127.subsonic",
+                "title": "More accurate OpenSubsonic direct-play decisions",
+                "summary": "Recognize MP3, FLAC and related file labels without needless transcode advice.",
+                "body": "OpenSubsonic getTranscodeDecision now recognizes known equivalents such as mp3 and audio/mpeg or flac and audio/flac. Unknown source formats are never assumed to be MP3. This corrects advisory format reporting to compatible clients; existing media files, stream endpoints and access controls are not modified.",
+                "links": [
+                    {
+                        "label": "Open your music",
+                        "href": "/collection"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.127.artist-bio",
+                "title": "Keep existing artist biographies",
+                "summary": "An unavailable metadata source no longer erases a saved artist description.",
+                "body": "Artist enrichment now saves a new biography only when a usable, non-empty replacement exists. Empty Wikidata replies and temporary MusicBrainz failures leave the existing biography intact. Metadata confirmed to belong to the wrong MusicBrainz artist can still be cleared deliberately. This also protects existing libraries during upgrades without changing audio files or playlists.",
+                "links": [
+                    {
+                        "label": "Open your artists",
+                        "href": "/collection"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.26.0
     {
         "version": "1.26.0",

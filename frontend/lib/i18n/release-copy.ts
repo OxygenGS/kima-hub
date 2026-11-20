@@ -49,6 +49,68 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.28.0
+    "1.28.0": {
+        "titles": {
+            "Kima Hub 1.28.0": "Kima Hub 1.28.0"
+        },
+        "summaries": {
+            "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.": "Kopieer afspeellijsten veilig naar priv\u00e9, kies eigen hoesafbeeldingen en doorzoek of sorteer alle toegankelijke afspeellijsten."
+        },
+        "items": {
+            "fork.128.duplicate": {
+                "title": "Maak een priv\u00e9kopie van een afspeellijst",
+                "summary": "Dupliceer een toegankelijke afspeellijst zonder het origineel of de nummervolgorde te wijzigen.",
+                "body": "Kopieer een afspeellijst waarvoor je leesrechten hebt naar een zelfstandige priv\u00e9afspeellijst met een nieuwe naam. Lokaal afspeelbare nummers blijven in dezelfde volgorde staan. Wachtende of niet-beschikbare nummers worden overgeslagen en geteld, zodat de kopie alleen afspeelbare nummers bevat. Het origineel verandert niet; een veilige maximumomvang beschermt grote bibliotheken."
+            },
+            "fork.128.cover": {
+                "title": "Geef afspeellijsten een eigen hoes",
+                "summary": "Upload een afbeelding of herstel de automatische moza\u00efek met albumhoezen.",
+                "body": "Eigenaren kunnen een JPEG-, PNG- of WebP-afbeelding uploaden. Kima controleert de afbeelding, verwijdert metadata en slaat een begrensde vierkante WebP-versie bij de afspeellijst in de database op. Verwijder de eigen hoes om de automatische albumhoesmoza\u00efek te herstellen. Afbeeldingen van priv\u00e9afspeellijsten volgen dezelfde leesrechten. Muziekbestanden en bestaande albumhoezen blijven ongemoeid."
+            },
+            "fork.128.studio": {
+                "title": "Blader door alle toegankelijke afspeellijsten",
+                "summary": "Zoeken, eigenaarsfilters, sorteren en pagina's, ook voorbij de oude limiet van 50.",
+                "body": "Playlist Studio doorzoekt titels van de volledige toegankelijke collectie op de server. Filter op eigen lijsten of openbare lijsten van anderen, sorteer op datum of alfabet en blader door pagina's. De verborgen weergave gebruikt dezelfde bediening en eigenaren kunnen verborgen lijsten herstellen. Zoeken geeft nooit toegang tot priv\u00e9afspeellijsten van anderen."
+            }
+        }
+    },
+    // release-candidate:1.27.0
+    "1.27.0": {
+        "titles": {
+            "Kima Hub 1.27.0": "Kima Hub 1.27.0"
+        },
+        "summaries": {
+            "Customize text and navigation, choose audiobook speed, safely diagnose Redis startup failures, and improve OpenSubsonic direct-play decisions.": "Kies je eigen tekst- en menuweergave, stel de snelheid van luisterboeken in, controleer Redis-startproblemen veilig en verbeter de direct-play-herkenning voor OpenSubsonic."
+        },
+        "items": {
+            "fork.127.appearance": {
+                "title": "Pas de weergave aan",
+                "summary": "Toon originele hoofdletters en kies of Bladeren in het menu staat.",
+                "body": "Instellingen \u2192 Weergave bevat voor elke ingelogde gebruiker een hoofdletterkeuze en schakelaar voor de snelkoppeling Bladeren op de desktop. De bestaande stijl met kleine letters blijft standaard. Deze keuzes wijzigen geen opgeslagen artiesten-, album- of nummernamen en schakelen geen routes, bladwijzers of rechten uit. De voorkeuren worden per browser bewaard en direct tussen tabbladen gesynchroniseerd."
+            },
+            "fork.127.audiobook": {
+                "title": "Luisterboeken op jouw snelheid",
+                "summary": "Kies 0,75\u00d7, 1\u00d7, 1,25\u00d7, 1,5\u00d7, 1,75\u00d7 of 2\u00d7 voor luisterboeken.",
+                "body": "Kies de afspeelsnelheid op de luisterboekpagina, in de desktopspeler of via de mobiele speleropties. De snelheid blijft gelijk bij hoofdstukwissels en herstel van de speler met twee audio-elementen. De browser onthoudt je keuze; muziek en podcasts blijven op 1\u00d7, terwijl de voortgang de originele tijdpositie van het luisterboek gebruikt."
+            },
+            "fork.127.redis": {
+                "title": "Onderzoek Redis-opstartproblemen veilig",
+                "summary": "Controleer mogelijk beschadigde AOF-bestanden zonder gegevens te veranderen.",
+                "body": "Als Redis in de alles-in-\u00e9\u00e9n-container niet beschikbaar wordt, noemt de startlog mogelijke oorzaken zoals volle opslag, onleesbare bestanden of AOF-schade. Een begrensde alleen-lezen controle en herstelhandleiding ondersteunen de diagnose. Kima verwijdert, repareert of verkort nooit automatisch een Redis-bestand. Stop schrijvende processen en controleer de fysieke opslag en een afzonderlijk herstelbare koude back-up van het volledige /data-volume v\u00f3\u00f3r handmatig herstel."
+            },
+            "fork.127.subsonic": {
+                "title": "Nauwkeurigere OpenSubsonic direct-play-informatie",
+                "summary": "Herken MP3, FLAC en vergelijkbare codecbenamingen zonder onnodige transcode-adviezen.",
+                "body": "OpenSubsonic getTranscodeDecision herkent nu bekende overeenkomsten zoals mp3 en audio/mpeg, of flac en audio/flac. Onbekende audioformaten worden nooit automatisch als MP3 beschouwd. De verbetering corrigeert alleen de formaatmelding aan ondersteunde muziekclients; muziekbestanden, streamingroutes en toegangsrechten blijven ongewijzigd."
+            },
+            "fork.127.artist-bio": {
+                "title": "Bestaande artiestbiografie\u00ebn blijven behouden",
+                "summary": "Ontbrekende brongegevens wissen geen opgeslagen artiestbeschrijving meer.",
+                "body": "Artiestverrijking slaat een nieuwe biografie alleen op wanneer er een bruikbare, niet-lege vervangende tekst is. Een lege reactie van Wikidata of tijdelijke problemen met MusicBrainz laten de bestaande biografie intact. Gegevens die aantoonbaar bij een verkeerde MusicBrainz-artiest horen, kunnen nog steeds bewust worden verwijderd. Deze correctie beschermt ook bestaande bibliotheken bij updates zonder muziekbestanden of afspeellijsten te wijzigen."
+            }
+        }
+    },
     // release-candidate:1.26.0
     "1.26.0": {
         "titles": {

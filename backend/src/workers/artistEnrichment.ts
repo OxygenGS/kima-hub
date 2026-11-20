@@ -283,7 +283,11 @@ export async function enrichSimilarArtist(artist: Artist): Promise<void> {
         await prisma.artist.update({
             where: { id: artist.id },
             data: {
-                ...(wikidataFailed ? {} : { summary }),
+                // A missing/empty result is not permission to erase an existing
+                // biography. Only a verified replacement is written here.
+                // dropMbidOfAnotherArtist clears known-misattributed metadata
+                // explicitly, after confirming that the MBID is wrong.
+                ...(typeof summary === "string" && summary.trim() ? { summary } : {}),
                 heroUrl: finalHeroUrl,
                 ...(similarFetchFailed ? {} : { similarArtistsJson }),
                 genres: genres.length > 0 ? genres : undefined,

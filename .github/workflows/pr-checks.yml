@@ -60,6 +60,8 @@ jobs:
               run: python3 .github/ci/check-portable-compose.py
             - name: Validate pinned multiarch vulnerability-scanner installer syntax
               run: bash -n .github/ci/install-trivy-verified.sh
+            - name: Validate FFmpeg test bootstrap shell syntax
+              run: bash -n .github/ci/install-test-ffmpeg.sh
 
     public-privacy-audit:
         name: Block local installation details in public source
@@ -194,15 +196,14 @@ jobs:
               working-directory: backend
               run: npm ci
 
+            - name: Provide Python and pip for verified FFmpeg test binary
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+
             - name: Ensure FFmpeg is available for real-audio canary
               shell: bash
-              run: |
-                  set -euo pipefail
-                  if ! test -x /usr/bin/ffmpeg; then
-                    sudo apt-get update -qq
-                    sudo apt-get install -y --no-install-recommends ffmpeg
-                  fi
-                  /usr/bin/ffmpeg -hide_banner -version | head -n 1
+              run: bash .github/ci/install-test-ffmpeg.sh
 
             - name: Apply database migrations
               working-directory: backend

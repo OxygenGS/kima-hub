@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
 import { useAudioState, useAudioPlayback, useAudioControls, Track as AudioTrack } from "@/lib/audio-context";
 import { cn } from "@/lib/cn";
@@ -41,6 +42,8 @@ import {
     GripVertical,
     ChevronUp,
     ChevronDown,
+    ImagePlus,
+    ImageOff,
 } from "lucide-react";
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
@@ -138,7 +141,14 @@ export default function PlaylistDetailPage() {
     const [shareLoading, setShareLoading] = useState(false);
     const [shareCopied, setShareCopied] = useState(false);
     const [showSharePopover, setShowSharePopover] = useState(false);
+    const [isDuplicating, setIsDuplicating] = useState(false);
+    const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+    const [duplicateName, setDuplicateName] = useState("");
+    const [duplicateError, setDuplicateError] = useState<string | null>(null);
     const preview = usePreview();
+    const coverFileRef = useRef<HTMLInputElement>(null);
+    const [isUploadingCover, setIsUploadingCover] = useState(false);
+    const [isRemovingCover, setIsRemovingCover] = useState(false);
     const listRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLElement | null>(null);
     const [scrollMargin, setScrollMargin] = useState(0);
@@ -277,6 +287,43 @@ export default function PlaylistDetailPage() {
         }
     };
 
+    const handlePlaylistCoverSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = ""; // Selecting the same file again should retry.
+        if (!file || !playlist?.isOwner || isUploadingCover) return;
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+            !file.size || file.size > 3 * 1024 * 1024) {
+            notify.error(t("Playlist cover must be JPEG, PNG or WebP under 3 MB"));
+            return;
+        }
+        setIsUploadingCover(true);
+        try {
+            await api.uploadPlaylistCover(playlistId, file);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            notify.info(t("Playlist cover updated"));
+        } catch {
+            notify.error(t("Failed to update playlist cover"));
+        } finally {
+            setIsUploadingCover(false);
+        }
+    };
+
+    const handleRemovePlaylistCover = async () => {
+        if (!playlist?.isOwner || isRemovingCover) return;
+        setIsRemovingCover(true);
+        try {
+            await api.removePlaylistCover(playlistId);
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlist(playlistId) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            notify.info(t("Playlist cover removed"));
+        } catch {
+            notify.error(t("Failed to remove playlist cover"));
+        } finally {
+            setIsRemovingCover(false);
+        }
+    };
+
     const coverUrls = useMemo(
         () => mosaicCovers((playlist?.items ?? []).map((item: PlaylistItem) => item.track.album?.coverArt)),
         [playlist],
@@ -288,6 +335,50 @@ export default function PlaylistDetailPage() {
         } catch (error) {
             console.error("Failed to remove track:", error);
             notify.error(t("Failed to remove track"));
+        }
+    };
+
+    const openDuplicateDialog = () => {
+        if (!playlist) return;
+        const suffix = t("Playlist copy suffix");
+        setDuplicateName(playlist.name.slice(0, 200 - suffix.length) + suffix);
+        setDuplicateError(null);
+        setShowDuplicateDialog(true);
+    };
+
+    const closeDuplicateDialog = () => {
+        if (!isDuplicating) setShowDuplicateDialog(false);
+    };
+
+    const handleDuplicatePlaylist = async () => {
+        const name = duplicateName.trim();
+        if (!playlist || isDuplicating || !name || name.length > 200) return;
+        setIsDuplicating(true);
+        setDuplicateError(null);
+        try {
+            const result = await api.duplicatePlaylist(playlistId, name);
+            // The copy is committed; never report failure because a cache refresh fails.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
+            const href = "/playlist/" + encodeURIComponent(result.id);
+            window.dispatchEvent(new CustomEvent("playlist-updated", {
+                detail: { playlistId: result.id },
+            }));
+            const skipped = result.skippedTrackCount + result.skippedPendingCount;
+            notify.info(t("Playlist copied"), {
+                message: String(result.copiedTrackCount) + " " + t("tracks copied") +
+                    (skipped > 0
+                        ? ". " + t("Unavailable skipped") + ": " + result.skippedTrackCount +
+                            "; " + t("Pending skipped") + ": " + result.skippedPendingCount
+                        : ""),
+                href,
+            });
+            setShowDuplicateDialog(false);
+            router.push(href);
+        } catch (error) {
+            const tooLarge = error instanceof Error && "status" in error && error.status === 413;
+            setDuplicateError(t(tooLarge ? "Playlist copy is limited to 2,000 tracks" : "Failed to duplicate playlist"));
+        } finally {
+            setIsDuplicating(false);
         }
     };
 
@@ -795,7 +886,11 @@ export default function PlaylistDetailPage() {
         );
     }
 
-    const heroImage = coverUrls.length > 0 ? api.getCoverArtUrl(coverUrls[0] as string, 500) : null;
+    const customCoverUrl = playlist.coverUpdatedAt
+        ? api.getPlaylistCoverUrl(playlistId, playlist.coverUpdatedAt)
+        : null;
+    const heroImage = customCoverUrl || (coverUrls.length > 0
+        ? api.getCoverArtUrl(coverUrls[0] as string, 500) : null);
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
@@ -823,19 +918,27 @@ export default function PlaylistDetailPage() {
                             className="flex items-center gap-2 text-xs tabular-nums text-[var(--text-muted)] hover:text-white transition-colors mb-6"
                         >
                             <ArrowLeft className="w-3.5 h-3.5" />
-                            Playlists
+                            {t("Playlists")}
                         </button>
 
                         <div className="flex items-center gap-2 mb-4">
                             <div className="w-1.5 h-1.5 bg-brand rounded-full" />
                             <span className="t-eyebrow">
-                                {isShared ? "Public Playlist" : "Playlist"}
+                                {t(isShared ? "Public Playlist" : "Playlist")}
                             </span>
                         </div>
 
                         <div className="flex items-end gap-6">
                             <div className="w-[140px] h-[140px] md:w-[192px] md:h-[192px] bg-[var(--bg-primary)] rounded-lg shrink-0 overflow-hidden relative border-2 border-white/10">
-                                {coverUrls.length === 1 ? (
+                                {customCoverUrl ? (
+                                    <CachedImage
+                                        src={customCoverUrl}
+                                        alt={playlist.name}
+                                        fill
+                                        className="object-cover"
+                                        sizes="192px"
+                                    />
+                                ) : coverUrls.length === 1 ? (
                                     <CachedImage
                                         src={api.getCoverArtUrl(coverUrls[0], 400)}
                                         alt=""
@@ -864,6 +967,31 @@ export default function PlaylistDetailPage() {
                                     <div className="w-full h-full flex items-center justify-center">
                                         <ListMusic className="w-16 h-16 text-white/10" />
                                     </div>
+                                )}
+                                {playlist.isOwner && (
+                                    <>
+                                        <input
+                                            ref={coverFileRef}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            className="sr-only"
+                                            aria-label={t("Change playlist cover")}
+                                            onChange={(event) => { void handlePlaylistCoverSelected(event); }}
+                                            disabled={isUploadingCover}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => coverFileRef.current?.click()}
+                                            disabled={isUploadingCover}
+                                            title={t("Change playlist cover")}
+                                            aria-label={t("Change playlist cover")}
+                                            className="absolute bottom-2 right-2 z-10 h-10 w-10 rounded-lg border border-white/20 bg-black/80 flex items-center justify-center text-white hover:bg-black/95 focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50"
+                                        >
+                                            {isUploadingCover
+                                                ? <GradientSpinner size="sm" />
+                                                : <ImagePlus className="h-5 w-5" />}
+                                        </button>
+                                    </>
                                 )}
                             </div>
 
@@ -979,6 +1107,33 @@ export default function PlaylistDetailPage() {
 
                     <div className="flex-1" />
 
+                    <button
+                        type="button"
+                        onClick={openDuplicateDialog}
+                        disabled={isDuplicating}
+                        aria-label={t("Duplicate playlist")}
+                        title={t("Duplicate playlist")}
+                        className="h-10 min-w-10 rounded-lg px-2 flex items-center justify-center gap-2 text-[var(--text-muted)] hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-brand transition-all disabled:opacity-50"
+                    >
+                        {isDuplicating ? <GradientSpinner size="sm" /> : <Copy className="w-5 h-5" />}
+                        <span className="hidden lg:inline text-xs font-medium">{t("Duplicate playlist")}</span>
+                    </button>
+
+                    {playlist.isOwner && playlist.coverUpdatedAt && (
+                        <button
+                            type="button"
+                            onClick={() => { void handleRemovePlaylistCover(); }}
+                            disabled={isRemovingCover}
+                            title={t("Remove playlist cover")}
+                            aria-label={t("Remove playlist cover")}
+                            className="h-10 min-w-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50"
+                        >
+                            {isRemovingCover
+                                ? <GradientSpinner size="sm" />
+                                : <ImageOff className="h-5 w-5" />}
+                        </button>
+                    )}
+
                     {playlist.isOwner && (
                         <div className="relative" data-share-popover>
                             <button
@@ -1005,10 +1160,12 @@ export default function PlaylistDetailPage() {
                                     <div className="flex items-center gap-2 mb-2">
                                         <LinkIcon className="w-3.5 h-3.5 text-brand" />
                                         <span className="text-xs text-[var(--text-secondary)]">
-                                            Share Link
+                                            {t("Share Link")}
                                         </span>
                                         <button
+                                            type="button"
                                             onClick={() => setShowSharePopover(false)}
+                                            aria-label={t("Close")}
                                             className="ml-auto text-[var(--text-muted)] hover:text-white/60"
                                         >
                                             <X className="w-3.5 h-3.5" />
@@ -1018,6 +1175,7 @@ export default function PlaylistDetailPage() {
                                         <input
                                             type="text"
                                             readOnly
+                                            aria-label={t("Share Link")}
                                             value={shareUrl}
                                             className="flex-1 bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-xs tabular-nums text-[var(--text-secondary)] outline-none select-all"
                                             onClick={(e) => (e.target as HTMLInputElement).select()}
@@ -1033,7 +1191,7 @@ export default function PlaylistDetailPage() {
                                             ) : (
                                                 <Copy className="w-3.5 h-3.5" />
                                             )}
-                                            {shareCopied ? "Copied" : "Copy"}
+                                            {t(shareCopied ? "Copied" : "Copy")}
                                         </Button>
                                     </div>
                                     <button
@@ -1050,7 +1208,7 @@ export default function PlaylistDetailPage() {
                                         }}
                                         className="text-micro text-[var(--text-muted)] hover:text-danger-light/70 transition-colors mt-1"
                                     >
-                                        Revoke link
+                                        {t("Revoke link")}
                                     </button>
                                 </div>
                             )}
@@ -1116,9 +1274,8 @@ export default function PlaylistDetailPage() {
                             <div className="flex items-center gap-2">
                                 <AlertCircle className="w-4 h-4 text-danger-light" />
                                 <span className="text-xs tabular-nums text-danger-light">
-                                    {playlist.pendingCount} track
-                                    {playlist.pendingCount !== 1 ? "s" : ""} failed to
-                                    download
+                                    {playlist.pendingCount} {t(playlist.pendingCount === 1
+                                        ? "track failed to download" : "tracks failed to download")}
                                 </span>
                             </div>
                             <button
@@ -1127,7 +1284,7 @@ export default function PlaylistDetailPage() {
                                 className="flex items-center gap-1.5 px-3 py-1 text-xs tabular-nums text-danger-light hover:brightness-125 hover:bg-danger/20 rounded transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={cn("w-3 h-3", retryingAll && "animate-spin")} />
-                                Retry All
+                                {t("Retry All")}
                             </button>
                         </div>
                     )}
@@ -1179,7 +1336,7 @@ export default function PlaylistDetailPage() {
                                 <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/10">
                                     <div className="w-2 h-2 bg-brand" />
                                     <span className="text-xs text-[var(--text-secondary)]">
-                                        Empty Playlist
+                                        {t("Empty Playlist")}
                                     </span>
                                 </div>
 
@@ -1188,10 +1345,10 @@ export default function PlaylistDetailPage() {
                                         <ListMusic className="w-8 h-8 text-white/10" />
                                     </div>
                                     <h3 className="text-2xl font-bold tracking-tight text-white mb-2">
-                                        No tracks yet
+                                        {t("No tracks yet")}
                                     </h3>
                                     <p className="text-xs text-[var(--text-muted)]">
-                                        Add some tracks to get started
+                                        {t("Add some tracks to get started")}
                                     </p>
                                 </div>
                             </div>
@@ -1199,6 +1356,63 @@ export default function PlaylistDetailPage() {
                     )}
                 </div>
             </div>
+
+            <Modal
+                isOpen={showDuplicateDialog}
+                onClose={closeDuplicateDialog}
+                title={t("Duplicate playlist")}
+            >
+                <form
+                    onSubmit={(event) => { event.preventDefault(); void handleDuplicatePlaylist(); }}
+                    className="space-y-4"
+                >
+                    <div>
+                        <label
+                            htmlFor="duplicate-playlist-name"
+                            className="mb-2 block text-sm font-medium text-[var(--text-secondary)]"
+                        >
+                            {t("Name for copied playlist")}
+                        </label>
+                        <input
+                            id="duplicate-playlist-name"
+                            type="text"
+                            autoFocus
+                            required
+                            maxLength={200}
+                            value={duplicateName}
+                            onChange={(event) => {
+                                setDuplicateName(event.target.value);
+                                setDuplicateError(null);
+                            }}
+                            disabled={isDuplicating}
+                            aria-describedby="duplicate-playlist-help"
+                            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                        />
+                    </div>
+                    <p
+                        id="duplicate-playlist-help"
+                        className="text-xs leading-relaxed text-[var(--text-muted)]"
+                    >
+                        {t("Copy includes playable local tracks only. It is private and does not change the original playlist.")}
+                    </p>
+                    {duplicateError && (
+                        <p role="alert" className="text-xs text-danger-light">{duplicateError}</p>
+                    )}
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button type="button" variant="secondary" onClick={closeDuplicateDialog} disabled={isDuplicating}>
+                            {t("Cancel")}
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            isLoading={isDuplicating}
+                            disabled={!duplicateName.trim() || duplicateName.trim().length > 200}
+                        >
+                            {t("Create private copy")}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
 
             <ConfirmDialog
                 isOpen={showDeleteConfirm}
