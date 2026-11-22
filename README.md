@@ -18,6 +18,10 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 </div>
 
+## About the fork
+
+**OxygenGS Kima Hub** is an independent community fork of [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub), not an official upstream release. The aim is to make a more polished, capable and approachable self-hosted music application while keeping upstream improvements practical to integrate.
+
 ---
 
 ## What's new in v1.26.0
@@ -198,9 +202,6 @@ The [optional companion stack](docker-compose.server.yml) includes additional do
 | [Full changelog](CHANGELOG.md) | [Development](docs/development.md) |
 | [Branding](docs/instance-branding.md) | [Upstream compatibility](docs/upstream-compatibility.md) |
 
-## About the fork
-
-**OxygenGS Kima Hub** is an independent community fork of [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub), not an official upstream release. The aim is to make a more polished, capable and approachable self-hosted music application while keeping upstream improvements practical to integrate.
 
 Licensed under [GNU GPL v3.0](LICENSE). Original contributions and third-party components remain with their respective owners; see the [audio model notices](services/audio-analyzer/models/LICENSE-upf-models).
 
