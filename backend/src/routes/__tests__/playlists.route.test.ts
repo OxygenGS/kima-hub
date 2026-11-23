@@ -8,6 +8,7 @@ jest.mock('../../utils/db', () => ({
         playlist: {
             create: jest.fn(),
             findUnique: jest.fn(),
+            findFirst: jest.fn(),
             findMany: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
@@ -112,6 +113,7 @@ describe('GET /playlists/:id -- access control', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        (prisma.playlist.findFirst as jest.Mock).mockReset();
         // Auth: both users are valid
         (prisma.user.findUnique as jest.Mock).mockResolvedValue({
             id: USER_B,
@@ -131,6 +133,7 @@ describe('GET /playlists/:id -- access control', () => {
 
         expect(res.status).toBe(403);
         expect(res.body.error).toBeDefined();
+        expect(prisma.playlist.findFirst).not.toHaveBeenCalled();
         // 403 not 404 -- the playlist exists but access is denied
         // (404 would hide whether the resource exists, masking the auth check)
     });
@@ -139,13 +142,17 @@ describe('GET /playlists/:id -- access control', () => {
         (prisma.user.findUnique as jest.Mock).mockResolvedValue({
             id: USER_A, username: 'user-a', role: 'user', tokenVersion: 1,
         });
-        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
+        const details = {
             ...userAPlaylist,
             items: [],
             pendingTracks: [],
             hiddenByUsers: [],
             user: { username: 'user-a' },
-        });
+        };
+        // The middleware uses findUnique, but the content query uses a
+        // permission-scoped findFirst. Mock both to match the runtime contract.
+        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue(details);
+        (prisma.playlist.findFirst as jest.Mock).mockResolvedValue(details);
 
         const res = await request(app)
             .get(`/playlists/${PLAYLIST_ID}`)
@@ -153,23 +160,32 @@ describe('GET /playlists/:id -- access control', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.id).toBe(PLAYLIST_ID);
+        expect(res.headers['cache-control']).toBe('private, no-store');
+        expect(prisma.playlist.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: PLAYLIST_ID, OR: [{ userId: USER_A }, { isPublic: true }] },
+        }));
     });
 
     it('returns 200 when any user requests a public playlist', async () => {
-        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue({
+        const details = {
             ...userAPlaylist,
             isPublic: true,
             items: [],
             pendingTracks: [],
             hiddenByUsers: [],
             user: { username: 'user-a' },
-        });
+        };
+        (prisma.playlist.findUnique as jest.Mock).mockResolvedValue(details);
+        (prisma.playlist.findFirst as jest.Mock).mockResolvedValue(details);
 
         const res = await request(app)
             .get(`/playlists/${PLAYLIST_ID}`)
             .set('Authorization', `Bearer ${tokenFor(USER_B)}`);
 
         expect(res.status).toBe(200);
+        expect(prisma.playlist.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+            where: { id: PLAYLIST_ID, OR: [{ userId: USER_B }, { isPublic: true }] },
+        }));
     });
 });
 
