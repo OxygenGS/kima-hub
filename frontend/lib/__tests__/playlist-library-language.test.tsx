@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
     }>,
     create: vi.fn(),
     post: vi.fn(),
+    hide: vi.fn(),
+    unhide: vi.fn(),
+    notifyError: vi.fn(),
     studioFilters: null as null | { owner: string; sort: string; scope: string; page: number; q: string },
 }));
 vi.mock("@/hooks/useQueries", () => ({
@@ -51,10 +54,15 @@ vi.mock("@/lib/api", () => ({
     api: {
         createPlaylist: (...args: unknown[]) => state.create(...args),
         post: (...args: unknown[]) => state.post(...args),
+        hidePlaylist: (...args: unknown[]) => state.hide(...args),
+        unhidePlaylist: (...args: unknown[]) => state.unhide(...args),
         getCoverArtUrl: (u: string) => u,
         getPlaylistCoverUrl: (id: string, timestamp: string) =>
             "/api/playlists/" + id + "/cover?v=" + encodeURIComponent(timestamp),
     },
+}));
+vi.mock("@/lib/notify", () => ({
+    notify: { error: (...args: unknown[]) => state.notifyError(...args) },
 }));
 vi.mock("@/components/layout/PageHeader", () => ({
     PageHeader: ({ title, eyebrow, description, children }: {
@@ -70,12 +78,13 @@ vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({title}:{title:string}) => <h2>{title}</h2>,
 }));
 vi.mock("@/components/cards/MediaCard", () => ({
-    MediaCard: ({title,subtitle,imageUrl}:{
-        title:string;subtitle:string;imageUrl?:string|string[];
+    MediaCard: ({title,subtitle,imageUrl,corner}:{
+        title:string;subtitle:string;imageUrl?:string|string[];corner?:React.ReactNode;
     }) => <article>
         <h2>{title}</h2>
         <p>{subtitle}</p>
         {imageUrl && <img alt="playlist-art" src={Array.isArray(imageUrl) ? imageUrl[0] : imageUrl} />}
+        {corner}
     </article>,
 }));
 
@@ -97,6 +106,8 @@ beforeEach(() => {
     localStorage.removeItem("kima-hub-language");
     state.playlists = [];
     state.studioFilters = null;
+    state.hide.mockReset();
+    state.unhide.mockReset();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -179,6 +190,32 @@ describe("playlist library presentation translations", () => {
             sort!.dispatchEvent(new Event("change", { bubbles: true }));
         });
         expect(state.studioFilters).toMatchObject({ owner: "mine", sort: "name-asc", page: 1 });
+    });
+
+
+    it("keeps shared-playlist hide controls visible on touch and reports errors in the active language", async () => {
+        state.playlists = [{
+            id: "playlist-shared", name: "Shared mix", trackCount: 2,
+            isOwner: false, isHidden: false,
+        }];
+        await render();
+        let hide = host.querySelector<HTMLButtonElement>('button[aria-label="Hide playlist"]');
+        expect(hide).not.toBeNull();
+        // Touch-only screens have no hover: the default opacity must be visible.
+        // Hover-capable pointers can still use the quieter mouse-only treatment.
+        expect(hide!.className).toContain("opacity-100");
+        expect(hide!.className).toContain("[@media(hover:hover)]:opacity-0");
+        state.hide.mockRejectedValueOnce(new Error("Synthetic API error"));
+        await act(async () => { hide!.click(); });
+        expect(state.hide).toHaveBeenCalledWith("playlist-shared");
+        expect(state.notifyError).toHaveBeenCalledWith("Failed to update playlist visibility");
+
+        await switchLocale("nl");
+        hide = host.querySelector<HTMLButtonElement>('button[aria-label="Afspeellijst verbergen"]');
+        expect(hide).not.toBeNull();
+        state.hide.mockRejectedValueOnce(new Error("Synthetic API error"));
+        await act(async () => { hide!.click(); });
+        expect(state.notifyError).toHaveBeenLastCalledWith("Zichtbaarheid van afspeellijst wijzigen mislukt");
     });
 
     it("does not translate stored playlist names when the locale changes", async () => {

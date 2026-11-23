@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { api } from "@/lib/api";
+import { notify } from "@/lib/notify";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
 import { cn } from "@/lib/cn";
@@ -116,7 +117,7 @@ function PlaylistCard({
                         aria-label={t(playlist.isHidden ? "Show playlist" : "Hide playlist")}
                         title={t(playlist.isHidden ? "Show playlist" : "Hide playlist")}
                         className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150",
+                            "w-10 h-10 rounded-lg flex items-center justify-center bg-black/70 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150",
                             playlist.isHidden ? "text-success" : "text-[var(--text-muted)]",
                             isHiding && "opacity-50 cursor-not-allowed",
                         )}
@@ -135,9 +136,12 @@ const PANEL_INPUT =
     "px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30";
 
 function PanelCloseButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+    const { t } = useLanguage();
     return (
         <button
             type="button"
+            aria-label={t("Close")}
+            title={t("Close")}
             onClick={onClick}
             disabled={disabled}
             className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
@@ -626,6 +630,7 @@ export default function PlaylistsPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (error) {
             console.error("Failed to toggle playlist visibility:", error);
+            notify.error(t("Failed to update playlist visibility"));
         }
     };
 
