@@ -309,4 +309,33 @@ describe('GET /playlists -- data isolation', () => {
         // Must NOT contain a query with no user scope
         expect(call.where.userId).toBeUndefined(); // not a global userId filter
     });
+
+    it('keeps the legacy array response and enforces bounded pagination', async () => {
+        (prisma.playlist.findMany as jest.Mock).mockResolvedValue([]);
+        const res = await request(app)
+            .get('/playlists?page=3&limit=999')
+            .set('Authorization', `Bearer ${tokenFor(USER_B)}`)
+            .expect(200);
+        expect(res.body).toEqual([]);
+        expect(res.headers['cache-control']).toBe('private, no-store');
+        expect(prisma.playlist.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            skip: 200, take: 100,
+            where: { OR: [{ userId: USER_B }, { isPublic: true }] },
+        }));
+    });
+
+    it('rejects invalid pagination before accessing playlists', async () => {
+        const invalid = [
+            'page=-1', 'page=0', 'page=1.5', 'page=10001',
+            'page=not-a-number', 'limit=0', 'limit=-2', 'limit=oops',
+        ];
+        for (const query of invalid) {
+            await request(app)
+                .get('/playlists?' + query)
+                .set('Authorization', `Bearer ${tokenFor(USER_B)}`)
+                .expect(400);
+        }
+        expect(prisma.playlist.findMany).not.toHaveBeenCalled();
+        expect(prisma.hiddenPlaylist.findMany).not.toHaveBeenCalled();
+    });
 });

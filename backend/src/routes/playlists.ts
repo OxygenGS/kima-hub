@@ -175,6 +175,12 @@ router.get("/studio", async (req, res) => {
 });
 
 // GET /playlists
+// Preserve the legacy array response and 100-item cap while rejecting
+// malformed offsets that previously caused Prisma errors or 500 responses.
+const legacyPlaylistPageSchema = z.object({
+    page: z.coerce.number().int().min(1).max(10_000).default(1),
+    limit: z.coerce.number().int().min(1).default(50),
+});
 router.get("/", async (req, res) => {
     try {
         if (!req.user) {
@@ -182,8 +188,16 @@ router.get("/", async (req, res) => {
         }
         const userId = req.user.id;
 
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+        if ((req.query.page !== undefined && typeof req.query.page !== "string")
+            || (req.query.limit !== undefined && typeof req.query.limit !== "string")) {
+            return res.status(400).json({ error: "Invalid playlist pagination" });
+        }
+        const parsed = legacyPlaylistPageSchema.safeParse(req.query);
+        if (!parsed.success) {
+            return res.status(400).json({ error: "Invalid playlist pagination" });
+        }
+        const { page } = parsed.data;
+        const limit = Math.min(parsed.data.limit, 100);
 
         // Get user's hidden playlists
         const hiddenPlaylists = await prisma.hiddenPlaylist.findMany({
@@ -236,6 +250,7 @@ router.get("/", async (req, res) => {
             isHidden: hiddenPlaylistIds.has(playlist.id),
         }));
 
+        res.setHeader("Cache-Control", "private, no-store");
         res.json(playlistsWithCounts);
     } catch (error) {
         logger.error("Get playlists error:", error);
