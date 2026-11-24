@@ -1,8 +1,8 @@
 # Changelog — OxygenGS Kima Hub
 
-## OxygenGS fork v1.27.0 — release preparation (unpublished)
+## OxygenGS fork v1.27.0 — released 2026-11-24
 
-Four upstream-requested improvements and a data-preserving artist biography fix are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.
+Kima Hub v1.27.0 brings personal display preferences, audiobook playback speed, safer Redis diagnostics, OpenSubsonic direct-play compatibility and preservation of existing artist biographies. The stable image is `ghcr.io/oxygengs/kima-hub:v1.27.0` for native AMD64 and ARM64.
 
 ### Personal settings and audiobook playback
 - PR #271 adds Settings → Appearance for browser-local original capitalization and optional Browse shortcut visibility. The default lowercase appearance and all music metadata, routes and permissions remain unchanged.
@@ -13,10 +13,10 @@ Four upstream-requested improvements and a data-preserving artist biography fix 
 - PR #275 normalizes audio MIME/codec names for OpenSubsonic getTranscodeDecision, improving direct-play reporting without changing stream or download endpoints or touching media files.
 - Artist biography preservation keeps existing summaries when Wikidata has no replacement or MusicBrainz is temporarily unavailable, rather than writing null during startup enrichment. Verified incorrect artist identities can still have their mismatched metadata cleared.
 
-### Safe upgrade and release gates
+### Safe upgrade and release verification
 - No new Prisma migration, service port, external dependency or required media mount is added by these changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.
-- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.
-- No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0.
+- The [exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/45384258511) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/45384297510) succeeded. The preflight recorded 391 HIGH / 8 CRITICAL findings on AMD64 and 390 HIGH / 8 CRITICAL on ARM64, with zero scanner-listed fixes. The findings remain unresolved; see [image security](docs/image-security.md).
+- Publication does not automatically upgrade running deployments or promote `:latest`. Playlist Studio is a separate future update.
 
 ## OxygenGS fork v1.26.0 — released 2026-11-18
 

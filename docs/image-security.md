@@ -2,7 +2,20 @@
 
 This document describes the **current published OxygenGS Kima Hub release**, the scanner evidence and remaining risks. Passing a release gate **does not mean the container image is vulnerability-free**.
 
-## v1.26.0 — current published release (18 November 2026)
+## v1.27.0 — current published release (24 November 2026)
+
+The [exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167) passed on source commit `0a9d732726f3f4b66d83cdf16c6577e7e7dfe9a7`, including native AMD64/ARM64 builds, version/architecture checks, vulnerability policy and secret scans. The [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/45384258511) and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/45384297510) succeeded. Both architectures are present in the versioned stable image `ghcr.io/oxygengs/kima-hub:v1.27.0`.
+
+| Native v1.27.0 preflight | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with scanner-listed fixes |
+| :--- | ---: | ---: | ---: |
+| linux/amd64 | 391 | 8 | 0 |
+| linux/arm64 | 390 | 8 | 0 |
+
+The same eight critical advisories as v1.26.0 remain unresolved. Neither a missing scanner-listed fix nor publication approval establishes safety or non-reachability. Review untrusted media/network exposure, keep host/proxy components updated and maintain a verified cold backup. These are preflight-image measurements, not independent scans of a deployed instance.
+
+[AMD64 scan report](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167/artifacts/14913493463) · [ARM64 scan report](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167/artifacts/14914562245) · [Recorded review](https://github.com/OxygenGS/kima-hub/pull/277#issuecomment-7129981510) · [Published release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0)
+
+## Historical: v1.26.0 — published 18 November 2026
 
 The [v1.26.0 exact-main native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369) verified commit `3a1e0d84c12ed1e0e429bba4e7bb4bc3f4c0f4a7`, built native AMD64/ARM64 images and passed the configured architecture, source, vulnerability-policy and secret checks. [Explicit release approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. The published image is `ghcr.io/oxygengs/kima-hub:v1.26.0`.
 
