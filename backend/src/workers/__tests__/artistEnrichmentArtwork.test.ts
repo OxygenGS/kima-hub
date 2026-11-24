@@ -164,6 +164,44 @@ describe("the enrichment worker asks every source", () => {
         });
     });
 
+    describe("existing artist biographies", () => {
+        it("does not erase a stored biography when MusicBrainz is unavailable", async () => {
+            mockSearchArtist.mockResolvedValue({
+                kind: "transient",
+                error: { code: "TIMEOUT", message: "MusicBrainz timed out" },
+            });
+            await enrichSimilarArtist({
+                ...artist,
+                mbid: "temp-ci-fixture",
+                summary: "Preserve this artist",
+            });
+
+            // The enrichment status can change, but no source supplied a
+            // replacement for the original user-visible biography.
+            expect(writtenToArtist()).not.toHaveProperty("summary");
+        });
+
+        it("does not turn a previous biography into null on an empty Wikidata answer", async () => {
+            jest.requireMock("../../services/wikidata")
+                .wikidataService.getArtistInfo.mockResolvedValueOnce({});
+
+            await enrichSimilarArtist({ ...artist, summary: "Preserve this artist" });
+
+            expect(writtenToArtist()).not.toHaveProperty("summary");
+        });
+
+        it("replaces the biography when Wikidata supplies a nonempty summary", async () => {
+            jest.requireMock("../../services/wikidata")
+                .wikidataService.getArtistInfo.mockResolvedValueOnce({
+                    summary: "Verified artist biography",
+                });
+
+            await enrichSimilarArtist({ ...artist, summary: "Preserve this artist" });
+
+            expect(writtenToArtist().summary).toBe("Verified artist biography");
+        });
+    });
+
     describe("the album-cover sweep", () => {
         const uncovered = [
             { id: "alb-1", rgMbid: "rg-1", title: "Dangerous Days", coverUrl: null },

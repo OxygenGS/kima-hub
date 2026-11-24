@@ -1,5 +1,23 @@
 # Changelog — OxygenGS Kima Hub
 
+## OxygenGS fork v1.27.0 — release preparation (unpublished)
+
+Four upstream-requested improvements and a data-preserving artist biography fix are included in the v1.27.0 source candidate. This is source preparation only, not a published image. Published stable remains v1.26.0 until the exact-main native release preflight and explicit security-reviewed publication succeed.
+
+### Personal settings and audiobook playback
+- PR #271 adds Settings → Appearance for browser-local original capitalization and optional Browse shortcut visibility. The default lowercase appearance and all music metadata, routes and permissions remain unchanged.
+- PR #272 adds 0.75x–2x audiobook-only speed in the book page, desktop dock and mobile player. The preference survives chapter changes and audio element rebuilds; music and podcasts remain at 1x.
+
+### Reliability and client compatibility
+- PR #273 reports Redis AOF startup problems with bounded read-only diagnostics after disk exhaustion. It never repairs, truncates, deletes or flushes user data automatically. Recovery guidance requires a verified cold full-/data backup and explicit operator review.
+- PR #275 normalizes audio MIME/codec names for OpenSubsonic getTranscodeDecision, improving direct-play reporting without changing stream or download endpoints or touching media files.
+- Artist biography preservation keeps existing summaries when Wikidata has no replacement or MusicBrainz is temporarily unavailable, rather than writing null during startup enrichment. Verified incorrect artist identities can still have their mismatched metadata cleared.
+
+### Safe upgrade and release gates
+- No new Prisma migration, service port, external dependency or required media mount is added by these changes. Retain existing Compose/Dockge identity, persistent /data, /music, /downloads and integration credentials; upgrades from before v1.26.0 must also account for the previous Music DNA database migration.
+- The combined v1.27.0 source is checked by the release PR's exact-head backend, frontend, permission, EN/NL, database restore, dependency/secret and native AMD64/ARM64 no-push workflows. Every source change requires fresh CI; passing PR checks does not replace the exact-main native image/security preflight, human review of residual HIGH/CRITICAL findings and explicit publication approval.
+- No v1.27.0 tag, GHCR image, :latest promotion or live deployment is authorized by this candidate. Playlist duplication (#276) is scoped separately to v1.28.0, not included in v1.27.0.
+
 ## OxygenGS fork v1.26.0 — released 2026-11-18
 
 Kima Hub v1.26.0 adds guided local-library Flow mixes, private listening feedback, opt-in artist and album discovery, and administrator-only duplicate-recording evidence. The published stable image is `ghcr.io/oxygengs/kima-hub:v1.26.0` for native AMD64 and ARM64.
