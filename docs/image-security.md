@@ -20,6 +20,24 @@ These are the same counts and eight CRITICAL advisory identifiers as v1.25.0. **
 
 These values reflect the *preflight build and its scanner database*, not an independently scanned live deployment.
 
+## Unpublished v1.27.0 and v1.28.0 source candidates — NOT approved for publication
+
+The **published stable remains v1.26.0**. The following numbers come from GitHub Actions builds of unpublished PR source at the stated exact commits, **not** final exact-`main` Native Release Preflight results or registry images.
+
+| Candidate source and architecture | Trivy HIGH | Trivy CRITICAL | HIGH/CRITICAL with a scanner-listed fixed version |
+| :--- | ---: | ---: | ---: |
+| [v1.27.0 PR #277, commit `42b19a7`](https://github.com/OxygenGS/kima-hub/pull/277), amd64 | 389 | 8 | 0 |
+| v1.27.0, arm64 | 388 | 8 | 0 |
+| [v1.28.0 PR #284, commit `92b7bdd`](https://github.com/OxygenGS/kima-hub/pull/284), amd64 | 391 | 8 | 0 |
+| v1.28.0, arm64 | 390 | 8 | 0 |
+
+- v1.27.0: [AMD64 scan](https://github.com/OxygenGS/kima-hub/actions/runs/44609091119/artifacts/14572637841) and [ARM64 scan](https://github.com/OxygenGS/kima-hub/actions/runs/44609091119/artifacts/14573321003).
+- v1.28.0 at **`92b7bdd` only**: [AMD64 scan](https://github.com/OxygenGS/kima-hub/actions/runs/45257169903/artifacts/14860915206) and [ARM64 scan](https://github.com/OxygenGS/kima-hub/actions/runs/45257169903/artifacts/14858529755).
+
+Both scans report the same eight CRITICAL advisories for `zlib1g`, `libaom3`, `libmbedcrypto7` (three advisories), `libsqlite3-0`, `libglib2.0-0`, and `libxml2` as the published stable above. A missing scanner-listed patched version is **not** proof that a package cannot be exploited or that no fix or mitigation is possible. The v1.28.0 release branch has **advanced beyond `92b7bdd`**; the figures in this table must not be misrepresented as the final candidate's results.
+
+**Release gate:** obtain independent source review of v1.27.0, inspect each unresolved advisory and available package/feature mitigations, document the human security decision, and build/scan **the exact merged `main`** on AMD64 and ARM64 before separately approving any stable publication. Only after an approved v1.27.0 release can the v1.28.0 branch be reconciled to the actual `main`, revalidated, independently reviewed, and considered for separate publication. Green PR CI does not waive this gate.
+
 ## Historical: v1.25.0 — published 16 November 2026
 
 The [exact-main v1.25.0 native preflight](https://github.com/OxygenGS/kima-hub/actions/runs/43942681293) verified `main` source `0bda03e90ac12260b0f9307c799f2fc3a96a44a2`, built separate AMD64/ARM64 images, confirmed their architecture and revision labels, and passed configured secret and fixable-vulnerability checks without publishing. [Explicit approved stable publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945776519) preceded the [successful native multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/43945829307). The previously published v1.25.0 image is `ghcr.io/oxygengs/kima-hub:v1.25.0`.

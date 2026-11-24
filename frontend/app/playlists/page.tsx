@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { usePlaylistsQuery } from "@/hooks/useQueries";
+import { usePlaylistStudioQuery } from "@/hooks/useQueries";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/hooks/useQueries";
 import { useAudioControls } from "@/lib/audio-context";
@@ -19,9 +19,13 @@ import {
     Compass,
     X,
     Check,
+    Search,
+    ArrowLeft,
+    ArrowRight,
 } from "lucide-react";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { api } from "@/lib/api";
+import { notify } from "@/lib/notify";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { translate } from "@/lib/i18n/translations";
 import { cn } from "@/lib/cn";
@@ -38,7 +42,7 @@ interface PlaylistItem {
     id: string;
     track: {
         album?: {
-            coverUrl?: string;
+            coverUrl?: string | null;
         };
     };
 }
@@ -50,6 +54,7 @@ interface Playlist {
     items?: PlaylistItem[];
     isOwner?: boolean;
     isHidden?: boolean;
+    coverUpdatedAt?: string | null;
     user?: {
         username: string;
     };
@@ -95,14 +100,16 @@ function PlaylistCard({
             href={`/playlist/${playlist.id}`}
             title={playlist.name}
             subtitle={`${isShared && playlist.user?.username ? `${playlist.user.username} · ` : ""}${playlist.trackCount || 0} ${t((playlist.trackCount || 0) === 1 ? "song" : "songs")}`}
-            imageUrl={imageUrl}
+            imageUrl={playlist.coverUpdatedAt
+                ? api.getPlaylistCoverUrl(playlist.id, playlist.coverUpdatedAt)
+                : imageUrl}
             fallbackIcon={Music}
             type="track"
             index={index}
             className={cn(isHiddenView && "opacity-60 hover:opacity-100")}
             action={{ icon: Play, label: t("Play"), onClick: () => onPlay(playlist.id) }}
             corner={
-                isShared && (
+                (isHiddenView || isShared) && (
                     <button
                         type="button"
                         onClick={handleToggleHide}
@@ -110,7 +117,7 @@ function PlaylistCard({
                         aria-label={t(playlist.isHidden ? "Show playlist" : "Hide playlist")}
                         title={t(playlist.isHidden ? "Show playlist" : "Hide playlist")}
                         className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150",
+                            "w-10 h-10 rounded-lg flex items-center justify-center bg-black/70 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150",
                             playlist.isHidden ? "text-success" : "text-[var(--text-muted)]",
                             isHiding && "opacity-50 cursor-not-allowed",
                         )}
@@ -129,9 +136,12 @@ const PANEL_INPUT =
     "px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30";
 
 function PanelCloseButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+    const { t } = useLanguage();
     return (
         <button
             type="button"
+            aria-label={t("Close")}
+            title={t("Close")}
             onClick={onClick}
             disabled={disabled}
             className="px-3 py-2 rounded-lg text-xs tabular-nums text-[var(--text-muted)] hover:text-white/70 transition-colors"
@@ -537,23 +547,37 @@ export default function PlaylistsPage() {
     const queryClient = useQueryClient();
     const [showHiddenTab, setShowHiddenTab] = useState(false);
     const [activeAction, setActiveAction] = useState<ActionPanel>(null);
+    const [searchInput, setSearchInput] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [ownerFilter, setOwnerFilter] = useState<"all" | "mine" | "shared">("all");
+    const [sortOrder, setSortOrder] = useState<"recent" | "oldest" | "name-asc" | "name-desc">("recent");
+    const [page, setPage] = useState(1);
+    const pageSize = 24;
 
-    const { data: playlists = [], isLoading } = usePlaylistsQuery();
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            setSearchQuery(searchInput.trim());
+            setPage(1);
+        }, 250);
+        return () => window.clearTimeout(timer);
+    }, [searchInput]);
 
-    const { visiblePlaylists, hiddenPlaylists } = useMemo(() => {
-        const visible: Playlist[] = [];
-        const hidden: Playlist[] = [];
+    const { data: studio, isLoading, isFetching, isError, isPlaceholderData } = usePlaylistStudioQuery({
+        q: searchQuery,
+        scope: showHiddenTab ? "hidden" : "visible",
+        owner: ownerFilter,
+        sort: sortOrder,
+        page,
+        limit: pageSize,
+    });
+    const visibleCount = studio?.counts.visible ?? 0;
+    const hiddenCount = studio?.counts.hidden ?? 0;
+    const displayedPlaylists = isPlaceholderData ? [] : (studio?.items ?? []);
+    const resultCount = studio?.total ?? 0;
 
-        playlists.forEach((p: Playlist) => {
-            if (p.isHidden) {
-                hidden.push(p);
-            } else {
-                visible.push(p);
-            }
-        });
-
-        return { visiblePlaylists: visible, hiddenPlaylists: hidden };
-    }, [playlists]);
+    useEffect(() => {
+        if (!isPlaceholderData && studio && page > studio.pages) setPage(studio.pages);
+    }, [isPlaceholderData, studio, page]);
 
     useEffect(() => {
         const handlePlaylistEvent = () => {
@@ -606,6 +630,7 @@ export default function PlaylistsPage() {
             queryClient.invalidateQueries({ queryKey: queryKeys.playlists() });
         } catch (error) {
             console.error("Failed to toggle playlist visibility:", error);
+            notify.error(t("Failed to update playlist visibility"));
         }
     };
 
@@ -617,10 +642,8 @@ export default function PlaylistsPage() {
         return <LoadingScreen />;
     }
 
-    const displayedPlaylists = showHiddenTab
-        ? hiddenPlaylists
-        : visiblePlaylists;
-    const emptyStateHasForms = displayedPlaylists.length === 0 && !showHiddenTab;
+    const emptyStateHasForms = Boolean(studio) && visibleCount === 0 && !showHiddenTab &&
+        !searchInput.trim() && ownerFilter === "all" && !isPlaceholderData && !isError;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#0a0a0a] to-black section-stack">
@@ -628,18 +651,18 @@ export default function PlaylistsPage() {
                 eyebrow={t("Your library")}
                 title={t("Playlists")}
                 description={
-                    `${visiblePlaylists.length} ${t(visiblePlaylists.length === 1 ? "playlist" : "playlists")}` +
-                    (hiddenPlaylists.length > 0 ? ` · ${hiddenPlaylists.length} ${t("hidden")}` : "")
+                    `${visibleCount} ${t(visibleCount === 1 ? "playlist" : "playlists")}` +
+                    (hiddenCount > 0 ? ` · ${hiddenCount} ${t("hidden")}` : "")
                 }
                 actions={
-                    hiddenPlaylists.length > 0 && (
+                    (hiddenCount > 0 || showHiddenTab) && (
                         <Button
                             variant="secondary"
                             size="sm"
                             aria-pressed={showHiddenTab}
-                            onClick={() => setShowHiddenTab(!showHiddenTab)}
+                            onClick={() => { setShowHiddenTab(!showHiddenTab); setPage(1); }}
                         >
-                            {showHiddenTab ? t("Show all") : `${t("Hidden")} (${hiddenPlaylists.length})`}
+                            {showHiddenTab ? t("Show all") : `${t("Hidden")} (${hiddenCount})`}
                         </Button>
                     )
                 }
@@ -691,6 +714,55 @@ export default function PlaylistsPage() {
             </PageHeader>
 
             <div className="relative page-shell pb-24 animate-rise">
+                <div className="mb-6 flex flex-wrap items-center gap-3" role="search">
+                    <div className="relative min-w-[200px] flex-1 max-w-lg">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none" />
+                        <input
+                            type="search"
+                            value={searchInput}
+                            onChange={(event) => setSearchInput(event.target.value)}
+                            maxLength={120}
+                            autoComplete="off"
+                            aria-label={t("Search playlists by name")}
+                            placeholder={t("Search playlists by name")}
+                            className="w-full rounded-lg bg-white/5 border border-white/10 py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-[var(--text-muted)] outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                        />
+                    </div>
+                    <label className="sr-only" htmlFor="playlist-owner-filter">{t("Playlist ownership")}</label>
+                    <select
+                        id="playlist-owner-filter"
+                        aria-label={t("Playlist ownership")}
+                        value={ownerFilter}
+                        onChange={(event) => {
+                            setOwnerFilter(event.target.value as typeof ownerFilter);
+                            setPage(1);
+                        }}
+                        className="rounded-lg bg-[#1a1a1a] border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                    >
+                        <option value="all">{t("All owners")}</option>
+                        <option value="mine">{t("My playlists")}</option>
+                        <option value="shared">{t("Public playlists by others")}</option>
+                    </select>
+                    <label className="sr-only" htmlFor="playlist-sort-order">{t("Sort playlists")}</label>
+                    <select
+                        id="playlist-sort-order"
+                        aria-label={t("Sort playlists")}
+                        value={sortOrder}
+                        onChange={(event) => {
+                            setSortOrder(event.target.value as typeof sortOrder);
+                            setPage(1);
+                        }}
+                        className="rounded-lg bg-[#1a1a1a] border border-white/10 px-3 py-2.5 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+                    >
+                        <option value="recent">{t("Newest first")}</option>
+                        <option value="oldest">{t("Oldest first")}</option>
+                        <option value="name-asc">{t("Name A to Z")}</option>
+                        <option value="name-desc">{t("Name Z to A")}</option>
+                    </select>
+                </div>
+                <p role="status" aria-live="polite" className="mb-4 text-xs text-[var(--text-muted)]">
+                    {isFetching ? t("Searching playlists") : `${resultCount} ${t(resultCount === 1 ? "playlist" : "playlists")}`}
+                </p>
                 {showHiddenTab && (
                     <div className="mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10">
                         <p className="text-xs text-[var(--text-muted)]">
@@ -699,9 +771,13 @@ export default function PlaylistsPage() {
                     </div>
                 )}
 
-                {displayedPlaylists.length > 0 ? (
+                {isPlaceholderData ? (
+                    <div aria-live="polite" className="rounded-lg border border-white/10 bg-white/5 p-8 text-center text-sm text-[var(--text-muted)]">
+                        {t("Searching playlists")}
+                    </div>
+                ) : displayedPlaylists.length > 0 ? (
                     <div>
-                        <SectionHeader type="track" title={t(showHiddenTab ? "Hidden" : "All Playlists")} count={displayedPlaylists.length} />
+                        <SectionHeader type="track" title={t(showHiddenTab ? "Hidden" : "All Playlists")} count={resultCount} />
 
                         <div
                             data-tv-section="playlists"
@@ -720,9 +796,40 @@ export default function PlaylistsPage() {
                                 )
                             )}
                         </div>
+                        {studio && studio.pages > 1 && (
+                            <nav aria-label={t("Playlist pages")} className="mt-8 flex items-center justify-center gap-4">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={page <= 1 || isPlaceholderData}
+                                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    {t("Previous page")}
+                                </Button>
+                                <span className="text-xs tabular-nums text-[var(--text-secondary)]">
+                                    {t("Page")} {page} {t("of")} {studio.pages}
+                                </span>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={page >= studio.pages || isPlaceholderData}
+                                    onClick={() => setPage((current) => current + 1)}
+                                >
+                                    {t("Next page")}
+                                    <ArrowRight className="h-4 w-4" />
+                                </Button>
+                            </nav>
+                        )}
                     </div>
                 ) : (
-                    showHiddenTab ? (
+                    (searchQuery || searchInput.trim() || ownerFilter !== "all" || isError) ? (
+                        <EmptyState
+                            icon={<Search className="w-12 h-12" />}
+                            title={t(isError ? "Could not search playlists" : "No matching playlists")}
+                            description={t(isError ? "Check the connection and try again" : "Try a different search or filter")}
+                        />
+                    ) : showHiddenTab ? (
                         <EmptyState
                             icon={<ListMusic className="w-12 h-12" />}
                             title={t("No hidden playlists")}

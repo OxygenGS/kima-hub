@@ -92,9 +92,14 @@ Review docker compose config to confirm that the /data mount resolves to the res
 
 ## What we have tested
 
-GitHub CI successfully (commit 7129428) took a cold full-volume snapshot of a **synthetic pre-fork PostgreSQL** /data directory, upgraded a copy to the new AIO container, then restored the untouched snapshot into an independent PostgreSQL 16 container. Accounts, settings, library, playback state and an ordinary file outside the database survived the restore.
+GitHub Actions tests use **disposable, synthetic accounts and media**, never the contents of a user's installation. The exact [v1.27.0 candidate source `42b19a7`](https://github.com/OxygenGS/kima-hub/actions/runs/44609091390) and [v1.28.0 candidate source `92b7bdd`](https://github.com/OxygenGS/kima-hub/actions/runs/45257169952) both passed the following rehearsals:
 
-This is not yet proof of rollback using the *original monolithic Kima AIO image*, historical encrypted secrets, a real library or external services. Before a production upgrade, rehearse the complete old-image → candidate-image and independent old-image rollback process on disposable copies.
+1. **Pre-fork database and full-volume recovery:** start PostgreSQL 16 from the original schema on an isolated `/data` volume; create synthetic users, library, playlist, settings, playback state and secrets; take a **cold complete-volume snapshot**; start the candidate AIO on the old data; verify migrated data after two starts; and independently restore the untouched original snapshot against the original schema.
+2. **Actual historical AIO-image migration and rollback:** boot the real published upstream `chevron7locked/kima:v1.10.0` image in CI, create synthetic login accounts, a real test WAV, playlist, track and persistent secrets; make independent full `/data` copies; boot the fork candidate using one copy; check identities and data; then boot **the original upstream image** with a separate unchanged original-volume copy and verify recovery.
+
+The logs explicitly report `Full actual-image upgrade and independent old-image rollback: PASS` for both candidates. This **supersedes** the older statement that an original-monolithic-image rollback had not been tested. It does **not** prove that every production setup, custom bind mount, external media filesystem, networked service, or real data set will migrate successfully. Each source commit still needs its own CI; later v1.28.0 commits must not inherit `92b7bdd` results automatically.
+
+**Neither candidate is published or approved.** Review the [image-security evidence](image-security.md), obtain required release approval and rehearse an independent cold `/data` restore using your own Compose/Dockge identity before changing a live stack.
 
 
 ## Login failure after disk exhaustion

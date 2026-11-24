@@ -101,6 +101,54 @@ const KEVIN_1_11 = [
 ].join("\n\n");
 
 export const RELEASES: Release[] = [
+    // release-candidate:1.28.0
+    {
+        "version": "1.28.0",
+        "title": "Kima Hub 1.28.0",
+        "summary": "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.",
+        "date": "2026-11-20",
+        "items": [
+            {
+                "kind": "note",
+                "key": "fork.128.duplicate",
+                "title": "Make a private copy of a playlist",
+                "summary": "Duplicate a readable playlist without changing the original or losing track order.",
+                "body": "Copy a playlist you can read into an independent, private playlist with a new name. Locally playable tracks preserve their order. Pending or unavailable entries are skipped and reported so your copy contains only playable tracks. The source playlist stays unchanged; bounded requests protect large libraries.",
+                "links": [
+                    {
+                        "label": "Open playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.128.cover",
+                "title": "Give playlists their own covers",
+                "summary": "Upload an image or restore the automatic album-art mosaic whenever you like.",
+                "body": "Playlist owners can upload a JPEG, PNG or WebP image. Kima validates and converts it into a bounded square WebP cover, stripping image metadata and storing the result with the playlist in the database. Owners can remove the custom cover to return to the album-art mosaic. Private playlist artwork follows reader permissions; music files and original album covers are untouched.",
+                "links": [
+                    {
+                        "label": "Open playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            },
+            {
+                "kind": "note",
+                "key": "fork.128.studio",
+                "title": "Browse every playlist you can access",
+                "summary": "Server-side search, ownership filters, sorting and pagination beyond the old 50-item limit.",
+                "body": "Playlist Studio searches titles across the whole readable collection, not just the first 50 playlists. Filter your own lists and public playlists from other accounts, choose newest, oldest or alphabetical ordering, and navigate pages of results. The Hidden view keeps the same controls and owners can restore hidden playlists. Searching never expands permission to other people's private playlists.",
+                "links": [
+                    {
+                        "label": "Browse playlists",
+                        "href": "/playlists"
+                    }
+                ]
+            }
+        ]
+    },
     // release-candidate:1.27.0
     {
         "version": "1.27.0",

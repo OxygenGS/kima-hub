@@ -6,13 +6,40 @@ import { LanguageProvider } from "@/lib/i18n/language-context";
 import PlaylistsPage from "@/app/playlists/page";
 
 const state = vi.hoisted(() => ({
-    playlists: [] as Array<{id:string;name:string;trackCount:number;isOwner:boolean;isHidden:boolean}>,
+    playlists: [] as Array<{
+        id: string; name: string; trackCount: number; isOwner: boolean; isHidden: boolean;
+        coverUpdatedAt?: string | null;
+        items?: Array<{ id: string; track: { album: { coverUrl: string | null } } }>;
+    }>,
     create: vi.fn(),
     post: vi.fn(),
+    hide: vi.fn(),
+    unhide: vi.fn(),
+    notifyError: vi.fn(),
+    studioFilters: null as null | { owner: string; sort: string; scope: string; page: number; q: string },
 }));
 vi.mock("@/hooks/useQueries", () => ({
     queryKeys: { playlists: () => ["playlists"] },
-    usePlaylistsQuery: () => ({ data: state.playlists, isLoading: false }),
+    usePlaylistStudioQuery: (filters: { owner: string; sort: string; scope: string; page: number; q: string }) => {
+        state.studioFilters = filters;
+        return {
+        data: {
+            items: state.playlists,
+            total: state.playlists.length,
+            pages: 1,
+            page: 1,
+            limit: 24,
+            counts: {
+                visible: state.playlists.filter((playlist) => !playlist.isHidden).length,
+                hidden: state.playlists.filter((playlist) => playlist.isHidden).length,
+            },
+        },
+        isLoading: false,
+        isFetching: false,
+        isError: false,
+        isPlaceholderData: false,
+        };
+    },
 }));
 vi.mock("@tanstack/react-query", () => ({
     useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -27,8 +54,15 @@ vi.mock("@/lib/api", () => ({
     api: {
         createPlaylist: (...args: unknown[]) => state.create(...args),
         post: (...args: unknown[]) => state.post(...args),
+        hidePlaylist: (...args: unknown[]) => state.hide(...args),
+        unhidePlaylist: (...args: unknown[]) => state.unhide(...args),
         getCoverArtUrl: (u: string) => u,
+        getPlaylistCoverUrl: (id: string, timestamp: string) =>
+            "/api/playlists/" + id + "/cover?v=" + encodeURIComponent(timestamp),
     },
+}));
+vi.mock("@/lib/notify", () => ({
+    notify: { error: (...args: unknown[]) => state.notifyError(...args) },
 }));
 vi.mock("@/components/layout/PageHeader", () => ({
     PageHeader: ({ title, eyebrow, description, children }: {
@@ -44,7 +78,14 @@ vi.mock("@/components/ui/SectionHeader", () => ({
     SectionHeader: ({title}:{title:string}) => <h2>{title}</h2>,
 }));
 vi.mock("@/components/cards/MediaCard", () => ({
-    MediaCard: ({title,subtitle}:{title:string;subtitle:string}) => <article><h2>{title}</h2><p>{subtitle}</p></article>,
+    MediaCard: ({title,subtitle,imageUrl,corner}:{
+        title:string;subtitle:string;imageUrl?:string|string[];corner?:React.ReactNode;
+    }) => <article>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+        {imageUrl && <img alt="playlist-art" src={Array.isArray(imageUrl) ? imageUrl[0] : imageUrl} />}
+        {corner}
+    </article>,
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,6 +105,9 @@ beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem("kima-hub-language");
     state.playlists = [];
+    state.studioFilters = null;
+    state.hide.mockReset();
+    state.unhide.mockReset();
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host);
@@ -94,6 +138,84 @@ describe("playlist library presentation translations", () => {
         expect(host.textContent).toContain("Getting Started");
         expect(state.create).not.toHaveBeenCalled();
         expect(state.post).not.toHaveBeenCalled();
+    });
+
+    it("shows custom artwork in Studio cards, with mosaic fallback when no cover is set", async () => {
+        const stamp = "2026-11-18T18:00:00.000Z";
+        state.playlists = [
+            {
+                id: "playlist-a", name: "Custom image", trackCount: 1,
+                isOwner: true, isHidden: false, coverUpdatedAt: stamp,
+                items: [{ id: "item-a", track: { album: { coverUrl: "album-fallback" } } }],
+            },
+            {
+                id: "playlist-b", name: "Automatic mosaic", trackCount: 1,
+                isOwner: true, isHidden: false, coverUpdatedAt: null,
+                items: [{ id: "item-b", track: { album: { coverUrl: "album-art" } } }],
+            },
+        ];
+        await render();
+        const covers = [...host.querySelectorAll<HTMLImageElement>('img[alt="playlist-art"]')];
+        expect(covers).toHaveLength(2);
+        expect(covers[0].getAttribute("src"))
+            .toBe("/api/playlists/playlist-a/cover?v=" + encodeURIComponent(stamp));
+        expect(covers[1].getAttribute("src")).toBe("album-art");
+    });
+
+    it("passes user-selected owner and sort filters to the server query", async () => {
+        state.playlists = [{
+            id: "playlist-a", name: "Road trip", trackCount: 4,
+            isOwner: true, isHidden: false,
+        }];
+        await render();
+        expect(state.studioFilters).toMatchObject({
+            owner: "all", sort: "recent", scope: "visible", page: 1, q: "",
+        });
+
+        const owner = host.querySelector<HTMLSelectElement>("#playlist-owner-filter");
+        const sort = host.querySelector<HTMLSelectElement>("#playlist-sort-order");
+        expect(owner).not.toBeNull();
+        expect(sort).not.toBeNull();
+        expect(owner!.querySelector('option[value="shared"]')?.textContent)
+            .toBe("Public playlists by others");
+
+        await act(async () => {
+            owner!.value = "mine";
+            owner!.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(state.studioFilters).toMatchObject({ owner: "mine", page: 1 });
+
+        await act(async () => {
+            sort!.value = "name-asc";
+            sort!.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(state.studioFilters).toMatchObject({ owner: "mine", sort: "name-asc", page: 1 });
+    });
+
+
+    it("keeps shared-playlist hide controls visible on touch and reports errors in the active language", async () => {
+        state.playlists = [{
+            id: "playlist-shared", name: "Shared mix", trackCount: 2,
+            isOwner: false, isHidden: false,
+        }];
+        await render();
+        let hide = host.querySelector<HTMLButtonElement>('button[aria-label="Hide playlist"]');
+        expect(hide).not.toBeNull();
+        // Touch-only screens have no hover: the default opacity must be visible.
+        // Hover-capable pointers can still use the quieter mouse-only treatment.
+        expect(hide!.className).toContain("opacity-100");
+        expect(hide!.className).toContain("[@media(hover:hover)]:opacity-0");
+        state.hide.mockRejectedValueOnce(new Error("Synthetic API error"));
+        await act(async () => { hide!.click(); });
+        expect(state.hide).toHaveBeenCalledWith("playlist-shared");
+        expect(state.notifyError).toHaveBeenCalledWith("Failed to update playlist visibility");
+
+        await switchLocale("nl");
+        hide = host.querySelector<HTMLButtonElement>('button[aria-label="Afspeellijst verbergen"]');
+        expect(hide).not.toBeNull();
+        state.hide.mockRejectedValueOnce(new Error("Synthetic API error"));
+        await act(async () => { hide!.click(); });
+        expect(state.notifyError).toHaveBeenLastCalledWith("Zichtbaarheid van afspeellijst wijzigen mislukt");
     });
 
     it("does not translate stored playlist names when the locale changes", async () => {

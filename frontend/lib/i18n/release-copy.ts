@@ -49,6 +49,32 @@ interface VersionCopy {
 }
 
 const dutch: Record<string, VersionCopy> = {
+    // release-candidate:1.28.0
+    "1.28.0": {
+        "titles": {
+            "Kima Hub 1.28.0": "Kima Hub 1.28.0"
+        },
+        "summaries": {
+            "Duplicate playlists into private copies, set custom covers, and search and sort across your full accessible playlist collection.": "Kopieer afspeellijsten veilig naar priv\u00e9, kies eigen hoesafbeeldingen en doorzoek of sorteer alle toegankelijke afspeellijsten."
+        },
+        "items": {
+            "fork.128.duplicate": {
+                "title": "Maak een priv\u00e9kopie van een afspeellijst",
+                "summary": "Dupliceer een toegankelijke afspeellijst zonder het origineel of de nummervolgorde te wijzigen.",
+                "body": "Kopieer een afspeellijst waarvoor je leesrechten hebt naar een zelfstandige priv\u00e9afspeellijst met een nieuwe naam. Lokaal afspeelbare nummers blijven in dezelfde volgorde staan. Wachtende of niet-beschikbare nummers worden overgeslagen en geteld, zodat de kopie alleen afspeelbare nummers bevat. Het origineel verandert niet; een veilige maximumomvang beschermt grote bibliotheken."
+            },
+            "fork.128.cover": {
+                "title": "Geef afspeellijsten een eigen hoes",
+                "summary": "Upload een afbeelding of herstel de automatische moza\u00efek met albumhoezen.",
+                "body": "Eigenaren kunnen een JPEG-, PNG- of WebP-afbeelding uploaden. Kima controleert de afbeelding, verwijdert metadata en slaat een begrensde vierkante WebP-versie bij de afspeellijst in de database op. Verwijder de eigen hoes om de automatische albumhoesmoza\u00efek te herstellen. Afbeeldingen van priv\u00e9afspeellijsten volgen dezelfde leesrechten. Muziekbestanden en bestaande albumhoezen blijven ongemoeid."
+            },
+            "fork.128.studio": {
+                "title": "Blader door alle toegankelijke afspeellijsten",
+                "summary": "Zoeken, eigenaarsfilters, sorteren en pagina's, ook voorbij de oude limiet van 50.",
+                "body": "Playlist Studio doorzoekt titels van de volledige toegankelijke collectie op de server. Filter op eigen lijsten of openbare lijsten van anderen, sorteer op datum of alfabet en blader door pagina's. De verborgen weergave gebruikt dezelfde bediening en eigenaren kunnen verborgen lijsten herstellen. Zoeken geeft nooit toegang tot priv\u00e9afspeellijsten van anderen."
+            }
+        }
+    },
     // release-candidate:1.27.0
     "1.27.0": {
         "titles": {
