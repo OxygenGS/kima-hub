@@ -94,7 +94,7 @@ Review docker compose config to confirm that the /data mount resolves to the res
 
 GitHub CI successfully (commit 7129428) took a cold full-volume snapshot of a **synthetic pre-fork PostgreSQL** /data directory, upgraded a copy to the new AIO container, then restored the untouched snapshot into an independent PostgreSQL 16 container. Accounts, settings, library, playback state and an ordinary file outside the database survived the restore.
 
-This is not yet proof of rollback using the *original monolithic Kima AIO image*, historical encrypted secrets, a real library or external services. Before a production upgrade, rehearse the complete old-image → candidate-image and independent old-image rollback process on disposable copies.
+The published v1.27.0 source also passed the actual historical upstream `chevron7locked/kima:v1.10.0` AIO upgrade and independent original-image rollback rehearsal in [PR CI](https://github.com/OxygenGS/kima-hub/actions/runs/44609091390). That test uses synthetic accounts, a test WAV, playlist, track and persistent secrets with separate full `/data` copies. It does not demonstrate recovery of a particular real library, external service or custom mount. Before a production upgrade, rehearse restoration of your own pre-upgrade cold backup into an independent volume.
 
 
 ## Login failure after disk exhaustion

@@ -12,7 +12,7 @@ services:
     kima:
         # Match the published stable fork image. Pin the existing version until the upgrade is reviewed.
         # Existing deployments must explicitly keep their old pin until a reviewed update.
-        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.26.0}
+        image: ghcr.io/oxygengs/kima-hub:${VERSION:-v1.27.0}
         container_name: kima
         ports:
             - "${FRONTEND_PORT:-3030}:3030"

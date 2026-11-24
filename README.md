@@ -8,56 +8,45 @@
 
 A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
 
-[![Stable release](https://img.shields.io/badge/stable-v1.26.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0)
+[![Stable release](https://img.shields.io/badge/stable-v1.27.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
 [![Platforms](https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-41434f?style=flat-square)](https://github.com/OxygenGS/kima-hub/actions/workflows/docker-publish.yml)
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0-555?style=flat-square)](LICENSE)
 
-**[What's new](#whats-new-in-v1260) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
+**[What's new](#whats-new-in-v1270) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
 
 </div>
 
 ---
 
-## What's new in v1.26.0
+## What's new in v1.27.0
 
-**A simpler way to listen, discover and manage your own music.** [Kima Hub v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) was released on **18 November 2026** for Linux **AMD64 and ARM64**.
+**More control over your listening experience and safer library maintenance.** [Kima Hub v1.27.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) was published on **24 November 2026** for Linux **AMD64 and ARM64**.
 
-| New in v1.26.0 | What it does |
+| New in v1.27.0 | What it does |
 | :--- | :--- |
-| **Kima Flow** | Choose **My favorites**, **A bit of both** or **Surprise me**; adjust Energy and Discovery and preview a mix of playable songs from your own library. Playback starts only when you click **Start Flow**. |
-| **Continuous Flow** | Keep a Flow session going by adding local songs as the queue runs low. Editing the queue manually or changing listening mode stops automatic continuation without interrupting playback. |
-| **Music DNA** | Give songs **More like this** or **Less like this** feedback. Private, account-specific preferences influence future Flow mixes and can be undone. |
-| **Discovery Radar** | Click **Find new artists** to discover similar artists outside your playable library. No external discovery search runs until you request it. |
-| **Album Spotlight** | Click **Preview albums** for a discovered artist to see up to three MusicBrainz album/EP entries. Continue on the normal album detail page. |
-| **Library Guardian** | Administrators can inspect **possible duplicate recordings** using indexed recording IDs, durations and acoustic evidence—without deleting or modifying files. |
+| **Personal Appearance** | Keep original capitalization and choose whether Browse appears in the desktop sidebar, independently per browser. |
+| **Audiobook playback speed** | Listen at 0.75×–2× from the book page, desktop player or mobile player. Music and podcasts remain at 1×. |
+| **Redis diagnostics** | Investigate startup problems using bounded, read-only AOF checks. No automatic repair, deletion or queue wipe. |
+| **OpenSubsonic compatibility** | Recognize common codec and MIME aliases when reporting direct-play decisions. |
+| **Artist biography protection** | Keep stored descriptions when enrichment has no valid replacement. |
 
-**Start listening:** Open **Flow** from the navigation, choose a style and preview the suggested tracks. The original **3D Vibe Map** remains available for advanced exploration. Continuous Flow needs the originating browser session to remain open; it is not server-side background playback.
+No new database migration is introduced by v1.27.0. Keep your existing Compose/Dockge project and media mounts, and verify an independently restorable cold `/data` backup before upgrading.
 
-**Safe by design:** Discovery Radar and Album Spotlight never start downloads, and Library Guardian never removes music automatically. Music DNA introduces an additive database migration. Before upgrading an existing installation, back up the complete **stopped `/data` volume**, verify a separate restore, and preserve Compose/Dockge project identity and media mounts.
+[Full v1.27.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) · [Safe upgrade and rollback](docs/safe-aio-updates.md) · [Redis recovery](docs/redis-recovery.md)
 
-[Full v1.26.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) · [Using Flow](docs/using-kima.md#kima-flow-v1260) · [Library Doctor](docs/library-doctor.md) · [Safe upgrade and rollback](docs/safe-aio-updates.md)
+### Previously in v1.26.0 — Flow and Music DNA
+
+Kima Flow provides guided local-library mixes, continuous listening and private, reversible Music DNA feedback. Discovery Radar and Album Spotlight help explore new artists without automatically starting downloads; Library Guardian presents possible duplicate-recording evidence without modifying files. The original 3D Vibe Map remains available.
+
+[Full v1.26.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) · [Using Flow](docs/using-kima.md#kima-flow-v1260) · [Library Doctor](docs/library-doctor.md)
 
 ### Previously in v1.25.0 — Kima Connect
 
-Kima Connect introduced private browser-player discovery, remote Pause / Previous / Next and **consent-based queue handoff** between Kima browsers signed into the same account. The receiver must choose **Play here**. This does not control third-party OpenSubsonic apps or provide synchronized multiroom playback.
+Discover your own authenticated browser players, use remote playback controls and transfer a queue with the receiving player's consent. Kima Connect does not control third-party OpenSubsonic clients or provide synchronized multiroom playback.
 
 [v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect guide](docs/project-one.md)
-
-### Coming in v1.27.0 — source candidate, not published
-
-**Unpublished release candidate:** [v1.27.0](https://github.com/OxygenGS/kima-hub/pull/277) — source candidate awaiting independent review, not an available Docker image.
-
-**Current stable remains v1.26.0.** The next update is undergoing release checks and is not yet available as a v1.27.0 Docker image.
-
-- **Personal Appearance:** original text capitalization and optional Browse shortcut visibility per browser.
-- **Audiobook playback speed:** 0.75×–2× for books, while music and podcasts remain at 1×.
-- **Redis diagnostics:** bounded, read-only AOF checks with a recovery guide; no automatic repair or file deletion.
-- **OpenSubsonic compatibility:** recognize codec/MIME aliases in direct-play reporting, without changing audio files or streams.
-- **Artist biographies:** preserve saved descriptions when enrichment has no valid replacement; never erase them on a missing-source response.
-
-The release still requires combined CI, native AMD64/ARM64 security preflight and explicit publication approval. Keep the existing project name, storage mounts and complete `/data` backup when planning upgrades.
 
 ## The experience
 
@@ -158,9 +147,9 @@ Services are optional: Kima runs as a self-hosted music server without requiring
 
 ## Quick start
 
-**Current stable release:** [v1.26.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) (18 November 2026) · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable release:** [v1.27.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) (24 November 2026) · **Platforms:** `linux/amd64` and `linux/arm64`.
 
-**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.26.0`
+**Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.27.0`
 
 The all-in-one image includes the web interface, API, PostgreSQL, Redis and audio-analysis services. Your music stays in a host-mounted directory; persistent application data lives in `/data`. Lidarr and Soulseek are optional integrations.
 
@@ -173,17 +162,17 @@ docker run -d \
   -p 3030:3030 \
   -v /absolute/path/to/music:/music \
   -v kima_data:/data \
-  ghcr.io/oxygengs/kima-hub:v1.26.0
+  ghcr.io/oxygengs/kima-hub:v1.27.0
 ```
 
 Replace `/absolute/path/to/music` with the **existing, correctly mounted** host directory containing your music. Open `http://localhost:3030` on the Docker host to complete setup. Restrict external access unless appropriate security controls are in place.
 
 ### Docker Compose / Dockge — new installations
 
-The [production Compose example](docker-compose.prod.yml) defaults to the published **v1.26.0** image when `VERSION` is unset, requires `MUSIC_PATH` and does not silently create a missing host music directory.
+The [production Compose example](docker-compose.prod.yml) defaults to the published **v1.27.0** image when `VERSION` is unset, requires `MUSIC_PATH` and does not silently create a missing host music directory.
 
 ```bash
-MUSIC_PATH=/absolute/path/to/music VERSION=v1.26.0 \
+MUSIC_PATH=/absolute/path/to/music VERSION=v1.27.0 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -194,8 +183,8 @@ The [optional companion stack](docker-compose.server.yml) includes additional do
 
 ## Security and release quality
 
-- **v1.26.0 is published.** The [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/44255014369), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/44257548201) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/44257591587) succeeded. Publication does **not** automatically upgrade running installations or promote the `:latest` alias.
-- **Residual vulnerabilities remain.** The v1.26.0 Trivy preflight reported **393 HIGH / 8 CRITICAL** findings on AMD64 and **392 HIGH / 8 CRITICAL** on ARM64, with no scanner-listed fixed versions. A passing build or publication approval does not establish that affected code is unreachable or safe.
+- **v1.27.0 is published.** The [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/45384258511) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/45384297510) succeeded. Publication does **not** automatically upgrade running installations or promote the `:latest` alias.
+- **Residual vulnerabilities remain.** The v1.27.0 Trivy preflight reported **391 HIGH / 8 CRITICAL** findings on AMD64 and **390 HIGH / 8 CRITICAL** on ARM64, with no scanner-listed fixed versions. A passing build or publication approval does not establish that affected code is unreachable or safe.
 - Restrict unnecessary internet exposure, update your host and reverse proxy, protect credentials and verify a **separately restorable cold `/data` backup** before upgrading.
 
 [Security policy](SECURITY.md) · [Image-security report](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
