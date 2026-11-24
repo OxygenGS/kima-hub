@@ -8,6 +8,9 @@ import { requireAuth } from "../middleware/auth";
 import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
 import { buildNovaFlow } from "../services/novaFlow";
+import { MAX_DJ_TRACKS, planDjSet } from "../services/djSet";
+import { LIBRARY_TRACK_WHERE } from "../services/libraryFilters";
+import { NOT_MISSING } from "../utils/libraryEligibility";
 import { buildNovaAlbumSpotlight, buildNovaDiscovery } from "../services/novaFlowDiscovery";
 import { clearNovaFlowFeedback, setNovaFlowFeedback } from "../services/novaFlowFeedback";
 import { getVibeMap, type MapResponse } from "../services/vibeMap";
@@ -160,6 +163,56 @@ router.post("/flow", requireAuth, async (req, res) => {
     } catch (error) {
         logger.error("Generate NOVA Flow failed:", error);
         return res.status(500).json({ error: "Could not prepare your Flow" });
+    }
+});
+
+const djSetInput = z.object({
+    trackIds: z.array(z.string().min(1).max(100)).min(2).max(MAX_DJ_TRACKS),
+    style: z.enum(["smooth", "build", "cooldown"]).default("smooth"),
+}).strict();
+
+/** Read-only preview of an explicitly selected local-library set.
+ * No automatic playback, queue changes, external requests or downloads.
+ */
+router.post("/dj/preview", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const input = djSetInput.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: "Invalid DJ set selection" });
+    try {
+        const rows = await prisma.track.findMany({
+            where: {
+                ...LIBRARY_TRACK_WHERE, ...NOT_MISSING, corrupt: false,
+                id: { in: [...new Set(input.data.trackIds)] },
+            },
+            select: {
+                id: true, title: true, displayTitle: true, duration: true,
+                bpm: true, key: true, keyScale: true, keyStrength: true, energy: true,
+                album: { select: {
+                    id: true, title: true, coverUrl: true,
+                    artist: { select: { id: true, name: true } },
+                } },
+            },
+        });
+        const byId = new Map(rows.map(row => [row.id, row]));
+        const tracks = input.data.trackIds.flatMap(id => {
+            const row = byId.get(id);
+            return row ? [row] : [];
+        });
+        return res.json({
+            omittedCount: input.data.trackIds.length - tracks.length,
+            entries: planDjSet(tracks, input.data.style).map(({ track, transition }) => ({
+                track: {
+                    id: track.id, title: track.title, displayTitle: track.displayTitle,
+                    duration: track.duration, artist: track.album.artist,
+                    album: { id: track.album.id, title: track.album.title, coverArt: track.album.coverUrl },
+                },
+                bpm: track.bpm, key: track.key, keyScale: track.keyScale,
+                energy: track.energy, transition,
+            })),
+        });
+    } catch (error) {
+        logger.error("Prepare DJ set failed:", error);
+        return res.status(500).json({ error: "Could not prepare DJ set" });
     }
 });
 
