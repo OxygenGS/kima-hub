@@ -4,9 +4,9 @@
 
 # Kima Hub
 
-**A beautiful home for the music you own.**
+**Your music. Your space. Your server.**
 
-A modern, self-hosted listening experience with a distinctive dark interface, personal discovery, library tools and the freedom to run it all on your own server.
+A self-hosted music experience that combines your own library with intelligent discovery, a polished dark interface, flexible playback and practical tools for managing music. Run it on your own infrastructure, connect the services you choose, and keep control of your collection.
 
 [![Stable release](https://img.shields.io/badge/stable-v1.27.0-ffb000?style=flat-square)](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0)
 [![Docker image](https://img.shields.io/badge/image-GHCR-316797?style=flat-square&logo=docker&logoColor=white)](https://github.com/OxygenGS/kima-hub/pkgs/container/kima-hub)
@@ -14,7 +14,11 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 [![Languages](https://img.shields.io/badge/UI-English%20%2B%20Dutch-8150a1?style=flat-square)](docs/internationalization.md)
 [![License](https://img.shields.io/badge/license-GPL--3.0-555?style=flat-square)](LICENSE)
 
-**[What's new](#whats-new-in-v1270) · [Experience](#the-experience) · [Settings Studio](#settings-studio-20) · [Features](#features) · [Install](#quick-start) · [Docs](#documentation)**
+**[What's new](#whats-new-in-v1270) · [Quick start](#quick-start) · [Experience](#the-experience) · [Features](#features) · [Integrations](#integrations) · [Documentation](#documentation)**
+
+<img src="assets/screenshots/desktop-home.png" alt="Kima Hub dashboard with personal listening and discovery sections" width="100%" />
+
+<sub>Home — your library, listening and discoveries together</sub>
 
 </div>
 
@@ -22,136 +26,29 @@ A modern, self-hosted listening experience with a distinctive dark interface, pe
 
 ## What's new in v1.27.0
 
-**More control over your listening experience and safer library maintenance.** [Kima Hub v1.27.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) was published on **24 November 2026** for Linux **AMD64 and ARM64**.
+[**v1.27.0 is available now.**](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) Released on **24 November 2026** for native Linux AMD64 and ARM64.
 
-| New in v1.27.0 | What it does |
+| New in v1.27.0 | What it means for you |
 | :--- | :--- |
-| **Personal Appearance** | Keep original capitalization and choose whether Browse appears in the desktop sidebar, independently per browser. |
-| **Audiobook playback speed** | Listen at 0.75×–2× from the book page, desktop player or mobile player. Music and podcasts remain at 1×. |
-| **Redis diagnostics** | Investigate startup problems using bounded, read-only AOF checks. No automatic repair, deletion or queue wipe. |
-| **OpenSubsonic compatibility** | Recognize common codec and MIME aliases when reporting direct-play decisions. |
-| **Artist biography protection** | Keep stored descriptions when enrichment has no valid replacement. |
+| **Personal appearance** | Choose original text capitalization and show or hide the desktop Browse shortcut. Preferences are stored per browser, without modifying library metadata. |
+| **Audiobooks at your speed** | Choose 0.75×, 1×, 1.25×, 1.5×, 1.75× or 2× on desktop and mobile. The speed persists across chapter changes; music and podcasts remain at 1×. |
+| **Safer Redis diagnostics** | Bounded, read-only AOF checks help investigate startup problems. No automatic file repair, deletion or queue wipe. |
+| **OpenSubsonic improvements** | Recognized codec and MIME aliases produce more accurate direct-play reporting for compatible clients. |
+| **Artist biography protection** | Empty or unavailable enrichment results no longer erase an existing artist description. |
 
-No new database migration is introduced by v1.27.0. Keep your existing Compose/Dockge project and media mounts, and verify an independently restorable cold `/data` backup before upgrading.
+This update introduces no new Prisma migration. An upgrade from an older release may still require earlier migrations.
 
-[Full v1.27.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) · [Safe upgrade and rollback](docs/safe-aio-updates.md) · [Redis recovery](docs/redis-recovery.md)
-
-### Previously in v1.26.0 — Flow and Music DNA
-
-Kima Flow provides guided local-library mixes, continuous listening and private, reversible Music DNA feedback. Discovery Radar and Album Spotlight help explore new artists without automatically starting downloads; Library Guardian presents possible duplicate-recording evidence without modifying files. The original 3D Vibe Map remains available.
-
-[Full v1.26.0 release](https://github.com/OxygenGS/kima-hub/releases/tag/v1.26.0) · [Using Flow](docs/using-kima.md#kima-flow-v1260) · [Library Doctor](docs/library-doctor.md)
-
-### Previously in v1.25.0 — Kima Connect
-
-Discover your own authenticated browser players, use remote playback controls and transfer a queue with the receiving player's consent. Kima Connect does not control third-party OpenSubsonic clients or provide synchronized multiroom playback.
-
-[v1.25.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.25.0) · [Kima Connect guide](docs/project-one.md)
-
-## The experience
-
-One music space for your favorite albums, artists, playlists and discoveries. Built for a personal library rather than a subscription catalog.
-
-<div align="center">
-  <img src="assets/screenshots/desktop-home.png" alt="Kima Hub home dashboard showing personalized listening and library discovery" width="100%" />
-  <sub>Home · your library, listening and discoveries together</sub>
-</div>
-
-## Settings Studio 2.0
-
-**New in [v1.22.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0).** The old, endless settings screen is gone. A focused settings workspace now matches the rest of the OxygenGS theme: dark surfaces, warm amber accents, thoughtful spacing and clearer controls.
-
-<div align="center">
-  <img src="assets/settings-studio-showcase.svg" alt="Illustrated preview of Settings Studio 2.0, showing grouped navigation, search and the five settings categories" width="100%" />
-  <sub>Illustrated preview based on the v1.22.0 interface structure; not a screenshot of a live installation.</sub>
-</div>
-
-| Find what matters | Change settings with confidence |
-| :--- | :--- |
-| **Five areas:** Personal, Appearance, Downloads & services, Music library, Administration. | **One active panel at a time**, rather than a giant page of unrelated options. |
-| Searchable desktop navigation and mobile-friendly category shortcuts. | Unsaved inputs remain intact when switching panels, with the existing save workflow. |
-| Existing deep links continue to work; obsolete navigation is removed. | Admin-only controls stay permission-restricted; existing service connections and settings APIs are preserved. |
-
-[See all settings](docs/configuration.md) · [Read the v1.22.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.22.0)
-
-## Made for your music
-
-### Explore the library
-
-<table>
-<tr>
-<td width="50%" align="center"><img src="assets/screenshots/desktop-library.png" alt="Kima Hub desktop music library" width="100%"/><sub>Browse your library</sub></td>
-<td width="50%" align="center"><img src="assets/screenshots/desktop-artist.png" alt="Kima Hub artist overview with artwork and releases" width="100%"/><sub>Artists, albums and tracks</sub></td>
-</tr>
-<tr>
-<td width="50%" align="center"><img src="assets/screenshots/desktop-album.png" alt="Kima Hub album details and track listing" width="100%"/><sub>Albums and track lists</sub></td>
-<td width="50%" align="center"><img src="assets/screenshots/desktop-collection.png" alt="Kima Hub personal music collection" width="100%"/><sub>Your personal collection</sub></td>
-</tr>
-</table>
-
-### Find your next favorite
-
-Start with **Kima Flow** for a guided local-library mix, or open **Vibe Map** for a 3D view of audio similarity. **Mood Mixer**, radio and discovery views offer more ways to explore your collection.
-
-<table>
-<tr>
-<td width="50%" align="center"><img src="assets/screenshots/vibe-map.png" alt="Kima Hub Vibe Map for discovering similar-sounding music" width="100%"/><sub>Vibe Map · explore relationships between tracks</sub></td>
-<td width="50%" align="center"><img src="assets/screenshots/mood-mixer.png" alt="Kima Hub Mood Mixer interface" width="100%"/><sub>Mood Mixer · shape the next listening session</sub></td>
-</tr>
-</table>
-
-Vibe also includes **Match Vibe**, **Song Path** and **Blend** for listening paths and mixes built from audio similarity. [Explore the listening experience](docs/using-kima.md)
-
-### Built for smaller screens, too
-
-<div align="center">
-<table>
-<tr>
-<td width="33%" align="center"><img src="assets/screenshots/mobile-home.png" alt="Kima Hub mobile home" width="100%"/></td>
-<td width="33%" align="center"><img src="assets/screenshots/mobile-player.png" alt="Kima Hub full-screen mobile music player" width="100%"/></td>
-<td width="33%" align="center"><img src="assets/screenshots/mobile-vibe.png" alt="Kima Hub mobile Vibe view" width="100%"/></td>
-</tr>
-<tr><td align="center"><sub>Home</sub></td><td align="center"><sub>Player</sub></td><td align="center"><sub>Vibe</sub></td></tr>
-</table>
-</div>
-
-Responsive desktop and mobile layouts, installable browser-based PWA support and a dedicated television-browser layout. Existing repository screenshots are illustrative of product features and may differ slightly from the latest release.
-
-## Features
-
-| Listen & discover | Own & manage |
-| :--- | :--- |
-| **Music playback** — queue, shuffle, repeat, lyrics, playlists, radio and sleep timer. | **Local music library** — keep your own files and use your own storage paths. |
-| **Personal discovery** — Mood Mixer, Vibe Map, Similar, Song Path, Blend and listening stats. | **Library Doctor** — inspect missing tracks, album associations and library health. |
-| **Kima Flow** — guided, explainable local-library mixes with optional continuous queue refill. | **Music DNA** — private, reversible per-track taste feedback. |
-| **Discovery Radar & Album Spotlight** — opt-in discovery of similar artists and source-backed albums. | **Library Guardian** — admin-only, read-only evidence for possible duplicate recordings. |
-| **Playlists** — make, reorder, share and import from supported links or M3U. | **Artwork tools** — repair missing artist imagery and album covers without overwriting curated artwork. |
-| **Podcasts and audiobooks** — podcast subscriptions and optional Audiobookshelf playback. | **Downloads** — per-user Kima job history with optional Lidarr and Soulseek workflows. |
-| **Modern music clients** — compatible OpenSubsonic players, including Symfonium and Feishin. | **Server controls** — separate users and roles, 2FA, branding, language and audio quality settings. |
-| **Kima Connect** — private browser-device discovery, consent-based queue transfer and remote playback control. | **Safe handoff** — playback confirmation, bounded Redis commands, timeout recovery and SSE fallback. |
-
-### Connect the tools you already use
-
-| Integration | What it adds |
-| :--- | :--- |
-| **Lidarr** | Request albums using your existing automation and library-import workflow. |
-| **Soulseek / slskd** | Search for and download individual tracks using the built-in client or an external slskd server. |
-| **OpenSubsonic** | Connect compatible music apps, including **Symfonium** and **Feishin**; per-client Native Apps keys support modern authentication without requiring legacy login modes. |
-| **Audiobookshelf** | Bring audiobooks and podcast libraries into your listening space. |
-| **ListenBrainz** | Optional scrobbling and listening-related recommendations. |
-| **Fanart.tv / AcoustID** | Optional artwork enrichment and audio identification. |
-
-Services are optional: Kima runs as a self-hosted music server without requiring Lidarr, Soulseek or Audiobookshelf. The experimental **Downtify connector was retired in v1.21.0** and is **not** part of the current app; previously imported files and historical database records are preserved.
-
-[Integration guide](docs/integrations.md) · [Native music clients](docs/subsonic.md) · [Library Doctor](docs/library-doctor.md) · [Privacy](PRIVACY.md)
+[All v1.27.0 release notes](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) · [Full changelog](CHANGELOG.md) · [Safe updates](docs/safe-aio-updates.md)
 
 ## Quick start
 
-**Current stable release:** [v1.27.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0) (24 November 2026) · **Platforms:** `linux/amd64` and `linux/arm64`.
+**Current stable release:** [v1.27.0](https://github.com/OxygenGS/kima-hub/releases/tag/v1.27.0)
 
 **Versioned image:** `ghcr.io/oxygengs/kima-hub:v1.27.0`
 
-The all-in-one image includes the web interface, API, PostgreSQL, Redis and audio-analysis services. Your music stays in a host-mounted directory; persistent application data lives in `/data`. Lidarr and Soulseek are optional integrations.
+Kima's all-in-one Docker image includes the web interface, API, PostgreSQL, Redis and audio-analysis services. No separate database, Redis server, Lidarr or Audiobookshelf installation is required to listen to your own music.
+
+**Requirements:** Docker on a compatible Linux AMD64 or ARM64 host, a real existing music directory and sufficient storage and memory for the database, artwork cache and audio analysis. The production Compose example allows 6 GiB RAM and 8 GiB combined memory and swap; resource use depends on library size and analysis settings. NVIDIA acceleration is optional.
 
 ### Docker — new installations
 
@@ -160,57 +57,215 @@ docker run -d \
   --name kima \
   --restart unless-stopped \
   -p 3030:3030 \
-  -v /absolute/path/to/music:/music \
-  -v kima_data:/data \
+  --mount type=bind,source=/absolute/path/to/music,target=/music \
+  --mount type=volume,source=kima_data,target=/data \
   ghcr.io/oxygengs/kima-hub:v1.27.0
 ```
 
-Replace `/absolute/path/to/music` with the **existing, correctly mounted** host directory containing your music. Open `http://localhost:3030` on the Docker host to complete setup. Restrict external access unless appropriate security controls are in place.
+Replace the example music path with your existing library directory. Docker's bind-mount syntax rejects a missing source instead of creating an empty directory. On NAS or DAS storage, independently verify that the intended filesystem is mounted.
+
+Open `http://localhost:3030` on the Docker host, or the appropriate server address from another device on your network. Create the first administrator account and let Kima index and analyze your library. Advanced discovery becomes available as enrichment progresses.
 
 ### Docker Compose / Dockge — new installations
 
-The [production Compose example](docker-compose.prod.yml) defaults to the published **v1.27.0** image when `VERSION` is unset, requires `MUSIC_PATH` and does not silently create a missing host music directory.
+Use the [production Compose example](docker-compose.prod.yml) with an explicit image version and an existing music path:
 
 ```bash
 MUSIC_PATH=/absolute/path/to/music VERSION=v1.27.0 \
   docker compose -f docker-compose.prod.yml up -d
 ```
 
-The [optional companion stack](docker-compose.server.yml) includes additional download-management services. [Full installation instructions](docs/install.md)
+For Dockge, use that production Compose file as your new stack and set the same environment variables. The file defaults to the published v1.27.0 image, requires `MUSIC_PATH` and prevents creation of a missing host music directory. The [optional companion stack](docker-compose.server.yml) adds download-management services; it is not required for Kima itself.
+
+| Interface or mount | Purpose |
+| :--- | :--- |
+| `3030` | Web application and OpenSubsonic client API. |
+| `/music` | Your existing music library. |
+| `/data` | Database, accounts, generated secrets, settings, processing state and caches. Preserve this entire volume. |
+
+[Complete installation guide](docs/install.md) · [Optional NVIDIA GPU setup](docs/gpu.md) · [Configuration](docs/configuration.md)
+
+### Updating an existing installation
 
 > [!IMPORTANT]
-> **Already running Kima? Do not replace your existing stack with these new-install examples.** Retain your Compose/Dockge project name, pinned image, complete `/data` volume, and existing `/music` and `/downloads` mounts. Before upgrading, stop data writers and verify a **separately restorable cold backup** of `/data`. v1.26.0 adds a Music DNA database table; reverting only the image does not reverse a database migration. See [safe updates and recovery](docs/safe-aio-updates.md).
+> Do not replace your existing stack with a new-install example. Keep the original Compose/Dockge project name, `/data` volume, media mounts and integration configuration.
+
+1. Record the current image version and configuration privately. Stop data writers and make a **complete cold backup of /data**.
+2. Verify restoration into a separate volume. Keep the original backup available for rollback.
+3. Select the versioned v1.27.0 image in the same deployment. Pull it and redeploy through your existing Compose or Dockge workflow.
+4. Verify login, playback, playlists, library data, downloads and integrations before retiring any old backup.
+
+Do not use `docker compose down -v` to update an existing installation. Reverting a Docker image does not reverse a database migration. If rollback requires the original schema, restore the pre-upgrade data into an independent volume before starting the older image.
+
+[Read the complete backup, upgrade and rollback procedure](docs/safe-aio-updates.md).
+
+## The experience
+
+### Discover your next favorite
+
+**Kima Flow** is a simple way to discover music that is already in your library. Choose **My favorites**, **A bit of both** or **Surprise me**, tune Energy and Discovery, and preview a personalized mix before you start playback.
+
+| Discovery feature | How it works |
+| :--- | :--- |
+| **Continuous Flow** | Extend a Flow queue as it runs low. Manual queue edits or switching listening mode stop automatic continuation without pausing music. |
+| **Music DNA** | Give individual tracks reversible **More like this** or **Less like this** feedback. Preferences are private to each account. |
+| **Discovery Radar** | On request, find similar artists beyond your playable library. |
+| **Album Spotlight** | Preview source-backed albums or EPs from newly discovered artists. |
+| **Library Radio & Mood Mixer** | Start genre, decade, favorite or mood-based listening sessions. |
+
+Flow never starts playback merely because the server suggests a mix. Continuous Flow requires the originating browser to remain open. Radar and Album Spotlight never start downloads automatically.
+
+For deeper exploration, the original **3D Vibe Map** remains available. Use Match Vibe, Similar, Song Path and Blend to find connections between tracks or shape a listening journey.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="assets/screenshots/vibe-map.png" alt="Interactive 3D Vibe Map" width="100%"/><sub>Vibe Map — explore audio similarity</sub></td>
+<td width="50%" align="center"><img src="assets/screenshots/mood-mixer.png" alt="Mood Mixer interface" width="100%"/><sub>Mood Mixer — shape your session</sub></td>
+</tr>
+</table>
+
+[Explore Flow and Vibe](docs/using-kima.md#kima-flow-v1260)
+
+### Your library, beautifully organized
+
+Explore artists, albums, tracks, personal collections and playlists without losing ownership of your files. Search your local library and discover music beyond it. Review listening statistics, recently added albums, favorites and personalized recommendations.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-library.png" alt="Desktop music library" width="100%"/><sub>Browse your library</sub></td>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-artist.png" alt="Artist page with discography" width="100%"/><sub>Artist discography</sub></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-album.png" alt="Album track listing" width="100%"/><sub>Album detail and tracks</sub></td>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-collection.png" alt="Personal music collection" width="100%"/><sub>Your collection</sub></td>
+</tr>
+</table>
+
+### Podcasts and audiobooks
+
+Subscribe to podcasts, resume episodes and connect your Audiobookshelf library. Audiobook playback saves your listening position back to Audiobookshelf and supports the adjustable playback speed introduced in v1.27.0.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-podcasts.png" alt="Podcast browsing interface" width="100%"/><sub>Podcasts</sub></td>
+<td width="50%" align="center"><img src="assets/screenshots/desktop-audiobooks.png" alt="Audiobook browsing interface" width="100%"/><sub>Audiobooks</sub></td>
+</tr>
+</table>
+
+### Desktop, mobile and TV
+
+Use responsive desktop and mobile layouts, install Kima as a PWA through a compatible browser, or use the dedicated television-browser layout. No separate native Kima mobile application is required.
+
+<table>
+<tr>
+<td width="33%" align="center"><img src="assets/screenshots/mobile-home.png" alt="Mobile home" width="100%"/></td>
+<td width="33%" align="center"><img src="assets/screenshots/mobile-player.png" alt="Mobile full-screen player" width="100%"/></td>
+<td width="33%" align="center"><img src="assets/screenshots/mobile-library.png" alt="Mobile music library" width="100%"/></td>
+</tr>
+<tr><td align="center"><sub>Home</sub></td><td align="center"><sub>Player</sub></td><td align="center"><sub>Library</sub></td></tr>
+</table>
+
+**Kima Connect** discovers active Kima browsers belonging to the same account. Use remote playback controls or offer a queue handoff; the receiving browser must explicitly choose **Play here**. Kima Connect is not synchronized multiroom audio or remote control of third-party OpenSubsonic clients.
+
+[Kima Connect guide](docs/project-one.md) · [Mobile and TV](docs/using-kima.md#on-a-phone-or-a-tv)
+
+Repository screenshots illustrate existing product features and may not reflect every detail of the current release.
+
+## Features
+
+| Area | Available in the published stable release |
+| :--- | :--- |
+| **Playback** | Queue, shuffle, repeat, lyrics, radio, sleep timer, keyboard shortcuts and selectable streaming quality. |
+| **Music library** | Local audio files, artist and album pages, collections, search, metadata enrichment and personal statistics. |
+| **Playlists** | Private or public playlists, drag-to-reorder, share links, supported URL imports and M3U imports. |
+| **Discovery** | Flow, Continuous Flow, Music DNA, Discovery Radar, Album Spotlight, Vibe Map, Song Path, Blend and Mood Mixer. |
+| **Media** | Podcast subscriptions, optional Audiobookshelf playback, audiobook speed and progress synchronization. |
+| **Device continuity** | Kima Connect, browser-player discovery, remote controls and consent-based queue handoff. |
+| **Downloads** | Per-account download history, optional Lidarr album requests, built-in Soulseek or external slskd, and import-status review. |
+| **Library maintenance** | Library Doctor, Library Guardian, Smart Download Inbox, missing artwork repair and reversible supported album associations. |
+| **Administration** | Separate accounts and roles, 2FA, client keys, branding, storage and enrichment controls, English/Dutch language selection. |
+| **Client compatibility** | OpenSubsonic, including compatible clients such as Symfonium and Feishin. |
+
+### Settings Studio
+
+Settings are organized into **Personal, Appearance, Downloads & Services, Music Library, and Administration**. Find settings through desktop navigation search or mobile category selection. Only authorized administrators can change server-wide settings and integrations.
+
+<div align="center">
+<img src="assets/settings-studio-showcase.svg" alt="Illustration of Settings Studio with grouped categories and focused panels" width="100%" />
+<sub>Settings Studio — illustrated interface overview</sub>
+</div>
+
+[Settings Studio and configuration](docs/configuration.md) · [Appearance preferences](docs/using-kima.md#appearance-preferences-v1270) · [User permissions](docs/user-permissions.md)
+
+### Library maintenance without automatic destructive actions
+
+- **Library Doctor:** on-demand reports of indexed missing or corrupt tracks, missing artwork and review candidates.
+- **Library Guardian:** admin-only evidence for possible duplicate recordings using indexed metadata, duration and acoustic evidence. It does not delete files, retag songs or prove byte-identical duplicates.
+- **Smart Download Inbox:** review qualifying import and album associations; supported reversible database-only corrections remain explicit user actions.
+- **Artwork repair:** bounded repair of missing covers and artist pictures, preserving manually chosen artwork.
+- **Redis recovery:** read-only diagnostic guidance; persistent data is never automatically wiped to recover a startup failure.
+
+[Library Doctor and Guardian](docs/library-doctor.md) · [Administration](docs/administration.md) · [Redis recovery](docs/redis-recovery.md)
+
+## Integrations
+
+Configure integrations from Settings Studio. Each is optional; Kima can serve a local music library without external download services.
+
+| Service | Purpose |
+| :--- | :--- |
+| **Lidarr** | Request albums and follow your existing library-import workflow. |
+| **Soulseek / slskd** | Search for individual tracks with the built-in client or an external slskd server. |
+| **Audiobookshelf** | Access audiobook and podcast libraries and save listening position. |
+| **OpenSubsonic** | Connect compatible clients using per-client keys from **Settings → Native Apps**. |
+| **ListenBrainz** | Optional scrobbling and listening-related recommendations. |
+| **Fanart.tv / AcoustID** | Optional artwork enrichment and audio identification. |
+
+Playlist imports support M3U and links from supported music providers; tracks are matched to your library, with missing entries handled through configured services. Availability depends on providers and your permissions. Music requests and downloads should only be used for material you are authorized to obtain.
+
+The experimental Downtify connector was retired in v1.21.0. Previously imported music and historical database records are preserved; a separate Downtify service is no longer required.
+
+[Integration guide](docs/integrations.md) · [OpenSubsonic and native clients](docs/subsonic.md) · [Privacy](PRIVACY.md)
 
 ## Security and release quality
 
-- **v1.27.0 is published.** The [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/45384258511) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/45384297510) succeeded. Publication does **not** automatically upgrade running installations or promote the `:latest` alias.
-- **Residual vulnerabilities remain.** The v1.27.0 Trivy preflight reported **391 HIGH / 8 CRITICAL** findings on AMD64 and **390 HIGH / 8 CRITICAL** on ARM64, with no scanner-listed fixed versions. A passing build or publication approval does not establish that affected code is unreachable or safe.
-- Restrict unnecessary internet exposure, update your host and reverse proxy, protect credentials and verify a **separately restorable cold `/data` backup** before upgrading.
+The versioned v1.27.0 image has completed the [native AMD64/ARM64 preflight](https://github.com/OxygenGS/kima-hub/actions/runs/45379839167), [explicit stable approval](https://github.com/OxygenGS/kima-hub/actions/runs/45384258511) and [multi-architecture Docker publication](https://github.com/OxygenGS/kima-hub/actions/runs/45384297510).
 
-[Security policy](SECURITY.md) · [Image-security report](docs/image-security.md) · [Safe AIO upgrades](docs/safe-aio-updates.md) · [Privacy policy](PRIVACY.md)
+The tested source also passed backend/frontend checks, Security E2E, database migration and recovery, and actual historical upstream-image upgrade and rollback on synthetic test data. These tests are not a guarantee for every real installation or external service.
+
+**Residual vulnerabilities remain:** the native v1.27.0 preflight reported **391 HIGH / 8 CRITICAL** findings on AMD64 and **390 HIGH / 8 CRITICAL** on ARM64, without a scanner-listed patched version. Publication and passing policy checks do not establish that the findings are safe or unreachable.
+
+Use a versioned image, restrict unnecessary public exposure, keep the host and reverse proxy updated, protect credentials, and verify separately restorable cold backups. Do not rely on the moving `:latest` alias; Kima does not promote it automatically. Publishing a release never upgrades existing installations on its own.
+
+[Image-security report](docs/image-security.md) · [Security policy](SECURITY.md) · [Privacy policy](PRIVACY.md) · [Safe AIO updates](docs/safe-aio-updates.md)
 
 ## Documentation
 
-| Start exploring | Operate and improve |
+| Getting started | Operating your server |
 | :--- | :--- |
-| [Install & upgrade](docs/install.md) | [Settings Studio & configuration](docs/configuration.md) |
+| [Installation and upgrades](docs/install.md) | [Settings Studio and configuration](docs/configuration.md) |
 | [Using Kima](docs/using-kima.md) | [Administration](docs/administration.md) |
-| [Integrations](docs/integrations.md) | [Library health & repairs](docs/library-doctor.md) |
-| [Symfonium, Feishin & OpenSubsonic](docs/subsonic.md) | [Image security](docs/image-security.md) |
-| [User permissions](docs/user-permissions.md) | [Safe backups & rollback](docs/safe-aio-updates.md) |
-| [Full changelog](CHANGELOG.md) | [Development](docs/development.md) |
-| [Branding](docs/instance-branding.md) | [Upstream compatibility](docs/upstream-compatibility.md) |
+| [Integrations](docs/integrations.md) | [Library health and repairs](docs/library-doctor.md) |
+| [OpenSubsonic clients](docs/subsonic.md) | [Image security](docs/image-security.md) |
+| [Kima Connect](docs/project-one.md) | [Backup and rollback](docs/safe-aio-updates.md) |
+| [English and Dutch](docs/internationalization.md) | [Redis recovery](docs/redis-recovery.md) |
+| [User permissions](docs/user-permissions.md) | [Optional GPU acceleration](docs/gpu.md) |
+| [Branding](docs/instance-branding.md) | [Development](docs/development.md) |
+| [Changelog](CHANGELOG.md) | [Upstream compatibility](docs/upstream-compatibility.md) |
 
 ## About the fork
 
-**OxygenGS Kima Hub** is an independent community fork of [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub), not an official upstream release. The aim is to make a more polished, capable and approachable self-hosted music application while keeping upstream improvements practical to integrate.
+OxygenGS Kima Hub is an independent community fork of [Kima Hub by Chevron7Locked](https://github.com/Chevron7Locked/kima-hub), not an official upstream release. The goal is a more polished and capable self-hosted listening experience while retaining practical compatibility with upstream improvements and independent installations.
+
+Contributions and reproducible bug reports are welcome. See [contributing](CONTRIBUTING.md) and [issues](https://github.com/OxygenGS/kima-hub/issues). Do not include server addresses, credentials, database backups or private installation details in public reports.
 
 Licensed under [GNU GPL v3.0](LICENSE). Original contributions and third-party components remain with their respective owners; see the [audio model notices](services/audio-analyzer/models/LICENSE-upf-models).
+
+---
 
 <div align="center">
 
 **Your music. Your space. Your server.**
 
-[Releases](https://github.com/OxygenGS/kima-hub/releases) · [Installation](docs/install.md) · [Changelog](CHANGELOG.md)
+[Releases](https://github.com/OxygenGS/kima-hub/releases) · [Install](docs/install.md) · [Changelog](CHANGELOG.md)
 
 </div>

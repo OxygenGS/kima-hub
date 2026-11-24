@@ -62,7 +62,7 @@ Artist descriptions and genres that clients see come from Kima's metadata enrich
 - Album search results leave out albums that were downloaded as discovery suggestions.
 - The route code lives in `backend/src/routes/subsonic/`, one file per area. `index.ts` there holds the shared sign-in, rate limit and system endpoints.
 
-## Stream-format reporting (v1.27.0 development — not yet released)
+## Stream-format reporting (v1.27.0)
 
 For clients that use OpenSubsonic's getTranscodeDecision, Kima compares the
 client's requested format against the actual source codec/MIME. For example,
@@ -71,4 +71,4 @@ and `format=flac` matches `audio/flac`. The server no longer advises a
 needless transcode just because a client uses a file suffix while the scanner
 uses a MIME name. An unknown source format is **not** assumed to be MP3.
 This is a reporting correction; audio streams and stored file metadata are
-untouched, and the published stable release remains v1.26.0.
+untouched.
