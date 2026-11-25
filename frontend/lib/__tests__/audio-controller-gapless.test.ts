@@ -372,23 +372,25 @@ describe("AudioController -- opt-in crossfade", () => {
         vi.useRealTimers();
     });
 
-    function setup(seconds = 6) {
+    function setup(seconds = 6, beatGuided = false) {
         vi.useFakeTimers();
         const state = newController();
         active = state.controller;
         const { controller, audio, audioNext } = state;
         vi.spyOn(controller.soundLab, "hasRunningGraph").mockReturnValue(true);
         const sound = vi.spyOn(controller.soundLab, "getSnapshot").mockReturnValue({
-            ...controller.soundLab.getSnapshot(), crossfadeSeconds: seconds,
+            ...controller.soundLab.getSnapshot(), crossfadeSeconds: seconds, beatGuided,
         });
-        controller.load("http://x.com/a.mp3", { autoplay: true, expectedDurationS: 120 });
+        controller.load(beatGuided ? "http://x.com/api/library/tracks/track-1/stream" : "http://x.com/a.mp3",
+            { autoplay: true, expectedDurationS: 120 });
         audio.duration = 120;
         audio.currentTime = 114;
         audio.paused = false;
         audio.readyState = 4;
         audio.__fire("canplay");
         audio.__fire("playing");
-        makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 120);
+        makeEligible(controller, audioNext, "track-2",
+            beatGuided ? "http://x.com/api/library/tracks/track-2/stream" : "http://x.com/b.mp3", 120);
         audioNext.readyState = 4;
         audioNext.play.mockImplementation(async () => { audioNext.paused = false; });
         audioNext.pause.mockImplementation(() => { audioNext.paused = true; });
@@ -492,6 +494,131 @@ describe("AudioController -- opt-in crossfade", () => {
         audio.ended = true;
         audio.__fire("ended");
         expect(ended).toHaveBeenCalledOnce();
+    });
+
+    const timing = {
+        outgoingId: "track-1", incomingId: "track-2", targetSeconds: 6,
+        timing: { overlapMs: 6120, incomingFirstBeatMs: 370,
+            outgoingBeatBeforeEndMs: 5750, matchedBeats: 11, maxDriftMs: 0 },
+    };
+
+    async function beatSetup() {
+        const state = setup(6, true);
+        const { controller, audio } = state;
+        audio.currentTime = 113;
+        const report = vi.spyOn(controller.soundLab, "reportBeatTiming");
+        const loader = vi.fn(async () => timing);
+        controller.prepareDjTiming("track-1", "track-2", loader);
+        await flushMicrotasks();
+        return { ...state, report, loader };
+    }
+
+    it("looks up one exact pair and waits for the measured cue, not the fixed overlap", async () => {
+        const { controller, audio, audioNext, report, loader } = await beatSetup();
+        expect(loader).toHaveBeenCalledOnce();
+        expect(loader).toHaveBeenCalledWith({ outgoingId: "track-1", incomingId: "track-2", targetSeconds: 6 }, expect.any(AbortSignal));
+        controller.prepareDjTiming("track-1", "track-2", loader);
+        expect(loader).toHaveBeenCalledOnce();
+        expect(audioNext.play).not.toHaveBeenCalled();
+        expect(report).toHaveBeenCalledWith("ready");
+        audio.currentTime = 113.9;
+        vi.advanceTimersByTime(20);
+        await flushMicrotasks();
+        expect(audioNext.play).toHaveBeenCalledOnce();
+        audio.currentTime = 114.4;
+        audioNext.currentTime = 0.52;
+        vi.advanceTimersByTime(50);
+        expect(report).toHaveBeenCalledWith("guided");
+        expect(audio.volume).toBeLessThan(1);
+        expect(audioNext.volume).toBeGreaterThan(0);
+        expect(audio.volume + audioNext.volume).toBeCloseTo(1);
+        expect(audioNext.playbackRate).toBe(1);
+    });
+
+    it("degrades a guided overlap to a regular fade when observed media timing drifts", async () => {
+        const { audio, audioNext, report } = await beatSetup();
+        audio.currentTime = 113.9;
+        vi.advanceTimersByTime(20);
+        await flushMicrotasks();
+        audio.currentTime = 114.5;
+        audioNext.currentTime = 0.55;
+        vi.advanceTimersByTime(50);
+        expect(report).toHaveBeenCalledWith("guided");
+        audio.currentTime = 115.5;
+        audioNext.currentTime = 1;
+        vi.advanceTimersByTime(50);
+        expect(report).toHaveBeenLastCalledWith("fallback");
+        expect(audioNext.play).toHaveBeenCalledOnce();
+        expect(audioNext.pause).not.toHaveBeenCalled();
+        expect(audio.volume + audioNext.volume).toBeCloseTo(1);
+    });
+
+    it("uses a regular transition when a cue deadline was missed", async () => {
+        const { audio, audioNext, report } = await beatSetup();
+        audio.currentTime = 114.3;
+        vi.advanceTimersByTime(20);
+        await flushMicrotasks();
+        expect(audioNext.play).toHaveBeenCalledOnce();
+        expect(report).toHaveBeenLastCalledWith("fallback");
+    });
+
+    it("ignores a late response after the next track changes and aborts its request", async () => {
+        const { controller, audio, audioNext } = setup(6, true);
+        audio.currentTime = 110;
+        let resolve: (value: unknown) => void = () => {};
+        let signal: AbortSignal | undefined;
+        controller.prepareDjTiming("track-1", "track-2", (_pair, requestSignal) => {
+            signal = requestSignal;
+            return new Promise(done => { resolve = done; });
+        });
+        controller.setExpectedNext("http://x.com/api/library/tracks/track-3/stream", "track-3", 120);
+        expect(signal?.aborted).toBe(true);
+        resolve(timing);
+        await flushMicrotasks();
+        audio.currentTime = 113.9;
+        audio.__fire("timeupdate");
+        expect(audioNext.play).not.toHaveBeenCalled();
+    });
+
+    it("does not request timing for a stale current track or when beat mode is off", () => {
+        const { controller, sound } = setup(6, true);
+        const loader = vi.fn(async () => timing);
+        controller.prepareDjTiming("wrong-track", "track-2", loader);
+        expect(loader).not.toHaveBeenCalled();
+        sound.mockReturnValue({ ...controller.soundLab.getSnapshot(), beatGuided: false });
+        controller.prepareDjTiming("track-1", "track-2", loader);
+        expect(loader).not.toHaveBeenCalled();
+    });
+
+    it("times out a timing request and continues the ordinary crossfade without retry loops", async () => {
+        const { controller, audio, audioNext } = setup(6, true);
+        audio.currentTime = 105;
+        let signal: AbortSignal | undefined;
+        const loader = vi.fn((_pair: unknown, requestSignal: AbortSignal) => {
+            signal = requestSignal;
+            return new Promise<unknown>(() => {});
+        });
+        controller.prepareDjTiming("track-1", "track-2", loader);
+        for (let second = 1; second <= 5; second++) {
+            audio.currentTime = 105 + second;
+            vi.advanceTimersByTime(1000);
+        }
+        expect(signal?.aborted).toBe(true);
+        controller.prepareDjTiming("track-1", "track-2", loader);
+        expect(loader).toHaveBeenCalledOnce();
+        audio.currentTime = 114;
+        audio.__fire("timeupdate");
+        await flushMicrotasks();
+        expect(audioNext.play).toHaveBeenCalledOnce();
+    });
+
+    it("cancels a scheduled cue when the current source is replaced", async () => {
+        const { controller, audio, audioNext } = await beatSetup();
+        controller.load("http://x.com/api/library/tracks/track-4/stream");
+        audio.currentTime = 113.9;
+        vi.advanceTimersByTime(20);
+        await flushMicrotasks();
+        expect(audioNext.play).not.toHaveBeenCalled();
     });
 
     it("does not commit an old play promise after cancellation", async () => {

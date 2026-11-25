@@ -251,6 +251,7 @@ for (const locale of ["en", "nl"] as const) {
             const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
             await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
             await lab.getByRole("combobox", { name: locale === "nl" ? "Crossfade (muziek)" : "Crossfade (music)", exact: true }).selectOption("8");
+            await lab.getByRole("checkbox", { name: locale === "nl" ? "Beatgestuurde crossfade" : "Beat-guided crossfade", exact: true }).check();
             await smallPlayer.getByRole("button", { name: t("Play"), exact: true }).click();
             await advance(page);
             const slider = smallPlayer.getByRole("slider", { name: t("Playback position"), exact: true });
@@ -266,6 +267,7 @@ for (const locale of ["en", "nl"] as const) {
                     a.volume > 0.05 && b.volume > 0.05 && a.volume + b.volume <= 1.00001 &&
                     b.currentTime > 0.1 && a.src.includes("ci-ui-track-one") && b.src.includes("ci-ui-track-two");
             }), { timeout: 24000 }).toBe(true);
+            await expect(lab.locator("[data-beat-timing-status]")).toHaveAttribute("data-beat-timing-status", "fallback");
             await expect.poll(async () => Number(await lab.locator("[data-sound-peak]").getAttribute("data-sound-peak"))).toBeGreaterThan(0.00001);
             await expect.poll(async () => (await readPlayer(page)).src).toContain("ci-ui-track-two");
             expect((await readPlayer(page)).t).toBeGreaterThan(0.1);
@@ -276,5 +278,73 @@ for (const locale of ["en", "nl"] as const) {
             await expect.poll(async () => (await readPlayer(page)).paused).toBe(true);
         }
         expect(uncaught).toEqual([]);
+    });
+
+    test(`measured ${locale} DJ timing uses real media clocks and a safe fallback`, async ({ page, isMobile }, testInfo) => {
+        test.skip(isMobile, "Sound Lab is explicitly desktop-only");
+        const t = (key: string) => translate(locale, key);
+        const errors: string[] = [];
+        page.on("pageerror", error => errors.push(error.message));
+        await loginAsTestUser(page);
+        await closeFixtureNotices(page);
+        await page.goto("/settings#language");
+        await page.locator("#language-select").selectOption(locale);
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        await page.goto("/album/ci-dj-timing-album");
+        const album = page.locator('[data-music-detail="album"]');
+        await expect(album.locator("h1")).toHaveText("CI DJ Timing Album");
+        await album.getByRole("button", { name: t("play all"), exact: true }).click();
+        await advance(page);
+        expect((await readPlayer(page)).src).toContain("ci-dj-timing-one");
+        const dock = page.locator("[data-player-dock]");
+        await dock.getByRole("link", { name: t("Queue"), exact: true }).click();
+        const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
+        await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
+        await lab.getByRole("combobox", { name: locale === "nl" ? "Geluidsprofiel" : "Sound profile", exact: true }).selectOption("flat");
+        await lab.getByRole("button", { name: locale === "nl" ? "Sound Lab activeren" : "Enable Sound Lab", exact: true }).click();
+        await expect(lab.locator("[data-sound-status]")).toHaveAttribute("data-sound-status", "active");
+        await lab.getByRole("combobox", { name: locale === "nl" ? "Crossfade (muziek)" : "Crossfade (music)", exact: true }).selectOption("6");
+        const nextTiming = page.waitForResponse(response => response.url().endsWith("/api/vibe/dj/timing") && response.request().method() === "POST");
+        await lab.getByRole("checkbox", { name: locale === "nl" ? "Beatgestuurde crossfade" : "Beat-guided crossfade", exact: true }).check();
+        const slider = dock.getByRole("slider", { name: t("Playback position"), exact: true });
+        await expect(slider).toHaveAttribute("aria-disabled", "false");
+        const box = await slider.boundingBox();
+        expect(box).not.toBeNull();
+        await slider.click({ position: { x: box!.width * 0.75, y: box!.height / 2 } });
+        const response = await nextTiming;
+        expect(response.ok()).toBe(true);
+        const advice = await response.json() as { outgoingId: string; incomingId: string; timing: { overlapMs: number } | null };
+        expect(advice).toMatchObject({ outgoingId: "ci-dj-timing-one", incomingId: "ci-dj-timing-two", timing: { overlapMs: 6120 } });
+        await expect(lab.locator("[data-beat-timing-status]")).toHaveAttribute("data-beat-timing-status", "ready");
+        // Browser startup latency is not controllable. Require a real,
+        // bounded overlap; verify phase whenever the engine reports guidance.
+        // A late browser is allowed only the explicit ordinary-fade fallback.
+        let observed = "";
+        await expect.poll(async () => {
+            const clock = await page.evaluate(() => {
+                const a = document.querySelector<HTMLAudioElement>('[data-kima-player="main"]');
+                const b = document.querySelector<HTMLAudioElement>('[data-kima-player="next"]');
+                const status = document.querySelector("[data-beat-timing-status]")?.getAttribute("data-beat-timing-status");
+                return {
+                    status, valid: !!a && !!b && !a.paused && !b.paused &&
+                        a.src.includes("ci-dj-timing-one") && b.src.includes("ci-dj-timing-two") &&
+                        a.volume > 0.05 && b.volume > 0.05 && a.volume + b.volume <= 1.00001 &&
+                        a.playbackRate === 1 && b.playbackRate === 1 && b.currentTime > 0.1,
+                    overlapS: a && b ? a.duration - a.currentTime + b.currentTime : 0,
+                };
+            });
+            if (!clock.valid || (clock.status !== "guided" && clock.status !== "fallback")) return false;
+            if (clock.status === "guided") expect(Math.abs(clock.overlapS - 6.12)).toBeLessThan(0.25);
+            observed = clock.status;
+            return true;
+        }, { timeout: 24000 }).toBe(true);
+        console.log("Synthetic DJ clock overlap result: " + observed);
+        await expect.poll(async () => (await readPlayer(page)).src).toContain("ci-dj-timing-two");
+        expect((await readPlayer(page)).t).toBeGreaterThan(0.1);
+        await advance(page);
+        await page.screenshot({ path: testInfo.outputPath("dj-timing.png"), fullPage: true });
+        await dock.getByRole("button", { name: t("Pause"), exact: true }).click();
+        await expect.poll(async () => (await readPlayer(page)).paused).toBe(true);
+        expect(errors).toEqual([]);
     });
 }

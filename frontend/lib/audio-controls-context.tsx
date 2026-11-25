@@ -1289,16 +1289,22 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             );
             if (!nextTrack) return;
             const prewarmKey = JSON.stringify([ctrl.getSnapshot().generation, nextTrack.index, nextTrack.id]);
-            if (prewarmFiredForRef.current === prewarmKey) return;
-            prewarmFiredForRef.current = prewarmKey;
-            api.prewarmTrack(nextTrack.id);
-
-            if (repeatModeRef.current === "one") return;
-            const ctrl2 = controllerRef.current;
-            if (!ctrl2) return;
-            pendingGaplessNextRef.current = nextTrack;
-            ctrl2.setExpectedNext(api.getStreamUrl(nextTrack.id), nextTrack.id, nextTrack.duration);
-            ctrl2.preloadNext();
+            if (prewarmFiredForRef.current !== prewarmKey) {
+                prewarmFiredForRef.current = prewarmKey;
+                api.prewarmTrack(nextTrack.id);
+                if (repeatModeRef.current === "one") return;
+                pendingGaplessNextRef.current = nextTrack;
+                ctrl.setExpectedNext(api.getStreamUrl(nextTrack.id), nextTrack.id, nextTrack.duration);
+                ctrl.preloadNext();
+            }
+            if (repeatModeRef.current === "one" || !currentTrackRef.current) return;
+            // Recheck the mode even when prewarm already ran: the user may
+            // opt in after buffering. The controller deduplicates per pair.
+            ctrl.prepareDjTiming(currentTrackRef.current.id, nextTrack.id, (pair, signal) =>
+                api.request<unknown>("/vibe/dj/timing", {
+                    method: "POST", body: JSON.stringify(pair), signal,
+                })
+            );
         };
 
         ctrl.on("timeupdate", handleTimeUpdate);

@@ -167,6 +167,52 @@ router.post("/flow", requireAuth, async (req, res) => {
     }
 });
 
+// Select only the source fields needed to reject stale measured cues.
+const djCueSelect = {
+    filePath: true, fileModified: true, fileSize: true, analyzedAt: true, analysisStatus: true,
+    djCue: { select: { sourcePath: true, sourceModified: true, sourceSize: true, sourceAnalyzedAt: true, profile: true } },
+} as const;
+
+const djTimingInput = z.object({
+    outgoingId: z.string().min(1).max(100),
+    incomingId: z.string().min(1).max(100),
+    targetSeconds: z.union([z.literal(2), z.literal(4), z.literal(6), z.literal(8)]),
+}).strict();
+
+/** Fresh ordered-pair timing for the already selected next track.
+ * No set reordering, audio decode, playback changes or external calls.
+ * Missing/stale/uncertain cues are an ordinary no-advice result.
+ */
+router.post("/dj/timing", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    const input = djTimingInput.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: "Invalid DJ transition selection" });
+    const { outgoingId, incomingId, targetSeconds } = input.data;
+    try {
+        const tracks = await prisma.track.findMany({
+            where: {
+                ...LIBRARY_TRACK_WHERE, ...NOT_MISSING, corrupt: false,
+                id: { in: [...new Set([outgoingId, incomingId])] },
+            },
+            select: { id: true, duration: true, ...djCueSelect },
+        });
+        const outgoing = tracks.find(track => track.id === outgoingId);
+        const incoming = tracks.find(track => track.id === incomingId);
+        const targetMs = targetSeconds * 1000;
+        const timing = outgoing && incoming && outgoing.duration >= 12 && incoming.duration >= 12
+            ? suggestDjTiming(currentDjCue(outgoing), currentDjCue(incoming), {
+                targetMs,
+                minMs: Math.max(2000, targetMs - 750),
+                maxMs: Math.min(8000, targetMs + 750, outgoing.duration * 250, incoming.duration * 250),
+            })
+            : null;
+        return res.json({ outgoingId, incomingId, targetSeconds, timing });
+    } catch (error) {
+        logger.error("DJ transition timing failed:", error);
+        return res.status(500).json({ error: "Could not determine transition timing" });
+    }
+});
+
 const djSetInput = z.object({
     trackIds: z.array(z.string().min(1).max(100)).min(2).max(MAX_DJ_TRACKS),
     style: z.enum(["smooth", "build", "cooldown"]).default("smooth"),
@@ -188,8 +234,7 @@ router.post("/dj/preview", requireAuth, async (req, res) => {
             select: {
                 id: true, title: true, displayTitle: true, duration: true,
                 bpm: true, key: true, keyScale: true, keyStrength: true, energy: true,
-                filePath: true, fileModified: true, fileSize: true, analyzedAt: true, analysisStatus: true,
-                djCue: { select: { sourcePath: true, sourceModified: true, sourceSize: true, sourceAnalyzedAt: true, profile: true } },
+                ...djCueSelect,
                 album: { select: {
                     id: true, title: true, coverUrl: true,
                     artist: { select: { id: true, name: true } },

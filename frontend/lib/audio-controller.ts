@@ -3,6 +3,7 @@
 import { STORAGE_KEYS } from "./storage-keys";
 import { SoundLabSession } from "./sound-lab-session";
 import { crossfadeGains, transitionSeconds } from "./sound-lab-policy";
+import { guidedStart, isMusicStream, readDjTiming, DJ_CLOCK_DRIFT_TOLERANCE_S, type DjTimingAdvice, type DjTimingPair } from "./dj-timing-policy";
 import type {
     EngineStatus,
     TimerId,
@@ -19,6 +20,8 @@ type ExternalCallback = (data?: unknown) => void;
 
 const TICKER_INTERVAL_MS = 1000;
 const FADE_TICK_MS = 50;
+const BEAT_START_TICK_MS = 20;
+const BEAT_REQUEST_TIMEOUT_MS = 5000;
 
 interface DeckTransition {
     outgoing: HTMLAudioElement;
@@ -26,6 +29,8 @@ interface DeckTransition {
     generation: number;
     trackId: string;
     requested: number;
+    beatMode: boolean;
+    guidedOverlapS: number | null;
     outgoingStart: number;
     incomingStart: number;
     seconds: number;
@@ -33,6 +38,16 @@ interface DeckTransition {
     ready: boolean;
     progress: number;
     timer: ReturnType<typeof setInterval> | null;
+}
+
+interface BeatRequest {
+    pair: DjTimingPair;
+    generation: number;
+    src: string | null;
+    nextUrl: string | null;
+    abort: AbortController;
+    timeout: ReturnType<typeof setTimeout> | null;
+    advice: DjTimingAdvice | null;
 }
 
 function listenerAdder(el: HTMLAudioElement, store: ListenerStore) {
@@ -51,6 +66,8 @@ export class AudioController {
     private audioNext: HTMLAudioElement;
     readonly soundLab: SoundLabSession;
     private crossfade: DeckTransition | null = null;
+    private beatRequest: BeatRequest | null = null;
+    private beatStartTimer: ReturnType<typeof setTimeout> | null = null;
     private pendingGaplessSwap: { incoming: HTMLAudioElement; generation: number; trackId: string } | null = null;
     private crossfadeAttemptGeneration: number | null = null;
     private unsubscribeSoundLab: (() => void) | null = null;
@@ -140,14 +157,21 @@ export class AudioController {
         this.initializeVolume();
         this.attachGestureUnlock();
         this.unsubscribeSoundLab = this.soundLab.subscribe(() => {
+            const settings = this.soundLab.getSnapshot();
             if (this.crossfade && (!this.soundLab.hasRunningGraph() ||
-                this.soundLab.getSnapshot().crossfadeSeconds !== this.crossfade.requested)) {
+                settings.crossfadeSeconds !== this.crossfade.requested ||
+                settings.beatGuided !== this.crossfade.beatMode)) {
                 this.cancelCrossfade();
             }
+            if (this.beatRequest && (!settings.beatGuided || !this.soundLab.hasRunningGraph() ||
+                this.beatRequest.pair.targetSeconds !== settings.crossfadeSeconds)) this.clearBeatTiming();
         });
         if (typeof document !== "undefined") {
             this.crossfadeVisibility = () => {
-                if (document.visibilityState === "hidden") this.cancelCrossfade();
+                if (document.visibilityState === "hidden") {
+                    this.cancelCrossfade();
+                    this.clearBeatTiming();
+                }
             };
             document.addEventListener("visibilitychange", this.crossfadeVisibility);
         }
@@ -329,6 +353,7 @@ export class AudioController {
             switch (effect.kind) {
                 case "set-src-and-load": {
                     this.cancelCrossfade();
+                    this.clearBeatTiming();
                     this.cancelPendingGaplessSwap();
                     // Re-arm the silence detector here too (not just in the
                     // public load()) -- the recovery ladder's own reloads
@@ -744,6 +769,84 @@ export class AudioController {
      * music track. Keep the outgoing track authoritative until its natural end.
      * No tempo shifting or beat-grid claims: this is a bounded linear fade.
      */
+    /** Bounded, read-only cue lookup for the precise selected media pair.
+     * Called during prewarming; a late response can never switch a queue or
+     * attach a timing suggestion to a new generation/next-track selection.
+     */
+    prepareDjTiming(outgoingId: string, incomingId: string,
+        load: (pair: DjTimingPair, signal: AbortSignal) => Promise<unknown>): void {
+        const { beatGuided, crossfadeSeconds } = this.soundLab.getSnapshot();
+        if (!beatGuided || !crossfadeSeconds || !this.soundLab.hasRunningGraph() ||
+            document.visibilityState !== "visible" || this.crossfade ||
+            this.crossfadeAttemptGeneration === this.snapshot.generation ||
+            incomingId !== this.expectedNextTrackId ||
+            !isMusicStream(this.snapshot.src, outgoingId) ||
+            !isMusicStream(this.audio.src, outgoingId) ||
+            !isMusicStream(this.expectedNextUrl, incomingId)) return;
+        const previous = this.beatRequest;
+        if (previous && this.currentBeatRequest(previous) &&
+            previous.pair.outgoingId === outgoingId && previous.pair.incomingId === incomingId) return;
+        this.clearBeatTiming();
+        const pending: BeatRequest = {
+            pair: { outgoingId, incomingId, targetSeconds: crossfadeSeconds },
+            generation: this.snapshot.generation, src: this.snapshot.src, nextUrl: this.expectedNextUrl,
+            abort: new AbortController(), timeout: null, advice: null,
+        };
+        this.beatRequest = pending;
+        this.soundLab.reportBeatTiming("checking");
+        pending.timeout = setTimeout(() => {
+            pending.timeout = null;
+            pending.abort.abort();
+            if (this.currentBeatRequest(pending) && !this.crossfade) this.soundLab.reportBeatTiming("fallback");
+        }, BEAT_REQUEST_TIMEOUT_MS);
+        const settle = (value: unknown) => {
+            if (pending.timeout !== null) clearTimeout(pending.timeout);
+            pending.timeout = null;
+            if (pending.abort.signal.aborted || !this.currentBeatRequest(pending) || this.crossfade ||
+                this.crossfadeAttemptGeneration === this.snapshot.generation) return;
+            pending.advice = readDjTiming(value, pending.pair);
+            this.soundLab.reportBeatTiming(pending.advice ? "ready" : "fallback");
+            this.considerCrossfade();
+        };
+        try {
+            void load(pending.pair, pending.abort.signal).then(settle, () => settle(null));
+        } catch {
+            settle(null);
+        }
+    }
+
+    private currentBeatRequest(pending: BeatRequest): boolean {
+        const settings = this.soundLab.getSnapshot();
+        return this.beatRequest === pending && pending.generation === this.snapshot.generation &&
+            pending.src === this.snapshot.src && pending.nextUrl === this.expectedNextUrl &&
+            pending.pair.incomingId === this.expectedNextTrackId &&
+            pending.pair.targetSeconds === settings.crossfadeSeconds && settings.beatGuided;
+    }
+
+    private clearBeatStartTimer(): void {
+        if (this.beatStartTimer !== null) clearTimeout(this.beatStartTimer);
+        this.beatStartTimer = null;
+    }
+
+    private clearBeatTiming(): void {
+        this.clearBeatStartTimer();
+        const pending = this.beatRequest;
+        this.beatRequest = null;
+        if (pending) {
+            if (pending.timeout !== null) clearTimeout(pending.timeout);
+            pending.abort.abort();
+        }
+        this.soundLab.reportBeatTiming("idle");
+    }
+
+    private scheduleBeatStart(): void {
+        if (this.beatStartTimer !== null) return;
+        this.beatStartTimer = setTimeout(() => {
+            this.beatStartTimer = null;
+            this.considerCrossfade();
+        }, BEAT_START_TICK_MS);
+    }
+
     private considerCrossfade(): void {
         if (this.crossfade || this.crossfadeAttemptGeneration === this.snapshot.generation ||
             !this.soundLab.hasRunningGraph() || document.visibilityState !== "visible" ||
@@ -751,26 +854,52 @@ export class AudioController {
             this.audio.seeking || this.playbackRate !== 1 ||
             !this.expectedNextTrackId || this.preloadedTrackId !== this.expectedNextTrackId ||
             !this.idleReady || !this.audioNext.paused || this.audioNext.readyState < 3) return;
-        const requested = this.soundLab.getSnapshot().crossfadeSeconds;
+        const { crossfadeSeconds: requested, beatGuided: beatMode } = this.soundLab.getSnapshot();
         const duration = this.audio.duration;
         const incomingDuration = this.audioNext.duration;
         const window = transitionSeconds(requested, duration, incomingDuration);
         const remaining = duration - this.audio.currentTime;
-        if (window < 1 || !Number.isFinite(remaining) || remaining > window || remaining < 1) return;
+        if (window < 1 || !Number.isFinite(remaining) || remaining < 1) return;
         // Ignore implausible/truncated durations and stale or previously played
         // buffers. An uncertain boundary must use the ordinary playback path.
         if (!this.snapshot.expectedDurationS || !this.expectedNextDurationS ||
             Math.abs(duration - this.snapshot.expectedDurationS) > 3 ||
             Math.abs(incomingDuration - this.expectedNextDurationS) > 3 ||
             this.audioNext.currentTime > 0.15 || this.audioNext.seeking) return;
+
+        const pending = this.beatRequest;
+        let guidedOverlapS: number | null = null;
+        if (beatMode && pending?.advice && this.currentBeatRequest(pending) &&
+            isMusicStream(this.audio.src, pending.pair.outgoingId) &&
+            isMusicStream(this.audioNext.src, pending.pair.incomingId) &&
+            this.audioNext.currentTime <= 0.025 &&
+            Math.abs(duration - this.snapshot.expectedDurationS) <= 1 &&
+            Math.abs(incomingDuration - this.expectedNextDurationS) <= 1) {
+            const suggested = pending.advice.overlapMs / 1000;
+            if (suggested <= transitionSeconds(8, duration, incomingDuration)) {
+                const decision = guidedStart(suggested, remaining);
+                if (decision === "wait") {
+                    // Native timeupdate is too coarse for beat timing. Poll
+                    // only within the final second before this cue.
+                    if (remaining <= suggested + 1) this.scheduleBeatStart();
+                    return;
+                }
+                if (decision === "start") guidedOverlapS = suggested;
+            }
+        }
+        // A missed or incompatible cue never forces a seek, tempo change or
+        // start beyond the regular overlap window.
+        if (guidedOverlapS === null && remaining > window) return;
+        this.clearBeatStartTimer();
         const fade: DeckTransition = {
             outgoing: this.audio, incoming: this.audioNext, generation: this.snapshot.generation,
-            trackId: this.expectedNextTrackId, requested,
+            trackId: this.expectedNextTrackId, requested, beatMode, guidedOverlapS,
             outgoingStart: this.audio.currentTime, incomingStart: this.audioNext.currentTime,
             seconds: remaining, startedAt: Date.now(), ready: false, progress: 0, timer: null,
         };
         this.crossfadeAttemptGeneration = this.snapshot.generation;
         this.crossfade = fade;
+        if (beatMode && guidedOverlapS === null) this.soundLab.reportBeatTiming("fallback");
         this.applyDeckVolumes();
         try {
             const play = fade.incoming.play();
@@ -794,6 +923,7 @@ export class AudioController {
             fade.outgoing === this.audio && fade.incoming === this.audioNext &&
             fade.trackId === this.expectedNextTrackId && fade.trackId === this.preloadedTrackId &&
             this.soundLab.hasRunningGraph() && this.soundLab.getSnapshot().crossfadeSeconds === fade.requested &&
+            this.soundLab.getSnapshot().beatGuided === fade.beatMode &&
             document.visibilityState === "visible" && this.playbackRate === 1;
     }
 
@@ -821,6 +951,7 @@ export class AudioController {
             this.cancelCrossfade();
             return;
         }
+        this.checkBeatClock(fade);
         // Never fade the outgoing deck out faster than the incoming media
         // actually advances. A slow buffer therefore cannot create dead air.
         const progress = Math.min(1,
@@ -832,6 +963,20 @@ export class AudioController {
         }
         fade.progress = Math.max(fade.progress, progress);
         this.applyDeckVolumes();
+    }
+
+    private checkBeatClock(fade: DeckTransition): void {
+        if (fade.guidedOverlapS === null) return;
+        const error = Math.abs(fade.outgoing.duration - fade.outgoing.currentTime +
+            fade.incoming.currentTime - fade.guidedOverlapS);
+        // If browser startup latency or clock drift spoils the estimated
+        // phase, continue the safe ordinary fade instead of retiming media.
+        if (!Number.isFinite(error) || error > DJ_CLOCK_DRIFT_TOLERANCE_S) {
+            fade.guidedOverlapS = null;
+            this.soundLab.reportBeatTiming("fallback");
+        } else {
+            this.soundLab.reportBeatTiming("guided");
+        }
     }
 
     private applyDeckVolumes(): void {
@@ -848,6 +993,7 @@ export class AudioController {
     }
 
     private cancelCrossfade(): void {
+        this.clearBeatStartTimer();
         const fade = this.crossfade;
         if (!fade) return;
         this.crossfade = null;
@@ -859,6 +1005,7 @@ export class AudioController {
         fade.incoming.load();
         this.preloadedTrackId = null;
         this.idleReady = false;
+        if (fade.beatMode) this.soundLab.reportBeatTiming("fallback");
         this.applyDeckVolumes();
     }
 
@@ -873,6 +1020,7 @@ export class AudioController {
             this.cancelCrossfade();
             return false;
         }
+        this.checkBeatClock(fade);
         this.crossfade = null;
         if (fade.timer !== null) clearInterval(fade.timer);
         // No second play() call, no seek back to zero. Carry the actual
@@ -964,6 +1112,7 @@ export class AudioController {
             return;
         }
 
+        this.clearBeatTiming();
         const swappedTrackId = this.expectedNextTrackId;
         const newSrc = this.audioNext.src;
         const newDur = this.audioNext.duration;
@@ -1234,9 +1383,10 @@ export class AudioController {
     // buffers it into the idle element. Separate so a queue change can update
     // the expectation without restarting a fetch already in flight.
     setExpectedNext(url: string, trackId: string, durationS?: number): void {
-        if (this.expectedNextTrackId !== trackId) {
+        if (this.expectedNextTrackId !== trackId || this.expectedNextUrl !== url) {
             this.cancelCrossfade();
             this.cancelPendingGaplessSwap();
+            this.clearBeatTiming();
         }
         this.expectedNextTrackId = trackId;
         this.expectedNextUrl = url;
@@ -1257,6 +1407,7 @@ export class AudioController {
     // no real next track) so a stale preload can never be swapped in.
     clearExpectedNext(): void {
         this.cancelCrossfade();
+        this.clearBeatTiming();
         this.cancelPendingGaplessSwap();
         this.idleReady = false;
         this.expectedNextTrackId = null;

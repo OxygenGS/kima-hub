@@ -22,7 +22,7 @@ export function SoundLabPanel() {
     const { locale } = useLanguage();
     const nl = locale === "nl";
     const supported = useSyncExternalStore(noopSubscribe, supportsSoundLab, serverSupport);
-    const { settings, status, crossfadeSeconds } = useSyncExternalStore(session?.subscribe ?? noopSubscribe, session?.getSnapshot ?? defaultSnapshot, defaultSnapshot);
+    const { settings, status, crossfadeSeconds, beatGuided, beatTimingStatus } = useSyncExternalStore(session?.subscribe ?? noopSubscribe, session?.getSnapshot ?? defaultSnapshot, defaultSnapshot);
     const [open, setOpen] = useState(false);
     const [peak, setPeak] = useState(0);
     const measuring = open && (status === "active" || status === "bypass");
@@ -65,6 +65,19 @@ export function SoundLabPanel() {
     };
     const level = measuring ? peak : 0;
     const db = level > 0 ? Math.max(-90, 20 * Math.log10(level)) : -90;
+    const timingLabels = nl ? {
+        idle: "Wacht op het volgende nummer",
+        checking: "Gemeten overgang controleren",
+        ready: "Gemeten timing beschikbaar",
+        guided: "Overlap volgt het gemeten timingadvies",
+        fallback: "Gewone overgang — timing niet betrouwbaar",
+    } : {
+        idle: "Waiting for the next track",
+        checking: "Checking measured transition",
+        ready: "Measured timing available",
+        guided: "Overlap following measured timing advice",
+        fallback: "Regular transition — timing not reliable",
+    };
     const busy = status === "starting";
     const disabled = !supported || !session || busy;
 
@@ -118,9 +131,21 @@ export function SoundLabPanel() {
                         {[0, 2, 4, 6, 8].map(seconds => <option key={seconds} value={seconds}>{seconds ? seconds + " s" : nl ? "Uit" : "Off"}</option>)}
                     </select>
                     <span className="text-xs text-[var(--text-secondary)]">
-                        {nl ? "Optionele overlap bij een natuurlijke nummerovergang. Activeer eerst Sound Lab; werkt ook in bypass. Alleen op de voorgrond, zonder tempo- of beatmatching." : "Optional overlap at natural song boundaries. Activate Sound Lab first; also works in bypass. Foreground only, without tempo or beat matching."}
+                        {nl ? "Optionele overlap bij een natuurlijke nummerovergang. Activeer eerst Sound Lab; werkt ook in bypass. Alleen op de voorgrond." : "Optional overlap at natural song boundaries. Activate Sound Lab first; also works in bypass. Foreground only."}
                     </span>
                 </label>
+                <div className="space-y-1 rounded-lg border border-white/10 p-3">
+                    <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={beatGuided}
+                            disabled={!supported || !session || crossfadeSeconds === 0 || (status !== "active" && status !== "bypass")}
+                            onChange={event => session?.setBeatGuided(event.target.checked)} />
+                        {nl ? "Beatgestuurde crossfade" : "Beat-guided crossfade"}
+                    </label>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                        {nl ? "Gebruikt actuele gemeten beatposities. Past de overlap maximaal 0,75 seconde aan (binnen 2–8 s). Verandert geen tempo en slaat geen intro over. Bij ontbrekende metingen of browservertraging blijft de gewone overgang gelden." : "Uses current measured beat positions. Adjusts overlap by up to 0.75 seconds (within 2–8 s). No tempo changes or skipped intros. Missing measurements or browser timing delays use a regular transition."}
+                    </p>
+                    {beatGuided && <p className="text-xs font-medium" role="status" data-beat-timing-status={beatTimingStatus}>{timingLabels[beatTimingStatus]}</p>}
+                </div>
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-[var(--text-secondary)]">
                         <span>{nl ? "Uitgangssignaal" : "Output signal"}</span>

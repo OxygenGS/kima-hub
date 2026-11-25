@@ -46,6 +46,13 @@ describe("measured DJ edge metadata", () => {
         expect(answer!.overlapMs).not.toBe(6000);
     });
 
+    it("can narrow timing advice around the user's preferred overlap", () => {
+        const answer = suggestDjTiming(profile(), profile(edge(370)), { targetMs: 4000, minMs: 3250, maxMs: 4750 });
+        expect(answer?.overlapMs).toBe(4120);
+        expect(suggestDjTiming(profile(), profile(edge(370)), { targetMs: 4000, minMs: 3990, maxMs: 4010 })).toBeNull();
+        expect(suggestDjTiming(profile(), profile(edge(370)), { minMs: 7000, maxMs: 5000 })).toBeNull();
+    });
+
     it("does not infer phase from missing, incompatible or drifting measurements", () => {
         expect(suggestDjTiming(null, profile())).toBeNull();
         expect(suggestDjTiming(profile(), profile(edge(100, 600)))).toBeNull();

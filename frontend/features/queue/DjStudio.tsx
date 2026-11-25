@@ -129,7 +129,7 @@ export function DjStudio({ queue, currentIndex, onPlay }: {
             </div>
             {open && <div className="mt-4 space-y-4">
                 <p className="text-sm text-[var(--text-secondary)]">
-                    {nl ? "Gebruikt maximaal 60 nummers vanaf het geselecteerde nummer. Voorbereiden verandert niets aan de huidige wachtrij. Gemeten overgangsadviezen zijn informatief: de speler gebruikt nog de ingestelde crossfade, geen automatische beatsynchronisatie." : "Uses up to 60 tracks from the selected track onward. Preparing does not change your queue. Measured transition advice is informational: playback still uses your configured crossfade, not automatic beat synchronization."}
+                    {nl ? "Gebruikt maximaal 60 nummers vanaf het geselecteerde nummer. Voorbereiden verandert niets aan de huidige wachtrij. Bekijk hier de metingen. Activeer beatgestuurde crossfade in Sound Lab om tijdens het afspelen een actueel timingadvies te gebruiken. Geen tempo- of frasesynchronisatie." : "Uses up to 60 tracks from the selected track onward. Preparing does not change your queue. Review measurements here. Enable beat-guided crossfade in Sound Lab to use fresh timing advice during playback. No tempo or phrase synchronization."}
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 text-sm">

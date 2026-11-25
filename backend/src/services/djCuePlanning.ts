@@ -62,9 +62,11 @@ export interface DjTimingAdvice {
 /** Find an overlap suggestion using actual edge ticks without changing tempo,
  * skipping the intro or claiming downbeat alignment. Require measured local
  * tempo agreement and several matching ticks, not just a global BPM match.
- * Advisory only: the playback engine still uses its fixed crossfade setting.
+ * A caller may narrow the allowed interval around its preferred overlap.
  */
-export function suggestDjTiming(outgoing: DjCueProfile | null, incoming: DjCueProfile | null): DjTimingAdvice | null {
+export function suggestDjTiming(outgoing: DjCueProfile | null, incoming: DjCueProfile | null,
+    { targetMs = 6000, minMs = 2000, maxMs = 8000 } = {}): DjTimingAdvice | null {
+    if (![targetMs, minMs, maxMs].every(Number.isFinite) || minMs > maxMs) return null;
     const tail = outgoing?.tail;
     const head = incoming?.head;
     if (!tail || !head || !tail.tempoBpm || !head.tempoBpm ||
@@ -77,7 +79,7 @@ export function suggestDjTiming(outgoing: DjCueProfile | null, incoming: DjCuePr
     for (const beat of tail.beatsMs) {
         const beforeEnd = tail.windowMs - beat;
         const overlapMs = beforeEnd + first;
-        if (overlapMs < 2000 || overlapMs > 8000 || overlapMs > head.windowMs || overlapMs > tail.windowMs) continue;
+        if (overlapMs < Math.max(2000, minMs) || overlapMs > Math.min(8000, maxMs) || overlapMs > head.windowMs || overlapMs > tail.windowMs) continue;
         const start = tail.windowMs - overlapMs;
         const beats = head.beatsMs.filter(tick => tick < overlapMs - 80);
         if (beats.length < 3) continue;
@@ -97,7 +99,7 @@ export function suggestDjTiming(outgoing: DjCueProfile | null, incoming: DjCuePr
             maxDriftMs = Math.max(maxDriftMs, distance);
         }
         if (!valid) continue;
-        const score = Math.abs(overlapMs - 6000) + 4 * maxDriftMs;
+        const score = Math.abs(overlapMs - targetMs) + 4 * maxDriftMs;
         if (score < bestCost) {
             bestCost = score;
             best = { overlapMs, incomingFirstBeatMs: first, outgoingBeatBeforeEndMs: beforeEnd,

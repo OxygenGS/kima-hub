@@ -94,3 +94,37 @@ describe("authenticated DJ cue preview", () => {
         }
     });
 });
+
+
+describe("authenticated ordered-pair DJ timing", () => {
+    const timing = (outgoing: string, incoming: string, targetSeconds = 6) =>
+        request(app).post("/api/vibe/dj/timing").set("Authorization", "Bearer " + token)
+            .send({ outgoingId: P + outgoing, incomingId: P + incoming, targetSeconds });
+
+    it("answers only the requested pair with bounded phase advice and no source metadata", async () => {
+        const res = await timing("one", "two", 4);
+        expect(res.status).toBe(200);
+        expect(res.headers["cache-control"]).toBe("private, no-store");
+        expect(res.body).toMatchObject({ outgoingId: P + "one", incomingId: P + "two", targetSeconds: 4,
+            timing: { incomingFirstBeatMs: 370, maxDriftMs: 0 } });
+        expect(res.body.timing.overlapMs).toBeGreaterThanOrEqual(3250);
+        expect(res.body.timing.overlapMs).toBeLessThanOrEqual(4750);
+        expect(res.body.timing.matchedBeats).toBeGreaterThanOrEqual(3);
+        expect(JSON.stringify(res.body)).not.toContain("sourcePath");
+        expect(Object.keys(res.body).sort()).toEqual(["incomingId", "outgoingId", "targetSeconds", "timing"]);
+    });
+
+    it.each(["stale", "missing", "corrupt", "absent"])("returns no timing for %s next track", async suffix => {
+        const res = await timing("one", suffix);
+        expect(res.status).toBe(200);
+        expect(res.body.timing).toBeNull();
+    });
+
+    it("rejects unsupported durations, extra input and anonymous requests", async () => {
+        expect((await timing("one", "two", 99)).status).toBe(400);
+        const input = { outgoingId: P + "one", incomingId: P + "two", targetSeconds: 6 };
+        expect((await request(app).post("/api/vibe/dj/timing").send(input)).status).toBe(401);
+        expect((await request(app).post("/api/vibe/dj/timing").set("Authorization", "Bearer " + token)
+            .send({ ...input, skipIntro: true })).status).toBe(400);
+    });
+});

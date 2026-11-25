@@ -2,15 +2,18 @@ import { createSoundLabGraph } from "./sound-lab-graph";
 import { FLAT_SOUND, sanitizeSoundLab, type SoundLabSettings } from "./sound-lab-policy";
 
 export type SoundLabStatus = "off" | "starting" | "active" | "bypass" | "unsupported" | "interrupted" | "failed";
+export type BeatTimingStatus = "idle" | "checking" | "ready" | "guided" | "fallback";
 export interface SoundLabSnapshot {
     settings: SoundLabSettings;
     status: SoundLabStatus;
     crossfadeSeconds: number;
+    beatGuided: boolean;
+    beatTimingStatus: BeatTimingStatus;
 }
 type Graph = ReturnType<typeof createSoundLabGraph>;
 const KEY = "kima-sound-lab-device-v1";
 const START_TIMEOUT_MS = 2500;
-export const DEFAULT_SOUND_LAB: SoundLabSnapshot = { settings: { ...FLAT_SOUND }, status: "off", crossfadeSeconds: 0 };
+export const DEFAULT_SOUND_LAB: SoundLabSnapshot = { settings: { ...FLAT_SOUND }, status: "off", crossfadeSeconds: 0, beatGuided: false, beatTimingStatus: "idle" };
 
 function readSettings(): SoundLabSettings {
     try {
@@ -47,7 +50,7 @@ function closeContext(context: AudioContext): void {
  * detached back into native output). Do not close an attached context on disable.
  */
 export class SoundLabSession {
-    private snapshot: SoundLabSnapshot = { settings: readSettings(), status: "off", crossfadeSeconds: 0 };
+    private snapshot: SoundLabSnapshot = { settings: readSettings(), status: "off", crossfadeSeconds: 0, beatGuided: false, beatTimingStatus: "idle" };
     private listeners = new Set<() => void>();
     private context: AudioContext | null = null;
     private graph: Graph | null = null;
@@ -80,7 +83,22 @@ export class SoundLabSession {
         const next = [0, 2, 4, 6, 8].includes(seconds) ? seconds : 0;
         if (next !== 0 && (!supportsSoundLab() || !this.hasRunningGraph())) return;
         if (next === this.snapshot.crossfadeSeconds) return;
-        this.snapshot = { ...this.snapshot, crossfadeSeconds: next };
+        this.snapshot = { ...this.snapshot, crossfadeSeconds: next, beatGuided: next > 0 && this.snapshot.beatGuided, beatTimingStatus: "idle" };
+        this.listeners.forEach(listener => listener());
+    }
+
+    /** Also session-only: no timing requests until explicitly opted in. */
+    setBeatGuided(enabled: boolean): void {
+        if (this.destroyed || (enabled && (!this.hasRunningGraph() || this.snapshot.crossfadeSeconds === 0))) return;
+        if (enabled === this.snapshot.beatGuided) return;
+        this.snapshot = { ...this.snapshot, beatGuided: enabled, beatTimingStatus: "idle" };
+        this.listeners.forEach(listener => listener());
+    }
+
+    /** Controller reports only a current timing request or actual overlap. */
+    reportBeatTiming(status: BeatTimingStatus): void {
+        if (this.destroyed || !this.snapshot.beatGuided || this.snapshot.beatTimingStatus === status) return;
+        this.snapshot = { ...this.snapshot, beatTimingStatus: status };
         this.listeners.forEach(listener => listener());
     }
 

@@ -163,6 +163,30 @@ describe("Sound Lab desktop session", () => {
         session.destroy();
         next.destroy();
     });
+    it("requires an explicit enabled overlap before beat timing, and resets it after reload or Off", async () => {
+        const { session } = newSession();
+        session.setBeatGuided(true);
+        expect(session.getSnapshot().beatGuided).toBe(false);
+        await session.apply(settings());
+        session.setBeatGuided(true);
+        expect(session.getSnapshot().beatGuided).toBe(false);
+        session.setCrossfadeSeconds(6);
+        session.setBeatGuided(true);
+        expect(session.getSnapshot().beatGuided).toBe(true);
+        session.reportBeatTiming("ready");
+        expect(session.getSnapshot().beatTimingStatus).toBe("ready");
+        session.setCrossfadeSeconds(4);
+        expect(session.getSnapshot().beatGuided).toBe(true);
+        expect(session.getSnapshot().beatTimingStatus).toBe("idle");
+        const next = newSession().session;
+        expect(next.getSnapshot().beatGuided).toBe(false);
+        session.setCrossfadeSeconds(0);
+        expect(session.getSnapshot().beatGuided).toBe(false);
+        session.reportBeatTiming("guided");
+        expect(session.getSnapshot().beatTimingStatus).toBe("idle");
+        next.destroy();
+        session.destroy();
+    });
     it("does not allocate or attach on mobile/iOS", async () => {
         vi.stubGlobal("navigator", { userAgent: "iPhone Mobile", maxTouchPoints: 5 });
         const { session } = newSession();
