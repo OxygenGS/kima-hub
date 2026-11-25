@@ -71,17 +71,17 @@ INSERT INTO "Track" ("id","albumId","title","trackNo","duration","filePath","fil
 -- album-size, artist-overview or EQ acceptance fixture.
 INSERT INTO "Artist" ("id","mbid","name","identityKey","normalizedName")
 VALUES ('ci-dj-timing-artist','ci-dj-timing-fixture-artist','CI DJ Timing Artist','ci-dj-timing-artist','ci dj timing artist');
-INSERT INTO "Album" ("id","rgMbid","artistId","title","primaryType","identityKey","year","location")
-VALUES ('ci-dj-timing-album','ci-dj-timing-fixture-album','ci-dj-timing-artist','CI DJ Timing Album','Album','ci-dj-timing-album',2026,'LIBRARY');
+INSERT INTO "Album" ("id","rgMbid","artistId","title","primaryType","identityKey","year")
+VALUES ('ci-dj-timing-album','ci-dj-timing-fixture-album','ci-dj-timing-artist','CI DJ Timing Album','Album','ci-dj-timing-album',2026);
 INSERT INTO "OwnedAlbum" ("artistId","rgMbid","source")
 VALUES ('ci-dj-timing-artist','ci-dj-timing-fixture-album','import');
 INSERT INTO "Track" ("id","albumId","title","trackNo","duration","filePath","fileModified","fileSize","updatedAt","moodTags","essentiaGenres","analysisStatus","analyzedAt","bpm") VALUES
 ('ci-dj-timing-one','ci-dj-timing-album','CI DJ Timing One',1,48,'ci-release-ui/dj-one.wav',NOW(),$dj_size,NOW(),ARRAY[]::text[],ARRAY[]::text[],'completed',NOW(),120),
 ('ci-dj-timing-two','ci-dj-timing-album','CI DJ Timing Two',2,48,'ci-release-ui/dj-two.wav',NOW(),$dj_size,NOW(),ARRAY[]::text[],ARRAY[]::text[],'completed',NOW(),120);
-INSERT INTO "TrackDjCue" ("trackId","sourcePath","sourceModified","sourceSize","sourceAnalyzedAt",profile)
-SELECT id,"filePath","fileModified","fileSize","analyzedAt",
-    CASE WHEN id='ci-dj-timing-one' THEN :'dj_one'::jsonb ELSE :'dj_two'::jsonb END
-FROM "Track" WHERE id IN ('ci-dj-timing-one','ci-dj-timing-two');
+INSERT INTO "TrackDjCue" ("trackId","sourcePath","sourceModified","sourceSize","sourceAnalyzedAt","profile")
+VALUES
+('ci-dj-timing-one','ci-release-ui/dj-one.wav',NOW(),$dj_size,NOW(),:'dj_one'::jsonb),
+('ci-dj-timing-two','ci-release-ui/dj-two.wav',NOW(),$dj_size,NOW(),:'dj_two'::jsonb);
 COMMIT;
 SQL
 echo "Generated three owned disposable two-minute tracks and two separate pulse-audio DJ timing fixtures"

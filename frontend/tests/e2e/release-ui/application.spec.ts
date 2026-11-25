@@ -297,7 +297,10 @@ for (const locale of ["en", "nl"] as const) {
         await advance(page);
         expect((await readPlayer(page)).src).toContain("ci-dj-timing-one");
         const dock = page.locator("[data-player-dock]");
-        await dock.getByRole("link", { name: t("Queue"), exact: true }).click();
+        // Use the same already-proven overlay navigation as the ordinary
+        // release acceptance, rather than assume a link exists in the dock.
+        await dock.getByRole("button", { name: t("Expand player"), exact: true }).click();
+        await page.locator("[data-overlay-player]").getByRole("link", { name: t("Queue"), exact: true }).click();
         const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
         await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
         await lab.getByRole("combobox", { name: locale === "nl" ? "Geluidsprofiel" : "Sound profile", exact: true }).selectOption("flat");
