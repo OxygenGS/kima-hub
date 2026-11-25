@@ -57,7 +57,7 @@ RUN cd /tmp/musicnn-gate && python3 convert_musicnn.py gate /app/models /app/mod
 
 # analyzer.py imports classifier and musicnn_onnx at load. The wrapper puts the shared
 # GPU runtime on the path when "GPU for audio analysis" is on.
-COPY services/audio-analyzer/analyzer.py services/audio-analyzer/classifier.py services/audio-analyzer/musicnn_onnx.py \
+COPY services/audio-analyzer/analyzer.py services/audio-analyzer/classifier.py services/audio-analyzer/musicnn_onnx.py services/audio-analyzer/dj_cues.py \
      services/audio-analyzer-clap/gpu_switch.py ./
 COPY services/audio-analyzer-clap/gpu_env.sh /app/gpu_env.sh
 

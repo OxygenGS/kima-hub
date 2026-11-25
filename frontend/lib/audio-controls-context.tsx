@@ -1037,6 +1037,22 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
     const nextPodcastEpisodeRef = useRef(nextPodcastEpisode);
 
     useLayoutEffect(() => {
+        // Queue order, selection and repeat/shuffle changes can invalidate
+        // an already-buffered or overlapping next track. Check before the
+        // browser gets another media event, not after an async effect.
+        const pending = pendingGaplessNextRef.current;
+        if (pending) {
+            const next = state.playbackType === "track" && state.repeatMode !== "one"
+                ? getNextTrackInfo(state.queue, state.currentIndex, state.isShuffle, state.shuffleIndices, state.repeatMode)
+                : null;
+            if (!next || next.id !== pending.id || next.index !== pending.index ||
+                currentTrackRef.current?.id !== state.currentTrack?.id ||
+                currentIndexRef.current !== state.currentIndex) {
+                controllerRef.current?.clearExpectedNext();
+                pendingGaplessNextRef.current = null;
+                prewarmFiredForRef.current = null;
+            }
+        }
         playbackTypeRef.current = state.playbackType;
         currentTrackRef.current = state.currentTrack;
         currentAudiobookRef.current = state.currentAudiobook;
@@ -1272,16 +1288,23 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
                 repeatModeRef.current
             );
             if (!nextTrack) return;
-            if (prewarmFiredForRef.current === nextTrack.id) return;
-            prewarmFiredForRef.current = nextTrack.id;
-            api.prewarmTrack(nextTrack.id);
-
-            if (repeatModeRef.current === "one") return;
-            const ctrl2 = controllerRef.current;
-            if (!ctrl2) return;
-            pendingGaplessNextRef.current = nextTrack;
-            ctrl2.setExpectedNext(api.getStreamUrl(nextTrack.id), nextTrack.id, nextTrack.duration);
-            ctrl2.preloadNext();
+            const prewarmKey = JSON.stringify([ctrl.getSnapshot().generation, nextTrack.index, nextTrack.id]);
+            if (prewarmFiredForRef.current !== prewarmKey) {
+                prewarmFiredForRef.current = prewarmKey;
+                api.prewarmTrack(nextTrack.id);
+                if (repeatModeRef.current === "one") return;
+                pendingGaplessNextRef.current = nextTrack;
+                ctrl.setExpectedNext(api.getStreamUrl(nextTrack.id), nextTrack.id, nextTrack.duration);
+                ctrl.preloadNext();
+            }
+            if (repeatModeRef.current === "one" || !currentTrackRef.current) return;
+            // Recheck the mode even when prewarm already ran: the user may
+            // opt in after buffering. The controller deduplicates per pair.
+            ctrl.prepareDjTiming(currentTrackRef.current.id, nextTrack.id, (pair, signal) =>
+                api.request<unknown>("/vibe/dj/timing", {
+                    method: "POST", body: JSON.stringify(pair), signal,
+                })
+            );
         };
 
         ctrl.on("timeupdate", handleTimeUpdate);
@@ -1297,7 +1320,7 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
         if (!ctrl) return;
 
         const handleGaplessAdvance = (data?: unknown) => {
-            const { durationS, trackId } = (data ?? {}) as { durationS?: number; trackId?: string };
+            const { durationS, trackId, currentTimeS } = (data ?? {}) as { durationS?: number; trackId?: string; currentTimeS?: number };
 
             let resolved: (Track & { index: number }) | null = null;
             if (pendingGaplessNextRef.current?.id === trackId) {
@@ -1321,9 +1344,10 @@ export function AudioControlsProvider({ children }: { children: ReactNode }) {
             state.setCurrentIndex(resolved.index);
             state.setCurrentTrack(resolved);
             playback.setDuration(durationS || resolved.duration || 0);
-            playback.setCurrentTime(0);
+            playback.setCurrentTime(Number.isFinite(currentTimeS) ? Math.max(0, currentTimeS ?? 0) : 0);
             lastManualAdvanceAtRef.current = Date.now();
             pendingGaplessNextRef.current = null;
+            prewarmFiredForRef.current = null;
         };
 
         ctrl.on("gapless-advance", handleGaplessAdvance);

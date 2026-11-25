@@ -237,6 +237,14 @@ jobs:
                   test "${#pins[@]}" -eq 2
                   python -m pip install --disable-pip-version-check --no-cache-dir "${pins[@]}"
 
+            - name: Check measured DJ edge analysis on synthetic signals
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  pin="$(grep -E '^numpy==[0-9.]+' services/audio-analyzer/requirements.txt)"
+                  python -m pip install --disable-pip-version-check --no-cache-dir "$pin"
+                  python -m unittest discover -s services/audio-analyzer -p test_dj_cues.py
+
             - name: Process a synthetic CLAP BullMQ job on disposable Redis
               shell: bash
               timeout-minutes: 2

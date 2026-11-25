@@ -208,7 +208,7 @@ RUN cd /tmp/musicnn-gate && python3 convert_musicnn.py gate /app/models /app/mod
     && rm -rf /tmp/musicnn-gate
 
 # analyzer.py imports classifier and musicnn_onnx at load.
-COPY services/audio-analyzer/analyzer.py services/audio-analyzer/classifier.py services/audio-analyzer/musicnn_onnx.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer/
+COPY services/audio-analyzer/analyzer.py services/audio-analyzer/classifier.py services/audio-analyzer/musicnn_onnx.py services/audio-analyzer/dj_cues.py services/audio-analyzer-clap/gpu_switch.py /app/audio-analyzer/
 
 # ============================================
 # CLAP ANALYZER SETUP (Vibe Similarity)

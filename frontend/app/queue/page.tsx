@@ -8,13 +8,15 @@ import { useAudioState, useAudioControls, useAudioPlayback } from "@/lib/audio-c
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { QueueSurface } from "@/features/queue/QueueSurface";
+import { DjStudio } from "@/features/queue/DjStudio";
+import { SoundLabPanel } from "@/components/player/SoundLabPanel";
 import { moveUpcomingTrack } from "@/features/queue/queuePresentation";
 
 export default function QueuePage() {
     const router = useRouter();
     const { t, locale } = useLanguage();
     const { isAuthenticated, user } = useAuth();
-    const { queue, currentTrack, currentIndex, playbackType, activeOperation, setActiveOperation, setQueue } = useAudioState();
+    const { queue, currentTrack, currentIndex, playbackType, activeOperation, setActiveOperation, setQueue, setIsShuffle, setRepeatMode } = useAudioState();
     const { playTracks, removeFromQueue, clearQueue, pause, resumeWithGesture } = useAudioControls();
     const { isPlaying } = useAudioPlayback();
     const [confirmClear, setConfirmClear] = useState(false);
@@ -38,6 +40,18 @@ export default function QueuePage() {
                     </Button>
                 </div>
             )}
+            {user?.id && playbackType === "track" && <DjStudio
+                key={user.id}
+                queue={queue}
+                currentIndex={currentIndex}
+                onPlay={(tracks) => {
+                    setActiveOperation({ type: "idle" });
+                    setIsShuffle(false);
+                    setRepeatMode("off");
+                    playTracks(tracks, 0);
+                }}
+            />}
+            <SoundLabPanel />
             <QueueSurface
                 queue={queue} currentIndex={currentIndex} currentIsActive={currentIsActive} isPlaying={isPlaying}
                 onToggleCurrent={() => {

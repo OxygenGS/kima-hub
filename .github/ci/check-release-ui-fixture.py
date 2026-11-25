@@ -10,7 +10,10 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-TABLES = ("Artist", "Album", "OwnedAlbum", "Track")
+# Keep the original four-table fixture and require the exact additional
+# four-table rhythmic fixture plus its optional measured-cue relation.
+TABLES = ("Artist", "Album", "OwnedAlbum", "Track",
+          "Artist", "Album", "OwnedAlbum", "Track", "TrackDjCue")
 SCALARS = {"String", "Int", "BigInt", "Float", "Decimal", "Boolean", "DateTime", "Json", "Bytes"}
 
 
@@ -29,7 +32,7 @@ def check(source: str, schema: str) -> None:
     models = dict(re.findall(r"^model\s+(\w+)\s*\{\n(.*?)^\}", schema, re.M | re.S))
     inserts = fixture_inserts(source)
     if len(inserts) != len(TABLES):
-        raise ValueError("Expected four release fixture INSERT statements")
+        raise ValueError("Expected exactly nine release fixture INSERT statements in the declared order")
     for expected, statement in zip(TABLES, inserts):
         match = re.match(r'INSERT\s+INTO\s+"(\w+)"\s*\(([^)]+)\)\s+VALUES\b', statement)
         if not match or match[1] != expected:
@@ -57,6 +60,9 @@ def check(source: str, schema: str) -> None:
             raise ValueError(f"Unknown stored columns in {expected}: {', '.join(sorted(unknown))}")
         if expected == "OwnedAlbum" and set(columns) != {"artistId", "rgMbid", "source"}:
             raise ValueError("OwnedAlbum fixture must include its composite key and source")
+        if expected == "TrackDjCue" and set(columns) != {
+                "trackId", "sourcePath", "sourceModified", "sourceSize", "sourceAnalyzedAt", "profile"}:
+            raise ValueError("DJ cue fixture must include the complete measured-source identity and profile")
 
 
 def self_test(source: str, schema: str) -> None:
@@ -76,6 +82,10 @@ def self_test(source: str, schema: str) -> None:
         "missing commit": source.replace("COMMIT;", ""),
         "extra statement": source.replace("COMMIT;", "DELETE FROM \"Artist\";\nCOMMIT;"),
         "unknown track column": source.replace('"fileSize"', '"nonexistentFileSize"'),
+        "unknown cue column": source.replace('"sourceAnalyzedAt"', '"nonexistentAnalysisTime"'),
+        "missing cue identity": source.replace(',"sourceSize"', ''),
+        "wrong cue table": source.replace('INSERT INTO "TrackDjCue"', 'INSERT INTO "Track"'),
+        "extra cue statement": source.replace("COMMIT;", "INSERT INTO \"TrackDjCue\" (profile) VALUES ('{}');\nCOMMIT;"),
     }
     for name, mutated in mutations.items():
         if mutated == source:

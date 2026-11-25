@@ -77,6 +77,7 @@ export type EngineEvent =
     | {
           type: "gapless-swapped";
           src: string;
+          currentTimeS?: number;
           durationS?: number;
           expectedDurationS?: number;
           now: number;
@@ -753,7 +754,7 @@ export function transition(
                 snapshot: {
                     ...snap,
                     src: event.src,
-                    currentTime: 0,
+                    currentTime: Number.isFinite(event.currentTimeS) ? Math.max(0, Math.min(event.durationS ?? Infinity, event.currentTimeS ?? 0)) : 0,
                     duration: event.durationS ?? 0,
                     expectedDurationS: event.expectedDurationS ?? null,
                     status: "playing",
