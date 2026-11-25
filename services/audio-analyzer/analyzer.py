@@ -50,6 +50,7 @@ from classifier import (
     Disposition,
 )
 from musicnn_onnx import PATCH_SECONDS
+from dj_cues import WINDOW_SECONDS, WINDOW_SAMPLES, edge_window, make_profile
 import gpu_switch
 
 # True when the wrapper started this process with the GPU runtime ("GPU for audio analysis" on and the
@@ -301,7 +302,7 @@ def _ffmpeg_command(file_path: str, channels: int, start: Optional[float]) -> Li
     ]
 
 
-def _run_decode(command: List[str], keep_last_bytes: int) -> Tuple[bytes, int, str, Optional[str]]:
+def _run_decode(command: List[str], keep_last_bytes: int, timeout_s: int = DECODE_TIMEOUT) -> Tuple[bytes, int, str, Optional[str]]:
     """Run one ffmpeg decode within DECODE_TIMEOUT: ``(pcm, rc, stderr, failure)``. The output
     is read as it comes and only its last `keep_last_bytes` kept, so a whole file is never held
     in memory."""
@@ -309,7 +310,7 @@ def _run_decode(command: List[str], keep_last_bytes: int) -> Tuple[bytes, int, s
         proc = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except Exception as e:  # missing ffmpeg, spawn failure
         return b'', -1, '', f"decode command failed: {e}"
-    timer = threading.Timer(DECODE_TIMEOUT, proc.kill)
+    timer = threading.Timer(timeout_s, proc.kill)
     stderr_chunks: List[bytes] = []
     drain = threading.Thread(target=lambda: stderr_chunks.append(proc.stderr.read()), daemon=True)
     timer.start()
@@ -328,7 +329,7 @@ def _run_decode(command: List[str], keep_last_bytes: int) -> Tuple[bytes, int, s
         timer.cancel()
     stderr_text = b''.join(stderr_chunks).decode('utf-8', 'replace').strip()
     if timed_out:
-        return b'', rc, stderr_text, f"decode command failed: timed out after {DECODE_TIMEOUT} s"
+        return b'', rc, stderr_text, f"decode command failed: timed out after {timeout_s} s"
     return raw, rc, stderr_text, None
 
 
@@ -375,6 +376,23 @@ def _decode_to_stereo(file_path: str, duration: int = 90):
     detail = lines[-1] if lines else f"ffmpeg produced no samples (exit {rc})"
     return (None, 44100, 0, 0.0, command, rc, detail,
             classify_failure(detail))
+
+
+def _decode_dj_intro(file_path: str, channels: int) -> Optional[np.ndarray]:
+    """At most 24 seconds and 20 seconds of decode wall time. Optional only:
+    never make the established Essentia/MusiCNN analysis depend on this read."""
+    command = _ffmpeg_command(file_path, channels, None)
+    command[-1:-1] = ['-t', str(WINDOW_SECONDS)]
+    raw, rc, stderr, failure = _run_decode(
+        command, keep_last_bytes=WINDOW_SAMPLES * channels * 2, timeout_s=20)
+    if failure is not None or rc != 0 or stderr or not raw:
+        return None
+    pcm = np.frombuffer(raw, dtype='<i2')
+    pcm = pcm[:pcm.size - pcm.size % channels]
+    if pcm.size == 0:
+        return None
+    decoded = pcm.reshape(-1, channels).astype(np.float32) / np.float32(32768.0)
+    return decoded.mean(axis=1)
 
 
 class AudioAnalyzer:
@@ -441,6 +459,8 @@ class AudioAnalyzer:
         bad frame is analysed.
         """
         self._last_load_error = None
+        self._dj_tail_clean = False
+        self._dj_tail_is_whole = False
         if not ESSENTIA_AVAILABLE:
             return None
 
@@ -457,6 +477,11 @@ class AudioAnalyzer:
             logger.warning(
                 f"Decoded {file_path} with errors (rc={rc}): {stderr[-160:]}"
             )
+        self._dj_tail_clean = rc == 0 and not stderr
+        # A no-seek read shorter than its retention window contains the whole
+        # decoded stream. Otherwise the beginning is not known.
+        self._dj_tail_is_whole = (self._dj_tail_clean and '-ss' not in command
+                                  and window < max_duration - 0.01)
         return samples
 
     def analyze(self, file_path: str) -> Dict[str, Any]:
@@ -468,6 +493,7 @@ class AudioAnalyzer:
         result = {
             'bpm': None,
             'beatsCount': None,
+            'djCueProfile': None,
             'key': None,
             'keyScale': None,
             'keyStrength': None,
@@ -523,8 +549,9 @@ class AudioAnalyzer:
             # === BASIC FEATURES (always extracted) ===
 
             # Tempo: none is stored when the extractor fails; an onset count is not a tempo.
+            beats, beat_confidence = [], None
             try:
-                bpm, beats, _, _, _ = self.rhythm_extractor(audio_44k)
+                bpm, beats, beat_confidence, _, _ = self.rhythm_extractor(audio_44k)
                 result['bpm'] = round(float(bpm), 1)
                 result['beatsCount'] = len(beats)
             except Exception as rhythm_error:
@@ -574,6 +601,30 @@ class AudioAnalyzer:
                 return result
 
             result['moodTags'] = self._generate_mood_tags(result)
+
+            # Reuse the actual outro ticks from normal analysis. Only a new
+            # analysis or a requested existing re-analysis fills these cues.
+            # No new queue, global backfill or separate model is required.
+            if getattr(self, '_dj_tail_clean', False):
+                try:
+                    tail = edge_window(audio_44k, beats, beat_confidence, tail=True)
+                    if getattr(self, '_dj_tail_is_whole', False):
+                        head = edge_window(audio_44k, beats, beat_confidence)
+                    else:
+                        intro = _decode_dj_intro(file_path, decoded.shape[0])
+                        head = None
+                        if intro is not None:
+                            intro_beats, intro_confidence = [], None
+                            if len(intro) >= 8 * 44100 and np.max(np.abs(intro)) >= SILENCE_PEAK:
+                                try:
+                                    _, intro_beats, intro_confidence, _, _ = self.rhythm_extractor(intro)
+                                except Exception:
+                                    pass  # keep measured signal bins, not guessed beats
+                            head = edge_window(intro, intro_beats, intro_confidence)
+                    result['djCueProfile'] = make_profile(head, tail)
+                except Exception as cue_error:
+                    # Optional DJ metadata must never fail ordinary analysis.
+                    logger.warning("DJ edge measurement unavailable: %s", cue_error)
 
             logger.info(f"Analysis complete [{result['analysisMode']}]: BPM={result['bpm']}, Key={result['key']} {result['keyScale']}, Valence={result['valence']}, Arousal={result['arousal']}")
         except MemoryError:
@@ -739,7 +790,19 @@ def _analyze_track_in_process(args: Tuple[str, str]) -> Tuple[str, str, Dict[str
         if os.path.getsize(full_path) == 0:
             return (track_id, file_path, {'_error': 'Empty file (0 bytes) - likely incomplete download'})
 
+        try:
+            before = os.stat(full_path)
+        except OSError:
+            before = None
         features = _process_analyzer.analyze(full_path)
+        if features.get('djCueProfile') is not None and before is not None:
+            try:
+                after = os.stat(full_path)
+                signature = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+                if signature(before) == signature(after):
+                    features['_djSource'] = {'size': before.st_size, 'mtime': before.st_mtime}
+            except OSError:
+                pass
         return (track_id, file_path, features)
 
     except UnicodeDecodeError as e:
@@ -1270,6 +1333,36 @@ class AnalysisWorker:
                 logger.warning(f"Track {track_id} was deleted before the save; not written")
                 self.db.rollback()
                 return False
+
+            # Optional measured cues use the same open stage claim and the
+            # actual source stat, plus the indexed file identity. The profile
+            # remains outside Track's frequently selected columns. Older cues
+            # become stale when analyzedAt changes, even if this write fails.
+            profile, source = features.get('djCueProfile'), features.get('_djSource')
+            if profile is not None and source is not None:
+                cursor.execute("SAVEPOINT dj_cue_write")
+                try:
+                    cursor.execute("""
+                        INSERT INTO "TrackDjCue"
+                            ("trackId", "sourcePath", "sourceModified", "sourceSize", "sourceAnalyzedAt", profile)
+                        SELECT id, "filePath", "fileModified", "fileSize", "analyzedAt", %s::jsonb
+                        FROM "Track"
+                        WHERE id = %s AND "filePath" = %s AND "fileSize" = %s
+                            AND abs(extract(epoch from "fileModified") - %s) < 0.002
+                            AND "missingSince" IS NULL AND NOT corrupt
+                        ON CONFLICT ("trackId") DO UPDATE SET
+                            "sourcePath" = EXCLUDED."sourcePath",
+                            "sourceModified" = EXCLUDED."sourceModified",
+                            "sourceSize" = EXCLUDED."sourceSize",
+                            "sourceAnalyzedAt" = EXCLUDED."sourceAnalyzedAt",
+                            profile = EXCLUDED.profile
+                    """, (json.dumps(profile, allow_nan=False), track_id, job.get('filePath'),
+                          source['size'], source['mtime']))
+                except Exception as cue_error:
+                    cursor.execute("ROLLBACK TO SAVEPOINT dj_cue_write")
+                    logger.warning("Could not save optional DJ cues: %s", cue_error)
+                finally:
+                    cursor.execute("RELEASE SAVEPOINT dj_cue_write")
 
             self.db.commit()
 

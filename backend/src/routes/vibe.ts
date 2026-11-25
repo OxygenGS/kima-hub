@@ -9,6 +9,7 @@ import { UserFacingError } from "../utils/errors";
 import { findSimilarTracks } from "../services/hybridSimilarity";
 import { buildNovaFlow } from "../services/novaFlow";
 import { MAX_DJ_TRACKS, planDjSet } from "../services/djSet";
+import { currentDjCue, suggestDjTiming } from "../services/djCuePlanning";
 import { LIBRARY_TRACK_WHERE } from "../services/libraryFilters";
 import { NOT_MISSING } from "../utils/libraryEligibility";
 import { buildNovaAlbumSpotlight, buildNovaDiscovery } from "../services/novaFlowDiscovery";
@@ -187,6 +188,8 @@ router.post("/dj/preview", requireAuth, async (req, res) => {
             select: {
                 id: true, title: true, displayTitle: true, duration: true,
                 bpm: true, key: true, keyScale: true, keyStrength: true, energy: true,
+                filePath: true, fileModified: true, fileSize: true, analyzedAt: true, analysisStatus: true,
+                djCue: { select: { sourcePath: true, sourceModified: true, sourceSize: true, sourceAnalyzedAt: true, profile: true } },
                 album: { select: {
                     id: true, title: true, coverUrl: true,
                     artist: { select: { id: true, name: true } },
@@ -198,16 +201,18 @@ router.post("/dj/preview", requireAuth, async (req, res) => {
             const row = byId.get(id);
             return row ? [row] : [];
         });
+        const planned = planDjSet(tracks, input.data.style).map(entry => ({ ...entry, cue: currentDjCue(entry.track) }));
         return res.json({
             omittedCount: input.data.trackIds.length - tracks.length,
-            entries: planDjSet(tracks, input.data.style).map(({ track, transition }) => ({
+            entries: planned.map(({ track, transition, cue }, index) => ({
                 track: {
                     id: track.id, title: track.title, displayTitle: track.displayTitle,
                     duration: track.duration, artist: track.album.artist,
                     album: { id: track.album.id, title: track.album.title, coverArt: track.album.coverUrl },
                 },
                 bpm: track.bpm, key: track.key, keyScale: track.keyScale,
-                energy: track.energy, transition,
+                energy: track.energy, transition, cue,
+                timing: index > 0 ? suggestDjTiming(planned[index - 1].cue, cue) : null,
             })),
         });
     } catch (error) {

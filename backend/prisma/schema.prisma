@@ -934,6 +934,7 @@ model Track {
   subsonicBookmarks SubsonicBookmark[]
   trackEmbedding    TrackEmbedding?
   trackLyrics       TrackLyrics?
+  djCue             TrackDjCue?
   playAuditIgnores  PlayAuditIgnore[]
   trackStages       TrackStage[]
 
@@ -963,6 +964,17 @@ model Track {
   @@index([searchVector], type: Gin)
   @@index([title])
   @@index([valence])
+}
+
+// Optional measured edge metadata, outside Track's default query payload.
+model TrackDjCue {
+  trackId          String   @id
+  sourcePath       String
+  sourceModified   DateTime
+  sourceSize       Int
+  sourceAnalyzedAt DateTime
+  profile          Json
+  track            Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
 }
 
 model TrackGenre {

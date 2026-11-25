@@ -34,6 +34,10 @@ done
 count="$(docker exec -u postgres "$name" psql -d kima -Atc "SELECT count(*) FROM \"Artist\" WHERE id='ci-ui-artist'")"
 test "$count" = 0 || { echo "Refusing to overwrite an existing release UI fixture" >&2; exit 1; }
 
+# Exercise the actual shipped analyzer and its bounded FFmpeg reads with
+# generated signals, on both native architectures. No library data is used.
+docker exec -i "$name" sh -c 'cd /app/audio-analyzer && python3 -' < .github/ci/check-dj-cue-runtime.py
+
 docker exec "$name" sh -c 'mkdir -p /music/ci-release-ui && ffmpeg -nostdin -hide_banner -loglevel error -y -f lavfi -i "sine=frequency=440:sample_rate=44100:duration=120" -af volume=0.02 -ac 2 -c:a pcm_s16le /music/ci-release-ui/one.wav && cp /music/ci-release-ui/one.wav /music/ci-release-ui/two.wav && cp /music/ci-release-ui/one.wav /music/ci-release-ui/three.wav'
 size="$(docker exec "$name" stat -c %s /music/ci-release-ui/one.wav)"
 [[ "$size" =~ ^[0-9]+$ ]]
