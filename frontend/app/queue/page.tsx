@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { QueueSurface } from "@/features/queue/QueueSurface";
 import { DjStudio } from "@/features/queue/DjStudio";
+import { SoundLabPanel } from "@/components/player/SoundLabPanel";
 import { moveUpcomingTrack } from "@/features/queue/queuePresentation";
 
 export default function QueuePage() {
@@ -50,6 +51,7 @@ export default function QueuePage() {
                     playTracks(tracks, 0);
                 }}
             />}
+            <SoundLabPanel />
             <QueueSurface
                 queue={queue} currentIndex={currentIndex} currentIsActive={currentIsActive} isPlaying={isPlaying}
                 onToggleCurrent={() => {

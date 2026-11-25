@@ -6,6 +6,7 @@ import { UserSettings } from "../../types";
 import { useTrackFormat } from "@/hooks/useTrackFormat";
 import { formatTrackDisplay } from "@/lib/track-format";
 import { useLanguage } from "@/lib/i18n/language-context";
+import { SoundLabPanel } from "@/components/player/SoundLabPanel";
 
 interface PlaybackSectionProps {
     value: UserSettings["playbackQuality"];
@@ -128,6 +129,7 @@ export function PlaybackSection({ value, onChange, maxQueueLength, onMaxQueueLen
                     <QueueLimitInput value={maxQueueLength} onCommit={onMaxQueueLength} />
                 </SettingsRow>
             )}
+            <SoundLabPanel />
         </SettingsSection>
     );
 }

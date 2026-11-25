@@ -182,6 +182,49 @@ for (const locale of ["en", "nl"] as const) {
         await advance(page);
         expect((await readPlayer(page)).src).toBe(source);
         expect(await audio!.evaluate((node) => node.isConnected)).toBe(true);
+        // DJ preview is a real server query on the owned fixture. It must
+        // not restart playback or change the active queue.
+        const dj = page.getByRole("region", { name: "DJ Studio", exact: true });
+        await dj.getByRole("button", { name: locale === "nl" ? "Set voorbereiden" : "Prepare set", exact: true }).click();
+        await dj.getByRole("button", { name: locale === "nl" ? "Bekijk set" : "Preview set", exact: true }).click();
+        await expect(dj.locator("ol li")).toHaveCount(3);
+        await expect(queue.locator("[data-queue-index]")).toHaveCount(2);
+        expect((await readPlayer(page)).src).toBe(source);
+        await dj.getByRole("button", { name: locale === "nl" ? "Sluiten" : "Close", exact: true }).click();
+
+        if (!isMobile) {
+            // The disposable fixture is a real low-amplitude 440 Hz WAV.
+            // Check its actual post-DSP samples, not only a moving playhead.
+            const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
+            await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
+            const profile = lab.locator("select");
+            await profile.selectOption("flat");
+            await lab.getByRole("button", { name: locale === "nl" ? "Sound Lab activeren" : "Enable Sound Lab", exact: true }).click();
+            await expect(lab.locator("[data-sound-status]")).toHaveAttribute("data-sound-status", "active");
+            const peak = async () => Number(await lab.locator("[data-sound-peak]").getAttribute("data-sound-peak"));
+            await expect.poll(peak).toBeGreaterThan(0.00001);
+            const baseline = await peak();
+            expect(baseline).toBeGreaterThan(0.00001);
+            await profile.selectOption("bass");
+            // The 4 dB low boost reserves headroom; at 440 Hz the resulting
+            // signal should be measurably below the flat reference.
+            await expect.poll(async () => {
+                const value = await peak();
+                return value > 0.00001 && value < baseline * 0.9;
+            }).toBe(true);
+            await lab.getByRole("button", { name: locale === "nl" ? "Sound Lab omzeilen" : "Bypass Sound Lab", exact: true }).click();
+            await expect(lab.locator("[data-sound-status]")).toHaveAttribute("data-sound-status", "bypass");
+            await expect.poll(async () => {
+                const value = await peak();
+                return value > baseline * 0.8 && value < baseline * 1.2;
+            }).toBe(true);
+            await advance(page);
+            expect((await readPlayer(page)).src).toBe(source);
+            expect(await audio!.evaluate(node => node.isConnected)).toBe(true);
+            await page.screenshot({ path: testInfo.outputPath("sound-lab.png"), fullPage: true });
+            await lab.getByRole("button", { name: locale === "nl" ? "Sluiten" : "Close", exact: true }).click();
+        }
+
         await queue.getByRole("button", { name: `${t("Move up")}: CI Interface Track Three`, exact: true }).click();
         await expect(queue.locator('[data-queue-index="1"] h3')).toHaveText("CI Interface Track Three");
         expect((await readPlayer(page)).src).toBe(source);

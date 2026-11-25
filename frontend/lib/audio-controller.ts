@@ -1,6 +1,7 @@
 "use client";
 
 import { STORAGE_KEYS } from "./storage-keys";
+import { SoundLabSession } from "./sound-lab-session";
 import type {
     EngineStatus,
     TimerId,
@@ -31,6 +32,7 @@ export class AudioController {
     // swap on `ended`. Bare (no context) off-iOS; both elements share the
     // iOS AudioContext/analyser graph when it exists.
     private audioNext: HTMLAudioElement;
+    readonly soundLab: SoundLabSession;
     private audioSessionSet = false;
 
     // State machine
@@ -99,6 +101,12 @@ export class AudioController {
     constructor() {
         this.audio = typeof document === "undefined" ? ({} as HTMLAudioElement) : this.createOwnedElement("main");
         this.audioNext = typeof document === "undefined" ? ({} as HTMLAudioElement) : this.createOwnedElement("next");
+
+        // No AudioContext is allocated by the optional desktop Sound Lab
+        // until the listener explicitly enables it.
+        this.soundLab = new SoundLabSession([this.audio, this.audioNext], () => {
+            if (this.snapshot.intent === "play") this.pause("system");
+        });
 
         const events: ExternalEvent[] = ["ended", "timeupdate", "canplay", "seeked", "error", "gapless-advance"];
         events.forEach((e) => this.externalListeners.set(e, new Set()));
@@ -171,6 +179,7 @@ export class AudioController {
     // re-claims the session and resumes the AudioContext. Runs only in an iOS
     // standalone PWA; a no-op everywhere else, including iOS Safari tabs.
     prime(): void {
+        this.soundLab.resume();
         if (!this.isIosStandalone()) return;
         this.setAudioSessionPlayback(true);
         this.setupAudioContextBridge();
@@ -311,6 +320,7 @@ export class AudioController {
                     // Resume AudioContext in parallel (fire-and-forget) so it is running
                     // by the time the first audio frames need routing. Must NOT be awaited
                     // or chained -- play() must remain synchronous for the iOS event-tail grant.
+                    this.soundLab.resume();
                     this.ensureContextRunning();
                     this.audio.play().then(() => {
                         // Play succeeded -- nothing to do; native-playing fires
@@ -567,6 +577,10 @@ export class AudioController {
         const add = listenerAdder(el, store);
 
         add("playing", () => {
+            if (!this.soundLab.canOutput()) {
+                this.pause("system");
+                return;
+            }
             this.dispatch({ type: "native-playing", now: Date.now() });
         });
 
@@ -669,6 +683,10 @@ export class AudioController {
     // play() must run synchronously in this handler to keep the iOS
     // user-activation grant.
     private handleActiveEnded(el: HTMLAudioElement): void {
+        if (!this.soundLab.canOutput()) {
+            this.pause("system");
+            return;
+        }
         const eligible =
             !!this.expectedNextTrackId &&
             this.preloadedTrackId === this.expectedNextTrackId &&
@@ -708,6 +726,12 @@ export class AudioController {
             // A skip or load() landed while play() resolved and already loaded
             // its own track. Abandon the swap without touching pointers or state.
             this.audioNext.pause();
+            return;
+        }
+
+        if (!this.soundLab.canOutput()) {
+            this.audioNext.pause();
+            this.pause("system");
             return;
         }
 
@@ -927,6 +951,7 @@ export class AudioController {
         // it must remove them here too.
         this.discardElement(this.audio);
         this.discardElement(this.audioNext);
+        this.soundLab.destroy();
 
         this.subscribers.clear();
     }
