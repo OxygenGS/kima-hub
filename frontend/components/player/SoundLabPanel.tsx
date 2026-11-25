@@ -22,7 +22,7 @@ export function SoundLabPanel() {
     const { locale } = useLanguage();
     const nl = locale === "nl";
     const supported = useSyncExternalStore(noopSubscribe, supportsSoundLab, serverSupport);
-    const { settings, status } = useSyncExternalStore(session?.subscribe ?? noopSubscribe, session?.getSnapshot ?? defaultSnapshot, defaultSnapshot);
+    const { settings, status, crossfadeSeconds } = useSyncExternalStore(session?.subscribe ?? noopSubscribe, session?.getSnapshot ?? defaultSnapshot, defaultSnapshot);
     const [open, setOpen] = useState(false);
     const [peak, setPeak] = useState(0);
     const measuring = open && (status === "active" || status === "bypass");
@@ -108,6 +108,18 @@ export function SoundLabPanel() {
                 <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={settings.nightMode} disabled={disabled} onChange={event => apply({ nightMode: event.target.checked })} />
                     {nl ? "Nachtmodus (kleiner dynamisch bereik)" : "Night mode (reduced dynamic range)"}
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                    {nl ? "Crossfade (muziek)" : "Crossfade (music)"}
+                    <select aria-label={nl ? "Crossfade (muziek)" : "Crossfade (music)"} value={crossfadeSeconds}
+                        disabled={!supported || !session || (status !== "active" && status !== "bypass")}
+                        onChange={event => session?.setCrossfadeSeconds(Number(event.target.value))}
+                        className="w-full rounded-lg border border-white/10 bg-[var(--bg-primary)] px-3 py-2">
+                        {[0, 2, 4, 6, 8].map(seconds => <option key={seconds} value={seconds}>{seconds ? seconds + " s" : nl ? "Uit" : "Off"}</option>)}
+                    </select>
+                    <span className="text-xs text-[var(--text-secondary)]">
+                        {nl ? "Optionele overlap bij een natuurlijke nummerovergang. Activeer eerst Sound Lab; werkt ook in bypass. Alleen op de voorgrond, zonder tempo- of beatmatching." : "Optional overlap at natural song boundaries. Activate Sound Lab first; also works in bypass. Foreground only, without tempo or beat matching."}
+                    </span>
                 </label>
                 <div className="space-y-1">
                     <div className="flex justify-between text-xs text-[var(--text-secondary)]">

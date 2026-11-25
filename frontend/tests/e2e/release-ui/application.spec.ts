@@ -197,7 +197,7 @@ for (const locale of ["en", "nl"] as const) {
             // Check its actual post-DSP samples, not only a moving playhead.
             const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
             await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
-            const profile = lab.locator("select");
+            const profile = lab.getByRole("combobox", { name: locale === "nl" ? "Geluidsprofiel" : "Sound profile", exact: true });
             await profile.selectOption("flat");
             await lab.getByRole("button", { name: locale === "nl" ? "Sound Lab activeren" : "Enable Sound Lab", exact: true }).click();
             await expect(lab.locator("[data-sound-status]")).toHaveAttribute("data-sound-status", "active");
@@ -244,6 +244,37 @@ for (const locale of ["en", "nl"] as const) {
         await page.locator(isMobile ? "[data-mobile-player]" : "[data-player-dock]")
             .getByRole("button", { name: t("Pause"), exact: true }).click();
         await expect.poll(async () => (await readPlayer(page)).paused).toBe(true);
+        if (!isMobile) {
+            // Use the real seek control; no forced media time or network mocks.
+            // The first fixture track lasts 120 s, giving the idle deck time to
+            // buffer before the 8-second overlap.
+            const lab = page.getByRole("region", { name: "Sound Lab", exact: true });
+            await lab.getByRole("button", { name: locale === "nl" ? "Geluid instellen" : "Sound controls", exact: true }).click();
+            await lab.getByRole("combobox", { name: locale === "nl" ? "Crossfade (muziek)" : "Crossfade (music)", exact: true }).selectOption("8");
+            await smallPlayer.getByRole("button", { name: t("Play"), exact: true }).click();
+            await advance(page);
+            const slider = smallPlayer.getByRole("slider", { name: t("Playback position"), exact: true });
+            await expect(slider).toHaveAttribute("aria-disabled", "false");
+            const box = await slider.boundingBox();
+            expect(box).not.toBeNull();
+            await slider.click({ position: { x: box!.width * 0.875, y: box!.height / 2 } });
+            await expect.poll(async () => (await readPlayer(page)).t).toBeGreaterThan(103);
+            await expect.poll(async () => page.evaluate(() => {
+                const a = document.querySelector<HTMLAudioElement>('[data-kima-player="main"]');
+                const b = document.querySelector<HTMLAudioElement>('[data-kima-player="next"]');
+                return !!a && !!b && !a.paused && !b.paused &&
+                    a.volume > 0.05 && b.volume > 0.05 && a.volume + b.volume <= 1.00001 &&
+                    b.currentTime > 0.1 && a.src.includes("ci-ui-track-one") && b.src.includes("ci-ui-track-two");
+            }), { timeout: 24000 }).toBe(true);
+            await expect.poll(async () => Number(await lab.locator("[data-sound-peak]").getAttribute("data-sound-peak"))).toBeGreaterThan(0.00001);
+            await expect.poll(async () => (await readPlayer(page)).src).toContain("ci-ui-track-two");
+            expect((await readPlayer(page)).t).toBeGreaterThan(0.1);
+            expect(await audio!.evaluate(node => (node as HTMLAudioElement).paused)).toBe(true);
+            await expect(queue.getByRole("heading", { name: "CI Interface Track Two", exact: true })).toBeVisible();
+            await advance(page);
+            await smallPlayer.getByRole("button", { name: t("Pause"), exact: true }).click();
+            await expect.poll(async () => (await readPlayer(page)).paused).toBe(true);
+        }
         expect(uncaught).toEqual([]);
     });
 }

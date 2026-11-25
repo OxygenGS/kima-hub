@@ -2,6 +2,7 @@
 
 import { STORAGE_KEYS } from "./storage-keys";
 import { SoundLabSession } from "./sound-lab-session";
+import { crossfadeGains, transitionSeconds } from "./sound-lab-policy";
 import type {
     EngineStatus,
     TimerId,
@@ -17,6 +18,22 @@ type ExternalEvent = "ended" | "timeupdate" | "canplay" | "seeked" | "error" | "
 type ExternalCallback = (data?: unknown) => void;
 
 const TICKER_INTERVAL_MS = 1000;
+const FADE_TICK_MS = 50;
+
+interface DeckTransition {
+    outgoing: HTMLAudioElement;
+    incoming: HTMLAudioElement;
+    generation: number;
+    trackId: string;
+    requested: number;
+    outgoingStart: number;
+    incomingStart: number;
+    seconds: number;
+    startedAt: number;
+    ready: boolean;
+    progress: number;
+    timer: ReturnType<typeof setInterval> | null;
+}
 
 function listenerAdder(el: HTMLAudioElement, store: ListenerStore) {
     return (event: string, handler: EventListener) => {
@@ -33,6 +50,11 @@ export class AudioController {
     // iOS AudioContext/analyser graph when it exists.
     private audioNext: HTMLAudioElement;
     readonly soundLab: SoundLabSession;
+    private crossfade: DeckTransition | null = null;
+    private pendingGaplessSwap: { incoming: HTMLAudioElement; generation: number; trackId: string } | null = null;
+    private crossfadeAttemptGeneration: number | null = null;
+    private unsubscribeSoundLab: (() => void) | null = null;
+    private crossfadeVisibility: (() => void) | null = null;
     private audioSessionSet = false;
 
     // State machine
@@ -117,6 +139,18 @@ export class AudioController {
         this.attachIdleListeners(this.audioNext, this.nativeListenersNext);
         this.initializeVolume();
         this.attachGestureUnlock();
+        this.unsubscribeSoundLab = this.soundLab.subscribe(() => {
+            if (this.crossfade && (!this.soundLab.hasRunningGraph() ||
+                this.soundLab.getSnapshot().crossfadeSeconds !== this.crossfade.requested)) {
+                this.cancelCrossfade();
+            }
+        });
+        if (typeof document !== "undefined") {
+            this.crossfadeVisibility = () => {
+                if (document.visibilityState === "hidden") this.cancelCrossfade();
+            };
+            document.addEventListener("visibilitychange", this.crossfadeVisibility);
+        }
     }
 
     // The controller owns its <audio> elements so rebuildAudioContextBridge()
@@ -294,6 +328,8 @@ export class AudioController {
         for (const effect of effects) {
             switch (effect.kind) {
                 case "set-src-and-load": {
+                    this.cancelCrossfade();
+                    this.cancelPendingGaplessSwap();
                     // Re-arm the silence detector here too (not just in the
                     // public load()) -- the recovery ladder's own reloads
                     // (e.g. the hidden/blocked->retry path) dispatch this
@@ -305,6 +341,8 @@ export class AudioController {
                     break;
                 }
                 case "seek": {
+                    this.cancelCrossfade();
+                    this.cancelPendingGaplessSwap();
                     try {
                         this.audio.currentTime = effect.time;
                     } catch {
@@ -389,6 +427,8 @@ export class AudioController {
                     break;
                 }
                 case "call-pause": {
+                    this.cancelCrossfade();
+                    this.cancelPendingGaplessSwap();
                     this.expectingPause = true;
                     this.audio.pause();
                     break;
@@ -585,6 +625,12 @@ export class AudioController {
         });
 
         add("pause", () => {
+            // A natural end may emit pause just before ended. Leave the
+            // already-playing incoming deck eligible for that boundary only.
+            if (!el.ended) {
+                this.cancelCrossfade();
+                this.cancelPendingGaplessSwap();
+            }
             if (this.expectingPause) {
                 // Our own call-pause effect fired this -- do not dispatch native-pause
                 this.expectingPause = false;
@@ -602,6 +648,7 @@ export class AudioController {
             // Suppress upstream timeupdate while transitioning (avoids 0-position flash)
             if (!this.isTransitioning) {
                 this.emitExternal("timeupdate", { time: el.currentTime });
+                this.considerCrossfade();
             }
         });
 
@@ -614,7 +661,13 @@ export class AudioController {
         });
 
         add("waiting", () => {
+            this.cancelCrossfade();
             this.dispatch({ type: "native-waiting", now: Date.now() });
+        });
+
+        add("seeking", () => {
+            this.cancelCrossfade();
+            this.cancelPendingGaplessSwap();
         });
 
         add("seeked", () => {
@@ -622,6 +675,7 @@ export class AudioController {
         });
 
         add("error", () => {
+            this.cancelCrossfade();
             const err = el.error;
             this.dispatch({
                 type: "native-error",
@@ -648,7 +702,11 @@ export class AudioController {
             this.idleReady = true;
         });
 
+        add("waiting", () => this.cancelCrossfade());
+        add("ended", () => this.cancelCrossfade());
         add("error", () => {
+            this.cancelCrossfade();
+            // Let the guarded pending play rejection finish a normal swap.
             this.preloadedTrackId = null;
             this.idleReady = false;
         });
@@ -682,11 +740,166 @@ export class AudioController {
     // Decides gapless eligibility here rather than in the reducer: the swap's
     // play() must run synchronously in this handler to keep the iOS
     // user-activation grant.
+    /** Only overlap on the opted-in desktop graph, with a known, ready next
+     * music track. Keep the outgoing track authoritative until its natural end.
+     * No tempo shifting or beat-grid claims: this is a bounded linear fade.
+     */
+    private considerCrossfade(): void {
+        if (this.crossfade || this.crossfadeAttemptGeneration === this.snapshot.generation ||
+            !this.soundLab.hasRunningGraph() || document.visibilityState !== "visible" ||
+            this.snapshot.status !== "playing" || this.audio.paused || this.audio.ended ||
+            this.audio.seeking || this.playbackRate !== 1 ||
+            !this.expectedNextTrackId || this.preloadedTrackId !== this.expectedNextTrackId ||
+            !this.idleReady || !this.audioNext.paused || this.audioNext.readyState < 3) return;
+        const requested = this.soundLab.getSnapshot().crossfadeSeconds;
+        const duration = this.audio.duration;
+        const incomingDuration = this.audioNext.duration;
+        const window = transitionSeconds(requested, duration, incomingDuration);
+        const remaining = duration - this.audio.currentTime;
+        if (window < 1 || !Number.isFinite(remaining) || remaining > window || remaining < 1) return;
+        // Ignore implausible/truncated durations and stale or previously played
+        // buffers. An uncertain boundary must use the ordinary playback path.
+        if (!this.snapshot.expectedDurationS || !this.expectedNextDurationS ||
+            Math.abs(duration - this.snapshot.expectedDurationS) > 3 ||
+            Math.abs(incomingDuration - this.expectedNextDurationS) > 3 ||
+            this.audioNext.currentTime > 0.15 || this.audioNext.seeking) return;
+        const fade: DeckTransition = {
+            outgoing: this.audio, incoming: this.audioNext, generation: this.snapshot.generation,
+            trackId: this.expectedNextTrackId, requested,
+            outgoingStart: this.audio.currentTime, incomingStart: this.audioNext.currentTime,
+            seconds: remaining, startedAt: Date.now(), ready: false, progress: 0, timer: null,
+        };
+        this.crossfadeAttemptGeneration = this.snapshot.generation;
+        this.crossfade = fade;
+        this.applyDeckVolumes();
+        try {
+            const play = fade.incoming.play();
+            Promise.resolve(play).then(() => {
+                // pause/load on cancellation invalidates this play operation;
+                // a late completion must never touch a reused deck.
+                if (this.crossfade !== fade) return;
+                fade.ready = true;
+                this.advanceCrossfade();
+            }).catch(() => {
+                if (this.crossfade === fade) this.cancelCrossfade();
+            });
+            fade.timer = setInterval(() => this.advanceCrossfade(), FADE_TICK_MS);
+        } catch {
+            this.cancelCrossfade();
+        }
+    }
+
+    private validCrossfade(fade: DeckTransition): boolean {
+        return fade.generation === this.snapshot.generation &&
+            fade.outgoing === this.audio && fade.incoming === this.audioNext &&
+            fade.trackId === this.expectedNextTrackId && fade.trackId === this.preloadedTrackId &&
+            this.soundLab.hasRunningGraph() && this.soundLab.getSnapshot().crossfadeSeconds === fade.requested &&
+            document.visibilityState === "visible" && this.playbackRate === 1;
+    }
+
+    private advanceCrossfade(): void {
+        const fade = this.crossfade;
+        if (!fade) return;
+        const elapsed = Date.now() - fade.startedAt;
+        if (!this.validCrossfade(fade) || elapsed > (fade.seconds + 2) * 1000) {
+            this.cancelCrossfade();
+            return;
+        }
+        // Natural end is handled by the native ended event. Do not treat it
+        // as a manual interruption while that event is queued.
+        if (fade.outgoing.ended) return;
+        if (fade.outgoing.paused || fade.outgoing.seeking || this.snapshot.status !== "playing") {
+            this.cancelCrossfade();
+            return;
+        }
+        const played = fade.incoming.currentTime - fade.incomingStart;
+        if (!fade.ready || played < 0.025) {
+            if (elapsed > 1500) this.cancelCrossfade();
+            return;
+        }
+        if (fade.incoming.paused || fade.incoming.ended || fade.incoming.seeking || fade.incoming.readyState < 2) {
+            this.cancelCrossfade();
+            return;
+        }
+        // Never fade the outgoing deck out faster than the incoming media
+        // actually advances. A slow buffer therefore cannot create dead air.
+        const progress = Math.min(1,
+            (fade.outgoing.currentTime - fade.outgoingStart) / fade.seconds,
+            played / fade.seconds);
+        if (!Number.isFinite(progress) || progress < 0 || progress + 0.02 < fade.progress) {
+            this.cancelCrossfade();
+            return;
+        }
+        fade.progress = Math.max(fade.progress, progress);
+        this.applyDeckVolumes();
+    }
+
+    private applyDeckVolumes(): void {
+        const fade = this.crossfade;
+        if (fade) {
+            const gains = crossfadeGains(fade.progress, this.volume, this.isMuted);
+            fade.outgoing.volume = gains.outgoing;
+            fade.incoming.volume = gains.incoming;
+        } else {
+            const volume = this.isMuted ? 0 : this.volume;
+            this.audio.volume = volume;
+            this.audioNext.volume = volume;
+        }
+    }
+
+    private cancelCrossfade(): void {
+        const fade = this.crossfade;
+        if (!fade) return;
+        this.crossfade = null;
+        if (fade.timer !== null) clearInterval(fade.timer);
+        // Stop and invalidate the pending media operation before restoring
+        // gain. Never carry an already-started idle buffer into a new queue.
+        fade.incoming.pause();
+        fade.incoming.removeAttribute("src");
+        fade.incoming.load();
+        this.preloadedTrackId = null;
+        this.idleReady = false;
+        this.applyDeckVolumes();
+    }
+
+    private completeCrossfade(): boolean {
+        const fade = this.crossfade;
+        if (!fade) return false;
+        const incomingTime = fade.incoming.currentTime;
+        if (!this.validCrossfade(fade) || !fade.ready || fade.incoming.paused ||
+            fade.incoming.ended || fade.incoming.seeking || fade.incoming.readyState < 2 ||
+            !Number.isFinite(incomingTime) || incomingTime - fade.incomingStart < 0.1 ||
+            !fade.outgoing.ended || fade.outgoing.currentTime < fade.outgoing.duration - 0.25) {
+            this.cancelCrossfade();
+            return false;
+        }
+        this.crossfade = null;
+        if (fade.timer !== null) clearInterval(fade.timer);
+        // No second play() call, no seek back to zero. Carry the actual
+        // already-audible incoming position into queue/player bookkeeping.
+        fade.incoming.volume = this.isMuted ? 0 : this.volume;
+        this.onSwapCommitted(fade.generation, incomingTime);
+        return true;
+    }
+
+    private cancelPendingGaplessSwap(): void {
+        const swap = this.pendingGaplessSwap;
+        if (!swap) return;
+        this.pendingGaplessSwap = null;
+        swap.incoming.pause();
+        swap.incoming.removeAttribute("src");
+        swap.incoming.load();
+        this.preloadedTrackId = null;
+        this.idleReady = false;
+    }
+
     private handleActiveEnded(el: HTMLAudioElement): void {
+        if (this.pendingGaplessSwap || this.snapshot.pauseClass === "user") return;
         if (!this.soundLab.canOutput()) {
             this.pause("system");
             return;
         }
+        if (this.completeCrossfade()) return;
         const eligible =
             !!this.expectedNextTrackId &&
             this.preloadedTrackId === this.expectedNextTrackId &&
@@ -702,26 +915,42 @@ export class AudioController {
             return;
         }
 
-        // Only play() is synchronous. The commit waits for .then() so a
-        // rejection, which arrives a microtask later, has nothing to unwind and
-        // the fallback still runs.
-        const swapGen = this.snapshot.generation;
-        let p: ReturnType<HTMLAudioElement["play"]> | undefined;
+        // Invoke play synchronously in the ended handler. Guard both
+        // success and rejection against intervening pause/load/queue edits.
+        const swap = {
+            incoming: this.audioNext, generation: this.snapshot.generation,
+            trackId: this.expectedNextTrackId!,
+        };
+        this.pendingGaplessSwap = swap;
+        const finish = (success: boolean) => {
+            if (this.pendingGaplessSwap !== swap) return;
+            if (this.snapshot.generation !== swap.generation ||
+                this.audioNext !== swap.incoming ||
+                this.expectedNextTrackId !== swap.trackId) {
+                this.cancelPendingGaplessSwap();
+                return;
+            }
+            if (success && this.preloadedTrackId === swap.trackId && this.idleReady) {
+                this.pendingGaplessSwap = null;
+                this.onSwapCommitted(swap.generation);
+            } else {
+                this.cancelPendingGaplessSwap();
+                this.onSwapFailed();
+            }
+        };
         try {
-            p = this.audioNext.play();
+            const play = swap.incoming.play();
+            if (play && typeof play.then === "function") {
+                void play.then(() => finish(true), () => finish(false));
+            } else {
+                finish(true);
+            }
         } catch {
-            this.onSwapFailed();
-            return;
-        }
-        if (p && typeof p.then === "function") {
-            p.then(() => this.onSwapCommitted(swapGen)).catch(() => this.onSwapFailed());
-        } else {
-            // No promise returned (old browsers) -- treat as committed.
-            this.onSwapCommitted(swapGen);
+            finish(false);
         }
     }
 
-    private onSwapCommitted(swapGen: number): void {
+    private onSwapCommitted(swapGen: number, incomingTime = 0): void {
         if (this.snapshot.generation !== swapGen) {
             // A skip or load() landed while play() resolved and already loaded
             // its own track. Abandon the swap without touching pointers or state.
@@ -749,6 +978,8 @@ export class AudioController {
         const oldActive = this.audio;
         this.audio = this.audioNext;
         this.audioNext = oldActive;
+        this.audio.setAttribute("data-kima-player", "main");
+        this.audioNext.setAttribute("data-kima-player", "next");
 
         const oldNode = this.mediaSourceNode;
         this.mediaSourceNode = this.mediaSourceNodeNext;
@@ -778,12 +1009,14 @@ export class AudioController {
             src: newSrc,
             durationS: isFinite(newDur) ? newDur : undefined,
             expectedDurationS: expectedDurationS ?? undefined,
+            ...(incomingTime > 0 ? { currentTimeS: incomingTime } : {}),
             now: Date.now(),
         });
 
         this.emitExternal("gapless-advance", {
             durationS: isFinite(newDur) ? newDur : (expectedDurationS ?? 0),
             trackId: swappedTrackId,
+            ...(incomingTime > 0 ? { currentTimeS: incomingTime } : {}),
         });
 
         // Re-arm the silence detector for the freshly-active element -- the
@@ -875,6 +1108,7 @@ export class AudioController {
             return;
         }
 
+        this.clearExpectedNext();
         this.dispatch({
             type: "load",
             src,
@@ -890,10 +1124,14 @@ export class AudioController {
     }
 
     pause(cls: "user" | "system" = "user"): void {
+        this.cancelCrossfade();
+        this.cancelPendingGaplessSwap();
         this.dispatch({ type: "pause-requested", cls, now: Date.now() });
     }
 
     seek(time: number): void {
+        this.cancelCrossfade();
+        this.cancelPendingGaplessSwap();
         const duration = this.audio.duration;
         if (duration && isFinite(duration) && duration > 0) {
             time = Math.max(0, Math.min(time, duration));
@@ -908,6 +1146,8 @@ export class AudioController {
     }
 
     cleanup(): void {
+        this.clearExpectedNext();
+        this.crossfadeAttemptGeneration = null;
         this.dispatch({ type: "cleanup", now: Date.now() });
 
         for (const [, handle] of this.timers) {
@@ -951,6 +1191,10 @@ export class AudioController {
         // it must remove them here too.
         this.discardElement(this.audio);
         this.discardElement(this.audioNext);
+        this.unsubscribeSoundLab?.();
+        this.unsubscribeSoundLab = null;
+        if (this.crossfadeVisibility) document.removeEventListener("visibilitychange", this.crossfadeVisibility);
+        this.crossfadeVisibility = null;
         this.soundLab.destroy();
 
         this.subscribers.clear();
@@ -990,6 +1234,10 @@ export class AudioController {
     // buffers it into the idle element. Separate so a queue change can update
     // the expectation without restarting a fetch already in flight.
     setExpectedNext(url: string, trackId: string, durationS?: number): void {
+        if (this.expectedNextTrackId !== trackId) {
+            this.cancelCrossfade();
+            this.cancelPendingGaplessSwap();
+        }
         this.expectedNextTrackId = trackId;
         this.expectedNextUrl = url;
         this.expectedNextDurationS = durationS ?? null;
@@ -1008,6 +1256,9 @@ export class AudioController {
     // left "track" playback, or repeat mode switched to "one" -- which has
     // no real next track) so a stale preload can never be swapped in.
     clearExpectedNext(): void {
+        this.cancelCrossfade();
+        this.cancelPendingGaplessSwap();
+        this.idleReady = false;
         this.expectedNextTrackId = null;
         this.expectedNextUrl = null;
         this.expectedNextDurationS = null;
@@ -1020,7 +1271,9 @@ export class AudioController {
      * whenever the playback type is not an audiobook.
      */
     setPlaybackRate(rate: number): void {
-        this.playbackRate = Number.isFinite(rate) ? Math.max(0.75, Math.min(2, rate)) : 1;
+        const next = Number.isFinite(rate) ? Math.max(0.75, Math.min(2, rate)) : 1;
+        if (next !== this.playbackRate) this.cancelCrossfade();
+        this.playbackRate = next;
         this.audio.playbackRate = this.playbackRate;
         this.audioNext.playbackRate = this.playbackRate;
     }
@@ -1030,11 +1283,8 @@ export class AudioController {
     }
 
     setVolume(volume: number): void {
-        this.volume = Math.max(0, Math.min(1, volume));
-        if (!this.isMuted) {
-            this.audio.volume = this.volume;
-            this.audioNext.volume = this.volume;
-        }
+        this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
+        if (this.crossfade || !this.isMuted) this.applyDeckVolumes();
     }
 
     setMuted(muted: boolean): void {
@@ -1042,11 +1292,8 @@ export class AudioController {
         // audio.muted, since audio.volume is read-only on iOS.
         this.audio.muted = muted;
         this.audioNext.muted = muted;
-        // Also set volume for non-iOS devices
-        if (!muted) {
-            this.audio.volume = this.volume;
-            this.audioNext.volume = this.volume;
-        }
+        // Do not destroy a fade envelope when the master is changed.
+        if (this.crossfade || !muted) this.applyDeckVolumes();
     }
 
     initializeVolume(): void {

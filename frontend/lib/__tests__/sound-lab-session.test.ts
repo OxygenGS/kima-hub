@@ -144,6 +144,25 @@ describe("Sound Lab desktop session", () => {
         expect(context.close).toHaveBeenCalledOnce();
         expect(context.sources.every(source => source.disconnect.mock.calls.length === 1)).toBe(true);
     });
+    it("keeps crossfade opt-in, bounded, and unavailable before a graph is running", async () => {
+        const { session } = newSession();
+        expect(session.getSnapshot().crossfadeSeconds).toBe(0);
+        session.setCrossfadeSeconds(8);
+        expect(session.getSnapshot().crossfadeSeconds).toBe(0);
+        await session.apply(settings());
+        session.setCrossfadeSeconds(6);
+        expect(session.getSnapshot().crossfadeSeconds).toBe(6);
+        await session.apply(FLAT_SOUND);
+        expect(session.getSnapshot().status).toBe("bypass");
+        expect(session.getSnapshot().crossfadeSeconds).toBe(6);
+        session.setCrossfadeSeconds(40);
+        expect(session.getSnapshot().crossfadeSeconds).toBe(0);
+        session.setCrossfadeSeconds(4);
+        const next = newSession().session;
+        expect(next.getSnapshot().crossfadeSeconds).toBe(0);
+        session.destroy();
+        next.destroy();
+    });
     it("does not allocate or attach on mobile/iOS", async () => {
         vi.stubGlobal("navigator", { userAgent: "iPhone Mobile", maxTouchPoints: 5 });
         const { session } = newSession();

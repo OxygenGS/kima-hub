@@ -14,6 +14,7 @@ function createFakeAudioElement() {
         duration: 0,
         paused: true,
         ended: false,
+        seeking: false,
         volume: 1,
         muted: false,
         playbackRate: 1,
@@ -359,5 +360,152 @@ describe("AudioController -- gapless swap: generation guard", () => {
         expect(state.audioNext).toBe(audioNext);
         expect(gaplessCb).not.toHaveBeenCalled();
         expect(audioNext.pause).toHaveBeenCalled();
+    });
+});
+
+describe("AudioController -- opt-in crossfade", () => {
+    let active: AudioController | null = null;
+
+    afterEach(() => {
+        active?.destroy();
+        active = null;
+        vi.useRealTimers();
+    });
+
+    function setup(seconds = 6) {
+        vi.useFakeTimers();
+        const state = newController();
+        active = state.controller;
+        const { controller, audio, audioNext } = state;
+        vi.spyOn(controller.soundLab, "hasRunningGraph").mockReturnValue(true);
+        const sound = vi.spyOn(controller.soundLab, "getSnapshot").mockReturnValue({
+            ...controller.soundLab.getSnapshot(), crossfadeSeconds: seconds,
+        });
+        controller.load("http://x.com/a.mp3", { autoplay: true, expectedDurationS: 120 });
+        audio.duration = 120;
+        audio.currentTime = 114;
+        audio.paused = false;
+        audio.readyState = 4;
+        audio.__fire("canplay");
+        audio.__fire("playing");
+        makeEligible(controller, audioNext, "track-2", "http://x.com/b.mp3", 120);
+        audioNext.readyState = 4;
+        audioNext.play.mockImplementation(async () => { audioNext.paused = false; });
+        audioNext.pause.mockImplementation(() => { audioNext.paused = true; });
+        return { ...state, sound };
+    }
+
+    async function overlap() {
+        const state = setup();
+        const { audio, audioNext } = state;
+        audio.__fire("timeupdate");
+        await flushMicrotasks();
+        expect(audioNext.play).toHaveBeenCalledOnce();
+        expect(audio.volume).toBe(1);
+        expect(audioNext.volume).toBe(0);
+        audio.currentTime = 117;
+        audioNext.currentTime = 3;
+        vi.advanceTimersByTime(50);
+        expect(audio.volume).toBeCloseTo(0.5);
+        expect(audioNext.volume).toBeCloseTo(0.5);
+        return state;
+    }
+
+    it("starts only on explicit opt-in, not merely because Sound Lab exists", () => {
+        const { audio, audioNext } = setup(0);
+        audio.__fire("timeupdate");
+        expect(audioNext.play).not.toHaveBeenCalled();
+        expect(audio.volume).toBe(1);
+    });
+
+    it("keeps the gain sum bounded, respects master/mute and promotes the incoming deck at its real position", async () => {
+        const { controller, audio, audioNext } = await overlap();
+        const onAdvance = vi.fn();
+        const ended = vi.fn();
+        controller.on("gapless-advance", onAdvance);
+        controller.on("ended", ended);
+        controller.setVolume(0.6);
+        expect(audio.volume).toBeCloseTo(0.3);
+        expect(audioNext.volume).toBeCloseTo(0.3);
+        controller.setMuted(true);
+        expect(audio.volume + audioNext.volume).toBe(0);
+        controller.setMuted(false);
+        expect(audio.volume + audioNext.volume).toBeCloseTo(0.6);
+        audio.currentTime = 120;
+        audio.ended = true;
+        audio.paused = true;
+        audioNext.currentTime = 5.8;
+        audio.__fire("ended");
+        expect(audioNext.play).toHaveBeenCalledOnce();
+        expect(onAdvance).toHaveBeenCalledExactlyOnceWith({
+            durationS: 120, trackId: "track-2", currentTimeS: 5.8,
+        });
+        expect(ended).not.toHaveBeenCalled();
+        expect(internals(controller).audio).toBe(audioNext);
+        expect(controller.getSnapshot().currentTime).toBe(5.8);
+        expect(controller.getCurrentTime()).toBe(5.8);
+        expect(audioNext.volume).toBeCloseTo(0.6);
+        expect(audioNext.setAttribute).toHaveBeenCalledWith("data-kima-player", "main");
+    });
+
+    it.each(["pause", "seek", "load", "queue-clear", "queue-change", "buffering", "hidden", "off"] as const)(
+        "stops and invalidates the incoming deck on %s", async (action) => {
+            const { controller, audio, audioNext, sound } = await overlap();
+            const onAdvance = vi.fn();
+            controller.on("gapless-advance", onAdvance);
+            switch (action) {
+                case "pause": controller.pause(); break;
+                case "seek": controller.seek(40); break;
+                case "load": controller.load("http://x.com/c.mp3"); break;
+                case "queue-clear": controller.clearExpectedNext(); break;
+                case "queue-change": controller.setExpectedNext("http://x.com/c.mp3", "track-3", 120); break;
+                case "buffering": audioNext.__fire("waiting"); break;
+                case "hidden":
+                    Object.assign(document, { visibilityState: "hidden" });
+                    vi.advanceTimersByTime(50);
+                    break;
+                case "off":
+                    sound.mockReturnValue({ ...controller.soundLab.getSnapshot(), crossfadeSeconds: 0 });
+                    vi.advanceTimersByTime(50);
+                    break;
+            }
+            expect(audioNext.pause).toHaveBeenCalled();
+            expect(audioNext.paused).toBe(true);
+            expect(audioNext.removeAttribute).toHaveBeenCalledWith("src");
+            expect(audio.volume).toBe(1);
+            expect(internals(controller).preloadedTrackId).toBeNull();
+            expect(onAdvance).not.toHaveBeenCalled();
+        },
+    );
+
+    it("leaves the outgoing track at full gain when the incoming play rejects", async () => {
+        const { controller, audio, audioNext } = setup();
+        audioNext.play.mockRejectedValueOnce(new Error("autoplay denied"));
+        audio.__fire("timeupdate");
+        await flushMicrotasks();
+        expect(audio.volume).toBe(1);
+        expect(internals(controller).preloadedTrackId).toBeNull();
+        expect(audioNext.pause).toHaveBeenCalled();
+        const ended = vi.fn();
+        controller.on("ended", ended);
+        audio.currentTime = 120;
+        audio.ended = true;
+        audio.__fire("ended");
+        expect(ended).toHaveBeenCalledOnce();
+    });
+
+    it("does not commit an old play promise after cancellation", async () => {
+        const { controller, audio, audioNext } = setup();
+        let resolve: () => void = () => {};
+        audioNext.play.mockImplementationOnce(() => new Promise<void>(done => { resolve = done; }));
+        const advance = vi.fn();
+        controller.on("gapless-advance", advance);
+        audio.__fire("timeupdate");
+        controller.pause();
+        resolve();
+        await flushMicrotasks();
+        expect(audioNext.pause).toHaveBeenCalled();
+        expect(advance).not.toHaveBeenCalled();
+        expect(audio.volume).toBe(1);
     });
 });

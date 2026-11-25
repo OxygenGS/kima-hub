@@ -5,11 +5,12 @@ export type SoundLabStatus = "off" | "starting" | "active" | "bypass" | "unsuppo
 export interface SoundLabSnapshot {
     settings: SoundLabSettings;
     status: SoundLabStatus;
+    crossfadeSeconds: number;
 }
 type Graph = ReturnType<typeof createSoundLabGraph>;
 const KEY = "kima-sound-lab-device-v1";
 const START_TIMEOUT_MS = 2500;
-export const DEFAULT_SOUND_LAB: SoundLabSnapshot = { settings: { ...FLAT_SOUND }, status: "off" };
+export const DEFAULT_SOUND_LAB: SoundLabSnapshot = { settings: { ...FLAT_SOUND }, status: "off", crossfadeSeconds: 0 };
 
 function readSettings(): SoundLabSettings {
     try {
@@ -46,7 +47,7 @@ function closeContext(context: AudioContext): void {
  * detached back into native output). Do not close an attached context on disable.
  */
 export class SoundLabSession {
-    private snapshot: SoundLabSnapshot = { settings: readSettings(), status: "off" };
+    private snapshot: SoundLabSnapshot = { settings: readSettings(), status: "off", crossfadeSeconds: 0 };
     private listeners = new Set<() => void>();
     private context: AudioContext | null = null;
     private graph: Graph | null = null;
@@ -69,8 +70,23 @@ export class SoundLabSession {
     };
 
     private publish(settings: SoundLabSettings, status: SoundLabStatus): void {
-        this.snapshot = { settings, status };
+        this.snapshot = { ...this.snapshot, settings, status };
         this.listeners.forEach(listener => listener());
+    }
+
+    /** Opt-in per browser session, never auto-enabled from local storage. */
+    setCrossfadeSeconds(seconds: number): void {
+        if (this.destroyed) return;
+        const next = [0, 2, 4, 6, 8].includes(seconds) ? seconds : 0;
+        if (next !== 0 && (!supportsSoundLab() || !this.hasRunningGraph())) return;
+        if (next === this.snapshot.crossfadeSeconds) return;
+        this.snapshot = { ...this.snapshot, crossfadeSeconds: next };
+        this.listeners.forEach(listener => listener());
+    }
+
+    hasRunningGraph(): boolean {
+        return !this.broken && this.context?.state === "running" && !!this.graph &&
+            (this.snapshot.status === "active" || this.snapshot.status === "bypass");
     }
 
     private onContextState = (): void => {
